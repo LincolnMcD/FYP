@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'welcome_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final bool isLoggedIn;
+  final String? email;
+  final String? name;
+  final String? toastMessage;
+  const HomePage({super.key, this.isLoggedIn = false, this.email, this.name, this.toastMessage});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -10,9 +14,35 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  bool _isLoggedIn = false; // Hardcoded mock state for testing drawer
+  late bool _isLoggedIn = widget.isLoggedIn;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  String? _toastMessage;
+  bool _isToastError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.toastMessage != null) {
+       WidgetsBinding.instance.addPostFrameCallback((_) {
+         _showTopToast(widget.toastMessage!, false);
+       });
+    }
+  }
+
+  void _showTopToast(String message, bool isError) {
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _toastMessage = null);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,37 +51,70 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: const Color(0xFFF8F9FB), // light grayish-blue background
       drawer: _buildDrawer(),
       appBar: _buildAppBar(),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSearchBar(),
-            const SizedBox(height: 16),
-            _buildBanner(),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Quick Actions'),
-            const SizedBox(height: 12),
-            _buildQuickActions(),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Active Activity'),
-            const SizedBox(height: 12),
-            _buildActiveActivity(),
-            const SizedBox(height: 24),
-            _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
-            const SizedBox(height: 12),
-            _buildRecommendedSmartphones(),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Recently Viewed Smartphones'),
-            const SizedBox(height: 12),
-            _buildRecentlyViewedSmartphones(),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Why Choose ReByte?'),
-            const SizedBox(height: 12),
-            _buildWhyChooseUs(),
-            const SizedBox(height: 24),
-          ],
-        ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSearchBar(),
+                const SizedBox(height: 16),
+                _buildBanner(),
+                const SizedBox(height: 24),
+                _buildSectionTitle('Quick Actions'),
+                const SizedBox(height: 12),
+                _buildQuickActions(),
+                const SizedBox(height: 24),
+                _buildSectionTitle('Active Activity'),
+                const SizedBox(height: 12),
+                _buildActiveActivity(),
+                const SizedBox(height: 24),
+                _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
+                const SizedBox(height: 12),
+                _buildRecommendedSmartphones(),
+                const SizedBox(height: 24),
+                _buildSectionTitle('Recently Viewed Smartphones'),
+                const SizedBox(height: 12),
+                _buildRecentlyViewedSmartphones(),
+                const SizedBox(height: 24),
+                _buildSectionTitle('Why Choose ReByte?'),
+                const SizedBox(height: 12),
+                _buildWhyChooseUs(),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+          if (_toastMessage != null)
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 16,
+              child: Dismissible(
+                key: UniqueKey(),
+                direction: DismissDirection.horizontal,
+                onDismissed: (_) => setState(() => _toastMessage = null),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _isToastError ? Colors.red.shade600 : Colors.green.shade600,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_toastMessage!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: _buildBottomNavigationBarWithShadow(),
     );
@@ -89,7 +152,22 @@ class _HomePageState extends State<HomePage> {
             ),
             Divider(color: Colors.grey.shade200, height: 1),
             _buildDrawerItem(Icons.help_outline, 'Help Desk'),
-            _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569)),
+            _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Confirm Logout'),
+                  content: const Text('Are you sure you want to log out?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomePage(isLoggedIn: false, toastMessage: 'Logout successful')), (route) => false),
+                      child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 16),
           ],
         ),
@@ -140,7 +218,7 @@ class _HomePageState extends State<HomePage> {
             border: Border.all(color: Colors.white, width: 3),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha:0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -152,15 +230,15 @@ class _HomePageState extends State<HomePage> {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                'Peter Jackson',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                widget.name ?? 'ReByte User',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
-              SizedBox(height: 2),
+              const SizedBox(height: 2),
               Text(
-                'peter_j@example.com',
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                widget.email ?? 'user@rebyte.com',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -169,7 +247,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDrawerItem(IconData icon, String title, {bool isSelected = false, String? badge, Color? iconColor}) {
+  Widget _buildDrawerItem(IconData icon, String title, {bool isSelected = false, String? badge, Color? iconColor, void Function()? onTap}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: ListTile(
@@ -198,7 +276,7 @@ class _HomePageState extends State<HomePage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         tileColor: isSelected ? const Color(0xFF0C5AD2) : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        onTap: () {},
+        onTap: onTap ?? () {},
       ),
     );
   }
@@ -298,7 +376,7 @@ class _HomePageState extends State<HomePage> {
           Text(
             'Upgrade your mobile experience sustainably. Get premium certified smartphones, turn old phones into cash, or rent the latest model when you need it.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha:0.9),
               fontSize: 12,
               height: 1.4,
             ),
@@ -396,7 +474,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -446,7 +524,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -566,7 +644,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -724,7 +802,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -792,7 +870,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -857,7 +935,7 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha:0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),

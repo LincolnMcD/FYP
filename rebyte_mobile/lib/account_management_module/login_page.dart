@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'home_page.dart';
+import 'services/auth_service.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -10,6 +12,144 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  String? _emailError;
+  String? _passwordError;
+  bool _isLoading = false;
+
+  bool get _isFormValid {
+    return _emailController.text.isNotEmpty &&
+        _passwordController.text.isNotEmpty &&
+        _emailError == null &&
+        _passwordError == null;
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _validateEmail(String value) {
+    if (value.isEmpty) {
+      setState(() => _emailError = 'Email cannot be empty');
+      return;
+    }
+    if (value.contains(' ')) {
+      setState(() => _emailError = 'Email cannot contain spaces');
+      return;
+    }
+    if (value.contains(RegExp(r'[A-Z]'))) {
+      setState(() => _emailError = 'Email cannot contain capital letters');
+      return;
+    }
+    if (!value.contains('@')) {
+      setState(() => _emailError = 'Email must contain @');
+      return;
+    }
+    final parts = value.split('@');
+    if (parts.length > 2) {
+      setState(() => _emailError = 'Email cannot contain multiple @');
+      return;
+    }
+    if (parts[0].isEmpty) {
+      setState(() => _emailError = 'Email must have at least 1 character before @');
+      return;
+    }
+    if (!parts[1].contains('.')) {
+      setState(() => _emailError = 'Email must have a dot after @');
+      return;
+    }
+    final afterParts = parts[1].split('.');
+    if (afterParts.length != 2) {
+      setState(() => _emailError = 'Email must have exactly one dot after @');
+      return;
+    }
+    if (afterParts[0].isEmpty) {
+      setState(() => _emailError = 'Email must have at least 1 character between @ and .');
+      return;
+    }
+    if (afterParts[1].isEmpty) {
+      setState(() => _emailError = 'Email must have at least 1 character after .');
+      return;
+    }
+    setState(() => _emailError = null);
+  }
+
+  void _handleLogin() async {
+    _validateEmail(_emailController.text);
+    setState(() => _passwordError = null);
+    if (_emailError != null) return;
+    
+    setState(() => _isLoading = true);
+    final result = await AuthService.login(_emailController.text, _passwordController.text);
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    
+      if (result['success']) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: _emailController.text, name: result['name'], toastMessage: 'Signed in successfully!')),
+          (route) => false,
+        );
+    } else {
+      _showTopToast(context, result['error'] ?? 'Login failed', true);
+    }
+  }
+
+  void _showTopToast(BuildContext context, String message, bool isError) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    // Natively extract the height of the Status Bar + the Header (AppBar)
+    final double exactTopPosition = MediaQuery.of(context).padding.top + kToolbarHeight + 12;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: exactTopPosition,
+        left: 16,
+        right: 16,
+        child: Dismissible(
+          key: UniqueKey(),
+          direction: DismissDirection.horizontal,
+          onDismissed: (_) => overlayEntry.remove(),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: isError ? Colors.red.shade600 : Colors.green.shade600,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                children: [
+                   Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     child: Text(
+                       message,
+                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                     ),
+                   ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+    Future.delayed(const Duration(seconds: 4), () {
+      if (overlayEntry.mounted) overlayEntry.remove();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,15 +179,17 @@ class _LoginPageState extends State<LoginPage> {
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            _buildLoginForm(context),
-            const SizedBox(height: 24),
-            _buildFooter(context),
-          ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              _buildLoginForm(context),
+              const SizedBox(height: 24),
+              _buildFooter(context),
+            ],
+          ),
         ),
       ),
     );
@@ -61,7 +203,7 @@ class _LoginPageState extends State<LoginPage> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha:0.02),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -93,9 +235,17 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 8),
           TextField(
+            controller: _emailController,
+            onChanged: (val) {
+              _validateEmail(val);
+              setState(() => _passwordError = null);
+            },
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               hintText: 'you@example.com',
+              errorText: _emailError,
+              errorMaxLines: 2,
+
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
               prefixIcon: Icon(Icons.email_outlined, color: Colors.grey.shade500, size: 20),
               border: OutlineInputBorder(
@@ -109,6 +259,14 @@ class _LoginPageState extends State<LoginPage> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Color(0xFF0C5AD2)),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.red),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -132,9 +290,14 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 8),
           TextField(
+            controller: _passwordController,
             obscureText: _obscurePassword,
+            onChanged: (val) {
+              setState(() => _passwordError = null);
+            },
             decoration: InputDecoration(
               hintText: '••••••••',
+              errorText: _passwordError,
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
               prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade500, size: 20),
               suffixIcon: IconButton(
@@ -161,6 +324,14 @@ class _LoginPageState extends State<LoginPage> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Color(0xFF0C5AD2)),
               ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -168,8 +339,10 @@ class _LoginPageState extends State<LoginPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: (_isLoading || !_isFormValid) ? null : _handleLogin,
+              icon: _isLoading 
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('Sign In', style: TextStyle(fontWeight: FontWeight.bold)),
               label: const Icon(Icons.arrow_forward, size: 18),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C5AD2),

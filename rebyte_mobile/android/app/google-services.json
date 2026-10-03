@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1013924601244",
+    "project_id": "rebyte-12549",
+    "storage_bucket": "rebyte-12549.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1013924601244:android:f2aaa021055cc6d6a3bc59",
+        "android_client_info": {
+          "package_name": "com.tarumt.rebyte"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1013924601244-1gciiuvp8ikffam43ka6pfdf7043bqgo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1013924601244-1gciiuvp8ikffam43ka6pfdf7043bqgo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
