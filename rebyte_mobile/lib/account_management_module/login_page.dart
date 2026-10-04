@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'services/auth_service.dart';
+import 'services/session_service.dart';
 import 'register_page.dart';
+import 'complete_profile_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -90,6 +92,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = false);
     
       if (result['success']) {
+        await SessionService.saveSession(email: _emailController.text.trim(), name: result['name']);
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: _emailController.text, name: result['name'], toastMessage: 'Signed in successfully!')),
@@ -149,6 +152,34 @@ class _LoginPageState extends State<LoginPage> {
     Future.delayed(const Duration(seconds: 4), () {
       if (overlayEntry.mounted) overlayEntry.remove();
     });
+  }
+
+  void _handleSocialLoginState(Future<Map<String, dynamic>> Function() loginMethod) async {
+    setState(() { _isLoading = true; });
+    final response = await loginMethod();
+    setState(() { _isLoading = false; });
+    
+    if (mounted) {
+      if (response['success']) {
+        if (response['requireProfileComplete'] == true) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => CompleteProfilePage(email: response['email'], initialName: response['name'], initialPhone: response['phone'])),
+          );
+        } else {
+          await SessionService.saveSession(email: response['email'], name: response['name']);
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomePage(isLoggedIn: true, email: response['email'], name: response['name'], toastMessage: response['message'] ?? 'Login successful via OAuth!'),
+            ),
+            (route) => false,
+          );
+        }
+      } else {
+        _showTopToast(context, response['error'] ?? 'Sign in failed', true);
+      }
+    }
   }
 
   @override
@@ -367,20 +398,20 @@ class _LoginPageState extends State<LoginPage> {
             ],
           ),
           const SizedBox(height: 24),
-          _buildSocialButton('Sign in with Google', Image.asset('assets/images/google_logo.png', height: 24, width: 24)),
+          _buildSocialButton('Sign in with Google', Image.asset('assets/images/google_logo.png', height: 24, width: 24), () => _handleSocialLoginState(AuthService.signInWithGoogle)),
           const SizedBox(height: 12),
-          _buildSocialButton('Sign in with Facebook', const Icon(Icons.facebook, color: Colors.blue, size: 30)),
+          _buildSocialButton('Sign in with Facebook', const Icon(Icons.facebook, color: Colors.blue, size: 30), () => _handleSocialLoginState(AuthService.signInWithFacebook)),
         ],
       ),
     );
   }
 
-  Widget _buildSocialButton(String label, Widget iconWidget) {
+  Widget _buildSocialButton(String label, Widget iconWidget, VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: OutlinedButton(
-        onPressed: () {},
+        onPressed: _isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: Colors.grey.shade300),
           padding: EdgeInsets.zero,

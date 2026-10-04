@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'welcome_page.dart';
+import 'profile_page.dart';
+import 'services/session_service.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -15,6 +17,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   late bool _isLoggedIn = widget.isLoggedIn;
+  late String? _email = widget.email;
+  late String? _name = widget.name;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -27,6 +31,16 @@ class _HomePageState extends State<HomePage> {
     if (widget.toastMessage != null) {
        WidgetsBinding.instance.addPostFrameCallback((_) {
          _showTopToast(widget.toastMessage!, false);
+       });
+    }
+  }
+
+  void _refreshProfileSession() async {
+    final session = await SessionService.getSession();
+    if (session.isNotEmpty && mounted) {
+       setState(() {
+          _email = session['email'];
+          _name = session['name'];
        });
     }
   }
@@ -53,37 +67,50 @@ class _HomePageState extends State<HomePage> {
       appBar: _buildAppBar(),
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSearchBar(),
-                const SizedBox(height: 16),
-                _buildBanner(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Quick Actions'),
-                const SizedBox(height: 12),
-                _buildQuickActions(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Active Activity'),
-                const SizedBox(height: 12),
-                _buildActiveActivity(),
-                const SizedBox(height: 24),
-                _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
-                const SizedBox(height: 12),
-                _buildRecommendedSmartphones(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Recently Viewed Smartphones'),
-                const SizedBox(height: 12),
-                _buildRecentlyViewedSmartphones(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Why Choose ReByte?'),
-                const SizedBox(height: 12),
-                _buildWhyChooseUs(),
-                const SizedBox(height: 24),
-              ],
-            ),
+          IndexedStack(
+            index: _selectedIndex,
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 16),
+                    _buildBanner(),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('Quick Actions'),
+                    const SizedBox(height: 12),
+                    _buildQuickActions(),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('Active Activity'),
+                    const SizedBox(height: 12),
+                    _buildActiveActivity(),
+                    const SizedBox(height: 24),
+                    _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
+                    const SizedBox(height: 12),
+                    _buildRecommendedSmartphones(),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('Recently Viewed Smartphones'),
+                    const SizedBox(height: 12),
+                    _buildRecentlyViewedSmartphones(),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('Why Choose ReByte?'),
+                    const SizedBox(height: 12),
+                    _buildWhyChooseUs(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+              const Center(child: Text('Shop Page - Under Construction')),
+              const Center(child: Text('Trade-In Page - Under Construction')),
+              const Center(child: Text('Rentals - Under Construction')),
+              ProfilePage(
+                name: _name, 
+                email: _email,
+                onProfileUpdated: () => _refreshProfileSession(),
+              ),
+            ],
           ),
           if (_toastMessage != null)
             Positioned(
@@ -126,48 +153,68 @@ class _HomePageState extends State<HomePage> {
       child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
-              child: _isLoggedIn ? _buildLoggedInDrawerHeader() : _buildLoggedOutDrawerHeader(),
-            ),
-            Divider(color: Colors.grey.shade200, height: 1),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  _buildDrawerItem(Icons.home, 'Home', isSelected: true),
-                  _buildDrawerItem(Icons.store_outlined, 'Shop'),
-                  _buildDrawerItem(Icons.autorenew, 'Trade-In'),
-                  _buildDrawerItem(Icons.calendar_month_outlined, 'Rentals'),
-                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices'),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                    child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                  ),
-                  _buildDrawerItem(Icons.inventory_2_outlined, 'My Orders'),
-                  _buildDrawerItem(Icons.shopping_bag_outlined, 'My Cart'),
-                  _buildDrawerItem(Icons.notifications_none, 'Notifications', badge: '3'),
-                ],
+            Container(
+              color: const Color(0xFFF8F9FB),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
+                child: _isLoggedIn ? _buildLoggedInDrawerHeader() : _buildLoggedOutDrawerHeader(),
               ),
             ),
             Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk'),
-            _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Confirm Logout'),
-                  content: const Text('Are you sure you want to log out?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                    TextButton(
-                      onPressed: () => Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomePage(isLoggedIn: false, toastMessage: 'Logout successful')), (route) => false),
-                      child: const Text('Logout', style: TextStyle(color: Colors.red)),
+            Expanded(
+              child: ClipRect(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildDrawerItem(Icons.home, 'Home', isSelected: _selectedIndex == 0, onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _selectedIndex = 0);
+                  }),
+                  _buildDrawerItem(Icons.store_outlined, 'Shop', isSelected: _selectedIndex == 1, onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _selectedIndex = 1);
+                  }),
+                    _buildDrawerItem(Icons.autorenew, 'Trade-In', isSelected: _selectedIndex == 2, onTap: () {
+                      Navigator.pop(context);
+                      setState(() => _selectedIndex = 2);
+                    }),
+                    _buildDrawerItem(Icons.calendar_month_outlined, 'Rentals', isSelected: _selectedIndex == 3, onTap: () {
+                      Navigator.pop(context);
+                      setState(() => _selectedIndex = 3);
+                    }),
+                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices'),
+                  if (_isLoggedIn) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                      child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
                     ),
+                    _buildDrawerItem(Icons.inventory_2_outlined, 'My Orders'),
+                    _buildDrawerItem(Icons.shopping_bag_outlined, 'My Cart'),
+                    _buildDrawerItem(Icons.notifications_none, 'Notifications', badge: '3'),
                   ],
-                ),
-              );
-            }),
+                ],
+              ),
+            ),
+          ),
+          Divider(color: Colors.grey.shade200, height: 1),
+            _buildDrawerItem(Icons.help_outline, 'Help Desk'),
+            if (_isLoggedIn)
+              _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirm Logout'),
+                    content: const Text('Are you sure you want to log out?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () => Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomePage(isLoggedIn: false, toastMessage: 'Logout successful')), (route) => false),
+                        child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             const SizedBox(height: 16),
           ],
         ),
@@ -208,42 +255,48 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildLoggedInDrawerHeader() {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha:0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        setState(() => _selectedIndex = 4);
+      },
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha:0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(Icons.person, size: 32, color: Colors.grey.shade400),
           ),
-          child: Icon(Icons.person, size: 32, color: Colors.grey.shade400),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.name ?? 'ReByte User',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.email ?? 'user@rebyte.com',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              ),
-            ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _name ?? 'ReByte User',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _email ?? 'user@rebyte.com',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -948,7 +1001,13 @@ class _HomePageState extends State<HomePage> {
   Widget _buildBottomNavigationBar() {
     return BottomNavigationBar(
       currentIndex: _selectedIndex,
-      onTap: (index) => setState(() => _selectedIndex = index),
+      onTap: (index) {
+        if (index == 4 && !_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        setState(() => _selectedIndex = index);
+      },
       type: BottomNavigationBarType.fixed,
       backgroundColor: Colors.white,
       selectedItemColor: const Color(0xFF0C5AD2),

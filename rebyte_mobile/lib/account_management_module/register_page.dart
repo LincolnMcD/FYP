@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
 import 'package:rebyte_mobile/account_management_module/otp_verification_page.dart';
+import 'package:rebyte_mobile/account_management_module/complete_profile_page.dart';
+import 'package:rebyte_mobile/account_management_module/home_page.dart';
 import 'login_page.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -47,6 +49,11 @@ class _RegisterPageState extends State<RegisterPage> {
     else if (!value.contains(RegExp(r'[0-9]'))) setState(() => _passwordError = 'Password must contain at least 1 number');
     else if (!value.contains(RegExp(r'[!@#\$%\^&\*(),.?":{}|<>]'))) setState(() => _passwordError = 'Password must contain at least 1 special character');
     else setState(() => _passwordError = null);
+    
+    // Always re-validate confirm password when the main password changes!
+    if (_confirmPasswordController.text.isNotEmpty) {
+      _validateConfirmPassword(_confirmPasswordController.text);
+    }
   }
 
   void _validateConfirmPassword(String value) {
@@ -90,17 +97,22 @@ class _RegisterPageState extends State<RegisterPage> {
     overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         top: exactTopPosition, left: 16, right: 16,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(color: isError ? Colors.red.shade600 : Colors.green.shade600, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
-                const SizedBox(width: 12),
-                Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
-              ],
+        child: Dismissible(
+          key: UniqueKey(),
+          direction: DismissDirection.horizontal,
+          onDismissed: (_) => overlayEntry.remove(),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(color: isError ? Colors.red.shade600 : Colors.green.shade600, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                ],
+              ),
             ),
           ),
         ),
@@ -108,6 +120,33 @@ class _RegisterPageState extends State<RegisterPage> {
     );
     overlay.insert(overlayEntry);
     Future.delayed(const Duration(seconds: 4), () { if (overlayEntry.mounted) overlayEntry.remove(); });
+  }
+
+  void _handleSocialLoginState(Future<Map<String, dynamic>> Function() loginMethod) async {
+    setState(() { _isLoading = true; });
+    final response = await loginMethod();
+    setState(() { _isLoading = false; });
+    
+    if (mounted) {
+      if (response['success']) {
+        if (response['requireProfileComplete'] == true) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => CompleteProfilePage(email: response['email'], initialName: response['name'], initialPhone: response['phone'])),
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomePage(isLoggedIn: true, email: response['email'], name: response['name'], toastMessage: response['message'] ?? 'Registration completed via OAuth!'),
+            ),
+            (route) => false,
+          );
+        }
+      } else {
+        _showTopToast(response['error'] ?? 'Sign up failed', true);
+      }
+    }
   }
 
   @override
@@ -267,9 +306,9 @@ class _RegisterPageState extends State<RegisterPage> {
             ],
           ),
           const SizedBox(height: 24),
-          _buildSocialButton('Continue with Google', Image.asset('assets/images/google_logo.png', height: 24, width: 24)),
+          _buildSocialButton('Continue with Google', Image.asset('assets/images/google_logo.png', height: 24, width: 24), () => _handleSocialLoginState(AuthService.signInWithGoogle)),
           const SizedBox(height: 12),
-          _buildSocialButton('Continue with Facebook', const Icon(Icons.facebook, color: Colors.blue, size:30)),
+          _buildSocialButton('Continue with Facebook', const Icon(Icons.facebook, color: Colors.blue, size:30), () => _handleSocialLoginState(AuthService.signInWithFacebook)),
         ],
       ),
     );
@@ -314,12 +353,12 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildSocialButton(String label, Widget iconWidget) {
+  Widget _buildSocialButton(String label, Widget iconWidget, VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: OutlinedButton(
-        onPressed: () {},
+        onPressed: _isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: Colors.grey.shade300),
           padding: EdgeInsets.zero,

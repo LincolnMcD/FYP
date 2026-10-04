@@ -35,11 +35,9 @@ const { validateEmail, validatePassword } = require("./validation");
 const { Customer } = require("./models");
 const db = require("../config/firebase");
 
-const app = express();
-app.use(express.json());
-app.use(cors());
+const router = express.Router();
 
-app.post("/request-otp", async (req, res) => {
+router.post("/request-otp", async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
@@ -47,6 +45,10 @@ app.post("/request-otp", async (req, res) => {
         const usersRef = db.collection("users");
         const snapshot = await usersRef.where("email", "==", email).get();
         if (!snapshot.empty) {
+            const registeredMethod = snapshot.docs[0].data().loginMethod;
+            if (registeredMethod && registeredMethod !== "Email") {
+                return res.status(400).json({ error: `Your email address is registered at ${registeredMethod}. Please login using ${registeredMethod}.` });
+            }
             return res.status(400).json({ error: "Email is already registered" });
         }
 
@@ -66,7 +68,7 @@ app.post("/request-otp", async (req, res) => {
     }
 });
 
-app.post("/register", async (req, res) => {
+router.post("/register", async (req, res) => {
     // RE-ARCHITECTED: ONLY REQUIRE EMAIL, PASSWORD, and OTP!
     const { email, password, otp } = req.body;
 
@@ -83,7 +85,13 @@ app.post("/register", async (req, res) => {
     try {
         const usersRef = db.collection("users");
         const snapshot = await usersRef.where("email", "==", email).get();
-        if (!snapshot.empty) return res.status(400).json({ error: "Email is already registered" });
+        if (!snapshot.empty) {
+            const registeredMethod = snapshot.docs[0].data().loginMethod;
+            if (registeredMethod && registeredMethod !== "Email") {
+                return res.status(400).json({ error: `Your email address is registered at ${registeredMethod}. Please login using ${registeredMethod}.` });
+            }
+            return res.status(400).json({ error: "Email is already registered" });
+        }
 
         const otpRef = db.collection("otps").doc(email);
         const otpDoc = await otpRef.get();
@@ -127,7 +135,7 @@ app.post("/register", async (req, res) => {
     }
 });
 
-app.post("/update-profile", async (req, res) => {
+router.post("/update-profile", async (req, res) => {
     const { email, fullName, phoneNumber, birthDate, gender } = req.body;
     if (!email) return res.status(400).json({ error: "Email identifier is required" });
 
@@ -154,12 +162,110 @@ app.post("/update-profile", async (req, res) => {
     }
 });
 
-app.post("/login", async (req, res) => {
+router.post("/oauth-login", async (req, res) => {
+    const { idToken, loginMethod } = req.body;
+    if (!idToken) return res.status(400).json({ error: "idToken is required" });
+
+    try {
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+
+        let email = decodedToken.email;
+        let phone = decodedToken.phone_number;
+        let name = decodedToken.name || "ReByte User";
+
+        console.log("=== OAUTH ATTEMPT ===");
+        console.log("JWT -> Email:", email, "| Phone:", phone, "| UID:", uid, "| Method:", loginMethod);
+
+        if (!email || !phone) {
+            try {
+                const userRecord = await getAuth().getUser(uid);
+                console.log("UserRecord -> Email:", userRecord.email, "| Phone:", userRecord.phoneNumber);
+                console.log("UserRecord -> providerData:", JSON.stringify(userRecord.providerData));
+
+                email = email || userRecord.email;
+                phone = phone || userRecord.phoneNumber;
+                if (name === "ReByte User" && userRecord.displayName) name = userRecord.displayName;
+
+                // Explicit fallback for nested providerData
+                if (!email && userRecord.providerData) {
+                    const providerWithEmail = userRecord.providerData.find(p => p.email);
+                    if (providerWithEmail) email = providerWithEmail.email;
+                }
+            } catch (e) {
+                console.error("Failed to fetch explicit UserRecord", e);
+            }
+        }
+
+        console.log("FINAL EVALUATED IDENTITY -> Email:", email, "| Phone:", phone);
+
+        let snapshot;
+        if (email) {
+            snapshot = await db.collection("users").where("email", "==", email).get();
+        } else if (phone) {
+            snapshot = await db.collection("users").where("phoneNumber", "==", phone).get();
+        } else {
+            snapshot = { empty: true };
+        }
+
+        if (!snapshot.empty) {
+            // Existing User!
+            const userData = snapshot.docs[0].data();
+
+            // Check if login method matches
+            if (userData.loginMethod !== loginMethod) {
+                try {
+                    // Forcefully delete the newly spawned duplicate account from Firebase Auth to keep the console clean!
+                    if (uid !== userData.userId) {
+                        await getAuth().deleteUser(uid);
+                    }
+                } catch (e) {
+                    console.error("Failed to purge duplicate Firebase user", e);
+                }
+                return res.status(400).json({ error: `Your ${loginMethod} account's linked email is already registered. Please login using your ${userData.loginMethod} account.` });
+            }
+
+            // Force them to complete profile if phone is missing
+            const requireProfileComplete = !userData.phoneNumber || userData.phoneNumber === "";
+            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: userData.email, name: userData.fullName, requireProfileComplete });
+        } else {
+            if (!email && !phone) {
+                return res.status(400).json({ error: "Your social account does not have a bound Email or Phone Number. Please link one to your account to proceed." });
+            }
+
+            // New OAuth User! Create profile.
+            const newUser = new Customer({
+                fullName: name,
+                email: email || "",
+                phoneNumber: phone || "",
+                loginMethod: loginMethod || "OAuth"
+            });
+            newUser.userId = uid; // override the uuidv4 with the actual firebase UID
+
+            await db.collection("users").doc(uid).set(newUser.toJSON());
+            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: newUser.email, name, phone, requireProfileComplete: true });
+        }
+    } catch (err) {
+        console.error(err);
+        return res.status(401).json({ error: "Unauthorized OAuth Token" });
+    }
+});
+
+router.post("/login", async (req, res) => {
     const { email, password } = req.body;
     const emailValidation = validateEmail(email);
     if (!emailValidation.isValid) return res.status(400).json({ error: emailValidation.message });
 
     try {
+        // PRE-CHECK: Intercept Google/Facebook email usage natively instead of raw FIREBASE errors globally
+        const snapshot = await db.collection("users").where("email", "==", email).get();
+        if (!snapshot.empty) {
+            const registeredMethod = snapshot.docs[0].data().loginMethod;
+            if (registeredMethod && registeredMethod !== "Email") {
+                return res.status(400).json({ error: `Your email address is registered at ${registeredMethod}. Please login using ${registeredMethod}.` });
+            }
+        }
+
         const FIREBASE_API_KEY = "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE";
         const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
         const verifyResponse = await fetch(url, {
@@ -181,7 +287,6 @@ app.post("/login", async (req, res) => {
             return res.status(400).json({ error: errorMsg });
         }
 
-        const snapshot = await db.collection("users").where("email", "==", email).get();
         let fullName = "ReByte User";
         if (!snapshot.empty) {
             fullName = snapshot.docs[0].data().fullName || "ReByte User";
@@ -194,7 +299,63 @@ app.post("/login", async (req, res) => {
     }
 });
 
-const PORT = 3000;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+router.post("/get-profile", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    try {
+        const snapshot = await db.collection("users").where("email", "==", email).get();
+        if (snapshot.empty) return res.status(404).json({ error: "User not found" });
+
+        return res.status(200).json({ success: true, data: snapshot.docs[0].data() });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Failed to fetch profile" });
+    }
 });
+
+router.post("/change-password", async (req, res) => {
+    const { email, currentPassword, newPassword } = req.body;
+    if (!email || !currentPassword || !newPassword) return res.status(400).json({ error: "Missing required fields" });
+
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
+
+    try {
+        const FIREBASE_API_KEY = "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE";
+        const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
+
+        // Verify current password via REST
+        let fetchParams;
+        if (typeof fetch === 'undefined') {
+            fetchParams = require('node-fetch')(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: currentPassword, returnSecureToken: true })
+            });
+        } else {
+            fetchParams = fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: currentPassword, returnSecureToken: true })
+            });
+        }
+
+        const response = await fetchParams;
+        const data = await response.json();
+
+        if (data.error) {
+            return res.status(400).json({ error: "Incorrect current password" });
+        }
+
+        // Successfully verified! Apply the password change using Admin SDK
+        await getAuth().updateUser(data.localId, { password: newPassword });
+
+        return res.status(200).json({ success: true, message: "Password updated successfully" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Failed to update password" });
+    }
+});
+
+module.exports = router;

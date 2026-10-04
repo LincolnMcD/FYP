@@ -1,4 +1,4 @@
-package tarumt.edu.my.rebyte_mobile
+package com.tarumt.rebyte
 
 import io.flutter.embedding.android.FlutterActivity
 

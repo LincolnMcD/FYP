@@ -1,61 +1,52 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
+import 'package:rebyte_mobile/account_management_module/services/session_service.dart';
 import 'package:rebyte_mobile/account_management_module/home_page.dart';
 
 class CompleteProfilePage extends StatefulWidget {
   final String email;
+  final String? initialName;
+  final String? initialPhone;
 
-  const CompleteProfilePage({super.key, required this.email});
+  const CompleteProfilePage({super.key, required this.email, this.initialName, this.initialPhone});
 
   @override
   State<CompleteProfilePage> createState() => _CompleteProfilePageState();
 }
 
 class _CompleteProfilePageState extends State<CompleteProfilePage> {
-  final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  late final TextEditingController _fullNameController;
+  late final TextEditingController _phoneController;
   
   String? _selectedGender;
   DateTime? _selectedBirthDate;
   bool _isLoading = false;
   bool _hasInteractedWithFullName = false;
+  bool _hasInteractedWithPhone = false;
   bool _isFormValid = false;
 
-  String? _fullNameError;
+  @override
+  void initState() {
+    super.initState();
+    _fullNameController = TextEditingController(text: widget.initialName ?? '');
+    _phoneController = TextEditingController(text: widget.initialPhone ?? '');
+  }
+
+  String? _toastMessage;
+  bool _isToastError = false;
 
   void _showTopToast(String message, bool isError) {
-    var overlay = Overlay.of(context);
-    late OverlayEntry entry;
-    final topPos = MediaQuery.of(context).padding.top + kToolbarHeight + 12;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: topPos,
-        left: 16,
-        right: 16,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: isError ? Colors.red.shade600 : Colors.green.shade600,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
-            ),
-            child: Row(
-              children: [
-                Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
-                const SizedBox(width: 12),
-                Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(entry);
-    Future.delayed(const Duration(seconds: 4), () { if (entry.mounted) entry.remove(); });
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _toastMessage = null);
+      }
+    });
   }
 
   Future<void> _pickDate() async {
@@ -103,6 +94,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     setState(() => _isLoading = false);
 
     if (result['success']) {
+        await SessionService.saveSession(email: widget.email, name: _fullNameController.text);
         Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: widget.email, name: _fullNameController.text, toastMessage: 'Account created successfully!')), (route) => false);
     } else {
       _showTopToast(result['error'] ?? 'Update failed', true);
@@ -128,7 +120,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
 
     final p = _phoneController.text.trim();
     bool isPhoneValid = false;
-    if (p.isEmpty) isPhoneValid = true;
+    if (p.isEmpty) {
+        if (_hasInteractedWithPhone) {
+            currentPhoneError = 'Phone number is required';
+        }
+    }
     else if (!p.startsWith('1')) currentPhoneError = 'Must start with 1';
     else if (p.startsWith('11') && p.length != 10) currentPhoneError = 'Must be exactly 10 digits';
     else if (p.startsWith('1') && !p.startsWith('11') && p.length != 9) currentPhoneError = 'Must be exactly 9 digits';
@@ -156,8 +152,10 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
           ],
         ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +188,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                       onChangedCallback: () => setState(() => _hasInteractedWithFullName = true),
                     ),
                     const SizedBox(height: 16),
-                    _buildLabel('Phone Number'),
+                    _buildLabel('Phone Number *'),
                     Row(
                       children: [
                         Container(
@@ -209,6 +207,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                             maxLength: 10,
                             keyboardType: TextInputType.phone,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChangedCallback: () => setState(() => _hasInteractedWithPhone = true),
                           ),
                         ),
                       ],
@@ -293,6 +292,33 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
             ],
           ),
         ),
+      ),
+          if (_toastMessage != null)
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 16,
+              child: Dismissible(
+                key: UniqueKey(),
+                direction: DismissDirection.horizontal,
+                onDismissed: (_) => setState(() => _toastMessage = null),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(color: _isToastError ? Colors.red.shade600 : Colors.green.shade600, borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_toastMessage!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
