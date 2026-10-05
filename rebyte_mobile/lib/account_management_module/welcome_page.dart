@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'login_page.dart';
 import 'register_page.dart';
+import 'terms_of_service_page.dart';
+import 'privacy_policy_page.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -175,13 +177,17 @@ class WelcomePage extends StatelessWidget {
                 TextSpan(
                   text: 'Terms of Service',
                   style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w600),
-                  recognizer: TapGestureRecognizer()..onTap = () {},
+                  recognizer: TapGestureRecognizer()..onTap = () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsOfServicePage()));
+                  },
                 ),
                 const TextSpan(text: ' and '),
                 TextSpan(
                   text: 'Privacy Policy',
                   style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w600),
-                  recognizer: TapGestureRecognizer()..onTap = () {},
+                  recognizer: TapGestureRecognizer()..onTap = () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()));
+                  },
                 ),
                 const TextSpan(text: '.'),
               ],

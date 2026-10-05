@@ -135,6 +135,100 @@ router.post("/register", async (req, res) => {
     }
 });
 
+router.post("/forgot-password/request-otp", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    try {
+        const usersRef = db.collection("users");
+        const snapshot = await usersRef.where("email", "==", email).get();
+
+        if (snapshot.empty) {
+            return res.status(404).json({ error: "Email not registered. Please register first." });
+        }
+
+        const userDoc = snapshot.docs[0].data();
+        if (userDoc.loginMethod && userDoc.loginMethod !== "Email") {
+            return res.status(400).json({ error: `Email registered via ${userDoc.loginMethod}. Please use social sign-in.` });
+        }
+
+        const otpCode = crypto.randomInt(100000, 999999).toString();
+        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+        await db.collection("otps").doc(email + "_reset").set({
+            otpCode,
+            otpExpiresAt
+        });
+
+        await sendOTPEmail(email, otpCode);
+        return res.status(200).json({ message: "Verification code sent." });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+router.post("/forgot-password/verify-otp", async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required" });
+
+    try {
+        const otpRef = db.collection("otps").doc(email + "_reset");
+        const otpDoc = await otpRef.get();
+
+        if (!otpDoc.exists) return res.status(400).json({ error: "No OTP requested for this email" });
+
+        const otpData = otpDoc.data();
+        if (otpData.otpCode !== otp.toString()) return res.status(400).json({ error: "Invalid verification code" });
+
+        const now = new Date();
+        const expiresAt = new Date(otpData.otpExpiresAt);
+        if (now > expiresAt) return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+
+        return res.status(200).json({ success: true, message: "OTP is valid!" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error during OTP verification" });
+    }
+});
+
+router.post("/forgot-password/reset", async (req, res) => {
+    const { email, newPassword, otp } = req.body;
+    if (!email || !newPassword || !otp) return res.status(400).json({ error: "Missing required parameters" });
+
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
+
+    try {
+        const otpRef = db.collection("otps").doc(email + "_reset");
+        const otpDoc = await otpRef.get();
+
+        if (!otpDoc.exists) return res.status(400).json({ error: "No OTP requested for this email" });
+
+        const otpData = otpDoc.data();
+        if (otpData.otpCode !== otp.toString()) return res.status(400).json({ error: "Invalid verification code" });
+
+        const now = new Date();
+        const expiresAt = new Date(otpData.otpExpiresAt);
+        if (now > expiresAt) return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+
+        await otpRef.delete();
+
+        const usersRef = db.collection("users");
+        const snapshot = await usersRef.where("email", "==", email).get();
+        if (snapshot.empty) return res.status(404).json({ error: "User not found" });
+
+        const uid = snapshot.docs[0].data().userId;
+
+        await getAuth().updateUser(uid, { password: newPassword });
+
+        return res.status(200).json({ success: true, message: "Password updated successfully" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error during reset" });
+    }
+});
+
 router.post("/update-profile", async (req, res) => {
     const { email, fullName, phoneNumber, birthDate, gender } = req.body;
     if (!email) return res.status(400).json({ error: "Email identifier is required" });

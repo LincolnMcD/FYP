@@ -4,6 +4,7 @@ import 'services/auth_service.dart';
 import 'services/session_service.dart';
 import 'register_page.dart';
 import 'complete_profile_page.dart';
+import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -191,7 +192,13 @@ class _LoginPageState extends State<LoginPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomePage(isLoggedIn: false)));
+            }
+          }
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -311,7 +318,9 @@ class _LoginPageState extends State<LoginPage> {
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               GestureDetector(
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ForgotPasswordPage()));
+                },
                 child: const Text(
                   'Forgot password?',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0C5AD2)),

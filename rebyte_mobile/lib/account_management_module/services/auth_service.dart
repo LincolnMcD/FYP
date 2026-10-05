@@ -25,6 +25,55 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> requestForgotPasswordOtp(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/forgot-password/request-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ).timeout(const Duration(seconds: 5));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'message': body['message']};
+      return {'success': false, 'error': body['error'] ?? 'Request failed'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> verifyForgotPasswordOtp(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/forgot-password/verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp}),
+      ).timeout(const Duration(seconds: 5));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'message': body['message']};
+      return {'success': false, 'error': body['error'] ?? 'Verification failed'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> resetForgotPassword(String email, String newPassword, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/forgot-password/reset'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'newPassword': newPassword,
+          'otp': otp
+        }),
+      ).timeout(const Duration(seconds: 10));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'message': body['message']};
+      return {'success': false, 'error': body['error'] ?? 'Reset failed'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> register({
     required String email,
     required String password,

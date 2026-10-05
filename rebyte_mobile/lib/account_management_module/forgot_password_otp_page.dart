@@ -1,23 +1,21 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
-import 'package:rebyte_mobile/account_management_module/complete_profile_page.dart';
+import 'package:rebyte_mobile/account_management_module/forgot_password_create_page.dart';
 
-class OTPVerificationPage extends StatefulWidget {
+class ForgotPasswordOtpPage extends StatefulWidget {
   final String email;
-  final String password;
 
-  const OTPVerificationPage({
+  const ForgotPasswordOtpPage({
     super.key,
     required this.email,
-    required this.password,
   });
 
   @override
-  State<OTPVerificationPage> createState() => _OTPVerificationPageState();
+  State<ForgotPasswordOtpPage> createState() => _ForgotPasswordOtpPageState();
 }
 
-class _OTPVerificationPageState extends State<OTPVerificationPage> {
+class _ForgotPasswordOtpPageState extends State<ForgotPasswordOtpPage> {
   final List<TextEditingController> _controllers = List.generate(6, (index) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
   bool _isLoading = false;
@@ -25,7 +23,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
   
   Timer? _timer;
   int _countdown = 600; // 10 minutes
-  int _resendCooldown = 60; // 1 minute lockout before they can click again
+  int _resendCooldown = 60; // 1 minute lockout
 
   @override
   void initState() {
@@ -101,18 +99,19 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
     }
 
     setState(() => _isLoading = true);
-    final result = await AuthService.register(
-      email: widget.email,
-      password: widget.password,
-      otp: code,
-    );
+    final result = await AuthService.verifyForgotPasswordOtp(widget.email, code);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result['success']) {
-      _showTopToast('Email verified!', false);
+      _showTopToast('OTP verified!', false);
       Future.delayed(const Duration(milliseconds: 500), () {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => CompleteProfilePage(email: widget.email)));
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CreateNewPasswordPage(email: widget.email, otp: code),
+          ),
+        );
       });
     } else {
       _showTopToast(result['error'] ?? 'Verification failed', true);
@@ -121,7 +120,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
 
   Future<void> _resendOTP() async {
     setState(() => _isResending = true);
-    final result = await AuthService.requestOTP(widget.email);
+    final result = await AuthService.requestForgotPasswordOtp(widget.email);
     if (!mounted) return;
     setState(() => _isResending = false);
 
@@ -150,9 +149,9 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/images/rebyte_logo.png', height: 36),
+            Image.asset('assets/images/rebyte_logo.png', height: 45),
             const SizedBox(width: 8),
-            const Text('ReByte', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 24)),
+            const Text('ReByte', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 32, letterSpacing: -0.5)),
           ],
         ),
       ),
@@ -179,7 +178,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
                 text: TextSpan(
                   style: const TextStyle(fontSize: 15, color: Color(0xFF475569), height: 1.5),
                   children: [
-                    const TextSpan(text: 'Weve sent a 6-digit verification code to\n'),
+                    const TextSpan(text: 'We\'ve sent a 6-digit verification code to\n'),
                     TextSpan(text: widget.email, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                   ],
                 ),
@@ -254,7 +253,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
                       ),
               ),
               const SizedBox(height: 32),
-              const Text('Didnt receive the email?', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+              const Text('Didn\'t receive the email?', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
               TextButton(
                 onPressed: (_isResending || _resendCooldown > 0) ? null : _resendOTP,
                 child: _isResending
@@ -276,7 +275,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
                 child: TextButton.icon(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.arrow_back, size: 16, color: Color(0xFF475569)),
-                  label: const Text('Back to Register', style: TextStyle(color: Color(0xFF475569))),
+                  label: const Text('Back to Previous', style: TextStyle(color: Color(0xFF475569))),
                 ),
               ),
             ],

@@ -1,8 +1,11 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
 import 'package:rebyte_mobile/account_management_module/services/session_service.dart';
 import 'package:rebyte_mobile/account_management_module/home_page.dart';
+import 'terms_of_service_page.dart';
+import 'privacy_policy_page.dart';
 
 class CompleteProfilePage extends StatefulWidget {
   final String email;
@@ -25,6 +28,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
   bool _hasInteractedWithFullName = false;
   bool _hasInteractedWithPhone = false;
   bool _isFormValid = false;
+  bool _agreedToTerms = false;
 
   @override
   void initState() {
@@ -130,7 +134,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     else if (p.startsWith('1') && !p.startsWith('11') && p.length != 9) currentPhoneError = 'Must be exactly 9 digits';
     else isPhoneValid = true;
 
-    _isFormValid = isFullNameValid && isPhoneValid && _selectedGender != null;
+    _isFormValid = isFullNameValid && isPhoneValid && _selectedGender != null && _agreedToTerms;
     
     final birthDateText = _selectedBirthDate != null 
         ? "${_selectedBirthDate!.day.toString().padLeft(2, '0')}/${_selectedBirthDate!.month.toString().padLeft(2, '0')}/${_selectedBirthDate!.year}"
@@ -268,7 +272,49 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: Checkbox(
+                      value: _agreedToTerms,
+                      onChanged: (val) => setState(() => _agreedToTerms = val ?? false),
+                      activeColor: Colors.blue.shade900,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+                        children: [
+                          const TextSpan(text: 'I agree to the '),
+                          TextSpan(
+                            text: 'Terms of Service',
+                            style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w600),
+                            recognizer: TapGestureRecognizer()..onTap = () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsOfServicePage()));
+                            },
+                          ),
+                          const TextSpan(text: ' and '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w600),
+                            recognizer: TapGestureRecognizer()..onTap = () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()));
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
