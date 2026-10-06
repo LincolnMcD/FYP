@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -74,10 +74,29 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> verifyRegistrationOtp(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/verify-registration-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp}),
+      ).timeout(const Duration(seconds: 5));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'message': body['message']};
+      return {'success': false, 'error': body['error'] ?? 'Verification failed'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> register({
     required String email,
     required String password,
     required String otp,
+    required String fullName,
+    required String phoneNumber,
+    required String gender,
+    required String birthDate,
   }) async {
     try {
       final response = await http.post(
@@ -87,6 +106,10 @@ class AuthService {
           'email': email,
           'password': password,
           'otp': otp,
+          'fullName': fullName,
+          'phoneNumber': phoneNumber,
+          'gender': gender,
+          'birthDate': birthDate,
         }),
       ).timeout(const Duration(seconds: 10));
       
@@ -107,7 +130,7 @@ class AuthService {
       final response = await http.post(
         Uri.parse('$baseUrl/oauth-login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'idToken': idToken, 'loginMethod': provider}),
+        body: jsonEncode({'idToken': idToken, 'loginMethod': provider, 'clientType': 'Mobile'}),
       ).timeout(const Duration(seconds: 10));
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
@@ -117,7 +140,8 @@ class AuthService {
           'name': body['name'], 
           'email': body['email'], 
           'phone': body['phone'], 
-          'requireProfileComplete': body['requireProfileComplete']
+          'requireProfileComplete': body['requireProfileComplete'],
+          'role': body['role']
         };
       }
       return {'success': false, 'error': body['error'] ?? 'OAuth Login failed'};
@@ -253,13 +277,14 @@ class AuthService {
         body: jsonEncode({
           'email': email,
           'password': password,
+          'clientType': 'Mobile',
         }),
       ).timeout(const Duration(seconds: 5));
       
       final body = jsonDecode(response.body);
       
       if (response.statusCode == 200) {
-        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User'};
+        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User', 'role': body['role']};
       } else {
         return {'success': false, 'error': body['error'] ?? 'Login failed'};
       }

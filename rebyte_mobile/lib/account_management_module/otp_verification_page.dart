@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
 import 'package:rebyte_mobile/account_management_module/complete_profile_page.dart';
@@ -57,41 +57,7 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
     super.dispose();
   }
 
-  void _showTopToast(String message, bool isError) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-    final topPos = MediaQuery.of(context).padding.top + kToolbarHeight + 12;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: topPos, left: 16, right: 16,
-        child: Dismissible(
-          key: UniqueKey(),
-          direction: DismissDirection.horizontal,
-          onDismissed: (_) => entry.remove(),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: isError ? Colors.red.shade600 : Colors.green.shade600,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(entry);
-    Future.delayed(const Duration(seconds: 4), () { if (entry.mounted) entry.remove(); });
-  }
+  
 
   Future<void> _verifyOTP() async {
     final code = _controllers.map((c) => c.text.trim()).join();
@@ -101,18 +67,14 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
     }
 
     setState(() => _isLoading = true);
-    final result = await AuthService.register(
-      email: widget.email,
-      password: widget.password,
-      otp: code,
-    );
+    final result = await AuthService.verifyRegistrationOtp(widget.email, code);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (result['success']) {
       _showTopToast('Email verified!', false);
       Future.delayed(const Duration(milliseconds: 500), () {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => CompleteProfilePage(email: widget.email)));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => CompleteProfilePage(email: widget.email, password: widget.password, otp: code)));
       });
     } else {
       _showTopToast(result['error'] ?? 'Verification failed', true);
@@ -133,6 +95,20 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
     } else {
       _showTopToast(result['error'] ?? 'Could not resend code', true);
     }
+  }
+
+  String? _toastMessage;
+  bool _isToastError = false;
+
+  void _showTopToast(String message, bool isError) {
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _toastMessage = null);
+    });
   }
 
   @override
@@ -156,7 +132,9 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
           ],
         ),
       ),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
@@ -283,6 +261,39 @@ class _OTPVerificationPageState extends State<OTPVerificationPage> {
           ),
         ),
       ),
+
+          if (_toastMessage != null)
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 16,
+              child: Dismissible(
+                key: UniqueKey(),
+                direction: DismissDirection.horizontal,
+                onDismissed: (_) => setState(() => _toastMessage = null),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _isToastError ? const Color(0xFFE11D48) : Colors.green.shade600,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_toastMessage!, textAlign: TextAlign.justify, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+
     );
   }
 }

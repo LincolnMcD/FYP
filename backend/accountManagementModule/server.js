@@ -68,9 +68,33 @@ router.post("/request-otp", async (req, res) => {
     }
 });
 
+router.post("/verify-registration-otp", async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required" });
+
+    try {
+        const otpRef = db.collection("otps").doc(email);
+        const otpDoc = await otpRef.get();
+
+        if (!otpDoc.exists) return res.status(400).json({ error: "No OTP requested for this email" });
+
+        const otpData = otpDoc.data();
+        if (otpData.otpCode !== otp.toString()) return res.status(400).json({ error: "Invalid verification code" });
+
+        const now = new Date();
+        const expiresAt = new Date(otpData.otpExpiresAt);
+        if (now > expiresAt) return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+
+        return res.status(200).json({ message: "OTP Verified successfully" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 router.post("/register", async (req, res) => {
     // RE-ARCHITECTED: ONLY REQUIRE EMAIL, PASSWORD, and OTP!
-    const { email, password, otp } = req.body;
+    const { email, password, otp, fullName, phoneNumber, gender, birthDate } = req.body;
 
     if (!email || !password || !otp) {
         return res.status(400).json({ error: "Email, Password, and OTP are required" });
@@ -112,15 +136,15 @@ router.post("/register", async (req, res) => {
 
         const userRecord = await getAuth().createUser(authPayload);
 
-        // Save initial incomplete schema 
+        // Save full schema natively avoiding dummy instances
         await usersRef.doc(userRecord.uid).set({
-            birthDate: null,
+            birthDate: birthDate || null,
             createdAt: new Date().toISOString(),
             email: email,
-            fullName: "",
-            gender: "Not Specified",
+            fullName: fullName || "",
+            gender: gender || "Not Specified",
             loginMethod: "Email",
-            phoneNumber: "",
+            phoneNumber: phoneNumber || "",
             role: "Customer",
             status: "Active",
             updatedAt: new Date().toISOString(),
@@ -150,6 +174,9 @@ router.post("/forgot-password/request-otp", async (req, res) => {
         const userDoc = snapshot.docs[0].data();
         if (userDoc.loginMethod && userDoc.loginMethod !== "Email") {
             return res.status(400).json({ error: `Email registered via ${userDoc.loginMethod}. Please use social sign-in.` });
+        }
+        if (userDoc.role === "Admin") {
+            return res.status(403).json({ error: "Password resets are heavily constrained for Administrator accounts. Please contact system administrators." });
         }
 
         const otpCode = crypto.randomInt(100000, 999999).toString();
@@ -257,7 +284,7 @@ router.post("/update-profile", async (req, res) => {
 });
 
 router.post("/oauth-login", async (req, res) => {
-    const { idToken, loginMethod } = req.body;
+    const { idToken, loginMethod, clientType } = req.body;
     if (!idToken) return res.status(400).json({ error: "idToken is required" });
 
     try {
@@ -319,9 +346,13 @@ router.post("/oauth-login", async (req, res) => {
                 return res.status(400).json({ error: `Your ${loginMethod} account's linked email is already registered. Please login using your ${userData.loginMethod} account.` });
             }
 
-            // Force them to complete profile if phone is missing
             const requireProfileComplete = !userData.phoneNumber || userData.phoneNumber === "";
-            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: userData.email, name: userData.fullName, requireProfileComplete });
+
+            if (userData.role === "Admin" && clientType === "Mobile") {
+                return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
+            }
+
+            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: userData.email, name: userData.fullName, requireProfileComplete, role: userData.role });
         } else {
             if (!email && !phone) {
                 return res.status(400).json({ error: "Your social account does not have a bound Email or Phone Number. Please link one to your account to proceed." });
@@ -337,7 +368,7 @@ router.post("/oauth-login", async (req, res) => {
             newUser.userId = uid; // override the uuidv4 with the actual firebase UID
 
             await db.collection("users").doc(uid).set(newUser.toJSON());
-            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: newUser.email, name, phone, requireProfileComplete: true });
+            return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: newUser.email, name, phone, requireProfileComplete: true, role: newUser.role });
         }
     } catch (err) {
         console.error(err);
@@ -346,7 +377,7 @@ router.post("/oauth-login", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, clientType } = req.body;
     const emailValidation = validateEmail(email);
     if (!emailValidation.isValid) return res.status(400).json({ error: emailValidation.message });
 
@@ -382,11 +413,17 @@ router.post("/login", async (req, res) => {
         }
 
         let fullName = "ReByte User";
+        let role = "Customer";
         if (!snapshot.empty) {
-            fullName = snapshot.docs[0].data().fullName || "ReByte User";
+            const userData = snapshot.docs[0].data();
+            fullName = userData.fullName || "ReByte User";
+            role = userData.role || "Customer";
+            if (role === "Admin" && clientType === "Mobile") {
+                return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
+            }
         }
 
-        return res.status(200).json({ message: "Login successful", token: data.idToken, uid: data.localId, name: fullName });
+        return res.status(200).json({ message: "Login successful", token: data.idToken, uid: data.localId, name: fullName, role: role });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "Internal Server Error connecting to Identity Toolkit" });

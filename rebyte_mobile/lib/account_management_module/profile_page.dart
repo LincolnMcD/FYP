@@ -185,7 +185,7 @@ class ProfilePage extends StatelessWidget {
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
+                                    backgroundColor: const Color(0xFFE11D48),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 14),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -209,8 +209,8 @@ class ProfilePage extends StatelessWidget {
   }
 
   Widget _buildMenuItem(IconData icon, String title, {bool isLogout = false, VoidCallback? onTap}) {
-    final color = isLogout ? Colors.red.shade600 : const Color(0xFF0F172A);
-    final iconColor = isLogout ? Colors.red.shade600 : const Color(0xFF0C5AD2);
+    final color = isLogout ? const Color(0xFFE11D48) : const Color(0xFF0F172A);
+    final iconColor = isLogout ? const Color(0xFFE11D48) : const Color(0xFF0C5AD2);
 
     return InkWell(
       onTap: onTap ?? () {},

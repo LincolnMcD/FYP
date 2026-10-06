@@ -275,7 +275,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       children: [
                         Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
                         const SizedBox(width: 12),
-                        Expanded(child: Text(_toastMessage!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                        Expanded(child: Text(_toastMessage!, textAlign: TextAlign.justify, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
                       ],
                     ),
                   ),

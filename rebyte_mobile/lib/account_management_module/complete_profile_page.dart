@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
@@ -9,10 +9,12 @@ import 'privacy_policy_page.dart';
 
 class CompleteProfilePage extends StatefulWidget {
   final String email;
+  final String? password;
+  final String? otp;
   final String? initialName;
   final String? initialPhone;
 
-  const CompleteProfilePage({super.key, required this.email, this.initialName, this.initialPhone});
+  const CompleteProfilePage({super.key, required this.email, this.password, this.otp, this.initialName, this.initialPhone});
 
   @override
   State<CompleteProfilePage> createState() => _CompleteProfilePageState();
@@ -87,13 +89,28 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     final phonePayload = pVal.isEmpty ? '' : '+60$pVal';
 
     setState(() => _isLoading = true);
-    final result = await AuthService.updateProfile(
-      email: widget.email,
-      fullName: _fullNameController.text,
-      phoneNumber: phonePayload,
-      birthDate: _selectedBirthDate?.toIso8601String() ?? '',
-      gender: _selectedGender ?? '',
-    );
+    
+    Map<String, dynamic> result;
+    if (widget.password != null && widget.otp != null) {
+      result = await AuthService.register(
+        email: widget.email,
+        password: widget.password!,
+        otp: widget.otp!,
+        fullName: _fullNameController.text,
+        phoneNumber: phonePayload,
+        birthDate: _selectedBirthDate?.toIso8601String() ?? '',
+        gender: _selectedGender ?? '',
+      );
+    } else {
+      result = await AuthService.updateProfile(
+        email: widget.email,
+        fullName: _fullNameController.text,
+        phoneNumber: phonePayload,
+        birthDate: _selectedBirthDate?.toIso8601String() ?? '',
+        gender: _selectedGender ?? '',
+      );
+    }
+    
     if (!mounted) return;
     setState(() => _isLoading = false);
 
@@ -357,7 +374,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                       children: [
                         Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
                         const SizedBox(width: 12),
-                        Expanded(child: Text(_toastMessage!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                        Expanded(child: Text(_toastMessage!, textAlign: TextAlign.justify, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
                       ],
                     ),
                   ),
@@ -390,6 +407,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         errorText: errorText,
         counterText: '',
         hintText: hint,
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),

@@ -6,12 +6,14 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 class SessionService {
   static const String _keyEmail = 'session_email';
   static const String _keyName = 'session_name';
+  static const String _keyRole = 'session_role';
   static const String _keyLoggedIn = 'session_logged_in';
 
-  static Future<void> saveSession({required String email, required String name}) async {
+  static Future<void> saveSession({required String email, required String name, String role = 'Customer'}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyEmail, email);
     await prefs.setString(_keyName, name);
+    await prefs.setString(_keyRole, role);
     await prefs.setBool(_keyLoggedIn, true);
   }
 
@@ -22,6 +24,7 @@ class SessionService {
       return {
         'email': prefs.getString(_keyEmail),
         'name': prefs.getString(_keyName),
+        'role': prefs.getString(_keyRole) ?? 'Customer',
       };
     }
     return {};

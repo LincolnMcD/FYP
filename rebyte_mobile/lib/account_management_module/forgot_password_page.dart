@@ -49,37 +49,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     }
   }
 
-  void _showTopToast(String message, bool isError) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry;
-    final double exactTopPosition = MediaQuery.of(context).padding.top + kToolbarHeight + 12;
+  
 
-    overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: exactTopPosition, left: 16, right: 16,
-        child: Dismissible(
-          key: UniqueKey(),
-          direction: DismissDirection.horizontal,
-          onDismissed: (_) => overlayEntry.remove(),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(color: isError ? Colors.red.shade600 : Colors.green.shade600, borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                children: [
-                  Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(overlayEntry);
-    Future.delayed(const Duration(seconds: 4), () { if (overlayEntry.mounted) overlayEntry.remove(); });
+  String? _toastMessage;
+  bool _isToastError = false;
+
+  void _showTopToast(String message, bool isError) {
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _toastMessage = null);
+    });
   }
 
   @override
@@ -103,7 +86,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         centerTitle: true,
       ),
-      body: Center(
+      body: Stack(
+        children: [
+          Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Container(
@@ -170,6 +155,39 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ),
         ),
       ),
+
+          if (_toastMessage != null)
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 16,
+              child: Dismissible(
+                key: UniqueKey(),
+                direction: DismissDirection.horizontal,
+                onDismissed: (_) => setState(() => _toastMessage = null),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _isToastError ? const Color(0xFFE11D48) : Colors.green.shade600,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_isToastError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(_toastMessage!, textAlign: TextAlign.justify, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+
     );
   }
 }
