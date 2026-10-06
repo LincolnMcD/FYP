@@ -1,6 +1,7 @@
-﻿const express = require("express");
+const express = require("express");
 const cors = require("cors");
 const { getAuth } = require("firebase-admin/auth");
+const { FieldValue } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
@@ -139,7 +140,7 @@ router.post("/register", async (req, res) => {
         // Save full schema natively avoiding dummy instances
         await usersRef.doc(userRecord.uid).set({
             birthDate: birthDate || null,
-            createdAt: new Date().toISOString(),
+            createdAt: FieldValue.serverTimestamp(),
             email: email,
             fullName: fullName || "",
             gender: gender || "Not Specified",
@@ -147,7 +148,7 @@ router.post("/register", async (req, res) => {
             phoneNumber: phoneNumber || "",
             role: "Customer",
             status: "Active",
-            updatedAt: new Date().toISOString(),
+            updatedAt: FieldValue.serverTimestamp(),
             userId: userRecord.uid
         });
 
@@ -273,7 +274,7 @@ router.post("/update-profile", async (req, res) => {
             phoneNumber: phoneNumber || "",
             birthDate: birthDate || null,
             gender: gender || "Not Specified",
-            updatedAt: new Date().toISOString()
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         return res.status(200).json({ message: "Profile updated successfully!" });
@@ -284,7 +285,7 @@ router.post("/update-profile", async (req, res) => {
 });
 
 router.post("/oauth-login", async (req, res) => {
-    const { idToken, loginMethod, clientType } = req.body;
+    const { idToken, loginMethod, clientType, fallbackEmail } = req.body;
     if (!idToken) return res.status(400).json({ error: "idToken is required" });
 
     try {
@@ -316,6 +317,10 @@ router.post("/oauth-login", async (req, res) => {
             } catch (e) {
                 console.error("Failed to fetch explicit UserRecord", e);
             }
+        }
+
+        if (!email && fallbackEmail) {
+            email = fallbackEmail;
         }
 
         console.log("FINAL EVALUATED IDENTITY -> Email:", email, "| Phone:", phone);
@@ -384,7 +389,9 @@ router.post("/login", async (req, res) => {
     try {
         // PRE-CHECK: Intercept Google/Facebook email usage natively instead of raw FIREBASE errors globally
         const snapshot = await db.collection("users").where("email", "==", email).get();
-        if (!snapshot.empty) {
+        if (snapshot.empty) {
+            return res.status(404).json({ error: "Please register an account first." });
+        } else {
             const registeredMethod = snapshot.docs[0].data().loginMethod;
             if (registeredMethod && registeredMethod !== "Email") {
                 return res.status(400).json({ error: `Your email address is registered at ${registeredMethod}. Please login using ${registeredMethod}.` });

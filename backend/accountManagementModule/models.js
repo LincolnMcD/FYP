@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { FieldValue } = require("firebase-admin/firestore");
 
 class User {
     constructor({ fullName, email, phoneNumber, loginMethod = 'Email' }) {
@@ -8,8 +9,8 @@ class User {
         this.phoneNumber = phoneNumber;
         this.loginMethod = loginMethod;
         this.status = 'Active';
-        this.createdAt = new Date().toISOString();
-        this.updatedAt = new Date().toISOString();
+        this.createdAt = FieldValue.serverTimestamp();
+        this.updatedAt = FieldValue.serverTimestamp();
     }
 
     toJSON() {

@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create an Account - ReByte</title>
+  <meta name="description" content="Join ReByte to start trading certified pre-owned smartphones and electronics sustainably.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Additional inline styles for multi-step registration */
+    .step-container { display: none; width: 100%; }
+    .step-container.active { display: block; animation: fadeIn 0.4s ease; }
+    
+    .btn-auth-submit:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* OTP Boxes */
+    .otp-boxes-row { display: flex; justify-content: center; gap: 10px; margin: 24px 0; }
+    .otp-digit {
+      width: 45px; height: 55px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      font-size: 24px; font-weight: 700; text-align: center; color: var(--color-primary-navy);
+      background: var(--color-bg-page); transition: all var(--transition-fast);
+    }
+    .otp-digit:focus { border-color: var(--color-primary-blue); box-shadow: 0 0 0 3px var(--color-primary-blue-light); outline: none; }
+    
+    .resend-container { text-align: center; margin-top: 16px; font-size: 14px; color: var(--color-text-secondary); }
+    .resend-btn { background: none; border: none; color: var(--color-primary-blue); font-weight: 600; cursor: pointer; }
+    .resend-btn:disabled { color: var(--color-text-light); cursor: not-allowed; }
+
+    /* Gender Pills */
+    .gender-toggle-group { display: flex; gap: 10px; margin-top: 6px; }
+    .gender-pill {
+      flex: 1; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+      background: #fff; color: var(--color-text-secondary); font-weight: 600; cursor: pointer;
+      text-align: center; transition: all var(--transition-fast);
+    }
+    .gender-pill.selected {
+      background: var(--color-primary-blue); border-color: var(--color-primary-blue); color: #fff;
+    }
+
+    .back-btn-step {
+      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+      border-radius: 50%; background: #fff; border: 1px solid var(--color-border); cursor: pointer;
+      margin-bottom: 24px; transition: background-color 0.2s, border-color 0.2s;
+    }
+    .back-btn-step:hover { background: var(--color-bg-page); }
+
+    /* Centered Icon */
+    .step-icon-wrapper {
+      width: 56px; height: 56px; border-radius: 50%; background: var(--color-bg-page);
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--color-primary-blue);
+    }
+
+    /* Step Headers */
+    .step-header-center { text-align: center; margin-bottom: 24px; }
+    .step-title { font-size: 24px; font-weight: 800; color: var(--color-primary-navy); margin-bottom: 8px; }
+    .step-subtitle { font-size: 14px; color: var(--color-text-secondary); }
+
+    .form-group-row { display: flex; gap: 16px; margin-bottom: 16px; }
+    .form-group-row .form-group { margin-bottom: 0; flex: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Navigation Bar -->
+  <header class="site-header">
+    <div class="container header-container">
+      <a href="home.html" class="brand-link">
+        <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+        <span class="brand-name">ReByte</span>
+      </a>
+      <ul class="nav-links">
+        <li class="nav-item"><a href="home.html">Home</a></li>
+        <li class="nav-item"><a href="home.html#shop">Shop</a></li>
+        <li class="nav-item"><a href="home.html#rentals">Rentals</a></li>
+        <li class="nav-item"><a href="home.html#tradein">Trade-in</a></li>
+      </ul>
+      <div class="header-actions">
+        <a href="register.html" class="btn-nav-register" style="color: var(--color-primary-blue); font-weight: 700;">Register</a>
+        <a href="login.html" class="btn-nav-login">
+          Login
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Register Main Layout -->
+  <main class="auth-page-container">
+    <div class="auth-split-layout">
+      <!-- Left Column: Branding -->
+      <div class="auth-banner-side">
+        <img src="assets/images/ecotech_bg.jpg" alt="Eco Background" class="auth-banner-illustration">
+        <div class="auth-banner-inner">
+          <h1 class="auth-banner-heading">Join the Recommerce<br>Revolution.</h1>
+          <p class="auth-banner-subheading">Trade in, upgrade, and extend the lifecycle of premium hardware with confidence.</p>
+          <div class="auth-badge-list">
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              Certified Tech
+            </div>
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 0 0-10 10c0 5.52 4.48 10 10 10s10-4.48 10-10A10 10 0 0 0 12 2zm1 14.93V18h-2v-1.07A4.002 4.002 0 0 1 9.07 14H11c0 1.1.9 2 2 2s2-.9 2-2c0-.73-.4-1.37-1-1.73V11a2 2 0 0 0-2-2H9.07A4.002 4.002 0 0 1 11 6.07V5h2v1.07A4.002 4.002 0 0 1 14.93 9H13a2 2 0 0 0-2 2v.27c.6.36 1 1 1 1.73z"></path></svg>
+              Sustainable
+            </div>
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              Secure Transactions
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Registration Steps -->
+      <div class="auth-card-side">
+        
+        <!-- ================= STEP 1: INITIAL REGISTRATION ================= -->
+        <div id="step-1" class="step-container active">
+          <a href="home.html" class="auth-back-btn" title="Back to Home">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </a>
+          <div class="auth-form-header">
+            <div class="auth-form-logo-center">
+              <img src="assets/images/rebyte_logo.png" alt="ReByte Logo">
+              <span>ReByte</span>
+            </div>
+            <h2 class="auth-title">Create an Account</h2>
+            <p class="auth-subtitle">Join ReByte to start trading certified pre-owned tech.</p>
+          </div>
+
+          <form id="registerForm" novalidate>
+            <div class="form-group">
+              <label class="form-label" for="regEmail">Email Address</label>
+              <div class="input-with-icon-wrapper">
+                <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                <input type="email" id="regEmail" class="form-input" placeholder="you@example.com" autocomplete="email" required>
+              </div>
+              <div class="input-error-msg" id="regEmailError"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regPassword">Password</label>
+              <div class="input-with-icon-wrapper">
+                <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <input type="password" id="regPassword" class="form-input" placeholder="Create a strong password" autocomplete="new-password" required>
+                <button type="button" class="input-toggle-password" id="toggleRegPasswordBtn" aria-label="Toggle password visibility">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+              <div class="input-error-msg" id="regPasswordError"></div>
+            </div>
+
+            <div class="password-requirements-card">
+              <div class="pwd-req-title">Password Requirements</div>
+              <ul class="pwd-req-list">
+                <li class="pwd-req-item" id="reqLength"><span class="pwd-req-circle"></span><span>At least 8 characters</span></li>
+                <li class="pwd-req-item" id="reqUpper"><span class="pwd-req-circle"></span><span>One uppercase letter</span></li>
+                <li class="pwd-req-item" id="reqLower"><span class="pwd-req-circle"></span><span>One lowercase letter</span></li>
+                <li class="pwd-req-item" id="reqNumber"><span class="pwd-req-circle"></span><span>One number (0–9)</span></li>
+                <li class="pwd-req-item" id="reqSpecial"><span class="pwd-req-circle"></span><span>One special character (!@#$%^&*)</span></li>
+              </ul>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="regConfirmPassword">Confirm Password</label>
+              <div class="input-with-icon-wrapper">
+                <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                <input type="password" id="regConfirmPassword" class="form-input" placeholder="Repeat your password" autocomplete="new-password" required>
+                <button type="button" class="input-toggle-password" id="toggleConfirmPasswordBtn" aria-label="Toggle password visibility">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+              <div class="input-error-msg" id="regConfirmError"></div>
+            </div>
+
+            <div class="auth-divider"><span>OR</span></div>
+            <div class="social-buttons-box">
+              <button type="button" class="btn-social" onclick="handleSocial('Google')">
+                <img src="assets/images/google_logo.png" alt="Google"> Continue with Google
+              </button>
+              <button type="button" class="btn-social" onclick="handleSocial('Facebook')">
+                <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                Continue with Facebook
+              </button>
+            </div>
+
+            <button type="submit" class="btn-auth-submit" id="regSubmitBtn" style="margin-top: 18px;" disabled>
+              Register Account
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+          </form>
+
+          <p class="auth-bottom-switch-link">Already have an account? <a href="login.html">Log In</a></p>
+        </div>
+
+
+        <!-- ================= STEP 2: OTP VERIFICATION ================= -->
+        <div id="step-2" class="step-container">
+          <button class="back-btn-step" onclick="cancelToStep1()" title="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </button>
+          
+          <div class="step-header-center">
+            <div class="step-icon-wrapper">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            </div>
+            <h2 class="step-title">Verify Your Email</h2>
+            <p class="step-subtitle">We've sent a 6-digit verification code to<br><strong id="otpEmailTargetDisplay" style="color: #0f172a;"></strong></p>
+          </div>
+
+          <div class="otp-boxes-row" id="otpBoxContainer">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-0">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-1">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-2">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-3">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-4">
+            <input type="text" maxlength="1" class="otp-digit" id="otp-5">
+          </div>
+          
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: #fff7ed; color: #ea580c; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span id="otpTimerDisplay">10:00</span>
+            </div>
+          </div>
+
+          <button type="button" class="btn-auth-submit" id="verifyCodeBtn" onclick="verifyOtpStep()" disabled>
+            Verify Code
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+
+          <div class="resend-container">
+            Didn't receive the email? <button class="resend-btn" id="resendCodeBtn" onclick="resendOtp()">Resend Code</button>
+          </div>
+        </div>
+
+
+        <!-- ================= STEP 3: COMPLETE PROFILE ================= -->
+        <div id="step-3" class="step-container">
+          <button class="back-btn-step" onclick="cancelToStep1()" title="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </button>
+          
+          <h2 class="auth-title" style="margin-bottom: 8px;">Complete Profile</h2>
+          <p class="auth-subtitle" style="margin-bottom: 24px;">Let's get your account set up for secure transactions.</p>
+
+          <div style="background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 20px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-weight: 600; color: var(--color-primary-navy);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              Personal Details
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="profileName">Full Name *</label>
+              <input type="text" id="profileName" class="form-input" placeholder="Jane Doe" required style="padding: 12px 14px;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="profilePhone">Phone Number *</label>
+              <div class="form-group-row" style="margin-bottom: 0;">
+                <input type="text" class="form-input" value="+60" disabled style="max-width: 60px; background: var(--color-bg-page); padding: 12px 10px; text-align: center;">
+                <input type="tel" id="profilePhone" class="form-input" placeholder="12 1234567" required style="padding: 12px 14px;">
+              </div>
+              <div class="input-error-msg" id="profilePhoneError"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="profileDob">Birthday</label>
+              <input type="date" id="profileDob" class="form-input" style="color: var(--color-text-main); padding: 12px 14px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Gender *</label>
+              <div class="gender-toggle-group">
+                <div class="gender-pill" id="genderMale" onclick="selectGender('Male')">Male</div>
+                <div class="gender-pill" id="genderFemale" onclick="selectGender('Female')">Female</div>
+              </div>
+              <input type="hidden" id="profileGender" value="">
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.2;">
+            <input type="checkbox" id="termsCheckbox" style="margin: 0; cursor: pointer; width: 16px; height: 16px;">
+            <label for="termsCheckbox" style="cursor: pointer; margin: 0;">
+              I agree to the <a href="#" style="color: var(--color-primary-blue); font-weight: 600;">Terms and Conditions</a> and <a href="#" style="color: var(--color-primary-blue); font-weight: 600;">Privacy Policy</a>.
+            </label>
+          </div>
+
+          <button type="button" class="btn-auth-submit" id="completeRegBtn" onclick="finalizeRegistration()" style="margin-top: 18px;" disabled>
+            Complete Registration
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top-grid">
+        <div class="footer-brand-col">
+          <a href="home.html" class="brand-link">
+            <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+            <span class="brand-name">ReByte</span>
+          </a>
+          <p class="footer-tagline">Sustainable hardware for a better future. Buy, trade, and rent premium tech with confidence.</p>
+        </div>
+        <div>
+          <h4 class="footer-col-title">Company</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#about">About Us</a></li>
+            <li class="footer-link-item"><a href="#sustainability">Sustainability</a></li>
+            <li class="footer-link-item"><a href="#careers">Careers</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-col-title">Legal</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#terms">Terms of Service</a></li>
+            <li class="footer-link-item"><a href="#privacy">Privacy Policy</a></li>
+            <li class="footer-link-item"><a href="#cookie">Cookie Policy</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="footer-col-title">Support</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#help">Help Center</a></li>
+            <li class="footer-link-item"><a href="#contact">Contact Us</a></li>
+            <li class="footer-link-item"><a href="#track">Track Order</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom-bar">&copy; 2024 ReByte Recommerce. All rights reserved. Built for sustainability.</div>
+    </div>
+  </footer>
+
+  <!-- Firebase Compat Client SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    // --- UI Logic ---
+    function showStep(stepNum) {
+      document.querySelectorAll('.step-container').forEach(c => c.classList.remove('active'));
+      document.getElementById('step-' + stepNum).classList.add('active');
+    }
+
+    function cancelToStep1() {
+      ReByteAuth.showToast('Registration cancelled', 'info');
+      showStep(1);
+      // Reset variables
+      regState = {};
+      stopTimer();
+      // Clear Step 2 OTP
+      document.querySelectorAll('.otp-digit').forEach(input => input.value = '');
+      validateOtpStep();
+      
+      // Clear Step 3 fields
+      if (document.getElementById('profileName')) document.getElementById('profileName').value = '';
+      if (document.getElementById('profilePhone')) document.getElementById('profilePhone').value = '';
+      if (document.getElementById('profileDob')) document.getElementById('profileDob').value = '';
+      if (document.getElementById('profileGender')) document.getElementById('profileGender').value = '';
+      if (document.getElementById('termsCheckbox')) document.getElementById('termsCheckbox').checked = false;
+      if (document.getElementById('genderMale')) document.getElementById('genderMale').classList.remove('selected');
+      if (document.getElementById('genderFemale')) document.getElementById('genderFemale').classList.remove('selected');
+      
+      const phoneError = document.getElementById('profilePhoneError');
+      if (phoneError) {
+        phoneError.classList.remove('show');
+        if (document.getElementById('profilePhone')) document.getElementById('profilePhone').classList.remove('input-error');
+      }
+      validateStep3();
+    }
+
+    function selectGender(gender) {
+      document.getElementById('genderMale').classList.remove('selected');
+      document.getElementById('genderFemale').classList.remove('selected');
+      document.getElementById('gender' + gender).classList.add('selected');
+      document.getElementById('profileGender').value = gender;
+      validateStep3();
+    }
+
+    // Birthday Calendar Limits (12 to 99 years old)
+    const dobInput = document.getElementById('profileDob');
+    if (dobInput) {
+      const today = new Date();
+      const minDate = new Date(today.getFullYear() - 99, today.getMonth(), today.getDate());
+      const maxDate = new Date(today.getFullYear() - 12, today.getMonth(), today.getDate());
+      dobInput.min = minDate.toISOString().split('T')[0];
+      dobInput.max = maxDate.toISOString().split('T')[0];
+      // Tidy placeholder
+      dobInput.addEventListener('change', () => { validateStep3(); });
+    }
+
+    // Name Alphabet Only
+    const profileNameInput = document.getElementById('profileName');
+    if (profileNameInput) {
+      profileNameInput.addEventListener('input', function() {
+        this.value = this.value.replace(/[^A-Za-z\s]/g, '');
+        validateStep3();
+      });
+    }
+
+    const profilePhoneInput = document.getElementById('profilePhone');
+    if (profilePhoneInput) {
+      profilePhoneInput.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+        validateStep3();
+      });
+    }
+
+    function validateStep3() {
+      const btn = document.getElementById('completeRegBtn');
+      const name = profileNameInput.value.trim();
+      const phone = profilePhoneInput.value.trim();
+      const gender = document.getElementById('profileGender').value;
+      const termsChecked = document.getElementById('termsCheckbox').checked;
+      const phoneError = document.getElementById('profilePhoneError');
+      
+      let isPhoneValid = false;
+      if (phone.length === 0) {
+        phoneError.classList.remove('show');
+        profilePhoneInput.classList.remove('input-error');
+      } else if (!phone.startsWith('1')) {
+        phoneError.textContent = 'Number must start with 1 (e.g. 12345678).';
+        phoneError.classList.add('show');
+        profilePhoneInput.classList.add('input-error');
+      } else if (phone.startsWith('11') && phone.length !== 10) {
+        phoneError.textContent = '011 numbers must have 10 digits after +60.';
+        phoneError.classList.add('show');
+        profilePhoneInput.classList.add('input-error');
+      } else if (!phone.startsWith('11') && phone.length !== 9) {
+        phoneError.textContent = 'The phone number must have at least 9 digits after +60.';
+        phoneError.classList.add('show');
+        profilePhoneInput.classList.add('input-error');
+      } else {
+        isPhoneValid = true;
+        phoneError.classList.remove('show');
+        profilePhoneInput.classList.remove('input-error');
+      }
+      
+      if (name.length > 0 && isPhoneValid && gender && termsChecked) {
+        btn.disabled = false;
+      } else {
+        btn.disabled = true;
+      }
+    }
+    
+    const termsCheckbox = document.getElementById('termsCheckbox');
+    if (termsCheckbox) {
+      termsCheckbox.addEventListener('change', validateStep3);
+    }
+
+    // --- Variables ---
+    let regState = { email: '', password: '', method: '', oauthName: '', oauthToken: '', fallbackEmail: '' };
+    let countdownInterval;
+    let secondsRemaining = 600; // 10 mins
+    let canResend = false;
+    let bufferRemaining = 60; // 1 min buffer
+
+    // --- Step 1 Validations ---
+    const emailInput = document.getElementById('regEmail');
+    const pwdInput = document.getElementById('regPassword');
+    const confirmInput = document.getElementById('regConfirmPassword');
+    const emailError = document.getElementById('regEmailError');
+    const pwdError = document.getElementById('regPasswordError');
+    const confirmError = document.getElementById('regConfirmError');
+
+    const reqLength = document.getElementById('reqLength');
+    const reqUpper = document.getElementById('reqUpper');
+    const reqLower = document.getElementById('reqLower');
+    const reqNumber = document.getElementById('reqNumber');
+    const reqSpecial = document.getElementById('reqSpecial');
+
+    const checkIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+    function updateRequirement(el, isValid) {
+      const circle = el.querySelector('.pwd-req-circle');
+      if (isValid) {
+        el.classList.add('met');
+        circle.innerHTML = checkIcon;
+      } else {
+        el.classList.remove('met');
+        circle.innerHTML = '';
+      }
+    }
+
+    function validateEmailField() {
+      const res = ReByteAuth.validateEmail(emailInput.value);
+      if (!res.isValid) {
+        emailError.textContent = res.message; emailError.classList.add('show'); emailInput.classList.add('input-error');
+        return false;
+      }
+      emailError.classList.remove('show'); emailInput.classList.remove('input-error');
+      return true;
+    }
+
+    function validatePasswordField() {
+      const pwd = pwdInput.value;
+      const criteria = ReByteAuth.checkPasswordCriteria(pwd);
+      updateRequirement(reqLength, criteria.length); updateRequirement(reqUpper, criteria.uppercase);
+      updateRequirement(reqLower, criteria.lowercase); updateRequirement(reqNumber, criteria.number);
+      updateRequirement(reqSpecial, criteria.special);
+
+      const res = ReByteAuth.validatePassword(pwd);
+      if (!res.isValid) {
+        pwdError.textContent = res.message; pwdError.classList.add('show'); pwdInput.classList.add('input-error');
+        return false;
+      }
+      pwdError.classList.remove('show'); pwdInput.classList.remove('input-error');
+      if (confirmInput.value.length > 0) validateConfirmField();
+      return true;
+    }
+
+    function validateConfirmField() {
+      const res = ReByteAuth.validateConfirmPassword(pwdInput.value, confirmInput.value);
+      if (!res.isValid) {
+        confirmError.textContent = res.message; confirmError.classList.add('show'); confirmInput.classList.add('input-error');
+        return false;
+      }
+      confirmError.classList.remove('show'); confirmInput.classList.remove('input-error');
+      return true;
+    }
+
+    emailInput.addEventListener('input', () => { validateEmailField(); validateStep1(); });
+    pwdInput.addEventListener('input', () => { validatePasswordField(); validateStep1(); });
+    confirmInput.addEventListener('input', () => { validateConfirmField(); validateStep1(); });
+
+    function validateStep1() {
+      const btn = document.getElementById('regSubmitBtn');
+      if (ReByteAuth.validateEmail(emailInput.value).isValid && 
+          ReByteAuth.validatePassword(pwdInput.value).isValid && 
+          ReByteAuth.validateConfirmPassword(pwdInput.value, confirmInput.value).isValid) {
+        btn.disabled = false;
+      } else {
+        btn.disabled = true;
+      }
+    }
+
+    document.getElementById('toggleRegPasswordBtn').addEventListener('click', () => {
+      pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+    });
+    document.getElementById('toggleConfirmPasswordBtn').addEventListener('click', () => {
+      confirmInput.type = confirmInput.type === 'password' ? 'text' : 'password';
+    });
+
+    // --- Step 1 Submit ---
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const isEmailValid = validateEmailField();
+      const isPwdValid = validatePasswordField();
+      const isConfirmValid = validateConfirmField();
+      if (!isEmailValid || !isPwdValid || !isConfirmValid) {
+        if (!isEmailValid) {
+          emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          emailInput.focus();
+        } else if (!isPwdValid) {
+          pwdInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          pwdInput.focus();
+        } else if (!isConfirmValid) {
+          confirmInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          confirmInput.focus();
+        }
+        return;
+      }
+
+      const btn = document.getElementById('regSubmitBtn');
+      btn.disabled = true; btn.textContent = 'Requesting...';
+
+      regState.email = emailInput.value.trim();
+      regState.password = pwdInput.value;
+      regState.method = 'Email';
+
+      const otpReq = await ReByteAuth.requestOTP(regState.email);
+      btn.disabled = false; btn.innerHTML = `Register Account <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+      
+      if (otpReq.success) {
+        document.getElementById('otpEmailTargetDisplay').textContent = regState.email;
+        showStep(2);
+        startTimer();
+      } else {
+        emailError.textContent = otpReq.error || 'Failed to send verification code.';
+        emailError.classList.add('show'); emailInput.classList.add('input-error');
+        emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        emailInput.focus();
+      }
+    });
+
+    const otpInputs = document.querySelectorAll('.otp-digit');
+    
+    function validateOtpStep() {
+      let code = '';
+      otpInputs.forEach(i => code += i.value);
+      document.getElementById('verifyCodeBtn').disabled = code.length !== 6;
+    }
+
+    otpInputs.forEach((input, index) => {
+      input.addEventListener('keyup', (e) => {
+        if (e.key >= '0' && e.key <= '9') {
+          if (index < 5) otpInputs[index + 1].focus();
+        } else if (e.key === 'Backspace') {
+          if (index > 0) otpInputs[index - 1].focus();
+        }
+        validateOtpStep();
+      });
+      input.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, ''); // Ensure only numbers
+        validateOtpStep();
+      });
+    });
+
+    // --- Timer Logic ---
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60).toString().padStart(2, '0');
+      const s = (secs % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function startTimer() {
+      stopTimer();
+      secondsRemaining = 600;
+      bufferRemaining = 60;
+      canResend = false;
+      document.getElementById('resendCodeBtn').disabled = true;
+      document.getElementById('resendCodeBtn').textContent = `Resend in 60s`;
+
+      countdownInterval = setInterval(() => {
+        secondsRemaining--;
+        bufferRemaining--;
+
+        document.getElementById('otpTimerDisplay').textContent = formatTime(secondsRemaining);
+
+        if (bufferRemaining > 0) {
+          document.getElementById('resendCodeBtn').textContent = `Resend in ${bufferRemaining}s`;
+        } else if (!canResend) {
+          canResend = true;
+          document.getElementById('resendCodeBtn').disabled = false;
+          document.getElementById('resendCodeBtn').textContent = `Resend Code`;
+        }
+
+        if (secondsRemaining <= 0) {
+          stopTimer();
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (countdownInterval) clearInterval(countdownInterval);
+    }
+
+    async function resendOtp() {
+      if (!canResend) return;
+      document.getElementById('resendCodeBtn').disabled = true;
+      const res = await ReByteAuth.requestOTP(regState.email);
+      if (res.success) {
+        ReByteAuth.showToast('Verification code resent.', 'success');
+        startTimer(); // Reset timer and buffer
+      } else {
+        ReByteAuth.showToast(res.error || 'Failed to resend code.', 'error');
+        document.getElementById('resendCodeBtn').disabled = false;
+      }
+    }
+
+    // --- Step 2 Verify ---
+    async function verifyOtpStep() {
+      let otpCode = '';
+      otpInputs.forEach(input => otpCode += input.value);
+      if (otpCode.length !== 6) {
+        ReByteAuth.showToast('Please enter a valid 6-digit code.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('verifyCodeBtn');
+      btn.disabled = true; btn.textContent = 'Verifying...';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/verify-registration-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: regState.email, otp: otpCode })
+        });
+        const data = await response.json();
+        btn.disabled = false; btn.innerHTML = `Verify Code <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+
+        if (response.ok) {
+          regState.otp = otpCode;
+          ReByteAuth.showToast('Email verified successfully!', 'success');
+          stopTimer();
+          showStep(3); // Proceed to Profile Completion
+        } else {
+          ReByteAuth.showToast(data.error || 'Invalid OTP code', 'error');
+        }
+      } catch (err) {
+        btn.disabled = false; btn.innerHTML = `Verify Code <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+        ReByteAuth.showToast('Connection failed.', 'error');
+      }
+    }
+
+    // --- OAuth Handling ---
+    async function handleSocial(provider) {
+      ReByteAuth.showToast(`Connecting to ${provider}...`, 'info');
+      let res;
+      if (provider === 'Google') res = await ReByteAuth.signInWithGoogle();
+      else res = await ReByteAuth.signInWithFacebook();
+
+      if (res.success && res.requireProfileComplete) {
+        // Intercept OAuth New User -> Go to Step 3
+        regState.email = res.email;
+        regState.method = provider;
+        regState.oauthName = res.name || '';
+        regState.idToken = res.pendingIdToken; // Save token for later creation
+        document.getElementById('profileName').value = regState.oauthName;
+        showStep(3);
+        ReByteAuth.showToast('Please complete your profile to finish registration.', 'info');
+      } else if (res.success) {
+        // Existing user logs in
+        ReByteAuth.showToast(`Signed in with ${provider}!`, 'success');
+        setTimeout(() => window.location.href = 'home.html', 700);
+      } else {
+        ReByteAuth.showToast(res.error || `${provider} sign in failed.`, 'error');
+      }
+    }
+
+    // --- Step 3 Complete Registration ---
+    async function finalizeRegistration() {
+      const name = document.getElementById('profileName').value.trim();
+      const phone = document.getElementById('profilePhone').value.trim();
+      const dob = document.getElementById('profileDob').value;
+      const gender = document.getElementById('profileGender').value;
+
+      if (!name) { ReByteAuth.showToast('Full Name is required.', 'error'); return; }
+      if (!phone) { ReByteAuth.showToast('Phone Number is required.', 'error'); return; }
+      if (!gender) { ReByteAuth.showToast('Please select your gender.', 'error'); return; }
+
+      const btn = document.getElementById('completeRegBtn');
+      btn.disabled = true; btn.textContent = 'Saving...';
+
+      if (regState.method === 'Email') {
+        const res = await ReByteAuth.register(regState.email, regState.password, regState.otp, name, `+60${phone}`, gender, dob);
+        btn.disabled = false; btn.textContent = 'Complete Registration';
+        if (res.success) {
+          ReByteAuth.showToast('Account registered successfully! Redirecting...', 'success');
+          setTimeout(() => window.location.href = 'home.html', 800);
+        } else {
+          ReByteAuth.showToast(res.error || 'Registration failed.', 'error');
+        }
+      } else {
+        // For OAuth, we defer backend creation until now
+        try {
+          // 1. Create the user in backend
+          const oauthRes = await fetch(`${API_BASE_URL}/oauth-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: regState.idToken, loginMethod: regState.method, fallbackEmail: regState.email })
+          });
+          const oauthData = await oauthRes.json();
+          if (!oauthRes.ok) {
+            btn.disabled = false; btn.textContent = 'Complete Registration';
+            ReByteAuth.showToast(oauthData.error || 'Failed to create account.', 'error');
+            return;
+          }
+
+          // 2. Update their profile with the filled-out fields
+          const updateRes = await fetch(`${API_BASE_URL}/update-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: regState.email, fullName: name, phoneNumber: `+60${phone}`, gender, birthDate: dob })
+          });
+          const updateData = await updateRes.json();
+          btn.disabled = false; btn.textContent = 'Complete Registration';
+          if (updateRes.ok) {
+            // Set the local session so the user is physically logged in!
+            ReByteAuth.setUser({
+              email: regState.email,
+              name: name,
+              role: oauthData.role || 'Customer',
+              loginMethod: regState.method
+            });
+            ReByteAuth.showToast('Account registered successfully! Redirecting...', 'success');
+            setTimeout(() => window.location.href = 'home.html', 800);
+          } else {
+            ReByteAuth.showToast(updateData.error || 'Profile update failed.', 'error');
+          }
+        } catch (err) {
+          btn.disabled = false; btn.textContent = 'Complete Registration';
+          ReByteAuth.showToast('Connection failed.', 'error');
+        }
+      }
+    }
+  </script>
+</body>
+</html>

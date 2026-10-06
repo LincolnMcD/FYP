@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ReByte - Edit Profile</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 0; }
+    .edit-layout { max-width: 1200px; width: 100%; box-sizing: border-box; margin: 40px auto; padding: 0 40px; }
+    
+    .edit-card { background: white; border-radius: 12px; padding: 48px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
+    .back-header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; color: #032b85; cursor: pointer; text-decoration: none; }
+    .back-header svg { width: 24px; height: 24px; }
+    .back-header h1 { font-size: 24px; font-weight: 600; margin: 0; }
+    
+    .form-group { margin-bottom: 24px; position: relative; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+    .form-group .help-text { font-size: 12px; color: #94a3b8; margin-top: 6px; display: block; }
+    .form-group .error-msg { font-size: 12px; color: #ef4444; margin-top: 6px; display: none; }
+    
+    .input-wrapper { position: relative; display: flex; align-items: center; }
+    .input-wrapper svg.lock-icon { position: absolute; right: 16px; color: #94a3b8; }
+    .input-field { width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 15px; color: #334155; box-sizing: border-box; background: white; transition: border-color 0.2s; }
+    .input-field.error { border-color: #ef4444; }
+    .input-field:focus { outline: none; border-color: #032b85; }
+    .input-field[disabled], .input-field[readonly] { background-color: #f1f5f9; color: #64748b; cursor: not-allowed; }
+    
+    .phone-group { display: flex; gap: 0; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; transition: border-color 0.2s; }
+    .phone-group.error { border-color: #ef4444; }
+    .phone-prefix { background: #f8fafc; padding: 14px 16px; font-size: 15px; font-weight: 500; color: #475569; border-right: 1px solid #cbd5e1; }
+    .phone-group input { flex: 1; border: none; padding: 14px 16px; font-size: 15px; font-family: inherit; color: #334155; outline: none; }
+    
+    .action-buttons { display: flex; flex-direction: column; gap: 12px; margin-top: 40px; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 8px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; text-decoration: none; transition: all 0.2s; }
+    
+    .btn-save { background-color: #cbd5e1; color: white; cursor: not-allowed; pointer-events: none; }
+    .btn-save.active { background-color: #032b85; color: white; cursor: pointer; pointer-events: auto; }
+    
+    .btn-change-pwd { background-color: #e2e8f0; color: #64748b; cursor: not-allowed; }
+    .btn-change-pwd.active { color: #032b85; background-color: #e0e7ff; cursor: pointer; }
+    
+    /* Modal Styles */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-overlay.active { display: flex; }
+    .modal-card { background: white; width: 100%; max-width: 450px; border-radius: 12px; padding: 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .modal-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: #0f172a; }
+    .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; padding: 0; line-height: 1; }
+    
+    /* Password Info Tooltip */
+    .pwd-info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #e2e8f0; color: #475569; font-size: 11px; font-weight: bold; cursor: help; position: relative; }
+    .pwd-tooltip { display: none; position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); width: 240px; background: #1e293b; color: white; padding: 12px; border-radius: 6px; font-size: 12px; font-weight: normal; z-index: 10; line-height: 1.5; white-space: pre-wrap; text-align: left; }
+    .pwd-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-width: 6px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
+    .pwd-info-icon:hover .pwd-tooltip { display: block; }
+    
+    /* Password Toggle Styles */
+    .pwd-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+    .pwd-toggle-btn { position: absolute; right: 12px; background: none; border: none; color: #64748b; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; }
+    .pwd-input-wrapper .input-field { padding-right: 40px; }
+
+    
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="site-header">
+    <div class="container header-container">
+      <a href="home.html" class="brand-link">
+        <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+        <span class="brand-name">ReByte</span>
+      </a>
+
+      <!-- Search Input -->
+      <div class="search-box-wrapper" style="visibility: hidden;">
+        <!-- Hidden for profile to match layout spacing -->
+        <input type="text" class="search-input">
+      </div>
+
+      <!-- Navigation Links -->
+      <ul class="nav-links">
+        <li class="nav-item"><a href="home.html">Home</a></li>
+        <li class="nav-item"><a href="home.html#shop">Shop</a></li>
+        <li class="nav-item"><a href="home.html#rentals">Rentals</a></li>
+        <li class="nav-item"><a href="home.html#tradein">Trade-in</a></li>
+      </ul>
+
+      <div class="header-actions"></div>
+    </div>
+  </header>
+
+  <div class="edit-layout">
+    <div class="edit-card">
+      <a href="profile.html" class="back-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        <h1>Edit Account Details</h1>
+      </a>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <div class="input-wrapper">
+          <input type="text" class="input-field" id="editEmail" disabled readonly value="Loading...">
+          <svg class="lock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        </div>
+        <span class="help-text">Email address cannot be changed.</span>
+      </div>
+
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" class="input-field" id="editName" value="">
+        <span class="error-msg" id="nameError">Full name must only contain letters and spaces.</span>
+      </div>
+
+      <div class="form-group">
+        <label>Phone Number</label>
+        <div class="phone-group" id="phoneGroup">
+          <div class="phone-prefix">+60</div>
+          <input type="text" id="editPhone" value="" placeholder="123456789">
+        </div>
+        <span class="error-msg" id="phoneError">Phone number must start with 1, and be 9 digits (or 10 digits for 11).</span>
+      </div>
+
+      <div class="form-group">
+        <label>Birthday</label>
+        <div class="input-wrapper">
+          <input type="date" class="input-field" id="editDob">
+        </div>
+        <span class="error-msg" id="dobError">Please enter a valid birthday.</span>
+      </div>
+
+      <div class="form-group">
+        <label>Gender</label>
+        <div class="input-wrapper">
+          <input type="text" class="input-field" id="editGender" disabled readonly value="Loading...">
+          <svg class="lock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        </div>
+        <span class="help-text">Gender cannot be changed.</span>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-save" id="saveChangesBtn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          SAVE CHANGES
+        </button>
+        <button class="btn btn-change-pwd" id="changePwdBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.22-10.27l-3.27 3.27"></path></svg>
+          CHANGE PASSWORD
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Modal -->
+  <div class="modal-overlay" id="changePwdModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Change Password</h2>
+        <button class="close-modal" id="closePwdModal">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Current Password</label>
+        <div class="pwd-input-wrapper">
+          <input type="password" class="input-field" id="currentPwd">
+          <button type="button" class="pwd-toggle-btn" aria-label="Toggle password visibility">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        <div class="error-msg" id="currentPwdError"></div>
+      </div>
+      <div class="form-group">
+        <label>
+          New Password
+          <div class="pwd-info-icon">?
+            <div class="pwd-tooltip">Password must be at least 8 characters long and contain:
+- Uppercase letter
+- Lowercase letter
+- Number
+- Special character (!@#$%^&*)</div>
+          </div>
+        </label>
+        <div class="pwd-input-wrapper">
+          <input type="password" class="input-field" id="newPwd">
+          <button type="button" class="pwd-toggle-btn" aria-label="Toggle password visibility">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        <div class="error-msg" id="newPwdError"></div>
+      </div>
+      <div class="form-group">
+        <label>Confirm New Password</label>
+        <div class="pwd-input-wrapper">
+          <input type="password" class="input-field" id="confirmNewPwd">
+          <button type="button" class="pwd-toggle-btn" aria-label="Toggle password visibility">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        <div class="error-msg" id="confirmNewPwdError"></div>
+      </div>
+      <button class="btn btn-save active" style="width: 100%; margin-top: 16px; pointer-events: auto; background-color: #032b85; color: white;" id="submitChangePwd">Confirm Change</button>
+    </div>
+  </div>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top-grid">
+        <!-- Brand Summary -->
+        <div class="footer-brand-col">
+          <a href="home.html" class="brand-link">
+            <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+            <span class="brand-name">ReByte</span>
+          </a>
+          <p class="footer-tagline">
+            Sustainable hardware for a better future. Buy, trade, and rent premium tech with confidence.
+          </p>
+        </div>
+
+        <!-- Company Links -->
+        <div>
+          <h4 class="footer-col-title">Company</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#about">About Us</a></li>
+            <li class="footer-link-item"><a href="#sustainability">Sustainability</a></li>
+            <li class="footer-link-item"><a href="#careers">Careers</a></li>
+          </ul>
+        </div>
+
+        <!-- Legal Links -->
+        <div>
+          <h4 class="footer-col-title">Legal</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#terms">Terms of Service</a></li>
+            <li class="footer-link-item"><a href="#privacy">Privacy Policy</a></li>
+            <li class="footer-link-item"><a href="#cookie">Cookie Policy</a></li>
+          </ul>
+        </div>
+
+        <!-- Support Links -->
+        <div>
+          <h4 class="footer-col-title">Support</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#help">Help Center</a></li>
+            <li class="footer-link-item"><a href="#contact">Contact Us</a></li>
+            <li class="footer-link-item"><a href="#track">Track Order</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        &copy; 2024 ReByte Recommerce. All rights reserved. Built for sustainability.
+      </div>
+    </div>
+  </footer>
+
+  <script src="auth.js"></script>
+  <script>
+    ReByteAuth.initHeader();
+    
+    if (!ReByteAuth.isLoggedIn()) {
+      window.location.href = 'login.html';
+    }
+
+    const API_URL = 'http://localhost:3000';
+    let initialData = {};
+    const sessionUser = ReByteAuth.getUser();
+
+    // Elements
+    const editName = document.getElementById('editName');
+    const editPhone = document.getElementById('editPhone');
+    const editDob = document.getElementById('editDob');
+    const saveChangesBtn = document.getElementById('saveChangesBtn');
+    const changePwdBtn = document.getElementById('changePwdBtn');
+    
+    const nameError = document.getElementById('nameError');
+    const phoneError = document.getElementById('phoneError');
+    const phoneGroup = document.getElementById('phoneGroup');
+
+    // Password Elements
+    const changePwdModal = document.getElementById('changePwdModal');
+    const closePwdModal = document.getElementById('closePwdModal');
+    const submitChangePwd = document.getElementById('submitChangePwd');
+
+    // Password Eye Toggles
+    const toggleBtns = document.querySelectorAll('.pwd-toggle-btn');
+    toggleBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const input = this.previousElementSibling;
+        const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+        input.setAttribute('type', type);
+        this.innerHTML = type === 'password' 
+          ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`
+          : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+      });
+    });
+
+    // Birthday Calendar Limits (12 to 99 years old)
+    const today = new Date();
+    const minDate = new Date(today.getFullYear() - 99, today.getMonth(), today.getDate());
+    const maxDate = new Date(today.getFullYear() - 12, today.getMonth(), today.getDate());
+    editDob.min = minDate.toISOString().split('T')[0];
+    editDob.max = maxDate.toISOString().split('T')[0];
+
+    async function loadEditProfile() {
+      if (!sessionUser) return;
+      document.getElementById('editEmail').value = sessionUser.email;
+      
+      try {
+        const response = await fetch(`${API_URL}/get-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: sessionUser.email })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const profile = data.data;
+          
+          if (profile.fullName) editName.value = profile.fullName;
+          if (profile.phoneNumber) {
+            let p = profile.phoneNumber;
+            if (p.startsWith('+60')) p = p.substring(3);
+            editPhone.value = p;
+          }
+          if (profile.birthDate) editDob.value = profile.birthDate;
+          if (profile.gender) document.getElementById('editGender').value = profile.gender;
+          
+          // Save initials for comparison
+          initialData = {
+            fullName: editName.value,
+            phoneNumber: editPhone.value,
+            birthDate: editDob.value
+          };
+          
+          // Handle Password Button Enable/Disable
+          if (profile.loginMethod && profile.loginMethod !== 'Email') {
+            changePwdBtn.classList.remove('active');
+            changePwdBtn.onclick = (e) => {
+              e.preventDefault();
+              ReByteAuth.showToast(`OAuth users (${profile.loginMethod}) cannot change password.`, 'error');
+            };
+          } else {
+            changePwdBtn.classList.add('active');
+            changePwdBtn.disabled = false;
+            changePwdBtn.onclick = (e) => {
+              e.preventDefault();
+              changePwdModal.classList.add('active');
+            };
+          }
+
+        }
+      } catch(e) {
+        console.error('Failed to load profile', e);
+      }
+    }
+
+    // Validation Functions
+    function validateName(val) {
+      return /^[A-Za-z\s]+$/.test(val);
+    }
+    function validatePhone(val) {
+      if (!val.startsWith('1')) return false;
+      if (val.startsWith('11')) return val.length === 10;
+      return val.length === 9;
+    }
+    
+    function checkFormChanges() {
+      let isValid = true;
+      let isChanged = false;
+
+      // Name
+      if (!validateName(editName.value.trim())) {
+        nameError.style.display = 'block';
+        editName.classList.add('error');
+        isValid = false;
+      } else {
+        nameError.style.display = 'none';
+        editName.classList.remove('error');
+      }
+
+      // Phone
+      const cleanPhone = editPhone.value.trim();
+      let isPhoneValid = false;
+      if (cleanPhone.length === 0) {
+        phoneError.style.display = 'none';
+        phoneGroup.classList.remove('error');
+        isValid = false;
+      } else if (!cleanPhone.startsWith('1')) {
+        phoneError.textContent = 'Number must start with 1 (e.g. 12345678).';
+        phoneError.style.display = 'block';
+        phoneGroup.classList.add('error');
+        isValid = false;
+      } else if (cleanPhone.startsWith('11') && cleanPhone.length !== 10) {
+        phoneError.textContent = '011 numbers must have 10 digits after +60.';
+        phoneError.style.display = 'block';
+        phoneGroup.classList.add('error');
+        isValid = false;
+      } else if (!cleanPhone.startsWith('11') && cleanPhone.length !== 9) {
+        phoneError.textContent = 'The phone number must have at least 9 digits after +60.';
+        phoneError.style.display = 'block';
+        phoneGroup.classList.add('error');
+        isValid = false;
+      } else {
+        isPhoneValid = true;
+        phoneError.style.display = 'none';
+        phoneGroup.classList.remove('error');
+      }
+
+      // Changes
+      if (editName.value.trim() !== initialData.fullName || 
+          cleanPhone !== initialData.phoneNumber || 
+          editDob.value !== initialData.birthDate) {
+        isChanged = true;
+      }
+
+      if (isValid && isChanged) {
+        saveChangesBtn.classList.add('active');
+        saveChangesBtn.disabled = false;
+      } else {
+        saveChangesBtn.classList.remove('active');
+        saveChangesBtn.disabled = true;
+      }
+    }
+
+    editName.addEventListener('input', checkFormChanges);
+    editPhone.addEventListener('input', checkFormChanges);
+    editDob.addEventListener('input', checkFormChanges);
+
+    // Save Changes API call
+    saveChangesBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      saveChangesBtn.innerHTML = 'SAVING...';
+      try {
+        const payload = {
+          email: sessionUser.email,
+          fullName: editName.value.trim(),
+          phoneNumber: `+60${editPhone.value.trim()}`,
+          birthDate: editDob.value,
+          gender: document.getElementById('editGender').value
+        };
+        const response = await fetch(`${API_URL}/update-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (response.ok) {
+          ReByteAuth.showToast('Profile updated successfully!', 'success');
+          initialData = {
+            fullName: editName.value.trim(),
+            phoneNumber: editPhone.value.trim(),
+            birthDate: editDob.value
+          };
+          checkFormChanges(); // disable button again
+        } else {
+          ReByteAuth.showToast('Failed to update profile.', 'error');
+        }
+      } catch (e) {
+        ReByteAuth.showToast('Network error updating profile.', 'error');
+      } finally {
+        saveChangesBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> SAVE CHANGES`;
+      }
+    });
+
+    // Password Modal Logic
+    const currentPwdInput = document.getElementById('currentPwd');
+    const newPwdInput = document.getElementById('newPwd');
+    const confirmPwdInput = document.getElementById('confirmNewPwd');
+    const currentPwdError = document.getElementById('currentPwdError');
+    const newPwdError = document.getElementById('newPwdError');
+    const confirmPwdError = document.getElementById('confirmNewPwdError');
+
+    function clearPwdModal() {
+      changePwdModal.classList.remove('active');
+      currentPwdInput.value = '';
+      newPwdInput.value = '';
+      confirmPwdInput.value = '';
+      currentPwdError.style.display = 'none';
+      newPwdError.style.display = 'none';
+      confirmPwdError.style.display = 'none';
+      currentPwdInput.classList.remove('error');
+      newPwdInput.classList.remove('error');
+      confirmPwdInput.classList.remove('error');
+    }
+
+    closePwdModal.onclick = clearPwdModal;
+
+    // Instant validation on input
+    currentPwdInput.addEventListener('input', () => {
+      currentPwdError.style.display = 'none';
+      currentPwdInput.classList.remove('error');
+    });
+
+    newPwdInput.addEventListener('input', () => {
+      const val = newPwdInput.value;
+      if (val.length > 0) {
+        const res = ReByteAuth.validatePassword(val);
+        if (!res.isValid) {
+          newPwdError.textContent = res.message;
+          newPwdError.style.display = 'block';
+          newPwdInput.classList.add('error');
+        } else {
+          newPwdError.style.display = 'none';
+          newPwdInput.classList.remove('error');
+        }
+      } else {
+        newPwdError.style.display = 'none';
+        newPwdInput.classList.remove('error');
+      }
+      
+      // Also trigger confirm check if confirm has value
+      if (confirmPwdInput.value.length > 0) {
+        confirmPwdInput.dispatchEvent(new Event('input'));
+      }
+    });
+
+    confirmPwdInput.addEventListener('input', () => {
+      const val = confirmPwdInput.value;
+      if (val.length > 0) {
+        const res = ReByteAuth.validateConfirmPassword(newPwdInput.value, val);
+        if (!res.isValid) {
+          confirmPwdError.textContent = res.message;
+          confirmPwdError.style.display = 'block';
+          confirmPwdInput.classList.add('error');
+        } else {
+          confirmPwdError.style.display = 'none';
+          confirmPwdInput.classList.remove('error');
+        }
+      } else {
+        confirmPwdError.style.display = 'none';
+        confirmPwdInput.classList.remove('error');
+      }
+    });
+
+    submitChangePwd.onclick = async () => {
+      const current = currentPwdInput.value;
+      const newPwd = newPwdInput.value;
+      const confirmPwd = confirmPwdInput.value;
+      let hasError = false;
+
+      if (!current) {
+        currentPwdError.textContent = "Current password is required.";
+        currentPwdError.style.display = 'block';
+        currentPwdInput.classList.add('error');
+        hasError = true;
+      }
+      
+      if (!newPwd) {
+        newPwdError.textContent = "New password is required.";
+        newPwdError.style.display = 'block';
+        newPwdInput.classList.add('error');
+        hasError = true;
+      } else if (current === newPwd) {
+        newPwdError.textContent = "New password cannot be the same as current password.";
+        newPwdError.style.display = 'block';
+        newPwdInput.classList.add('error');
+        hasError = true;
+      } else {
+        const res = ReByteAuth.validatePassword(newPwd);
+        if (!res.isValid) {
+          newPwdError.textContent = res.message;
+          newPwdError.style.display = 'block';
+          newPwdInput.classList.add('error');
+          hasError = true;
+        }
+      }
+
+      if (!confirmPwd) {
+        confirmPwdError.textContent = "Please confirm your new password.";
+        confirmPwdError.style.display = 'block';
+        confirmPwdInput.classList.add('error');
+        hasError = true;
+      } else {
+        const resConfirm = ReByteAuth.validateConfirmPassword(newPwd, confirmPwd);
+        if (!resConfirm.isValid) {
+          confirmPwdError.textContent = resConfirm.message;
+          confirmPwdError.style.display = 'block';
+          confirmPwdInput.classList.add('error');
+          hasError = true;
+        }
+      }
+
+      if (hasError) return;
+
+      submitChangePwd.textContent = 'Verifying...';
+      try {
+        const response = await fetch(`${API_URL}/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: sessionUser.email,
+            currentPassword: current,
+            newPassword: newPwd
+          })
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+          ReByteAuth.showToast("Password successfully changed!", 'success');
+          clearPwdModal();
+        } else {
+          if (result.error && result.error.toLowerCase().includes('current')) {
+            currentPwdError.textContent = result.error;
+            currentPwdError.style.display = 'block';
+            currentPwdInput.classList.add('error');
+          } else {
+            ReByteAuth.showToast(result.error || "Failed to change password.", 'error');
+          }
+        }
+      } catch (e) {
+        ReByteAuth.showToast("Network error changing password.", 'error');
+      } finally {
+        submitChangePwd.textContent = 'Confirm Change';
+      }
+    };
+
+    loadEditProfile();
+  </script>
+</body>
+</html>

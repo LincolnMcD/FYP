@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReByte - Smart Recommerce for Smartphones</title>
+  <meta name="description" content="Buy, trade-in, and rent certified smartphones sustainably with ReByte.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Sticky Navigation Bar -->
+  <header class="site-header">
+    <div class="container header-container">
+      <!-- Brand Logo -->
+      <a href="home.html" class="brand-link">
+        <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+        <span class="brand-name">ReByte</span>
+      </a>
+
+      <!-- Search Input -->
+      <div class="search-box-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" class="search-input" placeholder="Search devices, brands..." aria-label="Search devices, brands">
+      </div>
+
+      <!-- Navigation Links -->
+      <ul class="nav-links">
+        <li class="nav-item active"><a href="home.html">Home</a></li>
+        <li class="nav-item"><a href="#shop">Shop</a></li>
+        <li class="nav-item"><a href="#rentals">Rentals</a></li>
+        <li class="nav-item"><a href="#tradein">Trade-in</a></li>
+      </ul>
+
+      <!-- Right Header Actions: Login/Register by default, or Profile icon if logged in -->
+      <div class="header-actions">
+        <a href="register.html" class="btn-nav-register">Register</a>
+        <a href="login.html" class="btn-nav-login">
+          Login
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <div class="container">
+
+      <!-- Hero Banner Card -->
+      <section class="hero-banner-card">
+        <div class="hero-content-col">
+          <h1 class="hero-title">Buy, Trade-In, Rent<br>Smartphones</h1>
+          <p class="hero-subtitle">
+            Upgrade your mobile experience sustainably. Get premium certified smartphones, turn old phones into cash, or rent the latest model when you need it.
+          </p>
+          <div class="hero-buttons-row">
+            <a href="#shop" class="btn-hero-primary">
+              Explore Shop
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </a>
+            <a href="#tradein" class="btn-hero-secondary">
+              Start a Trade-In
+            </a>
+          </div>
+        </div>
+        <div class="hero-image-col">
+          <img src="assets/images/hero_phone.jpg" alt="Certified Pre-Owned Smartphone" class="hero-device-img">
+        </div>
+      </section>
+
+      <!-- Quick Actions Section -->
+      <section>
+        <h2 class="section-title">Quick Actions</h2>
+        <div class="quick-actions-grid">
+          <!-- Action 1: Shop -->
+          <div class="quick-action-card" onclick="ReByteAuth.showToast('Navigating to Smartphone Shop...', 'info')">
+            <div class="action-icon-circle bg-blue">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+            </div>
+            <span class="action-label">Shop</span>
+          </div>
+
+          <!-- Action 2: Trade-In -->
+          <div class="quick-action-card" onclick="ReByteAuth.showToast('Starting a Trade-In evaluation...', 'info')">
+            <div class="action-icon-circle bg-peach">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </div>
+            <span class="action-label">Trade-In</span>
+          </div>
+
+          <!-- Action 3: Pay Rental -->
+          <div class="quick-action-card" onclick="ReByteAuth.showToast('Rental payment portal loaded.', 'info')">
+            <div class="action-icon-circle bg-blue">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="12" y2="14"></line></svg>
+            </div>
+            <span class="action-label">Pay Rental</span>
+          </div>
+
+          <!-- Action 4: Rent Smartphone -->
+          <div class="quick-action-card" onclick="ReByteAuth.showToast('Browse rental catalog...', 'info')">
+            <div class="action-icon-circle bg-cyan">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+            </div>
+            <span class="action-label">Rent Smartphone</span>
+          </div>
+
+          <!-- Action 5: Compare Phones -->
+          <div class="quick-action-card" onclick="ReByteAuth.showToast('Compare phone specifications...', 'info')">
+            <div class="action-icon-circle bg-purple">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+            </div>
+            <span class="action-label">Compare Phones</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dashboard Two Columns (Active Activity + Recommended/Recent) -->
+      <div class="dashboard-columns-grid">
+
+        <!-- Left Column: Active Activity -->
+        <div class="active-activities-col" id="activity">
+          <h2 class="section-title">Active Activity</h2>
+          <div class="active-activities-list">
+
+            <!-- Card 1: iPhone 13 Pro Trade-In -->
+            <div class="activity-card" id="tradein-activity">
+              <div class="activity-card-header">
+                <div class="activity-identity">
+                  <div class="activity-type-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  </div>
+                  <div>
+                    <h3 class="activity-title">iPhone 13 Pro Trade-In</h3>
+                    <p class="activity-subtitle">Order #TRD-8821</p>
+                  </div>
+                </div>
+                <span class="badge-tag inspection">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  Inspection
+                </span>
+              </div>
+
+              <!-- Stepper Timeline -->
+              <div class="stepper-timeline">
+                <!-- Step 1: Quote (Done) -->
+                <div class="stepper-step completed">
+                  <div class="stepper-indicator">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  <span class="stepper-label">Quote</span>
+                </div>
+                <div class="stepper-line completed"></div>
+
+                <!-- Step 2: Shipped (Done) -->
+                <div class="stepper-step completed">
+                  <div class="stepper-indicator">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  <span class="stepper-label">Shipped</span>
+                </div>
+                <div class="stepper-line in-progress"></div>
+
+                <!-- Step 3: Inspecting (Current) -->
+                <div class="stepper-step current">
+                  <div class="stepper-indicator">
+                    <span class="stepper-indicator-dot"></span>
+                  </div>
+                  <span class="stepper-label">Inspecting</span>
+                </div>
+                <div class="stepper-line"></div>
+
+                <!-- Step 4: Payment (Pending) -->
+                <div class="stepper-step">
+                  <div class="stepper-indicator"></div>
+                  <span class="stepper-label">Payment</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Samsung Galaxy S24 Rental -->
+            <div class="activity-card" id="rentals-activity">
+              <div class="activity-card-header">
+                <div class="activity-identity">
+                  <div class="activity-type-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                  </div>
+                  <div>
+                    <h3 class="activity-title">Samsung Galaxy S24, 512GB</h3>
+                    <p class="activity-subtitle">Due: Nov 15, 2024</p>
+                  </div>
+                </div>
+                <span class="badge-tag active">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"></circle></svg>
+                  Active
+                </span>
+              </div>
+
+              <!-- Time Remaining & Action Buttons -->
+              <div class="activity-card-footer">
+                <div>
+                  <div class="time-remaining-label">Time Remaining</div>
+                  <div class="time-remaining-value">14 Days</div>
+                </div>
+                <div class="rental-btn-group">
+                  <button class="btn-card-outline" onclick="ReByteAuth.showToast('Subscription extended for 30 days!', 'success')">Extend</button>
+                  <button class="btn-card-solid" onclick="ReByteAuth.showToast('Return initiated. Check your email for shipping label.', 'info')">Return</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right Column: Recommended & Recently Viewed -->
+        <div class="recommended-column">
+          <!-- Recommended Certified Smartphones -->
+          <div class="section-header-row">
+            <h2 class="section-title" style="margin-bottom:0;">Recommended Certified Smartphones</h2>
+            <a href="#shop" class="view-all-link">View All &gt;</a>
+          </div>
+
+          <div class="recommended-list">
+            <!-- Item 1: iPhone 14 -->
+            <div class="product-row-card">
+              <div class="product-img-box">
+                <span class="product-badge-mini">PERFECT</span>
+                <img src="assets/images/iphone14.jpg" alt="Apple iPhone 14, 128GB">
+              </div>
+              <div class="product-info-box">
+                <div class="product-brand">Apple</div>
+                <div class="product-name">iPhone 14, 128GB</div>
+                <div class="product-price">RM599.00</div>
+              </div>
+              <button class="btn-add-circle" title="Add to cart / Trade" onclick="ReByteAuth.showToast('iPhone 14 added to selection', 'success')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+            </div>
+
+            <!-- Item 2: Galaxy S23 -->
+            <div class="product-row-card">
+              <div class="product-img-box">
+                <span class="product-badge-mini">EXCELLENT</span>
+                <img src="assets/images/galaxy_s23.jpg" alt="Samsung Galaxy S23, 256GB">
+              </div>
+              <div class="product-info-box">
+                <div class="product-brand">Samsung</div>
+                <div class="product-name">Galaxy S23, 256GB</div>
+                <div class="product-price">RM499.00</div>
+              </div>
+              <button class="btn-add-circle" title="Add to cart / Trade" onclick="ReByteAuth.showToast('Galaxy S23 added to selection', 'success')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recently Viewed -->
+          <h2 class="section-title">Recently Viewed</h2>
+          <div class="recently-viewed-grid">
+            <!-- Card 1 -->
+            <div class="recent-product-card">
+              <div class="recent-img-box">
+                <img src="assets/images/galaxy_s23.jpg" alt="Samsung Galaxy S22">
+              </div>
+              <div class="recent-brand">Samsung</div>
+              <div class="recent-model">Galaxy S22,<br>128GB</div>
+              <div class="recent-price">RM349.00</div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="recent-product-card">
+              <div class="recent-img-box">
+                <img src="assets/images/iphone14.jpg" alt="Samsung Galaxy S21">
+              </div>
+              <div class="recent-brand">Samsung</div>
+              <div class="recent-model">Galaxy S21,<br>128GB</div>
+              <div class="recent-price">RM149.00</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Why Choose ReByte Section -->
+      <section class="why-choose-section">
+        <h2 class="why-choose-title">Why Choose ReByte?</h2>
+        <div class="features-row">
+          <!-- Feature 1: Verified Condition -->
+          <div class="feature-col">
+            <div class="feature-icon-badge">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+            </div>
+            <h3 class="feature-heading">Verified Condition</h3>
+            <p class="feature-desc">Every device is rigorously tested and certified.</p>
+          </div>
+
+          <!-- Feature 2: Transparent Pricing -->
+          <div class="feature-col">
+            <div class="feature-icon-badge">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </div>
+            <h3 class="feature-heading">Transparent Pricing</h3>
+            <p class="feature-desc">No hidden fees, what you see is what you pay.</p>
+          </div>
+
+          <!-- Feature 3: Secure Payment -->
+          <div class="feature-col">
+            <div class="feature-icon-badge">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <h3 class="feature-heading">Secure Payment</h3>
+            <p class="feature-desc">Your transactions are fully protected and encrypted.</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top-grid">
+        <!-- Brand Summary -->
+        <div class="footer-brand-col">
+          <a href="home.html" class="brand-link">
+            <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+            <span class="brand-name">ReByte</span>
+          </a>
+          <p class="footer-tagline">
+            Sustainable hardware for a better future. Buy, trade, and rent premium tech with confidence.
+          </p>
+        </div>
+
+        <!-- Company Links -->
+        <div>
+          <h4 class="footer-col-title">Company</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#about">About Us</a></li>
+            <li class="footer-link-item"><a href="#sustainability">Sustainability</a></li>
+            <li class="footer-link-item"><a href="#careers">Careers</a></li>
+          </ul>
+        </div>
+
+        <!-- Legal Links -->
+        <div>
+          <h4 class="footer-col-title">Legal</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#terms">Terms of Service</a></li>
+            <li class="footer-link-item"><a href="#privacy">Privacy Policy</a></li>
+            <li class="footer-link-item"><a href="#cookie">Cookie Policy</a></li>
+          </ul>
+        </div>
+
+        <!-- Support Links -->
+        <div>
+          <h4 class="footer-col-title">Support</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#help">Help Center</a></li>
+            <li class="footer-link-item"><a href="#contact">Contact Us</a></li>
+            <li class="footer-link-item"><a href="#track">Track Order</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        &copy; 2024 ReByte Recommerce. All rights reserved. Built for sustainability.
+      </div>
+    </div>
+  </footer>
+
+  <script src="auth.js"></script>
+</body>
+</html>

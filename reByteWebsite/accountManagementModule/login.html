@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - ReByte</title>
+  <meta name="description" content="Sign in to your ReByte account to manage your certified devices, trade-ins, and rentals.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Sticky Navigation Bar -->
+  <header class="site-header">
+    <div class="container header-container">
+      <!-- Brand Logo -->
+      <a href="home.html" class="brand-link">
+        <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+        <span class="brand-name">ReByte</span>
+      </a>
+
+      <!-- Navigation Links -->
+      <ul class="nav-links">
+        <li class="nav-item"><a href="home.html">Home</a></li>
+        <li class="nav-item"><a href="home.html#shop">Shop</a></li>
+        <li class="nav-item"><a href="home.html#rentals">Rentals</a></li>
+        <li class="nav-item"><a href="home.html#tradein">Trade-in</a></li>
+      </ul>
+
+      <!-- Right Header Actions -->
+      <div class="header-actions">
+        <a href="register.html" class="btn-nav-register">Register</a>
+        <a href="login.html" class="btn-nav-login">
+          Login
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Login Main Layout -->
+  <main class="auth-page-container">
+    <div class="auth-split-layout">
+
+      <!-- Left Column: Branding & Pillars -->
+      <div class="auth-banner-side">
+        <img src="assets/images/ecotech_bg.jpg" alt="Eco Background" class="auth-banner-illustration">
+        <div class="auth-banner-inner">
+          <h1 class="auth-banner-heading">
+            Join the Recommerce<br>Revolution.
+          </h1>
+          <p class="auth-banner-subheading">
+            Trade in, upgrade, and extend the lifecycle of premium hardware with confidence.
+          </p>
+
+          <div class="auth-badge-list">
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              Certified Tech
+            </div>
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 0 0-10 10c0 5.52 4.48 10 10 10s10-4.48 10-10A10 10 0 0 0 12 2zm1 14.93V18h-2v-1.07A4.002 4.002 0 0 1 9.07 14H11c0 1.1.9 2 2 2s2-.9 2-2c0-.73-.4-1.37-1-1.73V11a2 2 0 0 0-2-2H9.07A4.002 4.002 0 0 1 11 6.07V5h2v1.07A4.002 4.002 0 0 1 14.93 9H13a2 2 0 0 0-2 2v.27c.6.36 1 1 1 1.73z"></path></svg>
+              Sustainable
+            </div>
+            <div class="auth-badge-item">
+              <svg class="auth-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              Secure Transactions
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Login Card -->
+      <div class="auth-card-side">
+        <!-- Back Arrow Button to Home -->
+        <a href="home.html" class="auth-back-btn" title="Back to Home">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </a>
+
+        <div class="auth-form-header">
+          <h2 class="auth-title">Welcome Back</h2>
+          <p class="auth-subtitle">Sign in to manage your certified tech portfolio.</p>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <!-- Email Input -->
+          <div class="form-group">
+            <label class="form-label" for="loginEmail">Email Address</label>
+            <div class="input-with-icon-wrapper">
+              <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              <input type="email" id="loginEmail" class="form-input" placeholder="you@example.com" autocomplete="email" required>
+            </div>
+            <div class="input-error-msg" id="loginEmailError"></div>
+          </div>
+
+          <!-- Password Input -->
+          <div class="form-group">
+            <div class="form-label-row">
+              <label class="form-label" for="loginPassword">Password</label>
+              <a href="forgot-password.html" class="form-forgot-link">Forgot password?</a>
+            </div>
+            <div class="input-with-icon-wrapper">
+              <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <input type="password" id="loginPassword" class="form-input" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required>
+              <button type="button" class="input-toggle-password" id="toggleLoginPasswordBtn" aria-label="Toggle password visibility">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+            <div class="input-error-msg" id="loginPasswordError"></div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="btn-auth-submit" id="loginSubmitBtn">
+            Sign In
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="auth-divider">
+          <span>OR</span>
+        </div>
+
+        <!-- Social Buttons -->
+        <div class="social-buttons-box">
+          <button type="button" class="btn-social" id="btnGoogleLogin">
+            <img src="assets/images/google_logo.png" alt="Google">
+            <span>Sign in with Google</span>
+          </button>
+          <button type="button" class="btn-social" id="btnFacebookLogin">
+            <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            <span>Sign in with Facebook</span>
+          </button>
+        </div>
+
+        <!-- Bottom Link to Register -->
+        <p class="auth-bottom-switch-link">
+          Don't have an account? <a href="register.html">Create Account</a>
+        </p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top-grid">
+        <!-- Brand Summary -->
+        <div class="footer-brand-col">
+          <a href="home.html" class="brand-link">
+            <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
+            <span class="brand-name">ReByte</span>
+          </a>
+          <p class="footer-tagline">
+            Sustainable hardware for a better future. Buy, trade, and rent premium tech with confidence.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Company</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#about">About Us</a></li>
+            <li class="footer-link-item"><a href="#sustainability">Sustainability</a></li>
+            <li class="footer-link-item"><a href="#careers">Careers</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Legal</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#terms">Terms of Service</a></li>
+            <li class="footer-link-item"><a href="#privacy">Privacy Policy</a></li>
+            <li class="footer-link-item"><a href="#cookie">Cookie Policy</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Support</h4>
+          <ul class="footer-links-list">
+            <li class="footer-link-item"><a href="#help">Help Center</a></li>
+            <li class="footer-link-item"><a href="#contact">Contact Us</a></li>
+            <li class="footer-link-item"><a href="#track">Track Order</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        &copy; 2024 ReByte Recommerce. All rights reserved. Built for sustainability.
+      </div>
+    </div>
+  </footer>
+
+  <!-- Firebase Compat Client SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    // Password visibility toggle
+    const toggleBtn = document.getElementById('toggleLoginPasswordBtn');
+    const pwdInput = document.getElementById('loginPassword');
+    toggleBtn.addEventListener('click', () => {
+      const isPwd = pwdInput.type === 'password';
+      pwdInput.type = isPwd ? 'text' : 'password';
+      toggleBtn.innerHTML = isPwd
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    });
+
+    // Form and input elements
+    const loginForm = document.getElementById('loginForm');
+    const emailInput = document.getElementById('loginEmail');
+    const emailError = document.getElementById('loginEmailError');
+    const pwdError = document.getElementById('loginPasswordError');
+    const submitBtn = document.getElementById('loginSubmitBtn');
+    const btnGoogle = document.getElementById('btnGoogleLogin');
+    const btnFacebook = document.getElementById('btnFacebookLogin');
+
+    let hasInteractedWithEmail = false;
+
+    // Instant format validation matching mobile _validateEmail
+    function validateEmailInput(showError = true) {
+      const val = emailInput.value;
+      const res = ReByteAuth.validateEmail(val);
+
+      // Remove suggested buttons highlighting on change
+      btnGoogle.classList.remove('highlight-suggested');
+      btnFacebook.classList.remove('highlight-suggested');
+
+      if (!res.isValid) {
+        if (showError) {
+          emailError.textContent = res.message;
+          emailError.classList.add('show');
+          emailInput.classList.add('input-error');
+        }
+        return false;
+      } else {
+        emailError.textContent = '';
+        emailError.classList.remove('show');
+        emailInput.classList.remove('input-error');
+        return true;
+      }
+    }
+
+    function validatePasswordInput(showError = true) {
+      const pwd = pwdInput.value;
+      if (!pwd || pwd.length === 0) {
+        if (showError) {
+          pwdError.textContent = 'Password cannot be empty';
+          pwdError.classList.add('show');
+          pwdInput.classList.add('input-error');
+        }
+        return false;
+      } else {
+        pwdError.textContent = '';
+        pwdError.classList.remove('show');
+        pwdInput.classList.remove('input-error');
+        return true;
+      }
+    }
+
+    // Check if form is valid matching mobile _isFormValid
+    function updateFormValidity() {
+      const isEmailValid = ReByteAuth.validateEmail(emailInput.value).isValid;
+      const isPwdValid = pwdInput.value.length > 0;
+      const isFormValid = isEmailValid && isPwdValid;
+
+      submitBtn.disabled = !isFormValid;
+      return isFormValid;
+    }
+
+    // Instant listeners matching mobile onChanged
+    emailInput.addEventListener('input', () => {
+      hasInteractedWithEmail = true;
+      validateEmailInput(true);
+      pwdError.textContent = '';
+      pwdError.classList.remove('show');
+      pwdInput.classList.remove('input-error');
+      updateFormValidity();
+    });
+
+    emailInput.addEventListener('blur', () => {
+      if (hasInteractedWithEmail || emailInput.value.length > 0) {
+        validateEmailInput(true);
+      }
+      updateFormValidity();
+    });
+
+    pwdInput.addEventListener('input', () => {
+      pwdError.textContent = '';
+      pwdError.classList.remove('show');
+      pwdInput.classList.remove('input-error');
+      updateFormValidity();
+    });
+
+    pwdInput.addEventListener('blur', () => {
+      if (pwdInput.value.length > 0) {
+        validatePasswordInput(true);
+      }
+      updateFormValidity();
+    });
+
+    // Form submission matching mobile _handleLogin
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const isEmailValid = validateEmailInput(true);
+      const isPwdValid = validatePasswordInput(true);
+
+      if (!isEmailValid) {
+        emailInput.focus();
+        return;
+      }
+      if (!isPwdValid) {
+        pwdInput.focus();
+        return;
+      }
+
+      // Set loading state matching mobile _isLoading
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="btn-spinner"></span> <span>Signing In...</span>`;
+
+      const result = await ReByteAuth.login(emailInput.value, pwdInput.value);
+
+      // Re-enable button
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<span>Sign In</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+      updateFormValidity();
+
+      if (result.success) {
+        ReByteAuth.showToast(result.message || 'Signed in successfully!', 'success');
+        setTimeout(() => {
+          window.location.href = 'home.html';
+        }, 700);
+      } else {
+        const errorMsg = result.error || 'Login failed';
+
+        // Check if user is registered via Google or Facebook
+        if (errorMsg.includes('registered at Google')) {
+          emailError.textContent = errorMsg;
+          emailError.classList.add('show');
+          emailInput.classList.add('input-error');
+          btnGoogle.classList.add('highlight-suggested');
+          emailInput.focus();
+        } else if (errorMsg.includes('registered at Facebook')) {
+          emailError.textContent = errorMsg;
+          emailError.classList.add('show');
+          emailInput.classList.add('input-error');
+          btnFacebook.classList.add('highlight-suggested');
+          emailInput.focus();
+        } else if (errorMsg.toLowerCase().includes('register an account first') || (errorMsg.toLowerCase().includes('email') && !errorMsg.toLowerCase().includes('password'))) {
+          emailError.textContent = errorMsg;
+          emailError.classList.add('show');
+          emailInput.classList.add('input-error');
+          emailInput.focus();
+        } else {
+          // "Incorrect email or password" or other credential issues
+          pwdError.textContent = errorMsg;
+          pwdError.classList.add('show');
+          pwdInput.classList.add('input-error');
+          emailInput.classList.add('input-error');
+          pwdInput.focus();
+        }
+      }
+    });
+
+    // Real OAuth Buttons
+    async function handleSocialClick(provider) {
+      const btn = provider === 'Google' ? btnGoogle : btnFacebook;
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<span class="btn-spinner-sm"></span> <span>Connecting to ${provider}...</span>`;
+
+      let res;
+      if (provider === 'Google') {
+        res = await ReByteAuth.signInWithGoogle();
+      } else {
+        res = await ReByteAuth.signInWithFacebook();
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+
+      if (res.success && res.requireProfileComplete) {
+        // New user tried to login via OAuth, redirect them to register.html
+        ReByteAuth.showToast('Please complete your profile to finish registration.', 'info');
+        setTimeout(() => {
+          window.location.href = `register.html?oauth=true&provider=${provider}`;
+        }, 700);
+      } else if (res.success) {
+        ReByteAuth.showToast(res.message || `Signed in with ${provider}!`, 'success');
+        setTimeout(() => {
+          window.location.href = 'home.html';
+        }, 700);
+      } else {
+        ReByteAuth.showToast(res.error || `${provider} sign in failed.`, 'error');
+      }
+    }
+
+    btnGoogle.addEventListener('click', () => handleSocialClick('Google'));
+    btnFacebook.addEventListener('click', () => handleSocialClick('Facebook'));
+
+    // Initial check on load
+    updateFormValidity();
+  </script>
+</body>
+</html>
