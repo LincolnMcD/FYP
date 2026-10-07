@@ -23,6 +23,11 @@ class _StaffHomePageState extends State<StaffHomePage> {
   void initState() {
     super.initState();
     _toastMessage = widget.toastMessage;
+    if (_toastMessage != null) {
+      Future.delayed(const Duration(seconds: 6), () {
+        if (mounted) setState(() => _toastMessage = null);
+      });
+    }
     _loadSession();
   }
 

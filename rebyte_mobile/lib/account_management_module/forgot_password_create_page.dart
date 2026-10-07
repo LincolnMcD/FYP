@@ -161,10 +161,8 @@ class _CreateNewPasswordPageState extends State<CreateNewPasswordPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
-            int count = 0;
-            Navigator.popUntil(context, (route) {
-              return count++ == 2;
-            });
+            Navigator.pop(context);
+            Navigator.pop(context);
           }
         ),
         title: Row(

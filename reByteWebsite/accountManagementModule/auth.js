@@ -66,11 +66,7 @@ const ReByteAuth = {
         localStorage.removeItem(this.SESSION_KEY);
         this.showToast('You have been signed out successfully.', 'info');
         setTimeout(() => {
-          if (window.location.pathname.endsWith('home.html') || window.location.pathname.endsWith('/') || window.location.pathname.endsWith('index.html')) {
-            this.initHeader();
-          } else {
-            window.location.href = 'home.html';
-          }
+          window.location.href = '/index.html';
         }, 600);
       });
     }
@@ -502,11 +498,14 @@ const ReByteAuth = {
       const response = await fetch(`${API_BASE_URL}/forgot-password/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp })
+        body: JSON.stringify({ email, otp, exchangeForResetToken: true })
       });
       const data = await response.json();
       if (response.ok) {
-        return { success: true, message: data.message || 'OTP is valid.' };
+        if (!data.resetToken) {
+          return { success: false, error: 'The password reset service is out of date. Restart the ReByte backend, then verify the code again.' };
+        }
+        return { success: true, resetToken: data.resetToken, message: data.message || 'OTP is valid.' };
       } else {
         return { success: false, error: data.error || 'Invalid OTP.' };
       }
@@ -518,12 +517,12 @@ const ReByteAuth = {
   /**
    * Reset Password
    */
-  async resetPassword(email, newPassword, otp) {
+  async resetPassword(email, newPassword, resetToken) {
     try {
       const response = await fetch(`${API_BASE_URL}/forgot-password/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, newPassword, otp })
+        body: JSON.stringify({ email, newPassword, resetToken })
       });
       const data = await response.json();
       if (response.ok) {

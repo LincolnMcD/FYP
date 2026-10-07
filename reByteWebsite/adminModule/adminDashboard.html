@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-navy: #1e3a8a;
+      --primary-blue: #2563eb;
+      --bg-page: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { display: flex; height: 100vh; background-color: var(--bg-page); color: var(--text-main); overflow: hidden; }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 260px; background-color: #fff; border-right: 1px solid var(--border-color);
+      display: flex; flex-direction: column; padding: 0; flex-shrink: 0;
+    }
+    .brand {
+      height: 105px; flex: 0 0 105px; display: flex; align-items: center; gap: 10px; padding: 0 28px; margin: 0;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { font-size: 25px; font-weight: 700; color: #10264b; letter-spacing: -1px; }
+    
+    .nav-list { list-style: none; display: grid; align-content: start; gap: 8px; padding: 22px 16px; margin: 0; flex: 1; overflow-y: auto; }
+    .nav-item {
+      min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-radius: 9px;
+      color: #586579; font-weight: 500; cursor: pointer; text-decoration: none; font-size: 14px;
+    }
+    .nav-item:hover { background-color: #f1f4f9; }
+    .nav-item.active { background-color: #082f72; color: #fff; font-weight: 600; }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    
+    /* Main Content */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+    
+    /* Header */
+    .header {
+      min-height: 105px; flex: 0 0 105px; display: flex; justify-content: space-between; align-items: center; padding: 0 40px;
+      background-color: #fff; border-bottom: 1px solid #e2e6ee; position: sticky; top: 0; z-index: 5;
+    }
+    .header-title { font-size: 20px; font-weight: 700; color: #173a75; }
+    
+    .header-right { display: flex; align-items: center; gap: 28px; position: relative; }
+    .header-date { font-size: 14px; color: #7a8496; }
+    .profile-btn {
+      width: 50px; height: 50px; border-radius: 50%; background-color: #f0f1f4; border: none;
+      display: flex; align-items: center; justify-content: center; color: #828a98; cursor: pointer;
+    }
+    .profile-dropdown {
+      position: absolute; top: 50px; right: 0; background: #fff; border: 1px solid var(--border-color);
+      border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 160px; display: none; z-index: 10;
+    }
+    .profile-dropdown.show { display: block; }
+    .dropdown-item {
+      padding: 12px 16px; display: block; text-decoration: none; color: var(--text-main);
+      font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+    }
+    .dropdown-item:hover { background-color: #f1f5f9; }
+    
+    /* Content Area */
+    .content-area { padding: 40px; display: flex; flex-direction: column; gap: 32px; }
+    
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; }
+    .page-title h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: var(--primary-navy); }
+    .page-title p { font-size: 14px; color: var(--text-muted); }
+    .btn-outline { background: #fff; border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--text-main); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .stat-card { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
+    .stat-header { font-size: 14px; font-weight: 500; color: var(--text-muted); margin-bottom: 12px; }
+    .stat-val { font-size: 32px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; display: flex; align-items: baseline; gap: 4px; }
+    .stat-val small { font-size: 16px; color: var(--text-muted); font-weight: 500; }
+    .stat-footer { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+    .text-green { color: #16a34a; }
+    .text-orange { color: #f59e0b; }
+    .text-muted { color: var(--text-muted); }
+    .stat-icon-bg { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background: #f1f5f9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--primary-blue); }
+    
+    /* Bottom Grid */
+    .bottom-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+    
+    .card { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; }
+    .card-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 16px; font-weight: 600; color: var(--text-main); }
+    .card-action { font-size: 13px; font-weight: 600; color: var(--primary-blue); text-decoration: none; display: flex; align-items: center; gap: 4px; }
+    
+    /* Pending Actions List */
+    .actions-list { display: flex; flex-direction: column; padding: 12px 24px; }
+    .action-item { display: flex; align-items: flex-start; gap: 16px; padding: 16px 0; border-bottom: 1px solid #f1f5f9; }
+    .action-item:last-child { border-bottom: none; }
+    .action-icon { width: 40px; height: 40px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: var(--primary-blue); flex-shrink: 0; }
+    .action-content { flex: 1; }
+    .action-content h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text-main); }
+    .action-content p { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+    .action-badge { background: #fee2e2; color: #b91c1c; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+    .action-badge.yellow { background: #fef3c7; color: #b45309; }
+    .card-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); text-align: center; }
+    .card-footer a { font-size: 13px; font-weight: 600; color: var(--primary-blue); text-decoration: none; }
+    
+    /* Transactions Table */
+    .table-container { padding: 0 24px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    th { text-align: left; padding: 16px 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); }
+    td { padding: 16px 8px; font-size: 13px; color: var(--text-main); border-bottom: 1px solid #f1f5f9; }
+    .txn-id { color: var(--text-muted); font-family: monospace; }
+    .txn-type { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .txn-type svg { color: var(--primary-blue); }
+    .txn-amount { font-family: monospace; font-weight: 600; }
+    
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+    .status-completed { background: #dcfce7; color: #166534; }
+    .status-active { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; background: transparent; }
+    .status-pending { background: #fef3c7; color: #b45309; }
+    .status-failed { background: #fee2e2; color: #b91c1c; }
+    
+    /* Modal Overlay */
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; opacity: 0; visibility: hidden; transition: all 0.2s ease; }
+    .modal-backdrop.show { opacity: 1; visibility: visible; }
+    .modal-card { background-color: #ffffff; border-radius: 12px; padding: 32px; width: 90%; max-width: 440px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; transform: scale(0.95); transition: transform 0.2s ease; }
+    .modal-backdrop.show .modal-card { transform: scale(1); }
+    
+    /* Toast Banner */
+    .toast-banner { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background-color: #1e3a8a; color: #ffffff; padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25); display: flex; align-items: center; gap: 12px; z-index: 99999; font-size: 13.5px; font-weight: 600; opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none; max-width: 90%; min-width: 300px; }
+    .toast-banner.show { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+    .toast-banner.success { background-color: #16a34a; }
+    .toast-banner.error { background-color: #e11d48; }
+    .toast-banner.info { background-color: #0c5ad2; }
+    .toast-banner-icon { width: 22px; height: 22px; flex-shrink: 0; }
+    .toast-banner-text { flex: 1; line-height: 1.45; }
+    .toast-banner-close { background: none; border: none; color: rgba(255, 255, 255, 0.85); cursor: pointer; padding: 3px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background-color 0.2s; }
+    .toast-banner-close:hover { background-color: rgba(255, 255, 255, 0.2); color: #ffffff; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <ul class="nav-list">
+      <a href="adminDashboard.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 13h6"></path></svg>Listings</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
+      <a href="staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="header">
+      <div class="header-title">Admin Dashboard</div>
+      <div class="header-right">
+        <div class="header-date">October 24th, 2023</div>
+        <div style="position: relative;">
+          <button class="profile-btn" id="profileDropdownBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </button>
+          <div class="profile-dropdown" id="profileDropdown">
+            <button class="dropdown-item" onclick="triggerLogout()" style="color: #ef4444;">Log Out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>System Overview</h1>
+          <p>Live metrics for ReByte Operations Hub &bull; Last updated: Just now</p>
+        </div>
+        <button class="btn-outline">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Export Report
+        </button>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">Total Users</div>
+          <div class="stat-val">45,291</div>
+          <div class="stat-footer text-green">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            +12% this month
+          </div>
+          <div class="stat-icon-bg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-header">Active Staff (Shift)</div>
+          <div class="stat-val">128 <small>/ 150</small></div>
+          <div class="stat-footer text-muted">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            85% operational capacity
+          </div>
+          <div class="stat-icon-bg" style="color: #0d9488; background: #ccfbf1;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">Monthly Sales (RM)</div>
+          <div class="stat-val">1,245,800</div>
+          <div class="stat-footer text-green">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            +5.4% vs last month
+          </div>
+          <div class="stat-icon-bg" style="color: #b45309; background: #fef3c7;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">Active Rentals</div>
+          <div class="stat-val">3,842</div>
+          <div class="stat-footer text-orange">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            42 pending returns
+          </div>
+          <div class="stat-icon-bg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Layout -->
+      <div class="bottom-grid">
+        <!-- Pending Actions -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Pending Actions</div>
+            <a href="#" class="card-action"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg></a>
+          </div>
+          <div class="actions-list">
+            <div class="action-item">
+              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></div>
+              <div class="action-content">
+                <h4>Listing Approvals</h4>
+                <p>Devices pending inspection</p>
+              </div>
+              <div class="action-badge">24</div>
+            </div>
+            
+            <div class="action-item">
+              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+              <div class="action-content">
+                <h4>Leave Applications</h4>
+                <p>Staff requests awaiting review</p>
+              </div>
+              <div class="action-badge" style="background: #e0e7ff; color: #4338ca;">8</div>
+            </div>
+
+            <div class="action-item">
+              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></div>
+              <div class="action-content">
+                <h4>Open Support Tickets</h4>
+                <p>Customer inquiries (SLA < 2h)</p>
+              </div>
+              <div class="action-badge yellow">15</div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <a href="#">View All Actions</a>
+          </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Transactions</div>
+            <a href="#" class="card-action">View Details &rarr;</a>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>TXN ID</th>
+                  <th>TYPE / ITEM</th>
+                  <th style="text-align: right;">AMOUNT (RM)</th>
+                  <th style="text-align: right;">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="txn-id">#TRX-8921</td>
+                  <td class="txn-type"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Purchase - iPhone 13 Pro</td>
+                  <td style="text-align: right;" class="txn-amount">3,250.00</td>
+                  <td style="text-align: right;"><span class="status-badge status-completed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Completed</span></td>
+                </tr>
+                <tr>
+                  <td class="txn-id">#TRX-8920</td>
+                  <td class="txn-type"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#0d9488;"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg> Rental Init - MacBook Air M2</td>
+                  <td style="text-align: right;" class="txn-amount">180.00 <span style="font-size: 11px; color: var(--text-muted); font-family: 'Inter';">/mo</span></td>
+                  <td style="text-align: right;"><span class="status-badge status-active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Active</span></td>
+                </tr>
+                <tr>
+                  <td class="txn-id">#TRX-8919</td>
+                  <td class="txn-type"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#b45309;"><path d="M2 12h4l2.5 9 5-18 2.5 9h4"></path></svg> Trade-in - Galaxy S22</td>
+                  <td style="text-align: right;" class="txn-amount" style="color: #ef4444;">-1,100.00</td>
+                  <td style="text-align: right;"><span class="status-badge status-pending"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line></svg> Pending Insp.</span></td>
+                </tr>
+                <tr>
+                  <td class="txn-id">#TRX-8918</td>
+                  <td class="txn-type"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Purchase - iPad Pro 11"</td>
+                  <td style="text-align: right;" class="txn-amount">2,899.00</td>
+                  <td style="text-align: right;"><span class="status-badge status-failed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Failed</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+  
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    // Dropdown Logic
+    const dropdownBtn = document.getElementById('profileDropdownBtn');
+    const dropdownMenu = document.getElementById('profileDropdown');
+    
+    dropdownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdownMenu.classList.toggle('show');
+    });
+    
+    window.addEventListener('click', () => {
+      if (dropdownMenu.classList.contains('show')) {
+        dropdownMenu.classList.remove('show');
+      }
+    });
+    
+    // Logout Logic matching existing confirm design
+    function triggerLogout() {
+      ReByteAuth.logout();
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check auth if needed, redirect to login if not logged in
+      if (!ReByteAuth.isLoggedIn()) {
+        window.location.href = '../accountManagementModule/login.html';
+      } else {
+        const user = ReByteAuth.getUser();
+        if (user && user.role !== 'Admin') {
+          // If not Admin, redirect home or appropriate dashboard
+          if (user.role === 'Staff') {
+            window.location.href = '../staffModule/staffDashboard.html';
+          } else {
+            window.location.href = '../accountManagementModule/home.html';
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

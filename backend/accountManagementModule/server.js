@@ -197,7 +197,7 @@ router.post("/forgot-password/request-otp", async (req, res) => {
 });
 
 router.post("/forgot-password/verify-otp", async (req, res) => {
-    const { email, otp } = req.body;
+    const { email, otp, exchangeForResetToken } = req.body;
     if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required" });
 
     try {
@@ -213,6 +213,23 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
         const expiresAt = new Date(otpData.otpExpiresAt);
         if (now > expiresAt) return res.status(400).json({ error: "OTP has expired. Please request a new one." });
 
+        // Website exchanges the verified OTP for a separate, short-lived reset session.
+        // Older mobile clients can continue using their existing OTP flow.
+        if (exchangeForResetToken) {
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            await db.runTransaction(async transaction => {
+                const current = await transaction.get(otpRef);
+                if (!current.exists || current.data().otpCode !== otp.toString() ||
+                    Date.now() >= Date.parse(current.data().otpExpiresAt)) {
+                    throw new Error('Reset code changed during verification');
+                }
+                transaction.set(otpRef, {
+                    resetTokenHash: crypto.createHash('sha256').update(resetToken).digest('hex'),
+                    resetExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+                });
+            });
+            return res.status(200).json({ success: true, resetToken, message: "Email verified successfully" });
+        }
         return res.status(200).json({ success: true, message: "OTP is valid!" });
     } catch (err) {
         console.error(err);
@@ -221,8 +238,8 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
 });
 
 router.post("/forgot-password/reset", async (req, res) => {
-    const { email, newPassword, otp } = req.body;
-    if (!email || !newPassword || !otp) return res.status(400).json({ error: "Missing required parameters" });
+    const { email, newPassword, otp, resetToken } = req.body;
+    if (!email || !newPassword || (!otp && !resetToken)) return res.status(400).json({ error: "Missing required parameters" });
 
     const passwordValidation = validatePassword(newPassword);
     if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
@@ -231,16 +248,15 @@ router.post("/forgot-password/reset", async (req, res) => {
         const otpRef = db.collection("otps").doc(email + "_reset");
         const otpDoc = await otpRef.get();
 
-        if (!otpDoc.exists) return res.status(400).json({ error: "No OTP requested for this email" });
-
-        const otpData = otpDoc.data();
-        if (otpData.otpCode !== otp.toString()) return res.status(400).json({ error: "Invalid verification code" });
-
-        const now = new Date();
-        const expiresAt = new Date(otpData.otpExpiresAt);
-        if (now > expiresAt) return res.status(400).json({ error: "OTP has expired. Please request a new one." });
-
-        await otpRef.delete();
+        const sessionError = "Your password reset session has expired or is invalid. Please verify your email again.";
+        const tokenHash = typeof resetToken === 'string'
+            ? crypto.createHash('sha256').update(resetToken).digest('hex') : null;
+        const validSession = data => data && (resetToken
+            ? tokenHash && data.resetTokenHash === tokenHash && Date.parse(data.resetExpiresAt) > Date.now()
+            : data.otpCode === String(otp) && Date.parse(data.otpExpiresAt) > Date.now());
+        if (!otpDoc.exists || !validSession(otpDoc.data())) {
+            return res.status(400).json({ error: sessionError });
+        }
 
         const usersRef = db.collection("users");
         const snapshot = await usersRef.where("email", "==", email).get();
@@ -248,7 +264,54 @@ router.post("/forgot-password/reset", async (req, res) => {
 
         const uid = snapshot.docs[0].data().userId;
 
-        await getAuth().updateUser(uid, { password: newPassword });
+        // Check if new password is the same as the current password by attempting to sign in
+        const FIREBASE_API_KEY = "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE";
+        const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
+        let fetchParams;
+        if (typeof fetch === 'undefined') {
+            fetchParams = require('node-fetch')(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: newPassword, returnSecureToken: true })
+            });
+        } else {
+            fetchParams = fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: newPassword, returnSecureToken: true })
+            });
+        }
+        
+        const signInResponse = await fetchParams;
+        const signInData = await signInResponse.json();
+        
+        if (!signInData.error) {
+            return res.status(400).json({ error: "New password cannot be the same as current password" });
+        }
+
+        // Claim only after validation so a rejected password can be corrected and retried.
+        const claimed = await db.runTransaction(async transaction => {
+            const current = await transaction.get(otpRef);
+            if (!current.exists || !validSession(current.data()) || current.data().resetInProgress) return false;
+            transaction.update(otpRef, { resetInProgress: true });
+            return true;
+        });
+        if (!claimed) return res.status(400).json({ error: sessionError });
+        try {
+            await getAuth().updateUser(uid, { password: newPassword });
+        } catch (err) {
+            await db.runTransaction(async transaction => {
+                const current = await transaction.get(otpRef);
+                if (current.exists && validSession(current.data())) transaction.update(otpRef, { resetInProgress: false });
+            });
+            throw err;
+        }
+        await db.runTransaction(async transaction => {
+            const current = await transaction.get(otpRef);
+            if (current.exists && (resetToken ? current.data().resetTokenHash === tokenHash : current.data().otpCode === String(otp))) {
+                transaction.delete(otpRef);
+            }
+        });
 
         return res.status(200).json({ success: true, message: "Password updated successfully" });
     } catch (err) {

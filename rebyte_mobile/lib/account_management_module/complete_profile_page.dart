@@ -164,6 +164,10 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
