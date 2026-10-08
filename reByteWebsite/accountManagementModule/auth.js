@@ -196,6 +196,17 @@ const ReByteAuth = {
     return { isValid: true, message: '' };
   },
 
+  validatePhoneNumber(phoneNumber) {
+    const digits = String(phoneNumber || '').replace(/\D/g, '');
+    if (!digits) return { isValid: false, message: 'Phone number is required' };
+    if (!digits.startsWith('1')) return { isValid: false, message: 'Malaysian mobile numbers must start with 1' };
+    const expectedLength = digits.startsWith('11') ? 10 : 9;
+    if (digits.length !== expectedLength) {
+      return { isValid: false, message: `This mobile number needs ${expectedLength} digits after +60` };
+    }
+    return { isValid: true, message: '' };
+  },
+
   /**
    * Display top toast notification banner (exact mobile _showTopToast match)
    */
@@ -378,7 +389,14 @@ const ReByteAuth = {
       }
       const fallbackEmail = userCred.user.email || (userCred.additionalUserInfo && userCred.additionalUserInfo.profile && userCred.additionalUserInfo.profile.email);
       const displayName = userCred.user.displayName || (userCred.additionalUserInfo && userCred.additionalUserInfo.profile && userCred.additionalUserInfo.profile.name);
-      return await this.oauthLogin(idToken, 'Google', fallbackEmail, displayName);
+      const loginResult = await this.oauthLogin(idToken, 'Google', fallbackEmail, displayName);
+      
+      // If backend blocks the login, but Firebase just created a new Auth record, delete the ghost record
+      if (!loginResult.success && userCred.additionalUserInfo && userCred.additionalUserInfo.isNewUser) {
+        try { await userCred.user.delete(); } catch (e) { console.error('Failed to delete ghost user:', e); }
+      }
+      
+      return loginResult;
     } catch (err) {
       console.error('Google Sign In error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
@@ -422,7 +440,14 @@ const ReByteAuth = {
       }
       const fallbackEmail = userCred.user.email || (userCred.additionalUserInfo && userCred.additionalUserInfo.profile && userCred.additionalUserInfo.profile.email);
       const displayName = userCred.user.displayName || (userCred.additionalUserInfo && userCred.additionalUserInfo.profile && userCred.additionalUserInfo.profile.name);
-      return await this.oauthLogin(idToken, 'Facebook', fallbackEmail, displayName);
+      const loginResult = await this.oauthLogin(idToken, 'Facebook', fallbackEmail, displayName);
+      
+      // If backend blocks the login, but Firebase just created a new Auth record, delete the ghost record
+      if (!loginResult.success && userCred.additionalUserInfo && userCred.additionalUserInfo.isNewUser) {
+        try { await userCred.user.delete(); } catch (e) { console.error('Failed to delete ghost user:', e); }
+      }
+      
+      return loginResult;
     } catch (err) {
       console.error('Facebook Sign In error:', err);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
@@ -560,6 +585,38 @@ const ReByteAuth = {
       }
     } catch (networkErr) {
       console.error('Registration network error:', networkErr);
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async checkStaffEmail(email) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-staff-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ email })
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message } : { success: false, error: data.error || 'Could not check this email.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async registerStaff(staffData) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/register-staff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify(staffData)
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Staff account created successfully.' } : { success: false, error: data.error || 'Staff account creation failed.' };
+    } catch (err) {
       return { success: false, error: 'Connection failed. Ensure backend is running.' };
     }
   }

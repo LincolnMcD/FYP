@@ -399,7 +399,7 @@
         phoneGroup.classList.add('error');
         isValid = false;
       } else if (!cleanPhone.startsWith('11') && cleanPhone.length !== 9) {
-        phoneError.textContent = 'The phone number must have at least 9 digits after +60.';
+        phoneError.textContent = 'The phone number must have exactly 9 digits after +60.';
         phoneError.style.display = 'block';
         phoneGroup.classList.add('error');
         isValid = false;

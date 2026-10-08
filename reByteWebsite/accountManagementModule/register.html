@@ -286,7 +286,7 @@
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.2;">
             <input type="checkbox" id="termsCheckbox" style="margin: 0; cursor: pointer; width: 16px; height: 16px;">
             <label for="termsCheckbox" style="cursor: pointer; margin: 0;">
-              I agree to the <a href="#" style="color: var(--color-primary-blue); font-weight: 600;">Terms and Conditions</a> and <a href="#" style="color: var(--color-primary-blue); font-weight: 600;">Privacy Policy</a>.
+              I agree to the <a href="terms-and-conditions.html" target="_blank" style="color: var(--color-primary-blue); font-weight: 600;">Terms and Conditions</a> and <a href="privacy-policy.html" target="_blank" style="color: var(--color-primary-blue); font-weight: 600;">Privacy Policy</a>.
             </label>
           </div>
 
@@ -436,7 +436,7 @@
         phoneError.classList.add('show');
         profilePhoneInput.classList.add('input-error');
       } else if (!phone.startsWith('11') && phone.length !== 9) {
-        phoneError.textContent = 'The phone number must have at least 9 digits after +60.';
+        phoneError.textContent = 'The phone number must have exactly 9 digits after +60.';
         phoneError.classList.add('show');
         profilePhoneInput.classList.add('input-error');
       } else {

@@ -33,10 +33,152 @@ async function sendOTPEmail(email, otp) {
     return transporter.sendMail(mailOptions);
 }
 const { validateEmail, validatePassword } = require("./validation");
-const { Customer } = require("./models");
+const Customer = require("../models/customerModel");
+const Staff = require("../models/staffModel");
 const db = require("../config/firebase");
 
 const router = express.Router();
+
+async function requireAdmin(req, res, next) {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ error: "Please sign in as an administrator." });
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken);
+        const usersRef = db.collection("users");
+        let userData = null;
+
+        const uidDoc = await usersRef.doc(decoded.uid).get();
+        if (uidDoc.exists) userData = uidDoc.data();
+
+        if (!userData) {
+            const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
+            if (!uidSnapshot.empty) userData = uidSnapshot.docs[0].data();
+        }
+
+        if (!userData && decoded.email) {
+            for (const email of new Set([decoded.email, decoded.email.toLowerCase()])) {
+                const emailSnapshot = await usersRef.where("email", "==", email).limit(1).get();
+                if (!emailSnapshot.empty) {
+                    userData = emailSnapshot.docs[0].data();
+                    break;
+                }
+            }
+        }
+
+        const role = userData?.systemRole || userData?.role;
+        if (typeof role !== "string" || role.trim().toLowerCase() !== "admin") {
+            return res.status(403).json({ error: "Administrator access is required." });
+        }
+        req.adminUid = decoded.uid;
+        return next();
+    } catch (err) {
+        return res.status(401).json({ error: "Your admin session has expired. Please sign in again." });
+    }
+}
+
+function registeredAccountType(userData = {}) {
+    const roles = [userData.systemRole, userData.role, userData.accountType, userData.userType]
+        .filter(value => typeof value === "string")
+        .map(value => value.trim().toLowerCase());
+    if (roles.includes("admin")) return "Admin";
+    if (roles.includes("staff")) return "Staff";
+    return "Customer";
+}
+
+async function findRegisteredAccount(email) {
+    const usersRef = db.collection("users");
+    const snapshot = await usersRef.where("email", "==", email).get();
+    if (!snapshot.empty) return snapshot.docs[0].data();
+    try {
+        const authUser = await getAuth().getUserByEmail(email);
+        const userDoc = await usersRef.doc(authUser.uid).get();
+        return userDoc.exists ? userDoc.data() : { role: "Customer" };
+    } catch (err) {
+        if (err.code !== "auth/user-not-found") throw err;
+        return null;
+    }
+}
+
+router.post("/register-staff", requireAdmin, async (req, res) => {
+    const { password, fullName, phoneNumber, staffNo, specialization, position } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email || !password || !fullName?.trim() || !phoneNumber || !staffNo || !position) {
+        return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) return res.status(400).json({ error: emailValidation.message });
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
+    const normalizedPhone = String(phoneNumber).replace(/^\+60/, "");
+    const expectedPhoneLength = normalizedPhone.startsWith("11") ? 10 : 9;
+    if (!/^1\d+$/.test(normalizedPhone) || normalizedPhone.length !== expectedPhoneLength) {
+        return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
+    }
+    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+        return res.status(400).json({ error: "Please select a valid staff position." });
+    }
+    const mobileBrands = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
+    const selectedBrands = Array.isArray(specialization) ? specialization : [];
+    if (selectedBrands.some(brand => !mobileBrands.includes(brand)) ||
+        (position !== "Deliverer" && (selectedBrands.length < 1 || selectedBrands.length > 3)) ||
+        (position === "Deliverer" && selectedBrands.length > 0)) {
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+    }
+
+    try {
+        const usersRef = db.collection("users");
+        const existingAccount = await findRegisteredAccount(email);
+        if (existingAccount) return res.status(409).json({ error: `This email is already registered as ${registeredAccountType(existingAccount)}.` });
+
+        const authPayload = { email, password, displayName: fullName.trim() };
+        const userRecord = await getAuth().createUser(authPayload);
+
+        const newStaff = new Staff({
+            fullName: fullName.trim(),
+            email: email,
+            phoneNumber: `+60${normalizedPhone}`,
+            loginMethod: "Email",
+            staffNo: staffNo || "S0001",
+            specialization: position === "Deliverer" ? [] : selectedBrands,
+            position: position
+        });
+        
+        newStaff.userId = userRecord.uid;
+        
+        const staffData = newStaff.toJSON();
+        staffData.createdAt = FieldValue.serverTimestamp();
+        staffData.updatedAt = FieldValue.serverTimestamp();
+
+        try {
+            await usersRef.doc(userRecord.uid).set(staffData);
+        } catch (writeError) {
+            await getAuth().deleteUser(userRecord.uid);
+            throw writeError;
+        }
+
+        return res.status(200).json({ message: "Staff account created successfully" });
+    } catch (err) {
+        if (err.code === "auth/email-already-exists") return res.status(400).json({ error: "Email is already registered" });
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+
+router.post("/check-staff-email", requireAdmin, async (req, res) => {
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email) return res.status(400).json({ error: "Email is required" });
+    try {
+        const existingAccount = await findRegisteredAccount(email);
+        if (existingAccount) return res.status(409).json({ error: `This email is already registered as ${registeredAccountType(existingAccount)}.` });
+        return res.status(200).json({ message: "Email is available" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 
 router.post("/request-otp", async (req, res) => {
     const { email } = req.body;
@@ -137,20 +279,27 @@ router.post("/register", async (req, res) => {
 
         const userRecord = await getAuth().createUser(authPayload);
 
-        // Save full schema natively avoiding dummy instances
-        await usersRef.doc(userRecord.uid).set({
-            birthDate: birthDate || null,
-            createdAt: FieldValue.serverTimestamp(),
-            email: email,
+        // Save full schema using the Customer model
+        const newCustomer = new Customer({
             fullName: fullName || "",
-            gender: gender || "Not Specified",
-            loginMethod: "Email",
+            email: email,
             phoneNumber: phoneNumber || "",
-            role: "Customer",
-            status: "Active",
-            updatedAt: FieldValue.serverTimestamp(),
-            userId: userRecord.uid
+            loginMethod: "Email",
+            birthDate: birthDate,
+            gender: gender
         });
+        
+        // Override generated userId with Firebase Auth UID
+        newCustomer.userId = userRecord.uid;
+        
+        // Use JSON representation
+        const customerData = newCustomer.toJSON();
+        
+        // Merge createdAt and updatedAt natively via Firestore FieldValue
+        customerData.createdAt = FieldValue.serverTimestamp();
+        customerData.updatedAt = FieldValue.serverTimestamp();
+
+        await usersRef.doc(userRecord.uid).set(customerData);
 
         return res.status(200).json({ message: "Registration successful" });
     } catch (err) {
@@ -559,4 +708,36 @@ router.post("/change-password", async (req, res) => {
     }
 });
 
+
+router.get("/staff-list", requireAdmin, async (req, res) => {
+    try {
+        const usersRef = db.collection("users");
+        // Get both Staff and Admin if possible, or just anyone with staffNo
+        const snapshot = await usersRef.get();
+        const staffList = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const isStaff = [data.role, data.systemRole]
+                .some(role => typeof role === "string" && role.trim().toLowerCase() === "staff");
+            if (isStaff || data.staffNo) {
+                staffList.push({
+                    id: doc.id,
+                    ...data
+                });
+            }
+        });
+        
+        // Sort by created date descending (newest first)
+        staffList.sort((a, b) => {
+           const timeA = a.createdAt ? a.createdAt._seconds : 0;
+           const timeB = b.createdAt ? b.createdAt._seconds : 0;
+           return timeB - timeA;
+        });
+        
+        return res.status(200).json(staffList);
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 module.exports = router;

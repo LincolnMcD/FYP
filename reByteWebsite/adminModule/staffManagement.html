@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Staff Management - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="adminHeader.css">
   <style>
     :root {
       --navy: #082f72;
@@ -30,7 +31,11 @@
     .topbar { min-height: 105px; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: #fff; border-bottom: 1px solid var(--border); }
     .topbar-title { color: #173a75; font-size: 20px; font-weight: 700; }
     .topbar-right { display: flex; align-items: center; gap: 28px; color: #7a8496; font-size: 14px; }
-    .profile { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: #828a98; background: #f0f1f4; }
+    .profile { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: #828a98; background: #f0f1f4; cursor: pointer; }
+    .profile-dropdown { position: absolute; top: 55px; right: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 160px; display: none; z-index: 10; }
+    .profile-dropdown.show { display: block; }
+    .dropdown-item { padding: 12px 16px; display: block; text-decoration: none; color: #172033; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left; }
+    .dropdown-item:hover { background-color: #f1f4f9; }
     .content { padding: 30px 40px 48px; }
     .back { display: inline-flex; padding: 8px; color: #5d6572; text-decoration: none; margin: 0 0 28px -8px; }
     .back svg { width: 20px; height: 20px; }
@@ -48,8 +53,18 @@
     .search svg { width: 18px; height: 18px; flex: 0 0 auto; }
     .search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 14px; }
     .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; min-width: 850px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1185px; }
     th { height: 54px; padding: 0 20px; text-align: left; color: #555b68; font-size: 12px; letter-spacing: .3px; font-weight: 700; border-bottom: 1px solid #cfd4df; white-space: nowrap; }
+    th:nth-child(1), td:nth-child(1) { width: 125px; }
+    th:nth-child(2), td:nth-child(2) { width: 35ch; max-width: 35ch; overflow: hidden; text-overflow: ellipsis; }
+    th:nth-child(3), td:nth-child(3) { width: 220px; }
+    th:nth-child(4), td:nth-child(4) { width: 200px; }
+    th:nth-child(5), td:nth-child(5) { width: 130px; }
+    th:nth-child(6), td:nth-child(6) { width: 140px; }
+    th:nth-child(7), td:nth-child(7) { width: 90px; }
+    .sort-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
+    .sort-arrow { color: #8a93a3; font-size: 14px; line-height: 1; }
+    .sort-arrow.active { color: #0646a5; }
     td { height: 76px; padding: 0 20px; color: #6b7180; font-size: 14px; border-bottom: 1px solid #e9ebf0; white-space: nowrap; }
     tbody tr:last-child td { border-bottom: 0; }
     td:first-child { color: #243a5e; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
@@ -89,6 +104,81 @@
       .search { width: 100%; }
       .card-footer { align-items: flex-start; flex-direction: column; }
     }
+  
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; opacity: 0; visibility: hidden; transition: all 0.2s ease; }
+    .modal-backdrop.show { opacity: 1; visibility: visible; }
+    .modal-card { background: #fff; border-radius: 16px; padding: 0; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+    .modal-backdrop.show .modal-card { transform: scale(1); }
+\n  
+.toast-banner {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background-color: #082f72;
+  color: #ffffff;
+  padding: 14px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 99999;
+  font-size: 13.5px;
+  font-weight: 600;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  max-width: 90%;
+  min-width: 300px;
+}
+
+.toast-banner.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.toast-banner.success {
+  background-color: #16a34a;
+}
+
+.toast-banner.error {
+  background-color: #e11d48;
+}
+
+.toast-banner.info {
+  background-color: #0c5ad2;
+}
+
+.toast-banner-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.toast-banner-text {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.toast-banner-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.toast-banner-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
   </style>
 </head>
 <body>
@@ -110,18 +200,12 @@
     </nav>
   </aside>
   <main class="main">
-    <header class="topbar">
-      <div class="topbar-title">Staff Management</div>
-      <div class="topbar-right">
-        <span>October 24th, 2023</span>
-        <div class="profile"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
-      </div>
-    </header>
+    <header class="admin-header" data-admin-header data-page-title="Staff Management"></header>
     <section class="content">
       <a class="back" href="adminDashboard.html" aria-label="Back to admin dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
       <div class="title-row">
         <div><h1>Staff Account Management</h1><p class="subtitle">Overview and management of active ReByte staff.</p></div>
-        <button class="add-button" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#fff"></circle><path d="M12 7v10M7 12h10" stroke="#0646a5" stroke-width="2.5"></path></svg>Add New Staff</button>
+        <button class="add-button" type="button" onclick="window.location.href='createStaffAccount.html'"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#fff"></circle><path d="M12 7v10M7 12h10" stroke="#0646a5" stroke-width="2.5"></path></svg>Add New Staff</button>
       </div>
       <section class="staff-card" aria-label="Staff accounts">
         <div class="toolbar">
@@ -133,16 +217,13 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>STAFF ID</th><th>NAME</th><th>EMAIL</th><th>ROLE</th><th>STATUS</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
+            <thead><tr><th data-sort-column="staffNo" aria-sort="ascending"><button class="sort-button" type="button" data-sort="staffNo">STAFF ID <span class="sort-arrow active" aria-hidden="true">↑</span></button></th><th data-sort-column="fullName" aria-sort="none"><button class="sort-button" type="button" data-sort="fullName">NAME <span class="sort-arrow" aria-hidden="true">↕</span></button></th><th>EMAIL</th><th>ROLE</th><th>STATUS</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
             <tbody id="staffRows">
-              <tr data-status="active"><td>#STF-001</td><td>Marcus Chen</td><td>m.chen@rebyte.com</td><td class="role">Senior Administrator</td><td><span class="status"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="8"></circle><path d="m4.2 8 2.3 2.3 5-5" fill="none" stroke="#fff" stroke-width="1.5"></path></svg>Active</span></td><td>Oct 12, 2023</td><td><button class="action" type="button" aria-label="Archive Marcus Chen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"></path></svg></button></td></tr>
-              <tr data-status="active"><td>#STF-042</td><td>Sarah Jenkins</td><td>s.jenkins@rebyte.com</td><td class="role">Technician</td><td><span class="status"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="8"></circle><path d="m4.2 8 2.3 2.3 5-5" fill="none" stroke="#fff" stroke-width="1.5"></path></svg>Active</span></td><td>Nov 05, 2023</td><td><button class="action" type="button" aria-label="Archive Sarah Jenkins"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"></path></svg></button></td></tr>
-              <tr data-status="active"><td>#STF-089</td><td>Elena Rodriguez</td><td>e.rodriguez@rebyte.com</td><td class="role">Administrator</td><td><span class="status"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="8"></circle><path d="m4.2 8 2.3 2.3 5-5" fill="none" stroke="#fff" stroke-width="1.5"></path></svg>Active</span></td><td>Jan 14, 2024</td><td><button class="action" type="button" aria-label="Archive Elena Rodriguez"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"></path></svg></button></td></tr>
             </tbody>
           </table>
           <div class="empty" id="emptyState">No staff found.</div>
         </div>
-        <footer class="card-footer"><span id="resultCount">Showing 1 to 3 of 3 entries</span><div class="pagination"><button class="page-button" disabled>Previous</button><button class="page-button current">1</button><button class="page-button" disabled>Next</button></div></footer>
+        <footer class="card-footer"><span id="resultCount">Showing 0 entries</span><div class="pagination" id="staffPagination" aria-label="Staff pages"></div></footer>
       </section>
     </section>
   </main>
@@ -150,33 +231,134 @@
   <script>
     const user = ReByteAuth.getUser();
     if (!user || user.role !== 'Admin') window.location.href = '../accountManagementModule/login.html';
-    const rows = [...document.querySelectorAll('#staffRows tr')];
+    
+    let allStaffData = [];
+    const tbody = document.getElementById('staffRows');
     const search = document.getElementById('staffSearch');
+    const pagination = document.getElementById('staffPagination');
+    const sortButtons = document.querySelectorAll('.sort-button[data-sort]');
     const tabs = [document.getElementById('activeTab'), document.getElementById('archivedTab')];
+    const PAGE_SIZE = 5;
     let status = 'active';
+    let currentPage = 1;
+    let sortKey = 'staffNo';
+    let sortDirection = 'asc';
+
+    async function loadStaff() {
+        try {
+            const res = await fetch('http://localhost:3000/staff-list', {
+                headers: { Authorization: `Bearer ${user.token || ''}` }
+            });
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.error || 'Could not load staff records.');
+            allStaffData = data;
+            renderRows();
+        } catch(e) {
+            console.error('Could not load staff records:', e);
+            if (typeof ReByteAuth !== 'undefined') ReByteAuth.showToast(e.message || 'Could not load staff records.', 'error');
+        }
+    }
+
+    function formatDate(seconds) {
+        if(!seconds) return 'N/A';
+        const d = new Date(seconds * 1000);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
     function renderRows() {
       const query = search.value.trim().toLowerCase();
-      let visible = 0;
-      rows.forEach(row => {
-        const matches = row.dataset.status === status && row.textContent.toLowerCase().includes(query);
-        row.hidden = !matches;
-        if (matches) visible++;
+      const sortedStaff = [...allStaffData].sort((a, b) => {
+        const valueA = String(a[sortKey] || '');
+        const valueB = String(b[sortKey] || '');
+        const comparison = valueA.localeCompare(valueB, undefined, { numeric: true, sensitivity: 'base' });
+        return sortDirection === 'asc' ? comparison : -comparison;
       });
-      document.getElementById('emptyState').style.display = visible ? 'none' : 'block';
-      document.getElementById('resultCount').textContent = visible
-        ? `Showing 1 to ${visible} of ${visible} entries` : 'Showing 0 entries';
+      const filteredStaff = sortedStaff.filter(staff => {
+        const staffStatus = (staff.status || 'active').toLowerCase();
+        const textContent = `${staff.staffNo || ''} ${staff.fullName || ''} ${staff.email || ''} ${staff.position || ''}`.toLowerCase();
+        return staffStatus === status && textContent.includes(query);
+      });
+
+      const total = filteredStaff.length;
+      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      currentPage = Math.min(currentPage, pageCount);
+      const firstIndex = total ? (currentPage - 1) * PAGE_SIZE : 0;
+      const pageRecords = filteredStaff.slice(firstIndex, firstIndex + PAGE_SIZE);
+      tbody.innerHTML = '';
+
+      pageRecords.forEach(staff => {
+        const staffStatus = (staff.status || 'active').toLowerCase();
+        const tr = document.createElement('tr');
+        tr.dataset.status = staffStatus;
+        const dateStr = staff.createdAt ? formatDate(staff.createdAt._seconds) : 'N/A';
+        const roleStr = staff.position === 'Both' ? 'Inspector & Deliverer' : (staff.position || staff.role || 'Staff');
+        tr.innerHTML = `
+          <td>${staff.staffNo || '#STF-???'}</td>
+          <td>${staff.fullName || 'Unknown'}</td>
+          <td>${staff.email}</td>
+          <td class="role">${roleStr}</td>
+          <td><span class="status"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="8"></circle><path d="m4.2 8 2.3 2.3 5-5" fill="none" stroke="#fff" stroke-width="1.5"></path></svg>${staffStatus.charAt(0).toUpperCase() + staffStatus.slice(1)}</span></td>
+          <td>${dateStr}</td>
+          <td><button class="action" type="button" aria-label="Archive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"></path></svg></button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('emptyState').style.display = total ? 'none' : 'block';
+      document.getElementById('resultCount').textContent = total
+        ? `Showing ${firstIndex + 1} to ${Math.min(firstIndex + PAGE_SIZE, total)} of ${total} entries`
+        : 'Showing 0 entries';
+      pagination.innerHTML = [
+        `<button class="page-button" type="button" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`,
+        ...Array.from({ length: pageCount }, (_, index) => {
+          const page = index + 1;
+          return `<button class="page-button${page === currentPage ? ' current' : ''}" type="button" data-page="${page}"${page === currentPage ? ' aria-current="page"' : ''}>${page}</button>`;
+        }),
+        `<button class="page-button" type="button" data-page="${currentPage + 1}" ${currentPage === pageCount ? 'disabled' : ''}>Next</button>`
+      ].join('');
     }
-    search.addEventListener('input', renderRows);
+
+    search.addEventListener('input', () => { currentPage = 1; renderRows(); });
+    pagination.addEventListener('click', event => {
+      const button = event.target.closest('button[data-page]');
+      if (!button || button.disabled) return;
+      currentPage = Number(button.dataset.page);
+      renderRows();
+    });
+    sortButtons.forEach(button => button.addEventListener('click', () => {
+      if (sortKey === button.dataset.sort) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortKey = button.dataset.sort;
+        sortDirection = 'asc';
+      }
+      currentPage = 1;
+      sortButtons.forEach(sortButton => {
+        const active = sortButton.dataset.sort === sortKey;
+        const column = sortButton.closest('th');
+        const arrow = sortButton.querySelector('.sort-arrow');
+        column.setAttribute('aria-sort', active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+        arrow.textContent = active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
+        arrow.classList.toggle('active', active);
+      });
+      renderRows();
+    }));
     tabs.forEach((tab, index) => tab.addEventListener('click', () => {
       status = index ? 'archived' : 'active';
+      currentPage = 1;
       tabs.forEach((item, itemIndex) => {
         item.classList.toggle('active', itemIndex === index);
         item.setAttribute('aria-selected', itemIndex === index ? 'true' : 'false');
       });
       renderRows();
     }));
+    
     document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));
+
+    // fetch on load
+    loadStaff();
   </script>
+  <script src="adminHeader.js"></script>
 </body>
 </html>
 

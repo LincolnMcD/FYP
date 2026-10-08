@@ -27,23 +27,4 @@ class User {
     }
 }
 
-class Customer extends User {
-    constructor({ fullName, email, phoneNumber, loginMethod, birthDate, gender }) {
-        super({ fullName, email, phoneNumber, loginMethod });
-        this.birthDate = birthDate || null;
-        this.gender = gender || 'Not Specified';
-        this.role = 'Customer';
-    }
-
-    toJSON() {
-        const base = super.toJSON();
-        return {
-            ...base,
-            birthDate: this.birthDate,
-            gender: this.gender,
-            role: this.role,
-        };
-    }
-}
-
-module.exports = { User, Customer };
+module.exports = User;
