@@ -60,7 +60,7 @@ class _ForgotPasswordOtpPageState extends State<ForgotPasswordOtpPage> {
   Future<void> _verifyOTP() async {
     final code = _controllers.map((c) => c.text.trim()).join();
     if (code.length != 6) {
-      _showTopToast('no 6 digit yet', true);
+      _showTopToast('Please enter a valid 6-digit PIN', true);
       return;
     }
 
@@ -80,7 +80,7 @@ class _ForgotPasswordOtpPageState extends State<ForgotPasswordOtpPage> {
         );
       });
     } else {
-      _showTopToast('fail due to wrong OTP', true);
+      _showTopToast(result['error'] ?? 'Verification failed', true);
     }
   }
 

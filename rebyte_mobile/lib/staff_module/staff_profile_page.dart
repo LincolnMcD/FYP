@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'staff_edit_profile_page.dart';
 
 class StaffProfilePage extends StatelessWidget {
   final String? name;
   final String? email;
   final VoidCallback onLogout;
+  final VoidCallback? onProfileUpdated;
 
   const StaffProfilePage({
     super.key,
     required this.name,
     required this.email,
     required this.onLogout,
+    this.onProfileUpdated,
   });
 
   Widget _buildListTile(IconData icon, String title, {Color? color, VoidCallback? onTap}) {
@@ -87,6 +90,13 @@ class StaffProfilePage extends StatelessWidget {
               color: Color(0xFF0F172A),
             ),
           ),
+          const SizedBox(height: 10),
+          Text(
+            email ?? '',
+            style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 20),
+
           const SizedBox(height: 24),
 
           // Edit Profile Button
@@ -96,7 +106,10 @@ class StaffProfilePage extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: email == null ? null : () async {
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => StaffEditProfilePage(email: email!)));
+                  onProfileUpdated?.call();
+                },
                 icon: const Icon(Icons.edit, size: 18),
                 label: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 style: ElevatedButton.styleFrom(

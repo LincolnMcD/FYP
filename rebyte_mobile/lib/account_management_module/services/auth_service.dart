@@ -5,6 +5,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class AuthService {
+  // Token revocation happens before this device can reauthenticate with the new
+  // password. Pause local session polling during that short transition window.
+  static bool passwordChangeInProgress = false;
+
   static String get baseUrl {
     // 192.168.100.185 explicitly targets the IPv4 host computer over local area network, perfectly unblocking physical devices/emulators natively.
     return 'http://192.168.100.185:3000';
@@ -116,6 +120,14 @@ class AuthService {
       final body = jsonDecode(response.body);
       
       if (response.statusCode == 200) {
+        try {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
+        } catch (_) {
+          // Keep registration successful if Firebase session restoration is unavailable.
+        }
         return {'success': true, 'message': body['message']};
       } else {
         return {'success': false, 'error': body['error'] ?? 'Registration failed'};
@@ -164,6 +176,9 @@ class AuthService {
       if (token == null) return {'success': false, 'error': 'Failed to retrieve auth token'};
       return await oauthLogin(token, 'Google');
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-disabled') {
+        return {'success': false, 'error': 'This account has been archived. Please contact administrator.'};
+      }
       if (e.code == 'account-exists-with-different-credential') return {'success': false, 'error': 'Email registered across a different provider. Use Email/Password.'};
       return {'success': false, 'error': e.message ?? 'Authentication failed'};
     } catch (e) {
@@ -184,6 +199,9 @@ class AuthService {
       if (token == null) return {'success': false, 'error': 'Failed to retrieve auth token'};
       return await oauthLogin(token, 'Facebook');
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-disabled') {
+        return {'success': false, 'error': 'This account has been archived. Please contact administrator.'};
+      }
       if (e.code == 'account-exists-with-different-credential') return {'success': false, 'error': 'Email registered across a different provider. Use Email/Password.'};
       return {'success': false, 'error': e.message ?? 'Authentication failed'};
     } catch (e) {
@@ -241,11 +259,59 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> updateStaffProfile({
+    required String fullName,
+    required String phoneNumber,
+    required String position,
+    required List<String> specialization,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
+      final token = await currentUser.getIdToken(true);
+      if (token == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
+      final response = await http.patch(
+        Uri.parse('$baseUrl/staff-profile'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({
+          'fullName': fullName,
+          'phoneNumber': phoneNumber,
+          'position': position,
+          'specialization': specialization,
+        }),
+      ).timeout(const Duration(seconds: 10));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'data': body['profile'], 'message': body['message']};
+      return {'success': false, 'error': body['error'] ?? 'Could not update staff profile.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getStaffProfile() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
+      final token = await currentUser.getIdToken();
+      if (token == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
+      final response = await http.get(
+        Uri.parse('$baseUrl/staff-profile'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 10));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'data': body['profile']};
+      return {'success': false, 'error': body['error'] ?? 'Could not load staff profile.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
   static Future<Map<String, dynamic>> changePassword({
     required String email,
     required String currentPassword,
     required String newPassword,
   }) async {
+    passwordChangeInProgress = true;
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/change-password'),
@@ -255,17 +321,29 @@ class AuthService {
           'currentPassword': currentPassword,
           'newPassword': newPassword,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 20));
       
       final body = jsonDecode(response.body);
       
       if (response.statusCode == 200) {
+        // The server updates the credential through the Admin SDK. Re-sign in
+        // with the new password to replace any revoked ID token on this device.
+        try {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email.trim(),
+            password: newPassword,
+          );
+        } catch (_) {
+          // The password update already succeeded; keep reporting that result.
+        }
         return {'success': true, 'message': body['message']};
       } else {
         return {'success': false, 'error': body['error'] ?? 'Update failed'};
       }
     } catch (e) {
       return {'success': false, 'error': 'Connection failed.'};
+    } finally {
+      passwordChangeInProgress = false;
     }
   }
 
@@ -284,12 +362,149 @@ class AuthService {
       final body = jsonDecode(response.body);
       
       if (response.statusCode == 200) {
-        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User', 'role': body['role']};
+        final role = (body['role'] ?? 'Customer').toString();
+        if (role.toLowerCase() != 'admin') {
+          // Keep customer and staff sessions in Firebase so revoked sessions
+          // are detected when a password changes on another device.
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
+        }
+        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User', 'role': role};
       } else {
-        return {'success': false, 'error': body['error'] ?? 'Login failed'};
+        final error = body['error'] ?? 'Login failed';
+        return {
+          'success': false,
+          'error': error == 'USER_DISABLED'
+              ? 'This account has been archived. Please contact administrator.'
+              : error,
+        };
       }
     } catch (e) {
+      if (e is FirebaseAuthException) {
+        final message = e.code == 'user-disabled'
+            ? 'This account has been archived. Please contact administrator.'
+            : (e.message ?? 'Unable to sign in.');
+        return {'success': false, 'error': message};
+      }
       return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkStaffSession() async {
+    if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+    try {
+      final auth = FirebaseAuth.instance;
+      User? firebaseUser = auth.currentUser;
+      // Firebase restores its persisted user asynchronously on cold launch.
+      // Wait for the first auth-state event before treating null as signed out.
+      if (firebaseUser == null) {
+        firebaseUser = await auth.authStateChanges().first.timeout(
+          const Duration(seconds: 5),
+        );
+      }
+      if (firebaseUser == null) {
+        return {'success': false, 'expired': true, 'error': 'Staff session is missing.'};
+      }
+
+      // The server verifies revocation status, so a cached ID token is enough and
+      // avoids forcing a Firebase token refresh on every session poll.
+      final idToken = await firebaseUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        return {'success': false, 'expired': true, 'error': 'Staff session has ended.'};
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/staff-session'),
+        headers: {'Authorization': 'Bearer $idToken'},
+      ).timeout(const Duration(seconds: 5));
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) return {'success': true, 'profile': body['profile']};
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        if (body['archived'] == true) {
+          return {
+            'success': false,
+            'expired': true,
+            'archived': true,
+            'error': 'This staff account has been archived.',
+          };
+        }
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      return {'success': false, 'transient': true, 'error': 'Could not verify staff session.'};
+    } on FirebaseAuthException catch (e) {
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      if (e.code == 'user-disabled') {
+        return {
+          'success': false,
+          'expired': true,
+          'archived': true,
+          'error': 'This staff account has been archived.',
+        };
+      }
+      if (e.code == 'user-not-found') {
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      if (['user-token-expired', 'invalid-user-token'].contains(e.code)) {
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      return {'success': false, 'transient': true, 'error': e.message ?? 'Could not verify staff session.'};
+    } catch (_) {
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      return {'success': false, 'transient': true, 'error': 'Could not verify staff session.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkAccountSession() async {
+    if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+    try {
+      final auth = FirebaseAuth.instance;
+      User? user = auth.currentUser;
+      if (user == null) {
+        user = await auth.authStateChanges().first.timeout(const Duration(seconds: 5));
+      }
+      if (user == null) {
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      final idToken = await user.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      final response = await http.get(
+        Uri.parse('$baseUrl/account-session'),
+        headers: {'Authorization': 'Bearer $idToken'},
+      ).timeout(const Duration(seconds: 5));
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      if (response.statusCode == 200) return {'success': true};
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        return {
+          'success': false,
+          'expired': true,
+          'archived': body['archived'] == true,
+          'error': body['error'] ?? 'Session expired. Please log in again.',
+        };
+      }
+      return {'success': false, 'transient': true, 'error': 'Could not verify account session.'};
+    } on FirebaseAuthException catch (e) {
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      if (e.code == 'user-disabled') {
+        return {
+          'success': false,
+          'expired': true,
+          'archived': true,
+          'error': 'This account has been archived. Please contact administrator.',
+        };
+      }
+      if (['user-not-found', 'user-token-expired', 'invalid-user-token'].contains(e.code)) {
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      }
+      return {'success': false, 'transient': true, 'error': e.message ?? 'Could not verify account session.'};
+    } catch (_) {
+      if (passwordChangeInProgress) return {'success': true, 'skipped': true};
+      return {'success': false, 'transient': true, 'error': 'Could not verify account session.'};
     }
   }
 }

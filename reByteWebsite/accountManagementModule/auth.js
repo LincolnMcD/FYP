@@ -8,6 +8,25 @@ const API_BASE_URL = 'http://localhost:3000';
 const ReByteAuth = {
   // Key for storing active user session
   SESSION_KEY: 'rebyte_current_user',
+  PASSWORD_CHANGE_KEY: 'rebyte_password_change_in_progress',
+
+  beginPasswordChange() {
+    localStorage.setItem(this.PASSWORD_CHANGE_KEY, String(Date.now()));
+  },
+
+  endPasswordChange() {
+    localStorage.removeItem(this.PASSWORD_CHANGE_KEY);
+  },
+
+  isPasswordChangeInProgress() {
+    const startedAt = Number(localStorage.getItem(this.PASSWORD_CHANGE_KEY) || 0);
+    if (!startedAt) return false;
+    if (Date.now() - startedAt > 120000) {
+      this.endPasswordChange();
+      return false;
+    }
+    return true;
+  },
 
   /**
    * Get currently logged-in user profile
@@ -289,10 +308,24 @@ const ReByteAuth = {
           uid: data.uid,
           loginMethod: 'Email'
         };
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+          try {
+            const credential = await firebase.auth().signInWithEmailAndPassword(email, password);
+            user.token = await credential.user.getIdToken();
+          } catch (authError) {
+            console.warn('Could not initialize Firebase session after login:', authError);
+          }
+        }
         this.setUser(user);
         return { success: true, message: data.message || 'Login successful!', user, role: user.role };
       } else {
-        return { success: false, error: data.error || 'Login failed' };
+        const error = data.error || 'Login failed';
+        const normalizedError = error.toLowerCase();
+        if (normalizedError.includes('user_disabled') || normalizedError.includes('user-disabled') ||
+            (normalizedError.includes('archived') && normalizedError.includes('administrator'))) {
+          return { success: false, error: 'This account has been archived. Please contact administrator.' };
+        }
+        return { success: false, error: error.replace(/contact an administrator/ig, 'contact administrator') };
       }
     } catch (networkErr) {
       console.error('Backend connection error:', networkErr);
@@ -343,6 +376,7 @@ const ReByteAuth = {
           email: data.email,
           name: data.name || 'ReByte User',
           role: data.role || 'Customer',
+          token: idToken,
           loginMethod: provider
         };
         this.setUser(user);
@@ -573,10 +607,20 @@ const ReByteAuth = {
 
       const data = await response.json();
       if (response.ok) {
+        let token = null;
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+          try {
+            const credential = await firebase.auth().signInWithEmailAndPassword(email, password);
+            token = await credential.user.getIdToken();
+          } catch (authError) {
+            console.warn('Could not initialize Firebase session after registration:', authError);
+          }
+        }
         this.setUser({
           email,
           name: fullName || email.split('@')[0],
           role: 'Customer',
+          token,
           loginMethod: 'Email'
         });
         return { success: true, message: data.message || 'Account created successfully!' };
@@ -619,6 +663,213 @@ const ReByteAuth = {
     } catch (err) {
       return { success: false, error: 'Connection failed. Ensure backend is running.' };
     }
+  },
+
+  async updateStaff(staffId, staffData) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify(staffData)
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Staff account updated successfully.' } : { success: false, error: data.error || 'Staff account update failed.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async updateOwnStaffProfile(profileData) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your staff session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff-profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify(profileData)
+      });
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error || 'Could not update staff profile.' };
+      this.setUser({ ...user, name: data.profile?.fullName || profileData.fullName });
+      return { success: true, message: data.message || 'Staff profile updated successfully.', profile: data.profile };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async getOwnStaffProfile() {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your staff session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff-profile`, {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, profile: data.profile } : { success: false, error: data.error || 'Could not load staff profile.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async archiveStaff(staffId) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Staff member archived.' } : { success: false, error: data.error || 'Staff archive failed.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async restoreStaff(staffId) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Staff member restored.' } : { success: false, error: data.error || 'Staff restore failed.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async deleteStaff(staffId) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Staff member permanently deleted.' } : { success: false, error: data.error || 'Staff deletion failed.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async getCustomerList() {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer-list`, {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, data } : { success: false, error: data.error || 'Could not load customer records.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async setCustomerStatus(customerId, status) {
+    const user = this.getUser();
+    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers/${encodeURIComponent(customerId)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ status })
+      });
+      const data = await response.json();
+      return response.ok ? { success: true, message: data.message || 'Customer status updated.' } : { success: false, error: data.error || 'Could not update this customer.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async checkStaffSession() {
+    if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+    const user = this.getUser();
+    try {
+      let token = user?.token;
+      if (!token && typeof firebase !== 'undefined' && firebase.auth) {
+        const auth = firebase.auth();
+        if (typeof auth.authStateReady === 'function') await auth.authStateReady();
+        if (auth.currentUser) token = await auth.currentUser.getIdToken();
+      }
+      if (!token) return { success: false, error: 'Staff session is missing.' };
+      const response = await fetch(`${API_BASE_URL}/staff-session`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+      const data = await response.json();
+      return response.ok ? { success: true } : { success: false, archived: data.archived === true, error: data.error || 'Staff session has ended.' };
+    } catch (err) {
+      if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+      if (err?.code?.startsWith('auth/')) {
+        const archived = err.code === 'auth/user-disabled';
+        return {
+          success: false,
+          archived,
+          error: archived ? 'This account has been archived. Please contact administrator.' : 'Staff session has ended.'
+        };
+      }
+      return { success: false, transient: true, error: 'Could not verify staff session.' };
+    }
+  },
+
+  async checkAccountSession() {
+    if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+    const user = this.getUser();
+    if (!user || user.role !== 'Customer') return { success: true, skipped: true };
+    try {
+      let token = user.token;
+      if (typeof firebase !== 'undefined' && firebase.auth) {
+        const currentUser = firebase.auth().currentUser;
+        if (currentUser && currentUser.email?.toLowerCase() === user.email?.toLowerCase()) {
+          token = await currentUser.getIdToken();
+          if (token !== user.token) this.setUser({ ...user, token });
+        }
+      }
+      if (!token) return { success: false, expired: true, error: 'Session expired. Please log in again.' };
+      const response = await fetch(`${API_BASE_URL}/account-session`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+      const data = await response.json();
+      return response.ok
+        ? { success: true }
+        : { success: false, expired: data.expired === true || response.status === 401 || response.status === 403, archived: data.archived === true, error: data.error || 'Session expired. Please log in again.' };
+    } catch (err) {
+      if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
+      if (err?.code?.startsWith('auth/')) {
+        const archived = err.code === 'auth/user-disabled';
+        return {
+          success: false,
+          expired: true,
+          archived,
+          error: archived ? 'This account has been archived. Please contact administrator.' : 'Session expired. Please log in again.'
+        };
+      }
+      return { success: false, transient: true, error: 'Could not verify account session.' };
+    }
+  },
+
+  forceSessionLogout(archived = false) {
+    localStorage.removeItem(this.SESSION_KEY);
+    if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut().catch(() => {});
+    const isLoginPage = window.location.pathname.toLowerCase().endsWith('/login.html');
+    if (isLoginPage) {
+      this.showToast(archived
+        ? 'This account has been archived. Please contact administrator.'
+        : 'Session expired. Please log in again.', 'error');
+      return;
+    }
+    const loginPath = window.location.pathname.toLowerCase().includes('/staffmodule/')
+      ? '../accountManagementModule/login.html'
+      : 'login.html';
+    window.location.replace(`${loginPath}?${archived ? 'archived=1' : 'sessionExpired=1'}`);
   }
 };
 
@@ -626,4 +877,41 @@ const ReByteAuth = {
 document.addEventListener('DOMContentLoaded', () => {
   ReByteAuth.initHeader();
   ReByteAuth.initFirebase();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('sessionExpired') === '1') {
+    params.delete('sessionExpired');
+    const query = params.toString();
+    history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    setTimeout(() => ReByteAuth.showToast('Session expired. Please log in again.', 'error'), 100);
+  } else if (params.get('archived') === '1') {
+    params.delete('archived');
+    const query = params.toString();
+    history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    setTimeout(() => ReByteAuth.showToast('This account has been archived. Please contact administrator.', 'error'), 100);
+  }
+  let accountSessionCheckInProgress = false;
+  const checkActiveSession = async () => {
+    if (accountSessionCheckInProgress || !ReByteAuth.isLoggedIn()) return;
+    accountSessionCheckInProgress = true;
+    try {
+      const user = ReByteAuth.getUser();
+      if (String(user?.role || '').toLowerCase() === 'staff') {
+        const result = await ReByteAuth.checkStaffSession();
+        if (!result.success && !result.transient && !result.skipped) {
+          ReByteAuth.forceSessionLogout(result.archived === true);
+        }
+      } else {
+        const result = await ReByteAuth.checkAccountSession();
+        if (result.expired) ReByteAuth.forceSessionLogout(result.archived === true);
+      }
+    } finally {
+      accountSessionCheckInProgress = false;
+    }
+  };
+  setTimeout(checkActiveSession, 1000);
+  window.setInterval(checkActiveSession, 2000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkActiveSession();
+  });
+  window.addEventListener('focus', checkActiveSession);
 });

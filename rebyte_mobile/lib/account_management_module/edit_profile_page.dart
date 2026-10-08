@@ -45,49 +45,96 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _fetchProfile() async {
-    setState(() => _isLoading = true);
-    final response = await AuthService.getProfile(widget.email);
-    
-    if (mounted) {
-      if (response['success']) {
-        final data = response['data'];
-        
-        setState(() {
-          _initialName = data['fullName'] ?? '';
-          _initialPhone = data['phoneNumber'] ?? '';
-          _loginMethod = data['loginMethod'] ?? 'Email';
-          if (_initialPhone.startsWith('+60')) {
-             _initialPhone = _initialPhone.substring(3);
-          }
-          
-          String rawBirthday = data['birthDate'] ?? '';
-          if (rawBirthday.isNotEmpty) {
-             try {
-                // If it's an ISO string or contains time, parse and format it tightly.
-                if (rawBirthday.contains('-') || rawBirthday.contains('T')) {
-                   DateTime parsed = DateTime.parse(rawBirthday);
-                   rawBirthday = DateFormat('dd/MM/yyyy').format(parsed);
-                } 
-             } catch (e) {
-                // fallback to whatever string is there
-             }
-          }
-          _initialBirthday = rawBirthday;
-          _selectedGender = data['gender'] ?? 'Not Specified';
-          
-          _nameController.text = _initialName;
-          _phoneController.text = _initialPhone;
-          _birthdayController.text = _initialBirthday;
-          
-          _isLoading = false;
-        });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    String? loadError;
+    try {
+      final response = await AuthService.getProfile(widget.email);
+      if (response['success'] != true) {
+        loadError = response['error']?.toString() ?? 'Failed to load profile.';
       } else {
+        final rawData = response['data'];
+        if (rawData is! Map) {
+          throw const FormatException('The profile response is invalid.');
+        }
+        final data = Map<String, dynamic>.from(rawData);
+        final name = data['fullName']?.toString() ?? '';
+        var phone = data['phoneNumber']?.toString() ?? '';
+        final loginMethod = data['loginMethod']?.toString() ?? 'Email';
+        if (phone.startsWith('+60')) phone = phone.substring(3);
+
+        final birthday = _formatBirthday(data['birthDate']);
+        final gender = data['gender']?.toString() ?? 'Not Specified';
+
+        if (!mounted) return;
         setState(() {
-          _errorMessage = response['error'];
+          _initialName = name;
+          _initialPhone = phone;
+          _loginMethod = loginMethod;
+          _initialBirthday = birthday;
+          _selectedGender = gender;
+          _nameController.text = name;
+          _phoneController.text = phone;
+          _birthdayController.text = birthday;
+        });
+      }
+    } catch (error) {
+      loadError = error is FormatException
+          ? error.message
+          : 'Could not load profile. Please try again.';
+    } finally {
+      if (mounted) {
+        setState(() {
+          _errorMessage = loadError;
           _isLoading = false;
         });
       }
     }
+  }
+
+  String _formatBirthday(dynamic value) {
+    if (value == null) return '';
+
+    DateTime? date;
+    if (value is DateTime) {
+      date = value;
+    } else if (value is num) {
+      final milliseconds = value.abs() >= 1000000000000
+          ? value.toInt()
+          : value.toInt() * 1000;
+      date = DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
+    } else if (value is Map) {
+      final seconds = value['_seconds'] ?? value['seconds'];
+      if (seconds is num) {
+        date = DateTime.fromMillisecondsSinceEpoch(
+          seconds.toInt() * 1000,
+          isUtc: true,
+        );
+      }
+    }
+
+    if (date != null) return DateFormat('dd/MM/yyyy').format(date);
+
+    final text = value.toString().trim();
+    if (text.isEmpty) return '';
+    date = DateTime.tryParse(text);
+    if (date != null) return DateFormat('dd/MM/yyyy').format(date);
+
+    for (final pattern in ['dd/MM/yyyy', 'd/M/yyyy']) {
+      try {
+        date = DateFormat(pattern).parseStrict(text);
+        return DateFormat('dd/MM/yyyy').format(date);
+      } catch (_) {
+        // Try the next supported legacy date format.
+      }
+    }
+
+    // Never expose Firestore serialization or another unrecognized value as
+    // though it were a birthday.
+    return '';
   }
 
   bool _hasChanges() {
@@ -240,7 +287,27 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _isLoading 
             ? const Center(child: CircularProgressIndicator()) 
             : _errorMessage != null 
-              ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _fetchProfile,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24.0),
@@ -685,10 +752,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 validateNewPassword(newPwController.text);
                                 validateConfirmPassword(confirmPwController.text);
 
-                                if (newPwController.text == currentPwController.text && newPwController.text.isNotEmpty) {
-                                  setDialogState(() => newPwError = 'New password cannot be the same as current password');
-                                }
-
                                 if (currentPwError == null && newPwError == null && confirmPwError == null) {
                                   setDialogState(() => isSubmitting = true);
                                   
@@ -710,8 +773,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                       if (mounted) setState(() => _toastMessage = null);
                                     });
                                   } else {
+                                    final error = response['error']?.toString() ?? 'Password update failed.';
                                     setDialogState(() {
-                                      currentPwError = response['error'];
+                                      if (error.toLowerCase().contains('same as current')) {
+                                        newPwError = error;
+                                      } else {
+                                        currentPwError = error;
+                                      }
                                       isSubmitting = false;
                                     });
                                   }

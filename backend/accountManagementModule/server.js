@@ -179,6 +179,201 @@ router.post("/check-staff-email", requireAdmin, async (req, res) => {
     }
 });
 
+router.get("/staff-session", async (req, res) => {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ error: "Staff session is missing." });
+    try {
+        // Check disabled status before revocation: archiving disables the Firebase
+        // user and revokes tokens, and the archive reason should take precedence.
+        const decoded = await getAuth().verifyIdToken(idToken, false);
+        const authUser = await getAuth().getUser(decoded.uid);
+        if (authUser.disabled) return res.status(401).json({ archived: true, error: "This staff account has been archived." });
+        await getAuth().verifyIdToken(idToken, true);
+
+        const usersRef = db.collection("users");
+        let userData = null;
+        const uidDoc = await usersRef.doc(decoded.uid).get();
+        if (uidDoc.exists) userData = uidDoc.data();
+        if (!userData) {
+            const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
+            if (!uidSnapshot.empty) userData = uidSnapshot.docs[0].data();
+        }
+        if (!userData && decoded.email) {
+            const emailSnapshot = await usersRef.where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+            if (!emailSnapshot.empty) userData = emailSnapshot.docs[0].data();
+        }
+
+        const role = String(userData?.role || userData?.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" || String(userData?.status || "active").trim().toLowerCase() === "archived") {
+            return res.status(403).json({ archived: String(userData?.status || "").trim().toLowerCase() === "archived", error: "This staff account is no longer active." });
+        }
+        return res.status(200).json({
+            active: true,
+            profile: {
+                fullName: userData.fullName || authUser.displayName || "Staff Member",
+                email: userData.email || decoded.email || "",
+                phoneNumber: userData.phoneNumber || "",
+                position: userData.position || "",
+                specialization: Array.isArray(userData.specialization) ? userData.specialization : []
+            }
+        });
+    } catch (err) {
+        if (err.code === "auth/user-disabled") {
+            return res.status(401).json({ archived: true, error: "This staff account has been archived." });
+        }
+        const statusCode = ["auth/id-token-revoked", "auth/id-token-expired", "auth/argument-error"].includes(err.code) ? 401 : 500;
+        if (statusCode === 500) console.error("Staff session check failed:", err);
+        return res.status(statusCode).json({ archived: false, error: statusCode === 401 ? "Your staff session has expired. Please sign in again." : "Could not verify staff session." });
+    }
+});
+
+router.get("/account-session", async (req, res) => {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ expired: true, error: "Session expired. Please log in again." });
+    try {
+        // Check disabled status before revocation so archived accounts are
+        // distinguishable from active accounts with an expired session.
+        const decoded = await getAuth().verifyIdToken(idToken, false);
+        const authUser = await getAuth().getUser(decoded.uid);
+        if (authUser.disabled) {
+            return res.status(401).json({ archived: true, expired: true, error: "This account has been archived." });
+        }
+        await getAuth().verifyIdToken(idToken, true);
+
+        const usersRef = db.collection("users");
+        let userDoc = await usersRef.doc(decoded.uid).get();
+        if (!userDoc.exists) {
+            const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
+            if (!uidSnapshot.empty) userDoc = uidSnapshot.docs[0];
+        }
+        if (!userDoc.exists && decoded.email) {
+            const emailSnapshot = await usersRef.where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+            if (!emailSnapshot.empty) userDoc = emailSnapshot.docs[0];
+        }
+        if (!userDoc.exists) {
+            return res.status(401).json({ expired: true, error: "Session expired. Please log in again." });
+        }
+
+        const userData = userDoc.data();
+        const role = String(userData.role || userData.systemRole || "").trim().toLowerCase();
+        const status = String(userData.status || "active").trim().toLowerCase();
+        if (role === "staff" && status === "archived") {
+            return res.status(401).json({ archived: true, expired: true, error: "This staff account has been archived." });
+        }
+        return res.status(200).json({ active: true, role: userData.role || userData.systemRole || "Customer" });
+    } catch (err) {
+        const expiredCodes = ["auth/id-token-revoked", "auth/id-token-expired", "auth/argument-error", "auth/user-disabled", "auth/user-not-found"];
+        const statusCode = expiredCodes.includes(err.code) ? 401 : 500;
+        if (statusCode === 500) console.error("Account session check failed:", err);
+        return res.status(statusCode).json({ expired: statusCode === 401, archived: err.code === "auth/user-disabled", error: statusCode === 401 ? "Session expired. Please log in again." : "Could not verify account session." });
+    }
+});
+
+router.get("/staff-profile", async (req, res) => {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ error: "Please sign in to view your staff profile." });
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken, true);
+        const usersRef = db.collection("users");
+        let staffDoc = await usersRef.doc(decoded.uid).get();
+        if (!staffDoc.exists) {
+            const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
+            if (!uidSnapshot.empty) staffDoc = uidSnapshot.docs[0];
+        }
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const staff = staffDoc.data();
+        const role = String(staff.role || staff.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" || String(staff.status || "active").trim().toLowerCase() === "archived") {
+            return res.status(403).json({ error: "This staff account is not active." });
+        }
+        return res.status(200).json({ profile: { ...staff, id: staffDoc.id, email: staff.email || decoded.email || "" } });
+    } catch (err) {
+        const statusCode = ["auth/id-token-revoked", "auth/user-disabled", "auth/id-token-expired", "auth/argument-error"].includes(err.code) ? 401 : 500;
+        if (statusCode === 500) console.error("Staff profile fetch failed:", err);
+        return res.status(statusCode).json({ error: statusCode === 401 ? "Your staff session has expired. Please sign in again." : "Could not load staff profile." });
+    }
+});
+
+router.patch("/staff-profile", async (req, res) => {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ error: "Please sign in to update your staff profile." });
+
+    const { fullName, phoneNumber, position, specialization } = req.body;
+    const normalizedName = typeof fullName === "string" ? fullName.trim() : "";
+    if (!/^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(normalizedName)) {
+        return res.status(400).json({ error: "Full name can contain letters and spaces only." });
+    }
+
+    let phoneDigits = String(phoneNumber || "").replace(/\D/g, "");
+    if (phoneDigits.startsWith("60")) phoneDigits = phoneDigits.slice(2);
+    const expectedPhoneLength = phoneDigits.startsWith("11") ? 10 : 9;
+    if (!/^1\d+$/.test(phoneDigits) || phoneDigits.length !== expectedPhoneLength) {
+        return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
+    }
+    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+        return res.status(400).json({ error: "Please select a valid staff position." });
+    }
+
+    const allowedSpecializations = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
+    const selectedSpecializations = Array.isArray(specialization) ? specialization : [];
+    const uniqueSpecializations = [...new Set(selectedSpecializations)];
+    if (uniqueSpecializations.length !== selectedSpecializations.length ||
+        selectedSpecializations.some(value => !allowedSpecializations.includes(value)) ||
+        (position === "Deliverer" && selectedSpecializations.length !== 0) ||
+        (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+    }
+
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken, true);
+        const authUid = decoded.uid;
+        const usersRef = db.collection("users");
+        let staffRef = usersRef.doc(authUid);
+        let staffDoc = await staffRef.get();
+        if (!staffDoc.exists) {
+            const uidSnapshot = await usersRef.where("userId", "==", authUid).limit(1).get();
+            if (!uidSnapshot.empty) {
+                staffDoc = uidSnapshot.docs[0];
+                staffRef = staffDoc.ref;
+            }
+        }
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+
+        const staff = staffDoc.data();
+        const role = String(staff.role || staff.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" || String(staff.status || "active").trim().toLowerCase() === "archived") {
+            return res.status(403).json({ error: "This staff account is not active." });
+        }
+
+        const profile = {
+            fullName: normalizedName,
+            phoneNumber: `+60${phoneDigits}`,
+            position,
+            specialization: position === "Deliverer" ? [] : selectedSpecializations
+        };
+        await staffRef.update({ ...profile, updatedAt: FieldValue.serverTimestamp() });
+        try {
+            await getAuth().updateUser(authUid, { displayName: normalizedName });
+        } catch (authError) {
+            console.warn("Staff profile saved, but Firebase Auth display name could not be synchronized:", authError.message);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Staff profile updated successfully.",
+            profile: {
+                ...profile,
+                staffNo: staff.staffNo || "",
+                email: staff.email || decoded.email || ""
+            }
+        });
+    } catch (err) {
+        const statusCode = ["auth/id-token-revoked", "auth/user-disabled", "auth/id-token-expired", "auth/argument-error"].includes(err.code) ? 401 : 500;
+        if (statusCode === 500) console.error("Staff profile update failed:", err);
+        return res.status(statusCode).json({ error: statusCode === 401 ? "Your staff session has expired. Please sign in again." : "Could not update staff profile." });
+    }
+});
+
 
 router.post("/request-otp", async (req, res) => {
     const { email } = req.body;
@@ -448,6 +643,7 @@ router.post("/forgot-password/reset", async (req, res) => {
         if (!claimed) return res.status(400).json({ error: sessionError });
         try {
             await getAuth().updateUser(uid, { password: newPassword });
+            await getAuth().revokeRefreshTokens(uid);
         } catch (err) {
             await db.runTransaction(async transaction => {
                 const current = await transaction.get(otpRef);
@@ -622,7 +818,9 @@ router.post("/login", async (req, res) => {
         if (!verifyResponse.ok) {
             let errorMsg = "Login failed";
             if (data.error && data.error.message) {
-                if (data.error.message === "EMAIL_NOT_FOUND" || data.error.message === "INVALID_LOGIN_CREDENTIALS") {
+                if (data.error.message === "USER_DISABLED") {
+                    errorMsg = "This account has been archived. Please contact administrator.";
+                } else if (data.error.message === "EMAIL_NOT_FOUND" || data.error.message === "INVALID_LOGIN_CREDENTIALS") {
                     errorMsg = "Incorrect email or password";
                 } else {
                     errorMsg = data.error.message;
@@ -668,9 +866,6 @@ router.post("/change-password", async (req, res) => {
     const { email, currentPassword, newPassword } = req.body;
     if (!email || !currentPassword || !newPassword) return res.status(400).json({ error: "Missing required fields" });
 
-    const passwordValidation = validatePassword(newPassword);
-    if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
-
     try {
         const FIREBASE_API_KEY = "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE";
         const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
@@ -697,11 +892,39 @@ router.post("/change-password", async (req, res) => {
         if (data.error) {
             return res.status(400).json({ error: "Incorrect current password" });
         }
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ error: "New password cannot be the same as current password." });
+        }
+        const passwordValidation = validatePassword(newPassword);
+        if (!passwordValidation.isValid) return res.status(400).json({ error: passwordValidation.message });
 
         // Successfully verified! Apply the password change using Admin SDK
         await getAuth().updateUser(data.localId, { password: newPassword });
+        await getAuth().revokeRefreshTokens(data.localId);
 
-        return res.status(200).json({ success: true, message: "Password updated successfully" });
+        // Issue a fresh token after the credential update so staff session checks
+        // do not mistake a stale token for an archived account.
+        let refreshedParams;
+        if (typeof fetch === 'undefined') {
+            refreshedParams = require('node-fetch')(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: newPassword, returnSecureToken: true })
+            });
+        } else {
+            refreshedParams = fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: newPassword, returnSecureToken: true })
+            });
+        }
+        const refreshedResponse = await refreshedParams;
+        const refreshedData = await refreshedResponse.json();
+        if (!refreshedResponse.ok || refreshedData.error) {
+            return res.status(200).json({ success: true, message: "Password updated successfully" });
+        }
+
+        return res.status(200).json({ success: true, message: "Password updated successfully", idToken: refreshedData.idToken });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "Failed to update password" });
@@ -740,4 +963,223 @@ router.get("/staff-list", requireAdmin, async (req, res) => {
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
+router.post("/staff/:staffId/archive", requireAdmin, async (req, res) => {
+    try {
+        const staffRef = db.collection("users").doc(req.params.staffId);
+        const staffDoc = await staffRef.get();
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const staffData = staffDoc.data();
+        const role = String(staffData.role || staffData.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" && !staffData.staffNo) return res.status(404).json({ error: "Staff account not found." });
+        if (String(staffData.status || "active").trim().toLowerCase() === "archived") {
+            return res.status(409).json({ error: "This staff account is already archived." });
+        }
+
+        const authUid = staffData.userId || staffDoc.id;
+        const authUser = await getAuth().getUser(authUid);
+        await getAuth().updateUser(authUid, { disabled: true });
+        try {
+            await getAuth().revokeRefreshTokens(authUid);
+            await staffRef.update({ status: "Archived", archivedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        } catch (archiveError) {
+            await getAuth().updateUser(authUid, { disabled: authUser.disabled }).catch(rollbackError => {
+                console.error("Could not restore staff account state after archive failure:", rollbackError);
+            });
+            throw archiveError;
+        }
+
+        return res.status(200).json({ success: true, message: "Staff member archived and signed out." });
+    } catch (err) {
+        if (err.code === "auth/user-not-found") return res.status(404).json({ error: "Staff sign-in account was not found." });
+        console.error("Staff archive failed:", err);
+        return res.status(500).json({ error: "Could not archive the staff account." });
+    }
+});
+
+router.post("/staff/:staffId/restore", requireAdmin, async (req, res) => {
+    try {
+        const staffRef = db.collection("users").doc(req.params.staffId);
+        const staffDoc = await staffRef.get();
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const staffData = staffDoc.data();
+        const role = String(staffData.role || staffData.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" && !staffData.staffNo) return res.status(404).json({ error: "Staff account not found." });
+        if (String(staffData.status || "active").trim().toLowerCase() !== "archived") {
+            return res.status(409).json({ error: "This staff account is not archived." });
+        }
+
+        const authUid = staffData.userId || staffDoc.id;
+        const authUser = await getAuth().getUser(authUid);
+        await getAuth().updateUser(authUid, { disabled: false });
+        try {
+            await staffRef.update({
+                status: "Active",
+                archivedAt: FieldValue.delete(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } catch (restoreError) {
+            await getAuth().updateUser(authUid, { disabled: authUser.disabled }).catch(rollbackError => {
+                console.error("Could not restore staff account state after restore failure:", rollbackError);
+            });
+            throw restoreError;
+        }
+
+        return res.status(200).json({ success: true, message: "Staff member restored. They must sign in again." });
+    } catch (err) {
+        if (err.code === "auth/user-not-found") return res.status(404).json({ error: "Staff sign-in account was not found." });
+        console.error("Staff restore failed:", err);
+        return res.status(500).json({ error: "Could not restore the staff account." });
+    }
+});
+
+router.delete("/staff/:staffId", requireAdmin, async (req, res) => {
+    try {
+        const staffRef = db.collection("users").doc(req.params.staffId);
+        const staffDoc = await staffRef.get();
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const staffData = staffDoc.data();
+        const role = String(staffData.role || staffData.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" && !staffData.staffNo) return res.status(404).json({ error: "Staff account not found." });
+        if (String(staffData.status || "active").trim().toLowerCase() !== "archived") {
+            return res.status(409).json({ error: "Only archived staff accounts can be permanently deleted." });
+        }
+
+        const authUid = staffData.userId || staffDoc.id;
+        try {
+            await getAuth().deleteUser(authUid);
+        } catch (authError) {
+            // Permit retry if Auth deletion succeeded but the Firestore delete failed.
+            if (authError.code !== "auth/user-not-found") throw authError;
+        }
+        await staffRef.delete();
+
+        return res.status(200).json({ success: true, message: "Staff member permanently deleted." });
+    } catch (err) {
+        console.error("Permanent staff deletion failed:", err);
+        return res.status(500).json({ error: "Could not permanently delete this staff account." });
+    }
+});
+
+router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
+    const { fullName, phoneNumber, position, specialization } = req.body;
+    const normalizedName = typeof fullName === "string" ? fullName.trim() : "";
+    if (!/^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(normalizedName)) {
+        return res.status(400).json({ error: "Full name can contain letters and spaces only." });
+    }
+
+    let phoneDigits = String(phoneNumber || "").replace(/\D/g, "");
+    if (phoneDigits.startsWith("60")) phoneDigits = phoneDigits.slice(2);
+    const expectedPhoneLength = phoneDigits.startsWith("11") ? 10 : 9;
+    if (!/^1\d+$/.test(phoneDigits) || phoneDigits.length !== expectedPhoneLength) {
+        return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
+    }
+
+    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+        return res.status(400).json({ error: "Please select a valid staff position." });
+    }
+    const allowedSpecializations = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
+    const selectedSpecializations = Array.isArray(specialization) ? specialization : [];
+    const uniqueSpecializations = [...new Set(selectedSpecializations)];
+    if (uniqueSpecializations.length !== selectedSpecializations.length ||
+        selectedSpecializations.some(value => !allowedSpecializations.includes(value)) ||
+        (position === "Deliverer" && selectedSpecializations.length !== 0) ||
+        (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+    }
+
+    try {
+        const staffRef = db.collection("users").doc(req.params.staffId);
+        const staffDoc = await staffRef.get();
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const currentStaff = staffDoc.data();
+        const currentRole = String(currentStaff.role || currentStaff.systemRole || "").trim().toLowerCase();
+        if (currentRole !== "staff" && !currentStaff.staffNo) {
+            return res.status(404).json({ error: "Staff account not found." });
+        }
+
+        const updatedFields = {
+            fullName: normalizedName,
+            phoneNumber: `+60${phoneDigits}`,
+            position,
+            specialization: position === "Deliverer" ? [] : selectedSpecializations,
+            updatedAt: FieldValue.serverTimestamp()
+        };
+        await staffRef.update(updatedFields);
+
+        const authUid = currentStaff.userId || staffDoc.id;
+        try {
+            await getAuth().updateUser(authUid, { displayName: normalizedName });
+        } catch (authError) {
+            console.warn("Staff record updated, but Firebase Auth display name could not be synchronized:", authError.message);
+        }
+
+        return res.status(200).json({ success: true, message: "Staff information updated successfully." });
+    } catch (err) {
+        console.error("Staff update failed:", err);
+        return res.status(500).json({ error: "Failed to update staff information." });
+    }
+});
+
+router.get("/customer-list", requireAdmin, async (req, res) => {
+    try {
+        const snapshot = await db.collection("users").get();
+        const customers = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const role = String(data.role || data.systemRole || "").trim().toLowerCase();
+            if (role !== "customer") return;
+            customers.push({ ...data, id: doc.id });
+        });
+        customers.sort((a, b) => {
+            const timeA = a.createdAt?._seconds || 0;
+            const timeB = b.createdAt?._seconds || 0;
+            return timeB - timeA;
+        });
+        return res.status(200).json(customers);
+    } catch (err) {
+        console.error("Could not load customer records:", err);
+        return res.status(500).json({ error: "Could not load customer records." });
+    }
+});
+
+router.post("/customers/:customerId/status", requireAdmin, async (req, res) => {
+    const requestedStatus = String(req.body.status || "").trim();
+    if (!["Active", "Suspended", "Banned"].includes(requestedStatus)) {
+        return res.status(400).json({ error: "Choose a valid customer status." });
+    }
+
+    try {
+        const customerRef = db.collection("users").doc(req.params.customerId);
+        const customerDoc = await customerRef.get();
+        if (!customerDoc.exists) return res.status(404).json({ error: "Customer account not found." });
+        const customer = customerDoc.data();
+        const role = String(customer.role || customer.systemRole || "").trim().toLowerCase();
+        if (role !== "customer") return res.status(404).json({ error: "Customer account not found." });
+
+        const authUid = customer.userId || customerDoc.id;
+        const authUser = await getAuth().getUser(authUid);
+        const shouldDisable = requestedStatus !== "Active";
+        await getAuth().updateUser(authUid, { disabled: shouldDisable });
+        try {
+            if (shouldDisable) await getAuth().revokeRefreshTokens(authUid);
+            await customerRef.update({
+                status: requestedStatus,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } catch (statusError) {
+            await getAuth().updateUser(authUid, { disabled: authUser.disabled }).catch(rollbackError => {
+                console.error("Could not restore customer account state after status update failure:", rollbackError);
+            });
+            throw statusError;
+        }
+
+        return res.status(200).json({ success: true, message: `Customer status updated to ${requestedStatus}.` });
+    } catch (err) {
+        if (err.code === "auth/user-not-found") return res.status(404).json({ error: "Customer sign-in account was not found." });
+        console.error("Customer status update failed:", err);
+        return res.status(500).json({ error: "Could not update this customer account." });
+    }
+});
+
 module.exports = router;

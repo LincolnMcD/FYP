@@ -162,7 +162,7 @@
       </a>
     </ul>
     <div class="nav-bottom">
-      <a href="#" class="nav-item">
+      <a href="../accountManagementModule/staff-edit-profile.html" class="nav-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         Profile
       </a>
@@ -180,7 +180,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           </button>
           <div class="profile-dropdown" id="profileDropdown">
-            <a href="#" class="dropdown-item">Edit Profile</a>
+            <a href="../accountManagementModule/staff-edit-profile.html" class="dropdown-item">Edit Profile</a>
             <div class="dropdown-divider"></div>
             <button class="dropdown-item" onclick="triggerLogout()" style="color: #ef4444;">Log Out</button>
           </div>
@@ -357,17 +357,42 @@
       ReByteAuth.logout();
     }
     
-    document.addEventListener('DOMContentLoaded', () => {
+    let staffSessionEnding = false;
+    let staffSessionCheckInProgress = false;
+    function endStaffSession(archived = false) {
+      if (staffSessionEnding) return;
+      staffSessionEnding = true;
+      localStorage.removeItem(ReByteAuth.SESSION_KEY);
+      if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut().catch(() => {});
+      window.location.replace(`../accountManagementModule/login.html${archived ? '?archived=1' : '?sessionExpired=1'}`);
+    }
+
+    async function verifyActiveStaffSession() {
+      if (staffSessionCheckInProgress || staffSessionEnding) return;
+      staffSessionCheckInProgress = true;
+      try {
+        const result = await ReByteAuth.checkStaffSession();
+        if (!result.success && !result.transient) endStaffSession(result.archived === true);
+      } finally {
+        staffSessionCheckInProgress = false;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
       // Check auth if needed, redirect to login if not logged in
       if (!ReByteAuth.isLoggedIn()) {
         window.location.href = '../accountManagementModule/login.html';
+        return;
       } else {
         const user = ReByteAuth.getUser();
         if (user && user.role !== 'Staff') {
           // If not staff, don't allow access
           window.location.href = '../accountManagementModule/home.html';
+          return;
         }
       }
+      await verifyActiveStaffSession();
+      if (!staffSessionEnding) window.setInterval(verifyActiveStaffSession, 2000);
     });
   </script>
 </body>

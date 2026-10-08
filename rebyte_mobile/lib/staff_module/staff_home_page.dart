@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'staff_profile_page.dart';
 import '../account_management_module/services/session_service.dart';
+import '../account_management_module/services/auth_service.dart';
 import '../account_management_module/home_page.dart';
 import 'staff_commission_page.dart';
 
@@ -12,23 +14,81 @@ class StaffHomePage extends StatefulWidget {
   State<StaffHomePage> createState() => _StaffHomePageState();
 }
 
-class _StaffHomePageState extends State<StaffHomePage> {
+class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   String? _name;
   String? _email;
   String? _toastMessage;
   final bool _isToastError = false;
+  Timer? _staffSessionTimer;
+  bool _staffSessionCheckInProgress = false;
+  bool _staffSessionEnding = false;
   
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _toastMessage = widget.toastMessage;
     if (_toastMessage != null) {
       Future.delayed(const Duration(seconds: 6), () {
         if (mounted) setState(() => _toastMessage = null);
       });
     }
-    _loadSession();
+    _loadSession().then((_) => _verifyStaffSession());
+    _staffSessionTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _verifyStaffSession(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _verifyStaffSession();
+  }
+
+  Future<void> _verifyStaffSession() async {
+    if (_staffSessionCheckInProgress || _staffSessionEnding) return;
+    _staffSessionCheckInProgress = true;
+    try {
+      final result = await AuthService.checkStaffSession();
+      if (result['expired'] == true) {
+        await _endStaffSession(archived: result['archived'] == true);
+      } else if (result['success'] == true && result['profile'] is Map) {
+        await _applyStaffProfile(Map<String, dynamic>.from(result['profile'] as Map));
+      } else if (result['success'] == true) {
+        await _loadFreshStaffProfile();
+      }
+    } finally {
+      _staffSessionCheckInProgress = false;
+    }
+  }
+
+  Future<void> _endStaffSession({bool archived = false}) async {
+    if (_staffSessionEnding) return;
+    _staffSessionEnding = true;
+    _staffSessionTimer?.cancel();
+    await SessionService.clearSession();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomePage(
+          isLoggedIn: false,
+          toastMessage: archived
+              ? 'This account has been archived. Please contact administrator.'
+              : 'Session expired. Please log in again.',
+          toastIsError: true,
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _staffSessionTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSession() async {
@@ -40,6 +100,31 @@ class _StaffHomePageState extends State<StaffHomePage> {
           _name = session['name'];
         });
       }
+    }
+  }
+
+  Future<void> _applyStaffProfile(Map<String, dynamic> profile) async {
+    final name = (profile['fullName'] as String?)?.trim();
+    final email = (profile['email'] as String?)?.trim();
+    if (!mounted) return;
+    final shouldPersistIdentity =
+        email?.isNotEmpty == true && name?.isNotEmpty == true && (_email != email || _name != name);
+    setState(() {
+      if (name?.isNotEmpty == true) _name = name;
+      if (email?.isNotEmpty == true) _email = email;
+    });
+    if (shouldPersistIdentity) {
+      await SessionService.saveSession(email: email!, name: name!, role: 'Staff');
+    }
+  }
+
+  Future<void> _loadFreshStaffProfile() async {
+    final session = await SessionService.getSession();
+    final email = session['email'];
+    if (email == null || email.isEmpty) return;
+    final result = await AuthService.getProfile(email);
+    if (result['success'] == true && result['data'] is Map) {
+      await _applyStaffProfile(Map<String, dynamic>.from(result['data'] as Map));
     }
   }
 
@@ -78,6 +163,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
                 setState(() {
                   _selectedIndex = 3;
                 });
+                _verifyStaffSession();
               },
               child: CircleAvatar(
                 radius: 16,
@@ -94,7 +180,12 @@ class _StaffHomePageState extends State<StaffHomePage> {
       ),
       body: Stack(
         children: [
-          _selectedIndex == 3 ? StaffProfilePage(name: _name, email: _email, onLogout: _showLogoutDialog) : SafeArea(
+          _selectedIndex == 3 ? StaffProfilePage(
+            name: _name,
+            email: _email,
+            onLogout: _showLogoutDialog,
+            onProfileUpdated: () async { await _loadFreshStaffProfile(); },
+          ) : SafeArea(
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -561,6 +652,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
                     _buildDrawerItem(Icons.person_outline, 'Profile', isSelected: _selectedIndex == 3, onTap: () {
                       Navigator.pop(context);
                       setState(() => _selectedIndex = 3);
+                      _verifyStaffSession();
                     }),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),

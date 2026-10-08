@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'welcome_page.dart';
 import 'profile_page.dart';
+import 'services/auth_service.dart';
 import 'services/session_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -8,13 +10,14 @@ class HomePage extends StatefulWidget {
   final String? email;
   final String? name;
   final String? toastMessage;
-  const HomePage({super.key, this.isLoggedIn = false, this.email, this.name, this.toastMessage});
+  final bool toastIsError;
+  const HomePage({super.key, this.isLoggedIn = false, this.email, this.name, this.toastMessage, this.toastIsError = false});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   late bool _isLoggedIn = widget.isLoggedIn;
   late String? _email = widget.email;
@@ -24,15 +27,69 @@ class _HomePageState extends State<HomePage> {
 
   String? _toastMessage;
   bool _isToastError = false;
+  Timer? _accountSessionTimer;
+  bool _accountSessionCheckInProgress = false;
+  bool _accountSessionEnding = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.toastMessage != null) {
        WidgetsBinding.instance.addPostFrameCallback((_) {
-         _showTopToast(widget.toastMessage!, false);
+         _showTopToast(widget.toastMessage!, widget.toastIsError);
        });
     }
+    if (_isLoggedIn) {
+      _accountSessionTimer = Timer.periodic(const Duration(seconds: 5), (_) => _verifyAccountSession());
+      Future.delayed(const Duration(seconds: 1), _verifyAccountSession);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _verifyAccountSession();
+  }
+
+  Future<void> _verifyAccountSession() async {
+    if (!_isLoggedIn || _accountSessionCheckInProgress || _accountSessionEnding) return;
+    _accountSessionCheckInProgress = true;
+    try {
+      final result = await AuthService.checkAccountSession();
+      if (result['expired'] == true) {
+        await _endExpiredAccountSession(archived: result['archived'] == true);
+      }
+    } finally {
+      _accountSessionCheckInProgress = false;
+    }
+  }
+
+  Future<void> _endExpiredAccountSession({bool archived = false}) async {
+    if (_accountSessionEnding) return;
+    _accountSessionEnding = true;
+    _accountSessionTimer?.cancel();
+    await SessionService.clearSession();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomePage(
+          isLoggedIn: false,
+          toastMessage: archived
+              ? 'This account has been archived. Please contact administrator.'
+              : 'Session expired. Please log in again.',
+          toastIsError: true,
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _accountSessionTimer?.cancel();
+    super.dispose();
   }
 
   void _refreshProfileSession() async {

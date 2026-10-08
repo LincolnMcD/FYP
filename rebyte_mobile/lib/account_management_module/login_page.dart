@@ -111,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
           );
         }
     } else {
-      _showTopToast(context, result['error'] ?? 'Login failed', true);
+      _showTopToast(context, _loginErrorText(result['error'] ?? 'Login failed'), true);
     }
   }
 
@@ -150,9 +150,23 @@ class _LoginPageState extends State<LoginPage> {
           }
         }
       } else {
-        _showTopToast(context, response['error'] ?? 'Sign in failed', true);
+        _showTopToast(context, _loginErrorText(response['error'] ?? 'Sign in failed'), true);
       }
     }
+  }
+
+  String _loginErrorText(dynamic error) {
+    final message = error.toString();
+    final normalized = message.toLowerCase();
+    if (normalized.contains('user_disabled') ||
+        normalized.contains('user-disabled') ||
+        (normalized.contains('archived') && normalized.contains('administrator'))) {
+      return 'This account has been archived. Please contact administrator.';
+    }
+    return message.replaceAll(
+      RegExp('contact an administrator', caseSensitive: false),
+      'contact administrator',
+    );
   }
 
   String? _toastMessage;

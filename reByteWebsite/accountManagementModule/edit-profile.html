@@ -57,6 +57,14 @@
     .pwd-tooltip { display: none; position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); width: 240px; background: #1e293b; color: white; padding: 12px; border-radius: 6px; font-size: 12px; font-weight: normal; z-index: 10; line-height: 1.5; white-space: pre-wrap; text-align: left; }
     .pwd-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-width: 6px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
     .pwd-info-icon:hover .pwd-tooltip { display: block; }
+    .password-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .password-label-row label { margin: 0; }
+    .pwd-info-icon { border: 0; padding: 0; }
+    .pwd-tooltip { position: absolute; top: 30px; right: 0; bottom: auto; left: auto; transform: none; box-sizing: border-box; width: 260px; max-width: calc(100vw - 48px); margin: 0; display: none; white-space: normal; box-shadow: 0 8px 20px rgba(15,23,42,.2); }
+    .pwd-tooltip ul { margin: 6px 0 0; padding-left: 20px; }
+    .pwd-tooltip li { margin: 2px 0; }
+    .pwd-tooltip.show { display: block; }
+    .pwd-tooltip::after { display: none; }
     
     /* Password Toggle Styles */
     .pwd-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
@@ -173,16 +181,8 @@
         <div class="error-msg" id="currentPwdError"></div>
       </div>
       <div class="form-group">
-        <label>
-          New Password
-          <div class="pwd-info-icon">?
-            <div class="pwd-tooltip">Password must be at least 8 characters long and contain:
-- Uppercase letter
-- Lowercase letter
-- Number
-- Special character (!@#$%^&*)</div>
-          </div>
-        </label>
+        <div class="password-label-row"><label for="newPwd">New Password</label><button type="button" class="pwd-info-icon" id="pwdRequirementsToggle" aria-expanded="false" aria-controls="pwdRequirements">?</button></div>
+        <div class="pwd-tooltip" id="pwdRequirements"><strong>Password requirement</strong><ul><li>At least 8 characters</li><li>At least 1 uppercase letter</li><li>At least 1 lowercase letter</li><li>At least 1 number</li><li>At least 1 special character</li></ul></div>
         <div class="pwd-input-wrapper">
           <input type="password" class="input-field" id="newPwd">
           <button type="button" class="pwd-toggle-btn" aria-label="Toggle password visibility">
@@ -287,15 +287,34 @@
 
     // Password Eye Toggles
     const toggleBtns = document.querySelectorAll('.pwd-toggle-btn');
+    const hiddenPasswordIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    const visiblePasswordIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
     toggleBtns.forEach(btn => {
+      btn.setAttribute('aria-label', 'Show password');
+      btn.innerHTML = hiddenPasswordIcon;
       btn.addEventListener('click', function() {
         const input = this.previousElementSibling;
         const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
         input.setAttribute('type', type);
-        this.innerHTML = type === 'password' 
-          ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`
-          : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+        this.setAttribute('aria-label', type === 'password' ? 'Show password' : 'Hide password');
+        this.innerHTML = type === 'password' ? hiddenPasswordIcon : visiblePasswordIcon;
       });
+    });
+
+    const pwdRequirementsToggle = document.getElementById('pwdRequirementsToggle');
+    const pwdRequirements = document.getElementById('pwdRequirements');
+    pwdRequirementsToggle.addEventListener('click', () => {
+      const expanded = pwdRequirementsToggle.getAttribute('aria-expanded') === 'true';
+      pwdRequirementsToggle.setAttribute('aria-expanded', String(!expanded));
+      pwdRequirements.classList.toggle('show', !expanded);
+    });
+    document.addEventListener('click', event => {
+      if (pwdRequirements.classList.contains('show') &&
+          !pwdRequirements.contains(event.target) &&
+          !pwdRequirementsToggle.contains(event.target)) {
+        pwdRequirements.classList.remove('show');
+        pwdRequirementsToggle.setAttribute('aria-expanded', 'false');
+      }
     });
 
     // Birthday Calendar Limits (12 to 99 years old)
@@ -478,6 +497,8 @@
       currentPwdInput.value = '';
       newPwdInput.value = '';
       confirmPwdInput.value = '';
+      [currentPwdInput, newPwdInput, confirmPwdInput].forEach(input => { input.type = 'password'; });
+      toggleBtns.forEach(btn => { btn.innerHTML = hiddenPasswordIcon; btn.setAttribute('aria-label', 'Show password'); });
       currentPwdError.style.display = 'none';
       newPwdError.style.display = 'none';
       confirmPwdError.style.display = 'none';
@@ -553,11 +574,6 @@
         newPwdError.style.display = 'block';
         newPwdInput.classList.add('error');
         hasError = true;
-      } else if (current === newPwd) {
-        newPwdError.textContent = "New password cannot be the same as current password.";
-        newPwdError.style.display = 'block';
-        newPwdInput.classList.add('error');
-        hasError = true;
       } else {
         const res = ReByteAuth.validatePassword(newPwd);
         if (!res.isValid) {
@@ -586,6 +602,7 @@
       if (hasError) return;
 
       submitChangePwd.textContent = 'Verifying...';
+      ReByteAuth.beginPasswordChange();
       try {
         const response = await fetch(`${API_URL}/change-password`, {
           method: 'POST',
@@ -599,20 +616,36 @@
         
         const result = await response.json();
         if (response.ok) {
+          const updatedSession = { ...ReByteAuth.getUser(), token: result.idToken || ReByteAuth.getUser()?.token };
+          ReByteAuth.setUser(updatedSession);
+          if (typeof firebase !== 'undefined' && firebase.auth) {
+            try {
+              const credential = await firebase.auth().signInWithEmailAndPassword(sessionUser.email, newPwd);
+              ReByteAuth.setUser({ ...updatedSession, token: await credential.user.getIdToken() });
+            } catch (authError) {
+              console.warn('Could not refresh Firebase session after password change:', authError);
+            }
+          }
           ReByteAuth.showToast("Password successfully changed!", 'success');
           clearPwdModal();
         } else {
-          if (result.error && result.error.toLowerCase().includes('current')) {
-            currentPwdError.textContent = result.error;
+          const message = result.error || "Failed to change password.";
+          if (message.toLowerCase().includes('same as current')) {
+            newPwdError.textContent = message;
+            newPwdError.style.display = 'block';
+            newPwdInput.classList.add('error');
+          } else if (message.toLowerCase().includes('current')) {
+            currentPwdError.textContent = message;
             currentPwdError.style.display = 'block';
             currentPwdInput.classList.add('error');
           } else {
-            ReByteAuth.showToast(result.error || "Failed to change password.", 'error');
+            ReByteAuth.showToast(message, 'error');
           }
         }
       } catch (e) {
         ReByteAuth.showToast("Network error changing password.", 'error');
       } finally {
+        ReByteAuth.endPasswordChange();
         submitChangePwd.textContent = 'Confirm Change';
       }
     };
