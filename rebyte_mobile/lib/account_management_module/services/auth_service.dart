@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'session_service.dart';
 
 class AuthService {
   // Token revocation happens before this device can reauthenticate with the new
@@ -120,15 +122,17 @@ class AuthService {
       final body = jsonDecode(response.body);
       
       if (response.statusCode == 200) {
+        String? sessionToken;
         try {
-          await FirebaseAuth.instance.signInWithEmailAndPassword(
+          final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
             email: email.trim(),
             password: password,
           );
+          sessionToken = await credential.user?.getIdToken();
         } catch (_) {
           // Keep registration successful if Firebase session restoration is unavailable.
         }
-        return {'success': true, 'message': body['message']};
+        return {'success': true, 'message': body['message'], 'token': sessionToken};
       } else {
         return {'success': false, 'error': body['error'] ?? 'Registration failed'};
       }
@@ -153,7 +157,8 @@ class AuthService {
           'email': body['email'], 
           'phone': body['phone'], 
           'requireProfileComplete': body['requireProfileComplete'],
-          'role': body['role']
+          'role': body['role'],
+          'token': idToken,
         };
       }
       return {'success': false, 'error': body['error'] ?? 'OAuth Login failed'};
@@ -162,13 +167,38 @@ class AuthService {
     }
   }
 
+  static Future<String> _disabledOAuthLoginMessage(String? email) async {
+    if (email != null && email.trim().isNotEmpty) {
+      try {
+        final response = await http.post(
+          Uri.parse('$baseUrl/account-access-status'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email.trim()}),
+        ).timeout(const Duration(seconds: 5));
+        final body = jsonDecode(response.body);
+        final status = (body['status'] ?? '').toString().toLowerCase();
+        if (status == 'suspended') {
+          return 'Your account is being suspended. Please view the email for more detail.';
+        }
+        if (status == 'banned') {
+          return 'Your account is being banned. Please view the email for more detail.';
+        }
+      } catch (_) {
+        // Fall back to the archived-account message if status lookup fails.
+      }
+    }
+    return 'This account has been archived. Please contact administrator.';
+  }
+
   static Future<Map<String, dynamic>> signInWithGoogle() async {
+    GoogleSignInAccount? googleAccount;
     try {
       final googleSignIn = GoogleSignIn();
       await googleSignIn.signOut();
       
       final GoogleSignInAccount? gUser = await googleSignIn.signIn();
       if (gUser == null) return {'success': false, 'error': 'Google sign in cancelled'};
+      googleAccount = gUser;
       final GoogleSignInAuthentication gAuth = await gUser.authentication;
       final OAuthCredential credential = GoogleAuthProvider.credential(accessToken: gAuth.accessToken, idToken: gAuth.idToken);
       final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
@@ -176,8 +206,8 @@ class AuthService {
       if (token == null) return {'success': false, 'error': 'Failed to retrieve auth token'};
       return await oauthLogin(token, 'Google');
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-disabled') {
-        return {'success': false, 'error': 'This account has been archived. Please contact administrator.'};
+      if (e.code.toLowerCase().replaceFirst('auth/', '') == 'user-disabled') {
+        return {'success': false, 'error': await _disabledOAuthLoginMessage(googleAccount?.email)};
       }
       if (e.code == 'account-exists-with-different-credential') return {'success': false, 'error': 'Email registered across a different provider. Use Email/Password.'};
       return {'success': false, 'error': e.message ?? 'Authentication failed'};
@@ -187,11 +217,25 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>> signInWithFacebook() async {
+    String? facebookEmail;
     try {
       await FacebookAuth.instance.logOut();
       final LoginResult result = await FacebookAuth.instance.login(permissions: ['email', 'public_profile']);
       if (result.status == LoginStatus.cancelled) return {'success': false, 'error': 'Facebook sign in cancelled'};
       if (result.status != LoginStatus.success) return {'success': false, 'error': result.message ?? 'Facebook sign in failed'};
+      try {
+        final accessToken = result.accessToken!.tokenString;
+        final profileResponse = await http.get(Uri.https('graph.facebook.com', '/me', {
+          'fields': 'email',
+          'access_token': accessToken,
+        })).timeout(const Duration(seconds: 5));
+        if (profileResponse.statusCode == 200) {
+          final profile = jsonDecode(profileResponse.body);
+          facebookEmail = profile['email']?.toString();
+        }
+      } catch (_) {
+        // The provider may not grant an email; use the generic fallback then.
+      }
       final OAuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
       final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       
@@ -199,8 +243,8 @@ class AuthService {
       if (token == null) return {'success': false, 'error': 'Failed to retrieve auth token'};
       return await oauthLogin(token, 'Facebook');
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-disabled') {
-        return {'success': false, 'error': 'This account has been archived. Please contact administrator.'};
+      if (e.code.toLowerCase().replaceFirst('auth/', '') == 'user-disabled') {
+        return {'success': false, 'error': await _disabledOAuthLoginMessage(facebookEmail)};
       }
       if (e.code == 'account-exists-with-different-credential') return {'success': false, 'error': 'Email registered across a different provider. Use Email/Password.'};
       return {'success': false, 'error': e.message ?? 'Authentication failed'};
@@ -363,17 +407,29 @@ class AuthService {
       
       if (response.statusCode == 200) {
         final role = (body['role'] ?? 'Customer').toString();
+        String? sessionToken;
         if (role.toLowerCase() != 'admin') {
           // Keep customer and staff sessions in Firebase so revoked sessions
           // are detected when a password changes on another device.
-          await FirebaseAuth.instance.signInWithEmailAndPassword(
+          final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
             email: email.trim(),
             password: password,
           );
+          sessionToken = await credential.user?.getIdToken();
         }
-        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User', 'role': role};
+        return {'success': true, 'message': body['message'], 'name': body['name'] ?? 'ReByte User', 'role': role, 'token': sessionToken};
       } else {
         final error = body['error'] ?? 'Login failed';
+        final status = (body['status'] ?? '').toString().toLowerCase();
+        if (status == 'suspended' || status == 'banned') {
+          return {
+            'success': false,
+            'status': body['status'],
+            'error': status == 'suspended'
+                ? 'Your account is being suspended. Please view the email for more detail.'
+                : 'Your account is being banned. Please view the email for more detail.',
+          };
+        }
         return {
           'success': false,
           'error': error == 'USER_DISABLED'
@@ -383,13 +439,38 @@ class AuthService {
       }
     } catch (e) {
       if (e is FirebaseAuthException) {
-        final message = e.code == 'user-disabled'
-            ? 'This account has been archived. Please contact administrator.'
+        final normalizedCode = e.code.toLowerCase().replaceFirst('auth/', '');
+        final message = normalizedCode == 'user-disabled'
+            ? await _disabledAccountLoginMessage(email, password)
             : (e.message ?? 'Unable to sign in.');
         return {'success': false, 'error': message};
       }
       return {'success': false, 'error': 'Connection failed. Ensure backend is running.'};
     }
+  }
+
+  static Future<String> _disabledAccountLoginMessage(String email, String password) async {
+    try {
+      // Firebase can disable the account between the backend check and the
+      // mobile SDK sign-in. Recheck the backend so a customer restriction is
+      // reported as Suspended/Banned instead of exposing Firebase's raw error.
+      final response = await http.post(
+        Uri.parse('$baseUrl/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password, 'clientType': 'Mobile'}),
+      ).timeout(const Duration(seconds: 5));
+      final body = jsonDecode(response.body);
+      final status = (body['status'] ?? '').toString().toLowerCase();
+      if (status == 'suspended') {
+        return 'Your account is being suspended. Please view the email for more detail.';
+      }
+      if (status == 'banned') {
+        return 'Your account is being banned. Please view the email for more detail.';
+      }
+    } catch (_) {
+      // Use the generic disabled-account notice if the status lookup is unavailable.
+    }
+    return 'This account has been archived. Please contact administrator.';
   }
 
   static Future<Map<String, dynamic>> checkStaffSession() async {
@@ -461,14 +542,30 @@ class AuthService {
     if (passwordChangeInProgress) return {'success': true, 'skipped': true};
     try {
       final auth = FirebaseAuth.instance;
+      final cachedSession = await SessionService.getSession();
       User? user = auth.currentUser;
       if (user == null) {
-        user = await auth.authStateChanges().first.timeout(const Duration(seconds: 5));
+        try {
+          user = await auth.authStateChanges().first.timeout(const Duration(seconds: 5));
+        } on TimeoutException {
+          // Continue with the locally cached token if Firebase's persisted
+          // user state has not restored yet.
+        }
       }
-      if (user == null) {
-        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
+      String? idToken;
+      if (user != null) {
+        try {
+          idToken = await user.getIdToken();
+          if (idToken != null && idToken.isNotEmpty && idToken != cachedSession['token']) {
+            await SessionService.updateToken(idToken);
+          }
+        } on FirebaseAuthException catch (e) {
+          if (e.code != 'user-disabled') rethrow;
+          idToken = cachedSession['token'];
+        }
+      } else {
+        idToken = cachedSession['token'];
       }
-      final idToken = await user.getIdToken();
       if (idToken == null || idToken.isEmpty) {
         return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
       }
@@ -484,6 +581,7 @@ class AuthService {
           'success': false,
           'expired': true,
           'archived': body['archived'] == true,
+          'status': body['status'],
           'error': body['error'] ?? 'Session expired. Please log in again.',
         };
       }
@@ -491,12 +589,7 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       if (passwordChangeInProgress) return {'success': true, 'skipped': true};
       if (e.code == 'user-disabled') {
-        return {
-          'success': false,
-          'expired': true,
-          'archived': true,
-          'error': 'This account has been archived. Please contact administrator.',
-        };
+        return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};
       }
       if (['user-not-found', 'user-token-expired', 'invalid-user-token'].contains(e.code)) {
         return {'success': false, 'expired': true, 'error': 'Session expired. Please log in again.'};

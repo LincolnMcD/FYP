@@ -107,7 +107,7 @@ class _RegisterPageState extends State<RegisterPage> {
           );
         } else {
           final role = response['role'] ?? 'Customer';
-          await SessionService.saveSession(email: response['email'], name: response['name'], role: role);
+          await SessionService.saveSession(email: response['email'], name: response['name'], role: role, token: response['token'] as String?);
           
           if (role.toString().toLowerCase() == 'staff') {
             Navigator.pushAndRemoveUntil(

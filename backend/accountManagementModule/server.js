@@ -38,6 +38,96 @@ const Staff = require("../models/staffModel");
 const db = require("../config/firebase");
 
 const router = express.Router();
+const CUSTOMER_SUSPENSION_MS = 7 * 24 * 60 * 60 * 1000;
+let suspensionSweepInProgress = false;
+
+function timestampMillis(value) {
+    if (!value) return NaN;
+    if (typeof value.toMillis === "function") return value.toMillis();
+    if (typeof value.toDate === "function") return value.toDate().getTime();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "number") return value;
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    })[character]);
+}
+
+async function sendCustomerStatusEmail(customer, status, reason) {
+    const suspended = status === "Suspended";
+    const subject = suspended ? "Your ReByte account is temporarily suspended" : "Your ReByte account has been banned";
+    const accessText = suspended
+        ? "Your account is suspended for 7 days and will automatically reactivate when this period ends."
+        : "Your account access has been disabled until an administrator reviews and removes the ban.";
+    const safeName = escapeHtml(customer.fullName || "ReByte customer");
+    const safeReason = escapeHtml(reason).replace(/\r?\n/g, "<br>");
+    return transporter.sendMail({
+        from: "\"ReByte Support\" <lolincoln021@gmail.com>",
+        to: customer.email,
+        subject,
+        text: `Hello ${customer.fullName || "ReByte customer"},\n\n${accessText}\n\nReason: ${reason}\n\nPlease contact ReByte support if you have questions.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#172033"><h2 style="color:#082f72">ReByte account notice</h2><p>Hello ${safeName},</p><p>${accessText}</p><p><strong>Reason:</strong><br>${safeReason}</p><p>Please contact ReByte support if you have questions.</p></div>`
+    });
+}
+
+async function reactivateExpiredCustomerSuspensions() {
+    if (suspensionSweepInProgress) return;
+    suspensionSweepInProgress = true;
+    try {
+        const snapshot = await db.collection("users").where("status", "==", "Suspended").get();
+        const now = Date.now();
+        for (const customerDoc of snapshot.docs) {
+            const customer = customerDoc.data();
+            if (timestampMillis(customer.suspendedUntil) > now) continue;
+            if (!Number.isFinite(timestampMillis(customer.suspendedUntil))) continue;
+            const authUid = customer.userId || customerDoc.id;
+            try {
+                await getAuth().updateUser(authUid, { disabled: false });
+                const reactivated = await db.runTransaction(async transaction => {
+                    const latestDoc = await transaction.get(customerDoc.ref);
+                    if (!latestDoc.exists) return false;
+                    const latest = latestDoc.data();
+                    if (latest.status !== "Suspended" || timestampMillis(latest.suspendedUntil) > Date.now()) return false;
+                    transaction.update(customerDoc.ref, {
+                        status: "Active",
+                        suspensionReason: FieldValue.delete(),
+                        suspendedAt: FieldValue.delete(),
+                        suspendedUntil: FieldValue.delete(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                    return true;
+                });
+                if (reactivated) {
+                    await db.collection("customerAccountAudit").add({
+                        customerId: customerDoc.id,
+                        userId: authUid,
+                        customerName: customer.fullName || "Customer",
+                        email: customer.email || "",
+                        action: "Automatic Reactivation",
+                        reason: "The seven-day suspension period expired.",
+                        performedBy: "system",
+                        createdAt: FieldValue.serverTimestamp()
+                    });
+                }
+                if (!reactivated) {
+                    const latestDoc = await customerDoc.ref.get();
+                    const latestStatus = latestDoc.exists ? String(latestDoc.data().status || "Active") : "Active";
+                    await getAuth().updateUser(authUid, { disabled: latestStatus !== "Active" });
+                }
+            } catch (err) {
+                console.error(`Could not auto-reactivate suspended customer ${customerDoc.id}:`, err.message);
+            }
+        }
+    } catch (err) {
+        console.error("Suspension expiry sweep failed:", err.message);
+    } finally {
+        suspensionSweepInProgress = false;
+    }
+}
 
 async function requireAdmin(req, res, next) {
     const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -235,11 +325,6 @@ router.get("/account-session", async (req, res) => {
         // distinguishable from active accounts with an expired session.
         const decoded = await getAuth().verifyIdToken(idToken, false);
         const authUser = await getAuth().getUser(decoded.uid);
-        if (authUser.disabled) {
-            return res.status(401).json({ archived: true, expired: true, error: "This account has been archived." });
-        }
-        await getAuth().verifyIdToken(idToken, true);
-
         const usersRef = db.collection("users");
         let userDoc = await usersRef.doc(decoded.uid).get();
         if (!userDoc.exists) {
@@ -257,6 +342,18 @@ router.get("/account-session", async (req, res) => {
         const userData = userDoc.data();
         const role = String(userData.role || userData.systemRole || "").trim().toLowerCase();
         const status = String(userData.status || "active").trim().toLowerCase();
+        if (role === "customer" && ["suspended", "banned"].includes(status)) {
+            const accountStatus = status === "suspended" ? "Suspended" : "Banned";
+            const message = status === "suspended"
+                ? "Your account has been suspended. Please check your email for more details."
+                : "Your account has been banned. Please check your email for more details.";
+            return res.status(401).json({ expired: true, status: accountStatus, error: message });
+        }
+        if (authUser.disabled) {
+            const archived = status === "archived" || role === "staff";
+            return res.status(401).json({ archived, expired: true, error: archived ? "This account has been archived." : "Your account is disabled." });
+        }
+        await getAuth().verifyIdToken(idToken, true);
         if (role === "staff" && status === "archived") {
             return res.status(401).json({ archived: true, expired: true, error: "This staff account has been archived." });
         }
@@ -789,6 +886,33 @@ router.post("/oauth-login", async (req, res) => {
     }
 });
 
+// Firebase rejects OAuth sign-in for disabled users before it can issue an
+// ID token. Let the client ask for only the blocked customer's status by the
+// email confirmed by their OAuth provider, without exposing profile details.
+router.post("/account-access-status", async (req, res) => {
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email) return res.status(400).json({ error: "Email is required." });
+    try {
+        const usersRef = db.collection("users");
+        let snapshot = await usersRef.where("email", "==", email).limit(1).get();
+        if (snapshot.empty) {
+            snapshot = await usersRef.where("email", "==", req.body.email.trim()).limit(1).get();
+        }
+        if (!snapshot.empty) {
+            const account = snapshot.docs[0].data();
+            const role = String(account.role || account.systemRole || "").trim().toLowerCase();
+            const status = String(account.status || "").trim().toLowerCase();
+            if (role === "customer" && ["suspended", "banned"].includes(status)) {
+                return res.status(200).json({ status: status === "suspended" ? "Suspended" : "Banned" });
+            }
+        }
+        return res.status(200).json({ status: null });
+    } catch (err) {
+        console.error("Could not check OAuth account access status:", err.message);
+        return res.status(500).json({ error: "Could not check account status." });
+    }
+});
+
 router.post("/login", async (req, res) => {
     const { email, password, clientType } = req.body;
     const emailValidation = validateEmail(email);
@@ -819,6 +943,16 @@ router.post("/login", async (req, res) => {
             let errorMsg = "Login failed";
             if (data.error && data.error.message) {
                 if (data.error.message === "USER_DISABLED") {
+                    const account = snapshot.docs[0]?.data() || {};
+                    const role = String(account.role || account.systemRole || "").trim().toLowerCase();
+                    const status = String(account.status || "").trim().toLowerCase();
+                    if (role === "customer" && ["suspended", "banned"].includes(status)) {
+                        const accountStatus = status === "suspended" ? "Suspended" : "Banned";
+                        const statusMessage = status === "suspended"
+                            ? "Your account is being suspended. Please view the email for more detail."
+                            : "Your account is being banned. Please view the email for more detail.";
+                        return res.status(403).json({ status: accountStatus, error: statusMessage });
+                    }
                     errorMsg = "This account has been archived. Please contact administrator.";
                 } else if (data.error.message === "EMAIL_NOT_FOUND" || data.error.message === "INVALID_LOGIN_CREDENTIALS") {
                     errorMsg = "Incorrect email or password";
@@ -1123,6 +1257,7 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
 
 router.get("/customer-list", requireAdmin, async (req, res) => {
     try {
+        await reactivateExpiredCustomerSuspensions();
         const snapshot = await db.collection("users").get();
         const customers = [];
         snapshot.forEach(doc => {
@@ -1148,6 +1283,14 @@ router.post("/customers/:customerId/status", requireAdmin, async (req, res) => {
     if (!["Active", "Suspended", "Banned"].includes(requestedStatus)) {
         return res.status(400).json({ error: "Choose a valid customer status." });
     }
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+    const notifyByEmail = req.body.notifyByEmail === true;
+    if (["Suspended", "Banned"].includes(requestedStatus) && !reason) {
+        return res.status(400).json({ error: "Please provide a reason for this account action." });
+    }
+    if (["Suspended", "Banned"].includes(requestedStatus) && reason.split(/\s+/).filter(Boolean).length > 30) {
+        return res.status(400).json({ error: "The reason must be 30 words or fewer." });
+    }
 
     try {
         const customerRef = db.collection("users").doc(req.params.customerId);
@@ -1160,26 +1303,108 @@ router.post("/customers/:customerId/status", requireAdmin, async (req, res) => {
         const authUid = customer.userId || customerDoc.id;
         const authUser = await getAuth().getUser(authUid);
         const shouldDisable = requestedStatus !== "Active";
-        await getAuth().updateUser(authUid, { disabled: shouldDisable });
+        const suspendedUntil = requestedStatus === "Suspended"
+            ? new Date(Date.now() + CUSTOMER_SUSPENSION_MS)
+            : null;
+        const updates = { status: requestedStatus, updatedAt: FieldValue.serverTimestamp() };
+        if (requestedStatus === "Suspended") {
+            updates.suspensionReason = reason;
+            updates.suspendedAt = FieldValue.serverTimestamp();
+            updates.suspendedUntil = suspendedUntil;
+            updates.banReason = FieldValue.delete();
+            updates.bannedAt = FieldValue.delete();
+        } else if (requestedStatus === "Banned") {
+            updates.banReason = reason;
+            updates.bannedAt = FieldValue.serverTimestamp();
+            updates.suspensionReason = FieldValue.delete();
+            updates.suspendedAt = FieldValue.delete();
+            updates.suspendedUntil = FieldValue.delete();
+        } else {
+            updates.suspensionReason = FieldValue.delete();
+            updates.suspendedAt = FieldValue.delete();
+            updates.suspendedUntil = FieldValue.delete();
+            updates.banReason = FieldValue.delete();
+            updates.bannedAt = FieldValue.delete();
+        }
+
+        // Persist the restriction before disabling/revoking Firebase tokens.
+        // Otherwise a concurrent mobile/web session poll can see a disabled
+        // account with the old Active Firestore status and log out with a
+        // generic session-expired toast before the real status is recorded.
+        await customerRef.update(updates);
         try {
+            await getAuth().updateUser(authUid, { disabled: shouldDisable });
             if (shouldDisable) await getAuth().revokeRefreshTokens(authUid);
-            await customerRef.update({
-                status: requestedStatus,
-                updatedAt: FieldValue.serverTimestamp()
-            });
         } catch (statusError) {
+            const statusFields = ["status", "suspensionReason", "suspendedAt", "suspendedUntil", "banReason", "bannedAt", "updatedAt"];
+            const rollback = {};
+            for (const field of statusFields) {
+                rollback[field] = Object.prototype.hasOwnProperty.call(customer, field)
+                    ? customer[field]
+                    : FieldValue.delete();
+            }
+            await customerRef.update(rollback).catch(rollbackError => {
+                console.error("Could not restore customer status after Firebase update failure:", rollbackError);
+            });
             await getAuth().updateUser(authUid, { disabled: authUser.disabled }).catch(rollbackError => {
                 console.error("Could not restore customer account state after status update failure:", rollbackError);
             });
             throw statusError;
         }
 
-        return res.status(200).json({ success: true, message: `Customer status updated to ${requestedStatus}.` });
+        let message = requestedStatus === "Suspended"
+            ? "Customer suspended for 7 days. The account will reactivate automatically."
+            : requestedStatus === "Banned"
+                ? "Customer banned until an administrator unbans the account."
+                : String(customer.status || "").toLowerCase() === "banned"
+                    ? "Customer unbanned and access restored."
+                    : "Customer reactivated and access restored.";
+        let auditLogged = true;
+        const action = requestedStatus === "Suspended" ? "Suspended"
+            : requestedStatus === "Banned" ? "Banned"
+                : String(customer.status || "").toLowerCase() === "banned" ? "Unbanned" : "Reactivated";
+        try {
+            await db.collection("customerAccountAudit").add({
+                customerId: customerDoc.id,
+                userId: authUid,
+                customerName: customer.fullName || "Customer",
+                email: customer.email || "",
+                action,
+                reason,
+                ...(suspendedUntil ? { suspendedUntil } : {}),
+                performedBy: req.adminUid || "admin",
+                createdAt: FieldValue.serverTimestamp()
+            });
+        } catch (auditError) {
+            auditLogged = false;
+            message += " The account status changed, but the audit record could not be saved.";
+            console.error("Customer status audit record could not be saved:", auditError.message);
+        }
+        let notificationSent = null;
+        if (notifyByEmail && ["Suspended", "Banned"].includes(requestedStatus) && customer.email) {
+            try {
+                await sendCustomerStatusEmail(customer, requestedStatus, reason);
+                notificationSent = true;
+            } catch (mailError) {
+                notificationSent = false;
+                message += " The status changed, but the email notice could not be sent.";
+                console.error("Customer status email could not be sent:", mailError.message);
+            }
+        }
+        return res.status(200).json({ success: true, message, notificationSent, auditLogged });
     } catch (err) {
         if (err.code === "auth/user-not-found") return res.status(404).json({ error: "Customer sign-in account was not found." });
         console.error("Customer status update failed:", err);
         return res.status(500).json({ error: "Could not update this customer account." });
     }
 });
+
+// Run an expiry sweep in the long-lived Express process; listing customers also
+// runs the same sweep so overdue suspensions are corrected on the next admin load.
+const suspensionExpiryTimer = setInterval(() => {
+    void reactivateExpiredCustomerSuspensions();
+}, 60 * 1000);
+suspensionExpiryTimer.unref?.();
+void reactivateExpiredCustomerSuspensions();
 
 module.exports = router;

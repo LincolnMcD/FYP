@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>User Account Detail - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="adminHeader.css">
+  <style>
+    :root { --navy:#082f72; --blue:#0b4fb3; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#717b8e; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:flex; background:var(--page); color:var(--text); font-family:Inter,Arial,sans-serif; }
+    button { font:inherit; }
+    .sidebar { width:260px; background:#fff; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+    .brand { height:105px; display:flex; align-items:center; gap:10px; padding:0 28px; border-bottom:1px solid #edf0f4; }
+    .brand img { width:38px; height:38px; object-fit:contain; }
+    .brand span { color:#10264b; font-size:25px; font-weight:700; letter-spacing:-1px; }
+    .nav-list { list-style:none; padding:22px 16px; margin:0; display:grid; gap:8px; flex:1; align-content:start; }
+    .nav-item { min-height:48px; padding:0 14px; display:flex; align-items:center; gap:12px; border-radius:9px; color:#586579; text-decoration:none; font-size:14px; font-weight:500; }
+    .nav-item svg { width:20px; height:20px; flex:0 0 auto; }
+    .nav-item:hover { background:#f1f4f9; }
+    .nav-item.active { color:#fff; background:var(--navy); }
+    .main { min-width:0; flex:1; display:flex; flex-direction:column; }
+    .content { padding:28px 40px 48px; }
+    .back { display:inline-flex; padding:8px; color:#5d6572; text-decoration:none; margin:0 0 20px -8px; }
+    .back svg { width:20px; height:20px; }
+    .page-title { margin:0 0 6px; color:#161a20; font-size:clamp(26px,2.2vw,36px); line-height:1.2; letter-spacing:-1px; }
+    .customer-id { margin:0 0 24px; color:#5d6472; font-size:16px; }
+    .detail-layout { display:grid; grid-template-columns:minmax(300px,370px) minmax(0,1fr); gap:28px; align-items:start; }
+    .profile-card,.history-card { background:#fff; border:1px solid #cfd4df; border-radius:16px; box-shadow:0 2px 5px #182b4510; overflow:hidden; }
+    .profile-top { position:relative; padding:26px 24px 24px; text-align:center; }
+    .avatar { width:112px; height:112px; margin:4px auto 18px; display:grid; place-items:center; border:5px solid #e9edff; border-radius:50%; background:#eef2ff; color:#315490; font-size:38px; font-weight:700; }
+    .profile-name { margin:0 0 7px; color:#13264a; font-size:23px; line-height:1.2; }
+    .profile-id { margin:0 0 20px; color:#626b7d; font-family:ui-monospace,Consolas,monospace; font-size:15px; }
+    .status { position:absolute; top:18px; right:18px; display:inline-flex; align-items:center; gap:7px; padding:7px 11px; border-radius:18px; font-size:12px; font-weight:700; }
+    .status::before { content:''; width:8px; height:8px; border-radius:50%; background:currentColor; }
+    .status-active { color:#168346; background:#e4f5e9; }
+    .status-suspended { color:#a85710; background:#ffead9; }
+    .status-banned { color:#b4232f; background:#ffe2e2; }
+    .profile-actions { display:flex; justify-content:center; gap:10px; }
+    .profile-actions button { min-height:44px; padding:0 18px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid #c51f25; border-radius:10px; background:#c51f25; color:#fff; font-weight:600; cursor:pointer; }
+    .profile-actions button.outline { background:#fff; color:#c51f25; }
+    .profile-actions button.green { border-color:#16a34a; background:#16a34a; color:#fff; }
+    .profile-actions button.green:hover { background:#15803d; }
+    .profile-actions button:hover { filter:brightness(.96); }
+    .profile-actions button[hidden] { display:none; }
+    .profile-actions svg { width:18px; height:18px; }
+    .profile-section { padding:20px 24px 24px; border-top:1px solid #d8dce5; }
+    .section-title { margin:0 0 16px; color:#555b68; font-size:12px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
+    .info-list { display:grid; gap:16px; margin:0; }
+    .info-item { min-width:0; display:flex; align-items:flex-start; gap:12px; color:#173154; }
+    .info-item svg { width:19px; height:19px; flex:0 0 auto; color:#7a8292; }
+    .info-item dt { display:none; }
+    .info-item dd { min-width:0; margin:0; overflow-wrap:anywhere; font-size:14px; line-height:1.5; }
+    .account-meta { margin-top:20px; padding-top:17px; border-top:1px solid #d8dce5; color:#626b7d; font-size:13px; line-height:1.65; }
+    .account-meta strong { color:#25344f; font-weight:600; }
+    .history-card { min-height:620px; }
+    .detail-tabs { min-height:74px; display:flex; border-bottom:1px solid #cfd4df; overflow-x:auto; }
+    .detail-tab { position:relative; min-width:132px; padding:0 18px; flex:1; border:0; background:#fff; color:#4e5564; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; }
+    .detail-tab:hover { background:#f8f9fc; }
+    .detail-tab.active { color:#0646a5; background:#f5f7ff; font-weight:700; }
+    .detail-tab.active::after { position:absolute; right:0; bottom:0; left:0; height:2px; background:#0646a5; content:''; }
+    .tab-content { min-height:544px; }
+    .loading,.load-error { color:var(--muted); font-size:14px; }
+    .loading { padding:28px 24px; }
+    .load-error { margin:20px 16px; padding:16px; border:1px solid #fecaca; border-radius:10px; background:#fef2f2; color:#b4232f; }
+    .confirm-backdrop[hidden] { display:none !important; }
+    .confirm-backdrop { position:fixed; inset:0; z-index:1100; display:flex; align-items:center; justify-content:center; padding:20px; background:#0f172a99; opacity:0; visibility:hidden; transition:all .2s ease; }
+    .confirm-backdrop.show { opacity:1; visibility:visible; }
+    .confirm-card { width:min(100%,440px); max-height:min(90vh,760px); overflow:auto; border-radius:18px; background:#fff; box-shadow:0 20px 40px #0f172a33; transform:scale(.96); transition:transform .2s ease; }
+    .confirm-backdrop.show .confirm-card { transform:scale(1); }
+    .confirm-head { display:flex; align-items:center; gap:14px; padding:20px 22px 16px; border-bottom:1px solid #e7eaf0; }
+    .confirm-icon { width:38px; height:38px; display:grid; place-items:center; flex:0 0 38px; border-radius:50%; background:#fee2e2; color:#b91c1c; }
+    .confirm-icon.success { background:#dcfce7; color:#15803d; }
+    .confirm-icon svg { width:20px; height:20px; }
+    .confirm-head h2 { margin:0 0 4px; color:#10264b; font-size:16px; }
+    .confirm-head p { margin:0; color:#566174; font-size:12px; }
+    .confirm-body { padding:18px 22px; color:#51596a; font-size:13px; line-height:1.55; }
+    .confirm-person { margin-bottom:12px; padding:12px; border:1px solid #d9def0; border-radius:12px; background:#f1f3ff; color:#10264b; font-weight:700; }
+    .confirm-notice { margin-bottom:16px; padding:9px 11px; border:1px solid #fecaca; border-radius:8px; background:#fef2f2; color:#b91c1c; }
+    .confirm-notice.success { border-color:#bbf7d0; background:#f0fdf4; color:#15803d; }
+    .confirm-reason-label { display:block; margin-top:16px; color:#10264b; font-size:12px; font-weight:600; }
+    .confirm-reason { display:block; width:100%; min-height:80px; margin-top:6px; padding:11px; resize:vertical; border:1px solid #c9cddd; border-radius:12px; background:#fafaff; color:var(--text); font:inherit; font-size:13px; }
+    .confirm-reason-meta { display:flex; justify-content:space-between; gap:12px; margin-top:5px; color:#667085; font-size:11px; font-weight:400; }
+    .confirm-word-count.over-limit { color:#dc2626; font-weight:600; }
+    .confirm-reason:focus { outline:2px solid #c7d2fe; border-color:#5473c4; }
+    .confirm-error { display:none; margin-top:5px; color:#dc2626; font-size:12px; }
+    .confirm-email { display:flex; align-items:flex-start; gap:8px; margin-top:14px; color:#4e5564; }
+    .confirm-email input { margin:3px 0 0; accent-color:#0646a5; }
+    .confirm-notice[hidden],.confirm-reason-label[hidden],.confirm-email[hidden] { display:none !important; }
+    .confirm-actions { display:flex; justify-content:flex-end; gap:10px; padding:12px 22px 18px; border-top:1px solid #e7eaf0; }
+    .confirm-actions button { min-height:40px; padding:0 16px; border:1px solid #d4d9e3; border-radius:22px; background:#fff; color:#344054; font-size:12px; font-weight:600; cursor:pointer; }
+    .confirm-actions .confirm-submit { border-color:#b91c1c; background:#b91c1c; color:#fff; }
+    .confirm-actions .confirm-submit.success { border-color:#16a34a; background:#16a34a; }
+    .confirm-actions .confirm-submit.success:hover { background:#15803d; }
+    .confirm-actions .confirm-submit:disabled { opacity:.6; cursor:wait; }
+    @media(max-width:1100px) { .content{padding:24px 22px 36px}.detail-layout{grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:18px}.detail-tab{min-width:115px;padding:0 12px} }
+    @media(max-width:760px) { body{display:block}.sidebar{width:100%}.brand{height:72px}.nav-list{display:flex;overflow-x:auto;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 14px}.detail-layout{grid-template-columns:1fr}.history-card{min-height:340px}.tab-content{min-height:264px}.detail-tabs{min-height:60px}.detail-tab{min-width:max-content;flex:0 0 auto}.profile-card{max-width:none} }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte"><span>ReByte</span></div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="adminDashboard.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 13h6"></path></svg>Listings</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Finance</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/></svg>Analytics</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"/></svg>Task Assignment</a>
+      <a href="customerManagement.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Customer Management</a>
+      <a href="staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M17 11h6"/></svg>Staff Management</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Communication</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Customer Management"></header>
+    <section class="content">
+      <a class="back" href="customerManagement.html" aria-label="Back to customer management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/><path d="M9 12h12"/></svg></a>
+      <h1 class="page-title">User Account Detail</h1>
+      <p class="customer-id" id="customerIdLabel">Loading account…</p>
+      <div class="detail-layout">
+        <section class="profile-card" aria-label="Customer profile">
+          <div class="profile-top">
+            <span class="status status-active" id="customerStatus">Active</span>
+            <div class="avatar" id="customerAvatar" aria-hidden="true">?</div>
+            <h2 class="profile-name" id="customerName">Loading…</h2>
+            <p class="profile-id" id="customerProfileId"></p>
+            <div class="profile-actions">
+              <button id="suspendButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 9v6m6-6v6"/></svg><span>Suspend</span></button>
+              <button id="banButton" class="outline" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m5 5 14 14"/></svg><span>Ban</span></button>
+              <button id="restoreButton" type="button" hidden>Reactivate</button>
+            </div>
+          </div>
+          <div class="profile-section">
+            <h3 class="section-title">Contact Information</h3>
+            <dl class="info-list">
+              <div class="info-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><dt>Email</dt><dd id="customerEmail">—</dd></div>
+              <div class="info-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.6 3h3l1.5 4.5-2 1.5a15 15 0 0 0 6 6l1.5-2 4.5 1.5v3A2 2 0 0 1 19 19.5 16 16 0 0 1 4.5 5 2 2 0 0 1 6.6 3z"/></svg><dt>Phone</dt><dd id="customerPhone">—</dd></div>
+            </dl>
+            <div class="account-meta" id="accountMeta"></div>
+          </div>
+        </section>
+        <section class="history-card" aria-label="Customer account activity">
+          <div class="detail-tabs" role="tablist" aria-label="Customer details">
+            <button class="detail-tab active" type="button" role="tab" aria-selected="true">Account History</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false">Orders</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false">Rentals</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false">Trade-ins</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false">Complaints</button>
+          </div>
+          <div class="tab-content" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <div class="confirm-backdrop" id="actionModal" hidden>
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalQuestion">
+      <header class="confirm-head"><span class="confirm-icon" id="modalIcon"></span><div><h2 id="modalTitle"></h2><p id="modalQuestion"></p></div></header>
+      <div class="confirm-body">
+        <div class="confirm-person" id="modalCustomer"></div>
+        <div class="confirm-notice" id="modalNotice" hidden></div>
+        <span id="modalDescription"></span>
+        <label class="confirm-reason-label" id="reasonWrap" hidden><span id="reasonLabel"></span><textarea class="confirm-reason" id="actionReason" placeholder="Provide a reason (up to 30 words)..."></textarea><span class="confirm-reason-meta"><span id="reasonHint">Enter up to 30 words.</span><span class="confirm-word-count" id="wordCount">0 / 30 words</span></span><span class="confirm-error" id="reasonError"></span></label>
+        <label class="confirm-email" id="emailWrap" hidden><input type="checkbox" id="notifyEmail" checked><span id="emailText"></span></label>
+      </div>
+      <footer class="confirm-actions"><button id="cancelAction" type="button">Cancel</button><button id="confirmAction" class="confirm-submit" type="button">Confirm</button></footer>
+    </section>
+  </div>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    const adminUser = ReByteAuth.getUser();
+    if (!adminUser || adminUser.role !== 'Admin') window.location.href = '../accountManagementModule/login.html';
+    const customerId = new URLSearchParams(window.location.search).get('customerId');
+    let customer = null;
+    let pendingStatus = '';
+    const tabs = [...document.querySelectorAll('.detail-tab')];
+
+    function displayId(record) {
+      const raw = String(record?.userId || record?.id || customerId || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+      return `USR-${raw.slice(-6) || 'UNKNOWN'}`;
+    }
+    function formatDate(value) {
+      if (!value) return '—';
+      const seconds = value?._seconds ?? value?.seconds;
+      const date = value?.toDate ? value.toDate() : seconds ? new Date(seconds * 1000) : new Date(value);
+      return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-US', { month:'short', day:'2-digit', year:'numeric' });
+    }
+    function remainingSuspension(record) {
+      const until = record?.suspendedUntil;
+      const millis = until?._seconds != null ? until._seconds * 1000
+        : until?.seconds != null ? until.seconds * 1000
+          : until?.toMillis ? until.toMillis()
+            : until ? new Date(until).getTime() : NaN;
+      if (!Number.isFinite(millis)) return 'The automatic reactivation time is unavailable.';
+      const remaining = millis - Date.now();
+      if (remaining <= 0) return 'The 7-day suspension period has ended and the account will reactivate shortly.';
+      const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+      return `This customer will automatically reactivate in ${days} ${days === 1 ? 'day' : 'days'}.`;
+    }
+    function initials(name) {
+      return String(name || 'Customer').trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase() || 'C';
+    }
+    function showToast(message, type = 'error') {
+      ReByteAuth.showToast(message, type);
+    }
+    function renderCustomer() {
+      if (!customer) return;
+      const name = customer.fullName || 'Customer';
+      const id = displayId(customer);
+      const status = String(customer.status || 'Active');
+      document.getElementById('customerIdLabel').textContent = id;
+      document.getElementById('customerProfileId').textContent = `ID: ${id}`;
+      document.getElementById('customerName').textContent = name;
+      document.getElementById('customerAvatar').textContent = initials(name);
+      document.getElementById('customerEmail').textContent = customer.email || '—';
+      document.getElementById('customerPhone').textContent = customer.phoneNumber || '—';
+      const statusNode = document.getElementById('customerStatus');
+      statusNode.textContent = status;
+      statusNode.className = `status status-${status.toLowerCase()}`;
+      document.getElementById('accountMeta').innerHTML = `<strong>Created:</strong> ${formatDate(customer.createdAt)}<br><strong>Sign-in method:</strong> ${String(customer.loginMethod || '—').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}`;
+      const isActive = status.toLowerCase() === 'active';
+      document.getElementById('suspendButton').hidden = !isActive;
+      document.getElementById('banButton').hidden = !isActive;
+      const restoreButton = document.getElementById('restoreButton');
+      restoreButton.hidden = isActive;
+      restoreButton.textContent = status.toLowerCase() === 'banned' ? 'Unban' : 'Reactivate';
+      restoreButton.classList.toggle('green', !isActive);
+    }
+    async function loadCustomer() {
+      if (!customerId) {
+        document.getElementById('customerName').textContent = 'Customer not found';
+        document.getElementById('customerIdLabel').textContent = '';
+        return;
+      }
+      const result = await ReByteAuth.getCustomerList();
+      if (!result.success) {
+        document.getElementById('customerName').textContent = 'Unable to load customer';
+        document.getElementById('customerIdLabel').textContent = '';
+        showToast(result.error || 'Could not load customer information.');
+        return;
+      }
+      customer = (Array.isArray(result.data) ? result.data : []).find(record => String(record.id || record.userId || '') === customerId);
+      if (!customer) {
+        document.getElementById('customerName').textContent = 'Customer not found';
+        document.getElementById('customerIdLabel').textContent = '';
+        return;
+      }
+      renderCustomer();
+    }
+    function openAction(status) {
+      pendingStatus = status;
+      const currentStatus = String(customer.status || 'Active').toLowerCase();
+      const isRestriction = status === 'Suspended' || status === 'Banned';
+      const isBan = status === 'Banned';
+      const isUnban = status === 'Active' && currentStatus === 'banned';
+      const isRestore = status === 'Active' && !isUnban;
+      const isSuccess = isUnban || isRestore;
+      const title = isRestriction ? (isBan ? 'Ban User Account' : 'Suspend User Account') : (isUnban ? 'Unban User Account' : 'Reactivate User Account');
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalQuestion').textContent = isRestriction ? (isBan ? 'Permanent account restriction' : 'Temporary account restriction') : 'Restore customer access';
+      document.getElementById('modalDescription').textContent = isRestriction
+        ? isBan ? 'This customer will lose access until an administrator unbans the account.' : 'This customer will lose access for 7 days. Their account will reactivate automatically when the suspension ends.'
+        : isUnban ? 'This will remove the ban and restore the customer’s access to ReByte.' : 'This will end the suspension and restore the customer’s access to ReByte.';
+      document.getElementById('modalCustomer').textContent = `${customer.fullName || 'Customer'} · ${customer.email || displayId(customer)}`;
+      const icon = document.getElementById('modalIcon');
+      icon.classList.toggle('success', isSuccess);
+      icon.innerHTML = isSuccess
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"></path></svg>'
+        : isBan
+          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="m5 5 14 14"></path></svg>'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9 9v6m6-6v6"></path></svg>';
+      const notice = document.getElementById('modalNotice');
+      notice.hidden = false;
+      notice.classList.toggle('success', isSuccess);
+      notice.textContent = status === 'Suspended' ? 'Active trade-ins will be paused.'
+        : isBan ? 'Account access will remain blocked until an administrator unbans this customer.'
+          : isRestore ? remainingSuspension(customer)
+            : isUnban ? 'The customer will regain access after the ban is removed.' : '';
+      document.getElementById('reasonWrap').hidden = !isRestriction;
+      document.getElementById('emailWrap').hidden = !isRestriction;
+      document.getElementById('reasonLabel').textContent = isBan ? 'Ban Reason *' : 'Suspension Reason *';
+      document.getElementById('actionReason').value = '';
+      document.getElementById('reasonHint').textContent = 'Enter up to 30 words.';
+      document.getElementById('reasonError').style.display = 'none';
+      document.getElementById('reasonError').textContent = '';
+      document.getElementById('wordCount').textContent = '0 / 30 words';
+      document.getElementById('notifyEmail').checked = true;
+      document.getElementById('emailText').textContent = isBan ? 'Send automated ban notice via email.' : 'Send automated suspension notice via email.';
+      document.getElementById('confirmAction').textContent = isRestriction ? (isBan ? 'Confirm Ban' : 'Confirm Suspension') : (isUnban ? 'Unban Customer' : 'Reactivate Customer');
+      document.getElementById('confirmAction').classList.toggle('success', isSuccess);
+      const modal = document.getElementById('actionModal');
+      modal.hidden = false;
+      requestAnimationFrame(() => modal.classList.add('show'));
+    }
+    document.getElementById('actionReason').addEventListener('input', event => {
+      const count = event.target.value.trim() ? event.target.value.trim().split(/\s+/).length : 0;
+      document.getElementById('wordCount').textContent = `${count} / 30 words`;
+      if (count <= 30) document.getElementById('reasonError').style.display = 'none';
+    });
+    document.getElementById('suspendButton').addEventListener('click', () => openAction('Suspended'));
+    document.getElementById('banButton').addEventListener('click', () => openAction('Banned'));
+    document.getElementById('restoreButton').addEventListener('click', () => openAction('Active'));
+    function closeActionModal() {
+      const modal = document.getElementById('actionModal');
+      modal.classList.remove('show');
+      setTimeout(() => { modal.hidden = true; }, 200);
+    }
+    const actionReason = document.getElementById('actionReason');
+    actionReason.addEventListener('beforeinput', event => {
+      if (event.isComposing || event.inputType.startsWith('delete')) return;
+      const insertedText = event.data ?? event.dataTransfer?.getData('text/plain') ?? event.clipboardData?.getData('text/plain') ?? '';
+      const start = actionReason.selectionStart;
+      const end = actionReason.selectionEnd;
+      const proposed = actionReason.value.slice(0, start) + insertedText + actionReason.value.slice(end);
+      if (proposed.trim() && proposed.trim().split(/\s+/).length > 30) event.preventDefault();
+    });
+    document.getElementById('cancelAction').addEventListener('click', closeActionModal);
+    document.getElementById('actionModal').addEventListener('click', event => { if (event.target.id === 'actionModal') closeActionModal(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.getElementById('actionModal').hidden) closeActionModal(); });
+    document.getElementById('confirmAction').addEventListener('click', async event => {
+      if (!customer || !pendingStatus) return;
+      const needsReason = pendingStatus === 'Suspended' || pendingStatus === 'Banned';
+      const reason = document.getElementById('actionReason').value.trim();
+      const count = reason ? reason.split(/\s+/).length : 0;
+      if (needsReason && (!reason || count > 30)) {
+        const error = document.getElementById('reasonError');
+        error.textContent = reason ? 'Reason must be 30 words or fewer.' : 'Please provide a reason before continuing.';
+        error.style.display = 'block';
+        document.getElementById('actionReason').focus();
+        return;
+      }
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const result = await ReByteAuth.setCustomerStatus(String(customer.id || customer.userId), pendingStatus, {
+          reason,
+          notifyByEmail: needsReason && document.getElementById('notifyEmail').checked
+        });
+        if (!result.success) {
+          showToast(result.error || 'Could not update customer status.');
+          return;
+        }
+        closeActionModal();
+        await loadCustomer();
+        showToast(result.message || 'Customer status updated.', 'success');
+      } catch (error) {
+        showToast(error.message || 'Could not update customer status.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(item => {
+        const selected = item === tab;
+        item.classList.toggle('active', selected);
+        item.setAttribute('aria-selected', String(selected));
+      });
+    }));
+    document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));
+    loadCustomer();
+  </script>
+  <script src="adminHeader.js"></script>
+</body>
+</html>

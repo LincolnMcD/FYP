@@ -41,7 +41,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
        });
     }
     if (_isLoggedIn) {
-      _accountSessionTimer = Timer.periodic(const Duration(seconds: 5), (_) => _verifyAccountSession());
+      _accountSessionTimer = Timer.periodic(const Duration(seconds: 1), (_) => _verifyAccountSession());
       Future.delayed(const Duration(seconds: 1), _verifyAccountSession);
     }
   }
@@ -57,14 +57,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       final result = await AuthService.checkAccountSession();
       if (result['expired'] == true) {
-        await _endExpiredAccountSession(archived: result['archived'] == true);
+        await _endExpiredAccountSession(
+          archived: result['archived'] == true,
+          accountStatus: result['status'] as String?,
+        );
       }
     } finally {
       _accountSessionCheckInProgress = false;
     }
   }
 
-  Future<void> _endExpiredAccountSession({bool archived = false}) async {
+  Future<void> _endExpiredAccountSession({bool archived = false, String? accountStatus}) async {
     if (_accountSessionEnding) return;
     _accountSessionEnding = true;
     _accountSessionTimer?.cancel();
@@ -75,9 +78,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       MaterialPageRoute(
         builder: (context) => HomePage(
           isLoggedIn: false,
-          toastMessage: archived
-              ? 'This account has been archived. Please contact administrator.'
-              : 'Session expired. Please log in again.',
+          toastMessage: accountStatus?.toLowerCase() == 'suspended'
+              ? 'Your account is being suspended. Please view the email for more detail.'
+              : accountStatus?.toLowerCase() == 'banned'
+                  ? 'Your account is being banned. Please view the email for more detail.'
+                  : archived
+                      ? 'This account has been archived. Please contact administrator.'
+                      : 'Session expired. Please log in again.',
           toastIsError: true,
         ),
       ),

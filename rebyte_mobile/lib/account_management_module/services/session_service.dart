@@ -8,13 +8,21 @@ class SessionService {
   static const String _keyName = 'session_name';
   static const String _keyRole = 'session_role';
   static const String _keyLoggedIn = 'session_logged_in';
+  static const String _keyToken = 'session_token';
 
-  static Future<void> saveSession({required String email, required String name, String role = 'Customer'}) async {
+  static Future<void> saveSession({required String email, required String name, String role = 'Customer', String? token}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyEmail, email);
     await prefs.setString(_keyName, name);
     await prefs.setString(_keyRole, role);
     await prefs.setBool(_keyLoggedIn, true);
+    if (token != null && token.isNotEmpty) await prefs.setString(_keyToken, token);
+  }
+
+  static Future<void> updateToken(String token) async {
+    if (token.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyToken, token);
   }
 
   static Future<Map<String, String?>> getSession() async {
@@ -25,6 +33,7 @@ class SessionService {
         'email': prefs.getString(_keyEmail),
         'name': prefs.getString(_keyName),
         'role': prefs.getString(_keyRole) ?? 'Customer',
+        'token': prefs.getString(_keyToken),
       };
     }
     return {};

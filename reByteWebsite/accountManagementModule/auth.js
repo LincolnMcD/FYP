@@ -313,12 +313,45 @@ const ReByteAuth = {
             const credential = await firebase.auth().signInWithEmailAndPassword(email, password);
             user.token = await credential.user.getIdToken();
           } catch (authError) {
+            if (String(authError?.code || '').toLowerCase().includes('user-disabled')) {
+              // The account may have been suspended after the backend accepted
+              // the password but before Firebase established the web session.
+              // Recheck the backend for the saved customer status.
+              try {
+                const statusResponse = await fetch(`${API_BASE_URL}/login`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, password, clientType: 'Web' })
+                });
+                const statusData = await statusResponse.json();
+                const accountStatus = String(statusData.status || '').toLowerCase();
+                if (accountStatus === 'suspended' || accountStatus === 'banned') {
+                  return {
+                    success: false,
+                    status: statusData.status,
+                    error: accountStatus === 'suspended'
+                      ? 'Your account is being suspended. Please view the email for more detail.'
+                      : 'Your account is being banned. Please view the email for more detail.'
+                  };
+                }
+              } catch (_) {
+                // Fall back to the existing archived-account message below.
+              }
+              return { success: false, error: 'This account has been archived. Please contact administrator.' };
+            }
             console.warn('Could not initialize Firebase session after login:', authError);
           }
         }
         this.setUser(user);
         return { success: true, message: data.message || 'Login successful!', user, role: user.role };
       } else {
+        const accountStatus = String(data.status || '').toLowerCase();
+        if (accountStatus === 'suspended' || accountStatus === 'banned') {
+          const statusMessage = accountStatus === 'suspended'
+            ? 'Your account is being suspended. Please view the email for more detail.'
+            : 'Your account is being banned. Please view the email for more detail.';
+          return { success: false, error: statusMessage, status: data.status };
+        }
         const error = data.error || 'Login failed';
         const normalizedError = error.toLowerCase();
         if (normalizedError.includes('user_disabled') || normalizedError.includes('user-disabled') ||
@@ -402,6 +435,47 @@ const ReByteAuth = {
     }
   },
 
+  async disabledOAuthLoginMessage(provider, authError) {
+    let email = authError?.email || authError?.customData?.email || authError?.customData?._tokenResponse?.email || '';
+    if (!email && typeof firebase !== 'undefined' && firebase.auth) {
+      try {
+        const providerClass = provider === 'Google'
+          ? firebase.auth.GoogleAuthProvider
+          : firebase.auth.FacebookAuthProvider;
+        const credential = providerClass.credentialFromError(authError);
+        if (credential?.accessToken && provider === 'Google') {
+          const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${credential.accessToken}` }
+          });
+          const profile = await response.json();
+          email = profile.email || '';
+        } else if (credential?.accessToken && provider === 'Facebook') {
+          const response = await fetch(`https://graph.facebook.com/me?fields=email&access_token=${encodeURIComponent(credential.accessToken)}`);
+          const profile = await response.json();
+          email = profile.email || '';
+        }
+      } catch (_) {
+        // Fall back to the generic disabled-account notice if provider data is unavailable.
+      }
+    }
+    if (email) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/account-access-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        const status = String(data.status || '').toLowerCase();
+        if (status === 'suspended') return 'Your account is being suspended. Please view the email for more detail.';
+        if (status === 'banned') return 'Your account is being banned. Please view the email for more detail.';
+      } catch (_) {
+        // Keep the user-facing fallback below if the status lookup is unavailable.
+      }
+    }
+    return 'This account has been archived. Please contact administrator.';
+  },
+
   /**
    * Real Google OAuth Login via Firebase Web Client SDK
    */
@@ -433,6 +507,9 @@ const ReByteAuth = {
       return loginResult;
     } catch (err) {
       console.error('Google Sign In error:', err);
+      if (String(err.code || '').toLowerCase().includes('user-disabled')) {
+        return { success: false, error: await this.disabledOAuthLoginMessage('Google', err) };
+      }
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         return { success: false, error: 'Google sign in was cancelled.' };
       }
@@ -484,6 +561,9 @@ const ReByteAuth = {
       return loginResult;
     } catch (err) {
       console.error('Facebook Sign In error:', err);
+      if (String(err.code || '').toLowerCase().includes('user-disabled')) {
+        return { success: false, error: await this.disabledOAuthLoginMessage('Facebook', err) };
+      }
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         return { success: false, error: 'Facebook sign in was cancelled.' };
       }
@@ -772,14 +852,18 @@ const ReByteAuth = {
     }
   },
 
-  async setCustomerStatus(customerId, status) {
+  async setCustomerStatus(customerId, status, options = {}) {
     const user = this.getUser();
     if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
       const response = await fetch(`${API_BASE_URL}/customers/${encodeURIComponent(customerId)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({
+          status,
+          reason: options.reason || '',
+          notifyByEmail: options.notifyByEmail === true
+        })
       });
       const data = await response.json();
       return response.ok ? { success: true, message: data.message || 'Customer status updated.' } : { success: false, error: data.error || 'Could not update this customer.' };
@@ -828,8 +912,15 @@ const ReByteAuth = {
       if (typeof firebase !== 'undefined' && firebase.auth) {
         const currentUser = firebase.auth().currentUser;
         if (currentUser && currentUser.email?.toLowerCase() === user.email?.toLowerCase()) {
-          token = await currentUser.getIdToken();
-          if (token !== user.token) this.setUser({ ...user, token });
+          try {
+            token = await currentUser.getIdToken();
+            if (token !== user.token) this.setUser({ ...user, token });
+          } catch (tokenError) {
+            // A disabled customer cannot refresh its Firebase token. Use the
+            // session's cached token so the server can return Suspended/Banned.
+            if (tokenError?.code !== 'auth/user-disabled' || !user.token) throw tokenError;
+            token = user.token;
+          }
         }
       }
       if (!token) return { success: false, expired: true, error: 'Session expired. Please log in again.' };
@@ -840,36 +931,43 @@ const ReByteAuth = {
       const data = await response.json();
       return response.ok
         ? { success: true }
-        : { success: false, expired: data.expired === true || response.status === 401 || response.status === 403, archived: data.archived === true, error: data.error || 'Session expired. Please log in again.' };
+        : { success: false, expired: data.expired === true || response.status === 401 || response.status === 403, archived: data.archived === true, status: data.status || null, error: data.error || 'Session expired. Please log in again.' };
     } catch (err) {
       if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
       if (err?.code?.startsWith('auth/')) {
-        const archived = err.code === 'auth/user-disabled';
         return {
           success: false,
           expired: true,
-          archived,
-          error: archived ? 'This account has been archived. Please contact administrator.' : 'Session expired. Please log in again.'
+          error: 'Session expired. Please log in again.'
         };
       }
       return { success: false, transient: true, error: 'Could not verify account session.' };
     }
   },
 
-  forceSessionLogout(archived = false) {
+  forceSessionLogout(archived = false, accountStatus = null) {
     localStorage.removeItem(this.SESSION_KEY);
     if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut().catch(() => {});
+    const accountStatusKey = String(accountStatus || '').toLowerCase();
+    const accountStatusMessage = accountStatusKey === 'suspended'
+      ? 'Your account is being suspended. Please view the email for more detail.'
+      : accountStatusKey === 'banned'
+        ? 'Your account is being banned. Please view the email for more detail.'
+        : null;
     const isLoginPage = window.location.pathname.toLowerCase().endsWith('/login.html');
     if (isLoginPage) {
-      this.showToast(archived
+      this.showToast(accountStatusMessage || (archived
         ? 'This account has been archived. Please contact administrator.'
-        : 'Session expired. Please log in again.', 'error');
+        : 'Session expired. Please log in again.'), 'error');
       return;
     }
     const loginPath = window.location.pathname.toLowerCase().includes('/staffmodule/')
       ? '../accountManagementModule/login.html'
       : 'login.html';
-    window.location.replace(`${loginPath}?${archived ? 'archived=1' : 'sessionExpired=1'}`);
+    const reason = accountStatusKey === 'suspended' || accountStatusKey === 'banned'
+      ? `accountStatus=${accountStatusKey}`
+      : archived ? 'archived=1' : 'sessionExpired=1';
+    window.location.replace(`${loginPath}?${reason}`);
   }
 };
 
@@ -878,7 +976,16 @@ document.addEventListener('DOMContentLoaded', () => {
   ReByteAuth.initHeader();
   ReByteAuth.initFirebase();
   const params = new URLSearchParams(window.location.search);
-  if (params.get('sessionExpired') === '1') {
+  if (['suspended', 'banned'].includes((params.get('accountStatus') || '').toLowerCase())) {
+    const status = params.get('accountStatus').toLowerCase();
+    params.delete('accountStatus');
+    const query = params.toString();
+    history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    const message = status === 'suspended'
+      ? 'Your account is being suspended. Please view the email for more detail.'
+      : 'Your account is being banned. Please view the email for more detail.';
+    setTimeout(() => ReByteAuth.showToast(message, 'error'), 100);
+  } else if (params.get('sessionExpired') === '1') {
     params.delete('sessionExpired');
     const query = params.toString();
     history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
@@ -902,14 +1009,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else {
         const result = await ReByteAuth.checkAccountSession();
-        if (result.expired) ReByteAuth.forceSessionLogout(result.archived === true);
+        if (result.expired) ReByteAuth.forceSessionLogout(result.archived === true, result.status);
       }
     } finally {
       accountSessionCheckInProgress = false;
     }
   };
   setTimeout(checkActiveSession, 1000);
-  window.setInterval(checkActiveSession, 2000);
+  window.setInterval(checkActiveSession, 1000);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkActiveSession();
   });
