@@ -45,6 +45,9 @@
     th:nth-child(4),td:nth-child(4) { width:180px; }
     th:nth-child(5),td:nth-child(5) { width:155px; }
     th:nth-child(6),td:nth-child(6) { width:125px; padding-left:4px; padding-right:10px; text-align:left; }
+    .sort-button { display:inline-flex; align-items:center; gap:6px; padding:8px 0; border:0; background:transparent; color:inherit; font:inherit; letter-spacing:inherit; cursor:pointer; }
+    .sort-arrow { color:#8a93a3; font-size:14px; line-height:1; }
+    .sort-arrow.active { color:#0646a5; }
     td { height:76px; padding:0 20px; color:#6b7180; font-size:14px; border-bottom:1px solid #e9ebf0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     tbody tr:last-child td { border-bottom:0; }
     tbody tr[data-customer-id] { cursor:pointer; }
@@ -135,7 +138,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>USER ID</th><th>NAME</th><th>EMAIL</th><th>STATUS</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
+            <thead><tr><th data-sort-column="id" aria-sort="ascending"><button class="sort-button" type="button" data-sort="id">USER ID <span class="sort-arrow active" aria-hidden="true">↑</span></button></th><th data-sort-column="name" aria-sort="none"><button class="sort-button" type="button" data-sort="name">NAME <span class="sort-arrow" aria-hidden="true">↕</span></button></th><th>EMAIL</th><th>STATUS</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
             <tbody id="customerRows"></tbody>
           </table>
           <div class="empty" id="emptyState">No customers found.</div>
@@ -166,10 +169,13 @@
     const customerPagination = document.getElementById('customerPagination');
     const customerConfirmModal = document.getElementById('customerConfirmModal');
     const confirmCustomerActionButton = document.getElementById('confirmCustomerAction');
+    const sortButtons = [...document.querySelectorAll('.sort-button[data-sort]')];
     const PAGE_SIZE = 5;
     let customers = [];
     let activeFilter = 'all';
     let currentPage = 1;
+    let sortKey = 'id';
+    let sortDirection = 'asc';
     let pendingCustomer = null;
     let pendingStatus = '';
 
@@ -242,6 +248,11 @@
         const matchesStatus = activeFilter === 'all' || status === activeFilter;
         const searchable = `${customerDisplayId(customer)} ${customer.userId || ''} ${customer.id || ''} ${customer.fullName || ''} ${customer.email || ''}`.toLowerCase();
         return matchesStatus && searchable.includes(query);
+      }).sort((a, b) => {
+        const valueA = sortKey === 'id' ? customerDisplayId(a) : String(a.fullName || 'Customer');
+        const valueB = sortKey === 'id' ? customerDisplayId(b) : String(b.fullName || 'Customer');
+        const comparison = valueA.localeCompare(valueB, undefined, { numeric:true, sensitivity:'base' });
+        return sortDirection === 'asc' ? comparison : -comparison;
       });
     }
 
@@ -374,6 +385,24 @@
       renderCustomers();
     }));
     customerSearch.addEventListener('input', () => { currentPage = 1; renderCustomers(); });
+    sortButtons.forEach(button => button.addEventListener('click', () => {
+      if (sortKey === button.dataset.sort) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortKey = button.dataset.sort;
+        sortDirection = 'asc';
+      }
+      currentPage = 1;
+      sortButtons.forEach(sortButton => {
+        const active = sortButton.dataset.sort === sortKey;
+        const column = sortButton.closest('th');
+        const arrow = sortButton.querySelector('.sort-arrow');
+        column.setAttribute('aria-sort', active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+        arrow.textContent = active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
+        arrow.classList.toggle('active', active);
+      });
+      renderCustomers();
+    }));
     customerPagination.addEventListener('click', event => {
       const button = event.target.closest('button[data-page]');
       if (!button || button.disabled) return;
