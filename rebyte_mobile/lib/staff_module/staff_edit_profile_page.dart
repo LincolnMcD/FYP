@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../account_management_module/services/auth_service.dart';
 import '../account_management_module/services/session_service.dart';
+import '../device_tradein_module/data/phone_brands_data.dart';
 
 class StaffEditProfilePage extends StatefulWidget {
   final String email;
@@ -13,7 +14,7 @@ class StaffEditProfilePage extends StatefulWidget {
 
 class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
   static const _blue = Color(0xFF0C5AD2);
-  static const _brands = ['Apple', 'Samsung', 'Xiaomi', 'Huawei', 'Oppo', 'Vivo', 'Google Pixel', 'OnePlus'];
+  static const _brands = PhoneBrandsData.wellKnownPhoneBrands;
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _currentPasswordController = TextEditingController();
@@ -70,7 +71,12 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
           : data['specialization'] is String && (data['specialization'] as String).isNotEmpty
               ? [data['specialization'] as String]
               : <String>[];
-      _specializations = savedSpecializations.where(_brands.contains).take(3).toList();
+      final normalizedSpecializations = savedSpecializations.map((s) {
+        if (s == 'Apple') return 'Apple (iPhone)';
+        if (s == 'Google Pixel') return 'Google (Pixel)';
+        return s;
+      }).toList();
+      _specializations = normalizedSpecializations.where(_brands.contains).take(3).toList();
       _nameController.text = (data['fullName'] ?? '').toString();
       _phoneController.text = phone;
       _initial = _currentValues();

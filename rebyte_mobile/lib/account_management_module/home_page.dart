@@ -4,6 +4,7 @@ import 'welcome_page.dart';
 import 'profile_page.dart';
 import 'services/auth_service.dart';
 import 'services/session_service.dart';
+import '../device_tradein_module/trade_in_landing_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -11,14 +12,23 @@ class HomePage extends StatefulWidget {
   final String? name;
   final String? toastMessage;
   final bool toastIsError;
-  const HomePage({super.key, this.isLoggedIn = false, this.email, this.name, this.toastMessage, this.toastIsError = false});
+  final int initialIndex;
+  const HomePage({
+    super.key,
+    this.isLoggedIn = false,
+    this.email,
+    this.name,
+    this.toastMessage,
+    this.toastIsError = false,
+    this.initialIndex = 0,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  int _selectedIndex = 0;
+  late int _selectedIndex = widget.initialIndex;
   late bool _isLoggedIn = widget.isLoggedIn;
   late String? _email = widget.email;
   late String? _name = widget.name;
@@ -122,6 +132,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
+  void _navigateOrRequireLogin(int targetIndex) {
+    if (!_isLoggedIn) {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+      return;
+    }
+    setState(() => _selectedIndex = targetIndex);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,7 +185,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
               const Center(child: Text('Shop Page - Under Construction')),
-              const Center(child: Text('Trade-In Page - Under Construction')),
+              TradeInLandingPage(
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+                isEmbedded: true,
+                onBackToHome: () => setState(() => _selectedIndex = 0),
+              ),
               const Center(child: Text('Rentals - Under Construction')),
               ProfilePage(
                 name: _name, 
@@ -236,17 +260,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   }),
                   _buildDrawerItem(Icons.store_outlined, 'Shop', isSelected: _selectedIndex == 1, onTap: () {
                     Navigator.pop(context);
-                    setState(() => _selectedIndex = 1);
+                    _navigateOrRequireLogin(1);
                   }),
                     _buildDrawerItem(Icons.autorenew, 'Trade-In', isSelected: _selectedIndex == 2, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 2);
+                      _navigateOrRequireLogin(2);
                     }),
                     _buildDrawerItem(Icons.calendar_month_outlined, 'Rentals', isSelected: _selectedIndex == 3, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 3);
+                      _navigateOrRequireLogin(3);
                     }),
-                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices'),
+                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices', onTap: () {
+                    Navigator.pop(context);
+                    _navigateOrRequireLogin(1);
+                  }),
                   if (_isLoggedIn) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
@@ -557,7 +584,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () => _navigateOrRequireLogin(2),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF0C5AD2),
@@ -629,18 +656,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         spacing: 16,
         runSpacing: 16,
         children: [
-          _buildActionItem('Shop\nSmartphones', Icons.shopping_bag_outlined, const Color(0xFFE0E7FF), itemWidth),
-          _buildActionItem('Trade-In\nPhone', Icons.autorenew, const Color(0xFFFFF7ED), itemWidth),
-          _buildActionItem('Rent\nSmartphone', Icons.calendar_month_outlined, const Color(0xFFE0E7FF), itemWidth),
-          _buildActionItem('Pay Rental', Icons.receipt_long_outlined, const Color(0xFFE0E7FF), itemWidth),
-          _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth),
+          _buildActionItem('Shop\nSmartphones', Icons.shopping_bag_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
+          _buildActionItem('Trade-In\nPhone', Icons.autorenew, const Color(0xFFFFF7ED), itemWidth, onTap: () => _navigateOrRequireLogin(2)),
+          _buildActionItem('Rent\nSmartphone', Icons.calendar_month_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
+          _buildActionItem('Pay Rental', Icons.receipt_long_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
+          _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
         ],
       );
     });
   }
 
-  Widget _buildActionItem(String text, IconData icon, Color bgColor, double width) {
-    return Container(
+  Widget _buildActionItem(String text, IconData icon, Color bgColor, double width, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       width: width,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
@@ -677,7 +706,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ],
       ),
-    );
+    ),);
   }
 
   Widget _buildActiveActivity() {
@@ -691,7 +720,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildTradeInActivityCard() {
-    return Container(
+    return GestureDetector(
+      onTap: () => _navigateOrRequireLogin(2),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -749,7 +780,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _buildTradeInTimeline(),
         ],
       ),
-    );
+    ),);
   }
 
   Widget _buildTradeInTimeline() {
@@ -875,7 +906,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Row(
                 children: [
                   OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () => _navigateOrRequireLogin(3),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       minimumSize: Size.zero,
@@ -886,7 +917,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () => _navigateOrRequireLogin(3),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       minimumSize: Size.zero,
@@ -1123,7 +1154,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return BottomNavigationBar(
       currentIndex: _selectedIndex,
       onTap: (index) {
-        if (index == 4 && !_isLoggedIn) {
+        if (index != 0 && !_isLoggedIn) {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
           return;
         }

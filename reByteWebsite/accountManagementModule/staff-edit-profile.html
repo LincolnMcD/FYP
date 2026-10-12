@@ -106,7 +106,11 @@
         requirementsToggle.setAttribute('aria-expanded', 'false');
       }
     });
-    const brands = ['Apple','Samsung','Xiaomi','Huawei','Oppo','Vivo','Google Pixel','OnePlus'];
+    const brands = [
+      'Apple (iPhone)', 'Samsung', 'Xiaomi', 'POCO', 'Oppo', 'Vivo',
+      'Honor', 'Realme', 'Huawei', 'ZTE', 'OnePlus', 'Infinix',
+      'ASUS', 'Google (Pixel)', 'Sony', 'Nothing'
+    ];
     const fields = ['editName','editPhone','editPosition'];
     const editName = document.getElementById('editName');
     const editPhone = document.getElementById('editPhone');
@@ -178,7 +182,11 @@
         editName.value = profile.fullName || sessionUser.name || '';
         editPhone.value = String(profile.phoneNumber || '').replace(/^\+60/, '').replace(/\D/g, '');
         editPosition.value = ['Inspector','Deliverer','Both'].includes(profile.position) ? profile.position : 'Inspector';
-        const savedBrands = Array.isArray(profile.specialization) ? profile.specialization : profile.specialization ? [profile.specialization] : [];
+        const savedBrands = (Array.isArray(profile.specialization) ? profile.specialization : profile.specialization ? [profile.specialization] : []).map(b => {
+          if (b === 'Apple') return 'Apple (iPhone)';
+          if (b === 'Google Pixel') return 'Google (Pixel)';
+          return b;
+        });
         selectedBrands = savedBrands.filter(brand => brands.includes(brand)).slice(0,3);
         initial = { fullName:editName.value.trim(), phone:editPhone.value.trim(), position:editPosition.value, specialization:[...selectedBrands] };
         renderBrands(); refreshForm();
