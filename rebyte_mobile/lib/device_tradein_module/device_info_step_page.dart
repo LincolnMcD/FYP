@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'data/phone_brands_data.dart';
 import 'services/trade_in_service.dart';
+import 'services/trade_in_flow_session.dart';
 import 'models/device_model.dart';
 import 'widgets/searchable_selection_sheet.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
@@ -28,20 +29,46 @@ class DeviceInfoStepPage extends StatefulWidget {
 class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
   String? _selectedBrand;
   String? _selectedModel;
+  String? _selectedModelCode;
   String? _selectedStorage; // No default selection
   String? _selectedColour;
   Color? _selectedColourSwatch;
   final TextEditingController _deviceAgeController = TextEditingController();
+  final FocusNode _deviceAgeFocusNode = FocusNode();
 
   List<String> _loadedBrands = List.from(PhoneBrandsData.wellKnownPhoneBrands);
   final Map<String, List<String>> _loadedModels = {};
-
-  String? _validationError;
 
   @override
   void initState() {
     super.initState();
     _deviceAgeController.addListener(_onFieldChanged);
+
+    // If user navigated back from Page 3/4 or resumed a pending session, populate values!
+    final activeDevice = TradeInFlowSession.currentDevice;
+    if (activeDevice != null) {
+      _selectedBrand = activeDevice.brand.isNotEmpty ? activeDevice.brand : null;
+      _selectedModel = activeDevice.model.isNotEmpty ? activeDevice.model : null;
+      _selectedModelCode = activeDevice.modelCode;
+      _selectedStorage = activeDevice.storageCapacity.isNotEmpty ? activeDevice.storageCapacity : null;
+      _selectedColour = activeDevice.colour.isNotEmpty ? activeDevice.colour : null;
+      if (_selectedColour != null) {
+        for (var c in PhoneBrandsData.popularColors) {
+          if (c.name.toLowerCase() == _selectedColour!.toLowerCase()) {
+            _selectedColourSwatch = c.color;
+            break;
+          }
+        }
+      }
+      if (activeDevice.deviceAge != null && activeDevice.deviceAge!.isNotEmpty) {
+        final digits = activeDevice.deviceAge!.replaceAll(RegExp(r'\D'), '');
+        _deviceAgeController.text = digits.isNotEmpty ? digits : '0';
+      }
+      if (_selectedBrand != null) {
+        _preloadModelsForBrand(_selectedBrand!);
+      }
+    }
+
     _fetchBrandsFromLibrary();
   }
 
@@ -72,6 +99,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
   void dispose() {
     _deviceAgeController.removeListener(_onFieldChanged);
     _deviceAgeController.dispose();
+    _deviceAgeFocusNode.dispose();
     super.dispose();
   }
 
@@ -81,6 +109,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
       title: 'Select Brand',
       searchHint: 'Search mobile brand...',
       items: _loadedBrands,
+      allowCustomWriteIn: false,
       asyncItemsLoader: _loadedBrands.isEmpty
           ? () async {
               final brands = await TradeInService.getBrands();
@@ -96,11 +125,12 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
         _selectedBrand = chosenBrand;
         if (chosenBrand == 'Other') {
           _selectedModel = 'Other';
+          _selectedModelCode = 'OTHER';
         } else {
           _selectedModel = null;
+          _selectedModelCode = null;
           _preloadModelsForBrand(chosenBrand);
         }
-        _validationError = null;
       });
     }
   }
@@ -152,7 +182,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
     if (chosenModel != null) {
       setState(() {
         _selectedModel = chosenModel;
-        _validationError = null;
+        _selectedModelCode = TradeInService.getModelCode(_selectedBrand!, chosenModel);
       });
     }
   }
@@ -172,86 +202,34 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
       items: colorNames,
       selectedItem: _selectedColour,
       itemColors: colorMap,
+      allowCustomWriteIn: false,
     );
 
     if (chosenColour != null) {
       setState(() {
         _selectedColour = chosenColour;
         _selectedColourSwatch = colorMap[chosenColour] ?? const Color(0xFF64748B);
-        _validationError = null;
       });
     }
   }
 
   bool _isSubmitting = false;
 
-  void _showValidationToast(String message) {
-    setState(() => _validationError = message);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFFDC2626),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
   void _onContinue() async {
     if (_isSubmitting) return;
-
-    if (_selectedBrand == null) {
-      _showValidationToast('Please select a mobile brand.');
-      return;
-    }
-    if (_selectedModel == null) {
-      _showValidationToast('Please select a device model.');
-      return;
-    }
-    if (_selectedStorage == null) {
-      _showValidationToast('Please select a storage capacity.');
-      return;
-    }
-    if (_selectedColour == null) {
-      _showValidationToast('Please select a device colour.');
-      return;
-    }
-    if (_deviceAgeController.text.trim().isEmpty) {
-      _showValidationToast('Please enter the device age.');
-      return;
-    }
 
     final rawAgeText = _deviceAgeController.text.trim();
     final int? ageNum = int.tryParse(rawAgeText);
 
-    if (ageNum == null) {
-      _showValidationToast('Please enter a valid number for device age.');
-      return;
-    }
+    if (ageNum == null) return;
 
     // Limit device age from 0 to 10 years
     if (ageNum > 10) {
-      setState(() => _validationError = 'The device is old, unable to trade in.');
       _showOldDeviceDialog();
       return;
     }
 
     setState(() {
-      _validationError = null;
       _isSubmitting = true;
     });
 
@@ -266,11 +244,17 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
       }
     } catch (_) {}
 
+    // Reuse existing deviceID from active session if present so we update the same device
+    final String devId = TradeInFlowSession.currentDeviceId ??
+        TradeInFlowSession.currentDevice?.deviceID ??
+        'DEV-${DateTime.now().millisecondsSinceEpoch}';
+
     final deviceToPass = DeviceModel(
-      deviceID: 'DEV-${DateTime.now().millisecondsSinceEpoch}',
+      deviceID: devId,
       deviceCategory: 'smartphone',
       brand: _selectedBrand!,
       model: _selectedModel!,
+      modelCode: _selectedModelCode,
       storageCapacity: _selectedStorage!,
       colour: _selectedColour!,
       status: 'pending',
@@ -278,16 +262,8 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
       userEmail: currentUserEmail,
     );
 
-    // Call backend asynchronously to create new record with status pending without blocking UI navigation
-    TradeInService.createDeviceRecord(
-      brand: _selectedBrand!,
-      model: _selectedModel!,
-      storageCapacity: _selectedStorage!,
-      colour: _selectedColour!,
-      deviceAge: formattedAge,
-      deviceCategory: 'smartphone',
-      userEmail: currentUserEmail,
-    ).catchError((_) => {'success': false});
+    // Save into active session
+    TradeInFlowSession.setCurrentDevice(deviceToPass);
 
     if (!mounted) return;
     setState(() => _isSubmitting = false);
@@ -393,11 +369,15 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
         selectedIndex: 2,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
             // Top back button row
             Align(
               alignment: Alignment.centerLeft,
@@ -454,31 +434,6 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Validation message banner
-                  if (_validationError != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _validationError!,
-                              style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
                   // Brand Field
                   _buildFieldLabel('Brand'),
                   const SizedBox(height: 8),
@@ -502,6 +457,44 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
                     isSelected: _selectedModel != null,
                     isEnabled: isModelEnabled,
                     onTap: isModelEnabled ? _onModelTapped : () {},
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Eligibility Notice Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.only(top: 1.5),
+                          child: Icon(
+                            Icons.info_outline_rounded,
+                            size: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Only listed brands and models are eligible for trade-in on this platform.',
+                            textAlign: TextAlign.justify,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -545,6 +538,8 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
                     ),
                     child: TextField(
                       controller: _deviceAgeController,
+                      focusNode: _deviceAgeFocusNode,
+                      autofocus: false,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
@@ -585,9 +580,9 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _onContinue,
+                      onPressed: (isFormComplete && !_isSubmitting) ? _onContinue : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isFormComplete ? const Color(0xFF0C5AD2) : const Color(0xFF94A3B8),
+                        backgroundColor: const Color(0xFF0C5AD2),
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: const Color(0xFFE2E8F0),
                         disabledForegroundColor: const Color(0xFF94A3B8),
@@ -600,7 +595,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Row(
+                          : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
@@ -608,14 +603,14 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                                    color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
                                   ),
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Icon(
                                   Icons.arrow_forward_rounded,
                                   size: 16,
-                                  color: Colors.white,
+                                  color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
                                 ),
                               ],
                             ),
@@ -671,6 +666,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
           ],
         ),
       ),
+    ),
     ),
     bottomNavigationBar: const ReByteBottomNavBar(
       selectedIndex: 2,

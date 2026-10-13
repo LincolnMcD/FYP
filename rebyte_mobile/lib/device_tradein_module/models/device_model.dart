@@ -3,6 +3,7 @@ class DeviceModel {
   final String deviceCategory;
   final String brand;
   final String model;
+  final String? modelCode;
   final String storageCapacity;
   final String colour;
   final String? imeiNum;
@@ -16,6 +17,7 @@ class DeviceModel {
     this.deviceCategory = 'smartphone',
     required this.brand,
     required this.model,
+    this.modelCode,
     required this.storageCapacity,
     required this.colour,
     this.imeiNum,
@@ -31,6 +33,7 @@ class DeviceModel {
       'deviceCategory': deviceCategory,
       'brand': brand,
       'model': model,
+      'modelCode': modelCode,
       'storageCapacity': storageCapacity,
       'colour': colour,
       'imeiNum': imeiNum,
@@ -47,6 +50,9 @@ class DeviceModel {
       deviceCategory: json['deviceCategory'] ?? 'smartphone',
       brand: json['brand'] ?? '',
       model: json['model'] ?? '',
+      modelCode: json['modelCode'] is List
+          ? (json['modelCode'] as List).join(', ')
+          : json['modelCode']?.toString(),
       storageCapacity: json['storageCapacity'] ?? '',
       colour: json['colour'] ?? json['color'] ?? '',
       imeiNum: json['imeiNum'] ?? json['imei'],
@@ -62,6 +68,7 @@ class DeviceModel {
     String? deviceCategory,
     String? brand,
     String? model,
+    String? modelCode,
     String? storageCapacity,
     String? colour,
     String? imeiNum,
@@ -75,6 +82,7 @@ class DeviceModel {
       deviceCategory: deviceCategory ?? this.deviceCategory,
       brand: brand ?? this.brand,
       model: model ?? this.model,
+      modelCode: modelCode ?? this.modelCode,
       storageCapacity: storageCapacity ?? this.storageCapacity,
       colour: colour ?? this.colour,
       imeiNum: imeiNum ?? this.imeiNum,

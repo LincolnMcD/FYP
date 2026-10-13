@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../account_management_module/home_page.dart';
 import '../../account_management_module/welcome_page.dart';
 import '../../account_management_module/services/session_service.dart';
+import '../services/trade_in_flow_session.dart';
 
 class TradeInBottomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -27,6 +28,9 @@ class TradeInBottomNavBar extends StatelessWidget {
     final String? name = session['name'];
 
     if (!context.mounted) return;
+
+    // Leaving trade-in flow
+    TradeInFlowSession.clear();
 
     if (index == 0) {
       // Navigate to Home

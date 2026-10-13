@@ -2,6 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'models/device_model.dart';
+import 'services/trade_in_service.dart';
+import 'services/trade_in_flow_session.dart';
+import 'imei_validation_step_page.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../widgets/rebyte_app_bar.dart';
 
@@ -10,6 +13,7 @@ enum ImageSlotStatus {
   uploading,
   success,
   error,
+  notPhoneDetected,
 }
 
 class ImageSlotItem {
@@ -70,6 +74,24 @@ class ImageSlotItem {
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
+
+  /// Returns a clean empty slot item with all image paths, files, and errors cleared
+  ImageSlotItem reset() {
+    return ImageSlotItem(
+      keyName: keyName,
+      label: label,
+      isOptional: isOptional,
+      hasInfo: hasInfo,
+      infoTitle: infoTitle,
+      infoMessage: infoMessage,
+      status: ImageSlotStatus.empty,
+      localFilePath: null,
+      previewBase64: null,
+      fileName: null,
+      uploadProgress: 0.0,
+      errorMessage: null,
+    );
+  }
 }
 
 class UploadDeviceImagesPage extends StatefulWidget {
@@ -92,61 +114,95 @@ class UploadDeviceImagesPage extends StatefulWidget {
 
 class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   late List<ImageSlotItem> _slots;
-  bool _isProceeding = false;
 
+  // Track upload generation tokens per slot to cancel processing if navigated away
+  final Map<int, int> _slotTokens = {};
+
+  void _cancelAndEmptyUploadingSlots() {
+    bool changed = false;
+    for (int i = 0; i < _slots.length; i++) {
+      if (_slots[i].status == ImageSlotStatus.uploading) {
+        // Invalidate generation token
+        _slotTokens[i] = (_slotTokens[i] ?? 0) + 1;
+        _slots[i] = _slots[i].reset();
+        changed = true;
+      }
+    }
+    if (changed) {
+      TradeInFlowSession.saveSlots(_slots);
+    }
+  }
+
+  @override
+  void dispose() {
+    _cancelAndEmptyUploadingSlots();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
-    _slots = [
-      const ImageSlotItem(
-        keyName: 'front',
-        label: 'Front',
-      ),
-      const ImageSlotItem(
-        keyName: 'back',
-        label: 'Back',
-      ),
-      const ImageSlotItem(
-        keyName: 'left_side',
-        label: 'Left Side',
-      ),
-      const ImageSlotItem(
-        keyName: 'right_side',
-        label: 'Right Side',
-      ),
-      const ImageSlotItem(
-        keyName: 'screen_open',
-        label: 'Screen (Open)',
-        hasInfo: true,
-        infoTitle: 'Screen (Display On)',
-        infoMessage:
-            'Please turn the display ON to show that the screen functions properly without dead pixels, tinting, or screen burn-in.',
-      ),
-      const ImageSlotItem(
-        keyName: 'screen_closed',
-        label: 'Screen (Closed)',
-        hasInfo: true,
-        infoTitle: 'Screen (Display Off)',
-        infoMessage:
-            'Please turn the display OFF (black screen) under good lighting to inspect for any surface hairline scratches, cracks, or chips on the glass.',
-      ),
-      const ImageSlotItem(
-        keyName: 'camera_area',
-        label: 'Camera Area',
-      ),
-      const ImageSlotItem(
-        keyName: 'any_angles',
-        label: 'Any Angles',
-        isOptional: true,
-      ),
-    ];
+    // If returning from Page 4 to Page 3, restore existing uploaded image slots
+    if (TradeInFlowSession.savedSlots != null &&
+        TradeInFlowSession.savedSlots!.isNotEmpty) {
+      _slots = TradeInFlowSession.savedSlots!.map((slot) {
+        // Sanitize: If a slot was left in 'uploading' when leaving the screen, reset it to empty
+        if (slot.status == ImageSlotStatus.uploading) {
+          return slot.reset();
+        }
+        return slot;
+      }).toList();
+    } else {
+      _slots = [
+        const ImageSlotItem(
+          keyName: 'front_screen_closed',
+          label: 'Front (Screen Closed)',
+          hasInfo: true,
+          infoTitle: 'Front (Screen Closed)',
+          infoMessage:
+              'Please turn the display OFF (black screen) under good lighting to inspect for any surface hairline scratches, cracks, or chips on the glass.',
+        ),
+        const ImageSlotItem(
+          keyName: 'front_screen_open',
+          label: 'Front (Screen Open)',
+          hasInfo: true,
+          infoTitle: 'Front (Screen Open)',
+          infoMessage:
+              'Please turn the display ON to show that the screen functions properly without dead pixels, tinting, or screen burn-in.',
+        ),
+        const ImageSlotItem(
+          keyName: 'back',
+          label: 'Back',
+        ),
+        const ImageSlotItem(
+          keyName: 'frame_right',
+          label: 'Frame (right)',
+        ),
+        const ImageSlotItem(
+          keyName: 'frame_top',
+          label: 'Frame (top)',
+        ),
+        const ImageSlotItem(
+          keyName: 'frame_bottom',
+          label: 'Frame (bottom)',
+        ),
+        const ImageSlotItem(
+          keyName: 'camera_area',
+          label: 'Camera area',
+        ),
+        const ImageSlotItem(
+          keyName: 'any_angles',
+          label: 'Any angles',
+          isOptional: true,
+        ),
+      ];
+    }
   }
 
   void _onSlotTap(int index) {
     final slot = _slots[index];
 
-    // If already uploading, ignore tap
+    // If this specific slot is already uploading, ignore tap
     if (slot.status == ImageSlotStatus.uploading) return;
 
     // Show source picker bottom sheet (Camera, Gallery, or mock simulation)
@@ -182,8 +238,8 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Select JPG or PNG (Maximum 5MB). Ensure good lighting without flash reflections.',
-                style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                'Supported formats: JPG, JPEG, PNG only (Max 5MB per image).',
+                style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.35),
               ),
               const SizedBox(height: 20),
               ListTile(
@@ -213,14 +269,16 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                   child: const Icon(Icons.photo_library_rounded, color: Color(0xFF0C5AD2)),
                 ),
                 title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text('Pick existing image from storage', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('JPG, JPEG, PNG only, max 5MB', style: TextStyle(fontSize: 12)),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickImage(index, ImageSource.gallery);
                 },
               ),
-              if (slot.status == ImageSlotStatus.success) ...[
+              if (slot.status == ImageSlotStatus.success ||
+                  slot.status == ImageSlotStatus.error ||
+                  slot.status == ImageSlotStatus.notPhoneDetected) ...[
                 const Divider(),
                 ListTile(
                   leading: Container(
@@ -231,20 +289,18 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                     ),
                     child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
                   ),
-                  title: const Text('Remove Photo', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626), fontSize: 14)),
+                  title: Text(
+                    slot.status == ImageSlotStatus.success ? 'Remove Photo' : 'Clear & Retake Photo',
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFDC2626), fontSize: 14),
+                  ),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onTap: () {
                     Navigator.pop(sheetContext);
+                    TradeInFlowSession.removeUploadedImage(_slots[index].keyName);
                     setState(() {
-                      _slots[index] = _slots[index].copyWith(
-                        status: ImageSlotStatus.empty,
-                        localFilePath: null,
-                        previewBase64: null,
-                        fileName: null,
-                        uploadProgress: 0.0,
-                        errorMessage: null,
-                      );
+                      _slots[index] = _slots[index].reset();
                     });
+                    TradeInFlowSession.saveSlots(_slots);
                   },
                 ),
               ],
@@ -259,11 +315,11 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
 
   Future<void> _pickImage(int index, ImageSource source) async {
     try {
+      // NOTE: Do not set maxWidth / maxHeight / imageQuality here,
+      // because image_picker compresses the file before returning,
+      // which masks files that originally exceed 5MB.
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: source,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 85,
       );
 
       if (pickedFile == null) {
@@ -271,36 +327,117 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
         return;
       }
 
-      // Check file size (limit 5MB)
-      final fileLength = await pickedFile.length();
-      if (fileLength > 5 * 1024 * 1024) {
+      // Check file extension / format (Only JPG / JPEG / PNG allowed; explicitly reject WEBP etc.)
+      final String pathLower = (pickedFile.path).toLowerCase();
+      final String nameLower = (pickedFile.name).toLowerCase();
+      final bool isJpg = pathLower.endsWith('.jpg') ||
+          pathLower.endsWith('.jpeg') ||
+          nameLower.endsWith('.jpg') ||
+          nameLower.endsWith('.jpeg');
+      final bool isPng =
+          pathLower.endsWith('.png') || nameLower.endsWith('.png');
+
+      if (!isJpg && !isPng) {
         if (!mounted) return;
         setState(() {
           _slots[index] = _slots[index].copyWith(
             status: ImageSlotStatus.error,
-            errorMessage: 'File exceeds 5MB limit.',
+            localFilePath: null,
+            fileName: pickedFile.name,
+            errorMessage:
+                'Only JPG, JPEG, and PNG formats are supported.',
           );
         });
         return;
       }
 
-      // Start upload animation
+      // Check actual file size (limit: strictly 5MB)
+      final fileLength = await pickedFile.length();
+      const int maxSizeBytes = 5 * 1024 * 1024; // 5 MB
+      if (fileLength > maxSizeBytes) {
+        if (!mounted) return;
+        final double mbSize = fileLength / (1024 * 1024);
+        setState(() {
+          _slots[index] = _slots[index].copyWith(
+            status: ImageSlotStatus.error,
+            localFilePath: null,
+            fileName: pickedFile.name,
+            errorMessage:
+                'File size (${mbSize.toStringAsFixed(1)}MB) exceeds 5MB limit. Please upload an image under 5MB.',
+          );
+        });
+        return;
+      }
+
+      // Start upload / AI verification animation with slot generation token
+      final int currentToken = (_slotTokens[index] ?? 0) + 1;
+      _slotTokens[index] = currentToken;
+
       setState(() {
         _slots[index] = _slots[index].copyWith(
           status: ImageSlotStatus.uploading,
-          uploadProgress: 0.30,
+          uploadProgress: 0.35,
           errorMessage: null,
+          localFilePath: pickedFile.path,
+          fileName: pickedFile.name,
         );
       });
 
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
+      // Step 2: Run AI Phone Detection via Backend Model 1
+      Map<String, dynamic> detectionResult = {};
+      try {
+        detectionResult = await TradeInService.detectPhone(pickedFile.path);
+      } catch (e) {
+        detectionResult = {
+          'isPhone': false,
+          'message': 'Phone verification failed. Please try again.',
+        };
+      }
+
+      // If user navigated away or cancelled while inference was running, abort
+      if (!mounted || _slotTokens[index] != currentToken) return;
+
+      final bool isPhone = detectionResult['isPhone'] == true;
+
+      if (!isPhone) {
+        // NON-PHONE DETECTED OR VERIFICATION FAILED:
+        // Use clean, low-level friendly message (no technical stack traces)
+        String errPrompt = 'No smartphone detected in this image. Please ensure the phone is clearly visible without heavy obstructions and retake the photo.';
+
+        if (detectionResult['message'] != null) {
+          final String msg = detectionResult['message'].toString();
+          if (msg.contains('Phone verification failed') ||
+              msg.contains('failed') ||
+              msg.contains('timed out') ||
+              msg.contains('SocketException') ||
+              msg.contains('TimeoutException')) {
+            errPrompt = 'Phone verification failed. Please try again.';
+          } else if (msg.isNotEmpty && msg != 'No smartphone detected in this image.') {
+            errPrompt = msg;
+          }
+        }
+
+        if (_slotTokens[index] != currentToken) return;
+        setState(() {
+          _slots[index] = _slots[index].copyWith(
+            status: ImageSlotStatus.notPhoneDetected,
+            localFilePath: pickedFile.path,
+            fileName: pickedFile.name,
+            uploadProgress: 0.0,
+            errorMessage: errPrompt,
+          );
+        });
+        return;
+      }
+
+      if (_slotTokens[index] != currentToken) return;
+      // Progress animation
       setState(() {
-        _slots[index] = _slots[index].copyWith(uploadProgress: 0.75);
+        _slots[index] = _slots[index].copyWith(uploadProgress: 0.85);
       });
 
-      await Future.delayed(const Duration(milliseconds: 250));
-      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted || _slotTokens[index] != currentToken) return;
 
       setState(() {
         _slots[index] = _slots[index].copyWith(
@@ -308,6 +445,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
           localFilePath: pickedFile.path,
           fileName: pickedFile.name,
           uploadProgress: 1.0,
+          errorMessage: null,
         );
       });
     } catch (e) {
@@ -315,7 +453,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       setState(() {
         _slots[index] = _slots[index].copyWith(
           status: ImageSlotStatus.error,
-          errorMessage: 'Failed to access camera or gallery.',
+          errorMessage: 'Failed to access camera or gallery: ${e.toString()}',
         );
       });
     }
@@ -377,7 +515,23 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   }
 
   bool get _canContinue {
-    // Check required slots: all non-optional slots must have status == success
+    // 1. Must NOT have any slot currently uploading or verifying (especially when 8th slot is in progress)
+    final bool anyUploading = _slots.any((slot) => slot.status == ImageSlotStatus.uploading);
+    if (anyUploading) return false;
+
+    // 2. Must NOT have any slot in error or notPhoneDetected state
+    final bool hasErrors = _slots.any(
+      (slot) => slot.status == ImageSlotStatus.error || slot.status == ImageSlotStatus.notPhoneDetected,
+    );
+    if (hasErrors) return false;
+
+    // 3. For optional slots (e.g. 8th "Any angles"), it must be either empty OR successfully verified
+    final bool optionalValid = _slots
+        .where((slot) => slot.isOptional)
+        .every((slot) => slot.status == ImageSlotStatus.empty || slot.status == ImageSlotStatus.success);
+    if (!optionalValid) return false;
+
+    // 4. All 7 required (non-optional) slots must have status == success
     return _slots
         .where((slot) => !slot.isOptional)
         .every((slot) => slot.status == ImageSlotStatus.success);
@@ -386,65 +540,79 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   void _onContinue() async {
     if (!_canContinue) return;
 
-    setState(() => _isProceeding = true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    setState(() => _isProceeding = false);
+    // Reuse existing TradeInRequestID from current flow session if user already created one!
+    final String? existingRequestId = TradeInFlowSession.currentTradeInRequestId;
+    final String tradeInRequestID = existingRequestId ?? 'TR${DateTime.now().millisecondsSinceEpoch}';
 
-    // Show completion dialog or route to Step 3 condition inspection
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDCFCE7),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 36),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Images Uploaded',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${widget.device.brand} ${widget.device.model} photos have been saved. Ready for Step 3 (Condition Questionnaire).',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0C5AD2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  child: const Text('PROCEED', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                ),
-              ),
-            ],
-          ),
+    // Store in active session immediately
+    TradeInFlowSession.setTradeInRequestId(tradeInRequestID);
+    TradeInFlowSession.setDeviceId(widget.device.deviceID);
+
+    // Collect local file paths for each imageView slot that are new or changed
+    final Map<String, String> imagePathsToUpload = {};
+    for (final slot in _slots) {
+      if (slot.status == ImageSlotStatus.success &&
+          slot.localFilePath != null &&
+          slot.localFilePath!.isNotEmpty) {
+        if (existingRequestId == null || TradeInFlowSession.hasImageChanged(slot.keyName, slot.localFilePath!)) {
+          imagePathsToUpload[slot.keyName] = slot.localFilePath!;
+        }
+      }
+    }
+
+    // Save slots to in-memory session so if user comes back to Page 3, their selections are kept
+    TradeInFlowSession.saveSlots(_slots);
+
+    final List<String> removedViews = List.from(TradeInFlowSession.pendingRemovedImageViews);
+
+    // Launch upload asynchronously in the background so user doesn't wait!
+    final uploadFuture = Future<void>(() async {
+      try {
+        final res = await TradeInService.submitTradeInRequestWithImages(
+          tradeInRequestID: existingRequestId,
+          deviceID: widget.device.deviceID,
+          brand: widget.device.brand,
+          model: widget.device.model,
+          modelCode: widget.device.modelCode,
+          storageCapacity: widget.device.storageCapacity,
+          colour: widget.device.colour,
+          deviceAge: widget.device.deviceAge ?? '1 year(s)',
+          imeiNum: widget.device.imeiNum,
+          deviceCategory: widget.device.deviceCategory,
+          userEmail: widget.email ?? widget.device.userEmail,
+          imageFilePaths: imagePathsToUpload,
+          removedImageViews: removedViews,
+        );
+
+        if (res['success'] == true) {
+          final returnedId = res['tradeInRequestID'];
+          if (returnedId != null) {
+            TradeInFlowSession.setTradeInRequestId(returnedId);
+          }
+          // Mark successfully uploaded image paths and clear pending removed list
+          for (final entry in imagePathsToUpload.entries) {
+            TradeInFlowSession.markImageUploaded(entry.key, entry.value);
+          }
+          TradeInFlowSession.clearPendingRemovedImages();
+        }
+      } catch (e) {
+        debugPrint('Background image upload notice: $e');
+      }
+    });
+
+    // Save background future in session
+    TradeInFlowSession.setBackgroundUploadFuture(uploadFuture);
+
+    // Directly navigate to Page 4 (IMEI Validation Step Page) instantly without blocking!
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ImeiValidationStepPage(
+          device: widget.device,
+          tradeInRequestID: tradeInRequestID,
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
         ),
       ),
     );
@@ -452,29 +620,41 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
-      appBar: const ReByteAppBar(),
-      drawer: ReByteDrawer(
-        isLoggedIn: widget.isLoggedIn,
-        email: widget.email,
-        name: widget.name,
-        selectedIndex: 2,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Back Button
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
-                onPressed: () => Navigator.pop(context),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              const SizedBox(height: 16),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        _cancelAndEmptyUploadingSlots();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FB),
+        appBar: const ReByteAppBar(),
+        drawer: ReByteDrawer(
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
+          selectedIndex: 2,
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Back Button
+                IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Color(0xFF0F172A),
+                    size: 22,
+                  ),
+                  onPressed: () {
+                    _cancelAndEmptyUploadingSlots();
+                    Navigator.pop(context);
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(height: 16),
 
               // Title
               const Text(
@@ -490,14 +670,49 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
 
               // Subtitle
               const Text(
-                'Please provide clear, well-lit photos of your device from the angles specified below to ensure an accurate trade-in valuation.\nSupported formats: JPG, PNG (Max 5MB each).',
+                'Please provide clear, well-lit photos of your device from the angles specified below.\nSupported formats: JPG, JPEG, PNG only (Max 5MB per image).',
                 style: TextStyle(
                   fontSize: 13,
                   color: Color(0xFF475569),
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+
+              // Protection Notice Tip Box
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFBFDBFE), width: 1.0),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: Color(0xFF1D4ED8),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Tip: Please remove any protective accessories such as phone cases, covers, or screen protectors (if possible) for a more accurate device valuation.',
+                        textAlign: TextAlign.justify,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1E40AF),
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
 
               // 2-Column Grid of Slots
               _buildSlotsGrid(),
@@ -508,7 +723,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: _canContinue && !_isProceeding ? _onContinue : null,
+                  onPressed: _canContinue ? _onContinue : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF003799),
                     foregroundColor: Colors.white,
@@ -517,23 +732,15 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (_isProceeding)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
-                        )
-                      else ...[
-                        const Text(
-                          'Continue',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward, size: 18),
-                      ],
+                      Text(
+                        'Continue',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward, size: 18),
                     ],
                   ),
                 ),
@@ -546,8 +753,9 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       bottomNavigationBar: const ReByteBottomNavBar(
         selectedIndex: 2,
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSlotsGrid() {
     return LayoutBuilder(
@@ -555,12 +763,58 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
         final double cardWidth = (constraints.maxWidth - 12) / 2;
         return Wrap(
           spacing: 12,
-          runSpacing: 12,
+          runSpacing: 14,
+          crossAxisAlignment: WrapCrossAlignment.start,
           children: List.generate(_slots.length, (index) {
+            final slot = _slots[index];
+            final bool hasError = slot.status == ImageSlotStatus.error ||
+                slot.status == ImageSlotStatus.notPhoneDetected;
             return SizedBox(
               width: cardWidth,
-              height: 175,
-              child: _buildSlotCard(index),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 175,
+                    child: _buildSlotCard(index),
+                  ),
+                  if (hasError && slot.errorMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFCA5A5), width: 1.0),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 1.0),
+                            child: Icon(Icons.error, size: 14, color: Color(0xFFDC2626)),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              slot.errorMessage!,
+                              textAlign: TextAlign.justify,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFB91C1C),
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             );
           }),
         );
@@ -574,6 +828,8 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     switch (slot.status) {
       case ImageSlotStatus.success:
         return _buildSuccessCard(index, slot);
+      case ImageSlotStatus.notPhoneDetected:
+        return _buildNotPhoneDetectedCard(index, slot);
       case ImageSlotStatus.uploading:
         return _buildUploadingCard(index, slot);
       case ImageSlotStatus.error:
@@ -679,6 +935,118 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     );
   }
 
+  // Non-Phone Image Card: Displays the uploaded image as normal, but highlighted in solid red with warning badge
+  Widget _buildNotPhoneDetectedCard(int index, ImageSlotItem slot) {
+    return InkWell(
+      onTap: () => _onSlotTap(index),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFDC2626),
+            width: 1.8,
+            style: BorderStyle.solid,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Image area filling the block with RED warning badge
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (slot.localFilePath != null)
+                    Image.file(
+                      File(slot.localFilePath!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => _buildFallbackPreview(),
+                    )
+                  else
+                    _buildFallbackPreview(),
+                  // Semi-transparent subtle tint on image to indicate review needed
+                  Container(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.08),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDC2626),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.20),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.close_rounded, color: Colors.white, size: 13),
+                          SizedBox(width: 3),
+                          Text(
+                            'Not a Phone',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Bottom Label Bar in Red
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF2F2),
+                border: Border(top: BorderSide(color: Color(0xFFFECACA), width: 1.0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      slot.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFDC2626),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // 2. Uploading Card (blue border, circular progress spinner, percentage label, progress bar at bottom)
   Widget _buildUploadingCard(int index, ImageSlotItem slot) {
     final int percent = (slot.uploadProgress * 100).toInt();
@@ -746,7 +1114,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     );
   }
 
-  // 3. Error / Invalid File Card (dashed red border, red icon, retry helper text)
+  // 3. Error / Invalid File Card (prominent red border, red alert background, instant prompt)
   Widget _buildErrorCard(int index, ImageSlotItem slot) {
     return InkWell(
       onTap: () => _onSlotTap(index),
@@ -757,9 +1125,16 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: const Color(0xFFDC2626),
-            width: 1.4,
+            width: 1.8,
             style: BorderStyle.solid,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -768,34 +1143,42 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 38,
+                    height: 38,
                     decoration: const BoxDecoration(
                       color: Color(0xFFFEE2E2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.error_outline_rounded,
+                      Icons.error_rounded,
                       color: Color(0xFFDC2626),
-                      size: 22,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   const Text(
-                    'Invalid File',
+                    'Upload Error',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       color: Color(0xFFDC2626),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text(
-                      'Must be JPG or PNG under 5MB. Tap to retry.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 9.5, color: Color(0xFF7F1D1D)),
+                  const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFCA5A5), width: 0.8),
+                    ),
+                    child: const Text(
+                      'Tap to change photo',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB91C1C),
+                      ),
                     ),
                   ),
                 ],
@@ -805,15 +1188,27 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               alignment: Alignment.centerLeft,
               decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
                 border: Border(top: BorderSide(color: Color(0xFFFECACA))),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
-              child: Text(
-                slot.label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFFDC2626),
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.close_rounded, size: 14, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      slot.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFDC2626),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

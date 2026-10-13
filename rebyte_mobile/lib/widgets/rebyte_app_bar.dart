@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../account_management_module/home_page.dart';
 import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
+import '../device_tradein_module/services/trade_in_flow_session.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -96,6 +97,8 @@ class ReByteDrawer extends StatelessWidget {
 
   void _navigateToTab(BuildContext context, int targetIndex) {
     Navigator.pop(context); // Close drawer
+    // If navigating to another tab or to Trade-In landing page, clear flow session
+    TradeInFlowSession.clear();
     if (onSelectTab != null) {
       onSelectTab!(targetIndex);
     } else {

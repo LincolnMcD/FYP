@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'device_info_step_page.dart';
+import 'models/device_model.dart';
+import 'services/trade_in_service.dart';
+import 'services/trade_in_flow_session.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../account_management_module/home_page.dart';
@@ -22,6 +25,7 @@ class TradeInLandingPage extends StatelessWidget {
   });
 
   void _handleBack(BuildContext context) {
+    TradeInFlowSession.clear();
     if (isEmbedded) {
       if (onBackToHome != null) {
         onBackToHome!();
@@ -44,7 +48,47 @@ class TradeInLandingPage extends StatelessWidget {
     }
   }
 
-  void _showTradeInRequestsModal(BuildContext context) {
+  void _startFreshFlow(BuildContext context) {
+    TradeInFlowSession.clear();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeviceInfoStepPage(
+          isLoggedIn: isLoggedIn,
+          email: email,
+          name: name,
+        ),
+      ),
+    );
+  }
+
+  void _resumePendingFlow(
+    BuildContext context,
+    String tradeInRequestId,
+    Map<String, dynamic>? devData,
+  ) {
+    DeviceModel? dev;
+    if (devData != null) {
+      dev = DeviceModel.fromJson(devData);
+    }
+    TradeInFlowSession.startOrResume(
+      tradeInRequestId: tradeInRequestId,
+      device: dev,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeviceInfoStepPage(
+          isLoggedIn: isLoggedIn,
+          email: email,
+          name: name,
+        ),
+      ),
+    );
+  }
+
+  void _showTradeInRequestsModal(BuildContext context) async {
     if (!isLoggedIn) {
       Navigator.push(
         context,
@@ -52,6 +96,33 @@ class TradeInLandingPage extends StatelessWidget {
       );
       return;
     }
+
+    // Show loading dialog while fetching pending request
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+      ),
+    );
+
+    Map<String, dynamic>? pendingReq;
+    Map<String, dynamic>? devData;
+
+    try {
+      final res = await TradeInService.getActivePendingTradeIn(email ?? '');
+      if (res['success'] == true && res['pendingRequest'] != null) {
+        pendingReq = res['pendingRequest'];
+        devData = res['device'];
+      }
+    } catch (_) {}
+
+    if (context.mounted) {
+      Navigator.pop(context); // close loader
+    }
+
+    if (!context.mounted) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -73,41 +144,94 @@ class TradeInLandingPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              const Icon(Icons.inventory_2_outlined, size: 52, color: Color(0xFF0C5AD2)),
+              Icon(
+                pendingReq != null ? Icons.pending_actions_rounded : Icons.inventory_2_outlined,
+                size: 52,
+                color: const Color(0xFF0C5AD2),
+              ),
               const SizedBox(height: 12),
-              const Text(
-                'Trade-In Requests',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              Text(
+                pendingReq != null ? 'Pending Trade-In Evaluation' : 'Trade-In Requests',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'You do not have any active trade-in evaluations at the moment. Start a new evaluation to trade in your device!',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DeviceInfoStepPage(
-                        isLoggedIn: isLoggedIn,
-                        email: email,
-                        name: name,
-                      ),
+              if (pendingReq != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Request ID: ${pendingReq['tradeInRequestID'] ?? ''}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0C5AD2),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0C5AD2),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
-                child: const Text('Start Trade-In Now', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  devData != null
+                      ? 'You have an ongoing evaluation for ${devData['brand']} ${devData['model']}. You can resume your session or start a new trade-in.'
+                      : 'You have an active pending trade-in request. Would you like to resume your session?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _resumePendingFlow(
+                      context,
+                      pendingReq!['tradeInRequestID'],
+                      devData,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0C5AD2),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Resume Trade-In', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _startFreshFlow(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    minimumSize: const Size(double.infinity, 44),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Start New Trade-In', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ] else ...[
+                const Text(
+                  'You do not have any active trade-in evaluations at the moment. Start a new evaluation to trade in your device!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _startFreshFlow(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0C5AD2),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Start Trade-In Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ],
           ),
         ),
@@ -271,16 +395,7 @@ class TradeInLandingPage extends StatelessWidget {
                   );
                   return;
                 }
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DeviceInfoStepPage(
-                      isLoggedIn: isLoggedIn,
-                      email: email,
-                      name: name,
-                    ),
-                  ),
-                );
+                _startFreshFlow(context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C5AD2),

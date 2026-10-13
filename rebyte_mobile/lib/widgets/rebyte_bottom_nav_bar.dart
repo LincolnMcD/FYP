@@ -3,6 +3,7 @@ import '../account_management_module/home_page.dart';
 import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
 import '../device_tradein_module/trade_in_landing_page.dart';
+import '../device_tradein_module/services/trade_in_flow_session.dart';
 
 class ReByteBottomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -30,7 +31,8 @@ class ReByteBottomNavBar extends StatelessWidget {
     if (!context.mounted) return;
 
     if (index == 0) {
-      // Home
+      // Home - leaving trade-in flow completely
+      TradeInFlowSession.clear();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -47,6 +49,7 @@ class ReByteBottomNavBar extends StatelessWidget {
     }
 
     if (!isLoggedIn) {
+      TradeInFlowSession.clear();
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const WelcomePage()),
@@ -55,7 +58,8 @@ class ReByteBottomNavBar extends StatelessWidget {
     }
 
     if (index == 2) {
-      // Trade-In Page
+      // User tapped Trade-In tab (Page 1) - clear current flow session per requirement
+      TradeInFlowSession.clear();
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -69,7 +73,8 @@ class ReByteBottomNavBar extends StatelessWidget {
       return;
     }
 
-    // Tabs inside HomePage (1: Shop, 3: Rentals, 4: Account)
+    // Tabs inside HomePage (1: Shop, 3: Rentals, 4: Account/Profile) - leaving trade-in flow completely
+    TradeInFlowSession.clear();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
