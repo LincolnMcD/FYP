@@ -7,6 +7,7 @@ class Device {
         deviceCategory = 'smartphone',
         brand,
         model,
+        modelCode = null,
         storageCapacity,
         colour,
         color,
@@ -19,6 +20,13 @@ class Device {
         this.deviceCategory = deviceCategory || 'smartphone';
         this.brand = brand;
         this.model = model;
+        let codes = [];
+        if (Array.isArray(modelCode)) {
+            codes = modelCode.map(c => String(c).trim()).filter(Boolean);
+        } else if (typeof modelCode === 'string' && modelCode.trim().length > 0) {
+            codes = modelCode.split(',').map(c => c.trim()).filter(Boolean);
+        }
+        this.modelCode = codes.length > 0 ? codes : null;
         this.storageCapacity = storageCapacity;
         this.colour = colour || color || '';
         this.imeiNum = imeiNum || null;
@@ -35,6 +43,7 @@ class Device {
             deviceCategory: this.deviceCategory,
             brand: this.brand,
             model: this.model,
+            modelCode: this.modelCode, // Array of strings e.g. ["STK-L21", "STK-L22", "STK-LX3"]
             storageCapacity: this.storageCapacity,
             colour: this.colour,
             imeiNum: this.imeiNum,
