@@ -1,0 +1,80 @@
+seed: 42
+device: auto
+image_size: 640
+batch_size: 8
+epochs: 100
+learning_rate: 0.0003
+weight_decay: 0.0005
+workers: 0
+early_stopping_patience: 15
+
+dataset:
+  root: dataset
+  # Optional explicit split roots. Each root should contain Phone/images,
+  # Phone/labels (or Phone/label), and Non Phone/images[/labels].
+  train_path: null
+  val_path: null
+  test_path: null
+  max_phone_images: null
+  max_non_phone_images: null
+  train_fraction: 0.70
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+model:
+  backbone: resnet18
+  pretrained: true
+  freeze_backbone_epochs: 5
+  freeze_backbone_bn: true
+  num_classes: 1
+  width: 0.5
+  depth: 0.5
+  strides: [8, 16, 32]
+
+loss:
+  classification_mode: bce
+  classification_target: binary
+  hard_negative_ratio: 3
+  negative_mining: per_image
+  classification_weight: 1.0
+  box_weight: 5.0
+  assign_topk: 5
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  negative_weight: 1.0
+  assignment_alpha: 0.5
+  assignment_beta: 6.0
+
+inference:
+  confidence_threshold: 0.40
+  minimum_precision: 0.70
+  iou_threshold: 0.35
+  max_detections: 1
+
+evaluation:
+  # Evaluate multiple phones even when deployment returns only one box.
+  # NMS IoU continues to use inference.iou_threshold.
+  max_detections: 100
+augmentation:
+  enabled: true
+  horizontal_flip: 0.5
+  rotation_degrees: 10
+  scale_range: [0.90, 1.10]
+  translation: 0.05
+  perspective: 0.0003
+  brightness: 0.15
+  exposure: 0.15
+  hsv_hue: 0.015
+  hsv_saturation: 0.25
+  hsv_value: 0.20
+  blur_probability: 0.10
+
+optimizer:
+  backbone_lr_factor: 0.1
+  warmup_epochs: 5
+  warmup_start_factor: 0.1
+  gradient_clip_norm: 10.0
+  scheduler: cosine
+  min_learning_rate: 0.00001
+
+save_dir: saved_models/resnet18

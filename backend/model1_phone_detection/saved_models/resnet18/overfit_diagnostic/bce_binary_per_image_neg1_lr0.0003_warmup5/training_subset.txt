@@ -1,0 +1,20 @@
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\04d1978c54394275_jpg.rf.74d1bdf2f00f1b84db74b07ff3b391be.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\best_sony_phone_2021_hero_jpg.rf.d4de9a898de648642d629ae07ea53f12.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000091654.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000173091.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000468965.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000166478.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\48cfd0c0df505066_jpg.rf.263857e00a5fd42ca8c377f46920f8c8.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000342006.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\7bcbcfe3e510ff72_jpg.rf.51cab8a04bc0ee80c5934315a504fcfe.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\061827ca716d76b5_jpg.rf.1eb77ee0afafe531cf123cb0cfcab9df.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\636ba2dda953b19a_jpg.rf.d7462e2cbfbe51fe12107d7769fc06c2.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\13b539c95bc2712a_jpg.rf.4c8e5253e8f8c09acc750ec7c28abe5c.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\42723180903694f8_jpg.rf.3a416a379a8eb292f65fbdb54e4779df.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000188465.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000225757.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\4f9c586140035d9a_jpg.rf.bc293387a1e3618a5a6964872ef59743.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000138979.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Phone\images\9d6f83edb470de79_jpg.rf.dff0d1c24ce105b1d1c131ac30d7f775.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000380706.jpg
+C:\Users\User\Desktop\model1_phone_detection\dataset\Non Phone\images\000000554291.jpg
