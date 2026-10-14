@@ -119,18 +119,18 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   final Map<int, int> _slotTokens = {};
 
   void _cancelAndEmptyUploadingSlots() {
-    bool changed = false;
     for (int i = 0; i < _slots.length; i++) {
       if (_slots[i].status == ImageSlotStatus.uploading) {
         // Invalidate generation token
         _slotTokens[i] = (_slotTokens[i] ?? 0) + 1;
         _slots[i] = _slots[i].reset();
-        changed = true;
+      } else if (_slots[i].status != ImageSlotStatus.success) {
+        // Reset any non-successful slots (error, notPhoneDetected, etc.)
+        _slots[i] = _slots[i].reset();
       }
     }
-    if (changed) {
-      TradeInFlowSession.saveSlots(_slots);
-    }
+    // Always persist the sanitized slots to TradeInFlowSession so success images are retained
+    TradeInFlowSession.saveSlots(_slots);
   }
 
   @override
@@ -142,15 +142,21 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   @override
   void initState() {
     super.initState();
-    // If returning from Page 4 to Page 3, restore existing uploaded image slots
+    TradeInFlowSession.setCurrentDevice(widget.device);
+    TradeInFlowSession.currentStep = 3;
+    // If returning from Page 4 to Page 3, or re-entering from Page 2, restore existing uploaded image slots
     if (TradeInFlowSession.savedSlots != null &&
         TradeInFlowSession.savedSlots!.isNotEmpty) {
       _slots = TradeInFlowSession.savedSlots!.map((slot) {
-        // Sanitize: If a slot was left in 'uploading' when leaving the screen, reset it to empty
-        if (slot.status == ImageSlotStatus.uploading) {
-          return slot.reset();
+        // Only keep slots that succeeded and whose local file still exists
+        if (slot.status == ImageSlotStatus.success &&
+            slot.localFilePath != null &&
+            slot.localFilePath!.isNotEmpty &&
+            File(slot.localFilePath!).existsSync()) {
+          return slot;
         }
-        return slot;
+        // Non-success (loading/uploading, error, notPhoneDetected, or missing file) is reset to empty
+        return slot.reset();
       }).toList();
     } else {
       _slots = [
@@ -448,6 +454,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
           errorMessage: null,
         );
       });
+      TradeInFlowSession.saveSlots(_slots);
     } catch (e) {
       if (!mounted) return;
       setState(() {

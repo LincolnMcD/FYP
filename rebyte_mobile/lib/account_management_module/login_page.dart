@@ -106,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
         } else {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: _emailController.text, name: result['name'], toastMessage: 'Signed in successfully!')),
+            MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: _emailController.text.trim(), name: result['name'], toastMessage: 'Signed in successfully!')),
             (route) => false,
           );
         }

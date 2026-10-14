@@ -59,7 +59,11 @@ class DeviceModel {
       status: json['status'] ?? 'pending',
       deviceAge: json['deviceAge'],
       userEmail: json['userEmail'],
-      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
+      createdAt: json['createdAt'] != null
+          ? (json['createdAt'] is Map && json['createdAt']['_seconds'] != null
+              ? DateTime.fromMillisecondsSinceEpoch(json['createdAt']['_seconds'] * 1000)
+              : DateTime.tryParse(json['createdAt'].toString()))
+          : null,
     );
   }
 

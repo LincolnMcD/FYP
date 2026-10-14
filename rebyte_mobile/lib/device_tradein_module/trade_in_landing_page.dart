@@ -49,6 +49,9 @@ class TradeInLandingPage extends StatelessWidget {
   }
 
   void _startFreshFlow(BuildContext context) {
+    if (isLoggedIn && email != null && email!.isNotEmpty) {
+      TradeInService.cancelTradeInRequests(email!).catchError((_) => {'success': false});
+    }
     TradeInFlowSession.clear();
     Navigator.push(
       context,

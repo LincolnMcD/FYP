@@ -5,8 +5,8 @@ import 'services/trade_in_service.dart';
 import 'services/trade_in_flow_session.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
-import 'trade_in_landing_page.dart';
 import 'device_info_step_page.dart';
+import 'improve_assessment_page.dart';
 
 class ImeiValidationStepPage extends StatefulWidget {
   final DeviceModel device;
@@ -45,6 +45,12 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
   @override
   void initState() {
     super.initState();
+    TradeInFlowSession.setCurrentDevice(widget.device);
+    if (widget.tradeInRequestID.isNotEmpty) {
+      TradeInFlowSession.setTradeInRequestId(widget.tradeInRequestID);
+    }
+    TradeInFlowSession.currentStep = 4;
+
     if (widget.device.imeiNum != null && widget.device.imeiNum!.isNotEmpty) {
       _imeiController.text = widget.device.imeiNum!;
       _isValidated = true;
@@ -176,97 +182,29 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
       final String actualRequestId = TradeInFlowSession.currentTradeInRequestId ?? widget.tradeInRequestID;
       final String enteredImei = _imeiController.text.trim();
 
-      // 2. Finalize trade-in request: change status to 'Submitted' and store IMEI
+      // Update trade-in request in Firestore to 'Submitted' and store IMEI
       await TradeInService.finalizeTradeInRequest(actualRequestId, imeiNum: enteredImei);
 
-      // 3. Clear currentTradeInRequestId from app memory
-      TradeInFlowSession.clear();
+      // Update in-memory and persistent session
+      TradeInFlowSession.currentUserEmail = widget.email;
+      TradeInFlowSession.setTradeInRequestId(actualRequestId);
+      TradeInFlowSession.setCurrentDevice(widget.device);
+      TradeInFlowSession.lastEnteredImei = enteredImei;
+      TradeInFlowSession.currentStep = 5;
 
       if (!mounted) return;
       setState(() => _isFinalSubmitting = false);
 
-      // 3. Show Final Submission Success Dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFDCFCE7),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 38),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Trade-In Submitted!',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Request ID: ${widget.tradeInRequestID}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0C5AD2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your ${widget.device.brand} ${widget.device.model} trade-in evaluation request has been submitted successfully with status "Submitted".',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TradeInLandingPage(
-                            isLoggedIn: widget.isLoggedIn,
-                            email: widget.email,
-                            name: widget.name,
-                          ),
-                        ),
-                        (route) => false,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0C5AD2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    child: const Text('FINISH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                ),
-              ],
-            ),
+      // Navigate to Page 5: Improve Your Assessment
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ImproveAssessmentPage(
+            device: widget.device,
+            tradeInRequestID: actualRequestId,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
           ),
         ),
       );
@@ -275,7 +213,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
       setState(() => _isFinalSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Submission failed: ${e.toString()}'),
+          content: Text('Failed to continue: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -895,6 +833,8 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
                 height: 48,
                 child: OutlinedButton(
                   onPressed: () {
+                    // Ensure session has current device saved
+                    TradeInFlowSession.setCurrentDevice(widget.device);
                     // Navigate back to Page 2 (DeviceInfoStepPage) while preserving session
                     Navigator.pushReplacement(
                       context,
@@ -903,6 +843,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
                           isLoggedIn: widget.isLoggedIn,
                           email: widget.email,
                           name: widget.name,
+                          device: widget.device,
                         ),
                       ),
                     );

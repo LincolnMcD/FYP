@@ -214,6 +214,68 @@ class TradeInService {
     }
   }
 
+  /// Check if the user has an existing submitted trade-in request for Active Activity
+  static Future<Map<String, dynamic>> getActiveSubmittedTradeIn(String userEmail) async {
+    try {
+      final uri = Uri.parse('$baseUrl/active-submitted').replace(
+        queryParameters: {'userEmail': userEmail},
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'submittedRequest': null};
+    } catch (e) {
+      return {'success': false, 'submittedRequest': null, 'message': e.toString()};
+    }
+  }
+
+  /// Cancel existing active trade-in requests for a user when starting a new flow
+  static Future<Map<String, dynamic>> cancelTradeInRequests(String userEmail) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/cancel-requests'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'userEmail': userEmail}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Update the status of a trade-in request (e.g. 'Evaluated')
+  static Future<Map<String, dynamic>> updateTradeInStatus({
+    required String tradeInRequestID,
+    required String status,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/update-status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'tradeInRequestID': tradeInRequestID,
+          'status': status,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   /// Check if the user has an existing pending trade-in request to resume
   static Future<Map<String, dynamic>> getActivePendingTradeIn(String userEmail) async {
     try {

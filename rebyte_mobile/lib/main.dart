@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'account_management_module/home_page.dart';
 import 'staff_module/staff_home_page.dart';
 import 'account_management_module/services/session_service.dart';
+import 'device_tradein_module/services/trade_in_flow_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,12 @@ void main() async {
   final String? email = session['email'];
   final String? name = session['name'];
   final String? role = session['role'];
+
+  if (isLoggedIn && email != null && email.isNotEmpty) {
+    await TradeInFlowSession.loadFromPrefs(loggedInUserEmail: email);
+  } else {
+    TradeInFlowSession.clear();
+  }
 
   runApp(MyApp(isLoggedIn: isLoggedIn, email: email, name: name, role: role));
 }

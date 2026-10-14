@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'edit_profile_page.dart';
 import 'services/session_service.dart';
+import '../device_tradein_module/services/trade_in_flow_session.dart';
 
 class ProfilePage extends StatelessWidget {
   final String? name;
@@ -170,6 +171,7 @@ class ProfilePage extends StatelessWidget {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () async {
+                                    TradeInFlowSession.clear();
                                     await SessionService.clearSession();
                                     if (context.mounted) {
                                       Navigator.pushAndRemoveUntil(

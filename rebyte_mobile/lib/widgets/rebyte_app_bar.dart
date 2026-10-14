@@ -3,6 +3,7 @@ import '../account_management_module/home_page.dart';
 import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
+import '../decision_assistance_module/diagnostic_suite_page.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -168,6 +169,23 @@ class ReByteDrawer extends StatelessWidget {
                       Icons.compare_arrows,
                       'Compare Devices',
                       onTap: () => _navigateToTab(context, 1),
+                    ),
+                    _buildDrawerItem(
+                      Icons.phonelink_setup_rounded,
+                      'Test My Device',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DiagnosticSuitePage(
+                              isLoggedIn: isLoggedIn,
+                              email: email,
+                              name: name,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     if (isLoggedIn) ...[
                       const Padding(
@@ -367,6 +385,7 @@ class ReByteDrawer extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
+                        TradeInFlowSession.clear();
                         await SessionService.clearSession();
                         if (context.mounted) {
                           Navigator.pushAndRemoveUntil(

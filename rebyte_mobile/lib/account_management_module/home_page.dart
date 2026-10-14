@@ -5,6 +5,13 @@ import 'profile_page.dart';
 import 'services/auth_service.dart';
 import 'services/session_service.dart';
 import '../device_tradein_module/trade_in_landing_page.dart';
+import '../device_tradein_module/improve_assessment_page.dart';
+import '../device_tradein_module/assessment_result_page.dart';
+import '../device_tradein_module/preliminary_quotation_page.dart';
+import '../device_tradein_module/services/trade_in_flow_session.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
+import '../device_tradein_module/models/device_model.dart';
+import '../decision_assistance_module/diagnostic_suite_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -13,6 +20,7 @@ class HomePage extends StatefulWidget {
   final String? toastMessage;
   final bool toastIsError;
   final int initialIndex;
+  final bool scrollToActiveActivity;
   const HomePage({
     super.key,
     this.isLoggedIn = false,
@@ -21,6 +29,7 @@ class HomePage extends StatefulWidget {
     this.toastMessage,
     this.toastIsError = false,
     this.initialIndex = 0,
+    this.scrollToActiveActivity = false,
   });
 
   @override
@@ -34,6 +43,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late String? _name = widget.name;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey _activeActivityKey = GlobalKey();
+  final ScrollController _homeScrollController = ScrollController();
 
   String? _toastMessage;
   bool _isToastError = false;
@@ -50,15 +61,97 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
          _showTopToast(widget.toastMessage!, widget.toastIsError);
        });
     }
+    // Only auto-scroll to Active Activity when explicitly requested (e.g. Back button pressed on Page 5)
+    if (widget.scrollToActiveActivity) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_activeActivityKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            _activeActivityKey.currentContext!,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
     if (_isLoggedIn) {
       _accountSessionTimer = Timer.periodic(const Duration(seconds: 1), (_) => _verifyAccountSession());
       Future.delayed(const Duration(seconds: 1), _verifyAccountSession);
+      _syncActiveTradeIn();
+    } else {
+      _syncActiveTradeIn();
     }
+  }
+
+  Future<void> _syncActiveTradeIn() async {
+    final email = _email;
+
+    // If user is not logged in, ensure TradeInFlowSession memory is cleared so no user trade-in appears
+    if (!_isLoggedIn || email == null || email.isEmpty) {
+      if (TradeInFlowSession.hasActiveFlow) {
+        TradeInFlowSession.clear();
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+
+    // 1. Ensure local prefs are loaded for this specific logged-in user
+    if (!TradeInFlowSession.hasLoadedFromPrefs) {
+      await TradeInFlowSession.loadFromPrefs(loggedInUserEmail: email);
+    }
+    if (mounted) setState(() {});
+
+    // 2. Query backend for trade-in requests with 'Submitted' status for this user
+    try {
+      final res = await TradeInService.getActiveSubmittedTradeIn(email);
+      if (res['success'] == true && res['submittedRequest'] != null) {
+        final submittedReq = res['submittedRequest'];
+        final reqId = submittedReq['tradeInRequestID']?.toString();
+        final devData = res['device'];
+
+        if (reqId != null && reqId.isNotEmpty) {
+          DeviceModel? dev;
+          if (devData != null) {
+            try { dev = DeviceModel.fromJson(devData); } catch (e) { debugPrint('DeviceModel parse error: $e'); }
+          }
+          // Populate session with the active submitted/evaluated trade-in request
+          TradeInFlowSession.currentUserEmail = email;
+          TradeInFlowSession.startOrResume(
+            tradeInRequestId: reqId,
+            device: dev,
+          );
+
+          final String reqStatus = (submittedReq['requestStatus'] ?? '').toString().toLowerCase();
+          if (reqStatus == 'quoted' || TradeInFlowSession.currentStep >= 8) {
+            TradeInFlowSession.currentStep = 8;
+          } else if (reqStatus == 'evaluated' || TradeInFlowSession.currentStep >= 7) {
+            TradeInFlowSession.currentStep = 7;
+          } else {
+            TradeInFlowSession.currentStep = 5;
+          }
+
+          if (submittedReq['imeiNum'] != null) {
+            TradeInFlowSession.lastEnteredImei = submittedReq['imeiNum'].toString();
+          }
+          if (mounted) setState(() {});
+        }
+      } else if (res['success'] == true && res['submittedRequest'] == null) {
+        // If backend has no submitted request, only clear local session if the user
+        // was in a submitted/post-submission step (step >= 5). If they are still
+        // filling in device info, images, or looking up IMEI (step < 5), preserve their flow!
+        if (TradeInFlowSession.hasActiveFlow && TradeInFlowSession.currentStep >= 5) {
+          TradeInFlowSession.clear();
+          if (mounted) setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _verifyAccountSession();
+    if (state == AppLifecycleState.resumed) {
+      _verifyAccountSession();
+      _syncActiveTradeIn();
+    }
   }
 
   Future<void> _verifyAccountSession() async {
@@ -153,6 +246,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             index: _selectedIndex,
             children: [
               SingleChildScrollView(
+                controller: _homeScrollController,
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,9 +259,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const SizedBox(height: 12),
                     _buildQuickActions(),
                     const SizedBox(height: 24),
-                    _buildSectionTitle('Active Activity'),
-                    const SizedBox(height: 12),
-                    _buildActiveActivity(),
+                    Container(
+                      key: _activeActivityKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionTitle('Active Activity'),
+                          const SizedBox(height: 12),
+                          _buildActiveActivity(),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
                     const SizedBox(height: 12),
@@ -274,6 +376,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     Navigator.pop(context);
                     _navigateOrRequireLogin(1);
                   }),
+                  _buildDrawerItem(Icons.phonelink_setup_rounded, 'Test My Device', onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DiagnosticSuitePage(
+                          isLoggedIn: _isLoggedIn,
+                          email: _email,
+                          name: _name,
+                        ),
+                      ),
+                    );
+                  }),
                   if (_isLoggedIn) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
@@ -331,6 +446,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () async {
+                                    TradeInFlowSession.clear();
                                     await SessionService.clearSession();
                                     if (context.mounted) {
                                       Navigator.pushAndRemoveUntil(
@@ -661,12 +777,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _buildActionItem('Rent\nSmartphone', Icons.calendar_month_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
           _buildActionItem('Pay Rental', Icons.receipt_long_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
           _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
+          _buildActionItem(
+            'Test My\nDevice',
+            Icons.phonelink_setup_rounded,
+            const Color(0xFFECFDF5),
+            itemWidth,
+            iconColor: const Color(0xFF059669),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DiagnosticSuitePage(
+                    isLoggedIn: _isLoggedIn,
+                    email: _email,
+                    name: _name,
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       );
     });
   }
 
-  Widget _buildActionItem(String text, IconData icon, Color bgColor, double width, {VoidCallback? onTap}) {
+  Widget _buildActionItem(String text, IconData icon, Color bgColor, double width, {VoidCallback? onTap, Color? iconColor}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -691,7 +826,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               color: bgColor,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.blue.shade700, size: 24),
+            child: Icon(icon, color: iconColor ?? Colors.blue.shade700, size: 24),
           ),
           const SizedBox(height: 12),
           Text(
@@ -710,90 +845,247 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _buildActiveActivity() {
+    final bool isUserMatching = _isLoggedIn &&
+        _email != null &&
+        TradeInFlowSession.currentUserEmail != null &&
+        TradeInFlowSession.currentUserEmail!.toLowerCase() == _email!.toLowerCase();
+
+    final bool hasActiveTradeIn = _isLoggedIn &&
+        isUserMatching &&
+        TradeInFlowSession.hasActiveFlow &&
+        TradeInFlowSession.isAtPage5;
+
     return Column(
       children: [
-        _buildTradeInActivityCard(),
-        const SizedBox(height: 12),
+        if (hasActiveTradeIn) ...[
+          _buildTradeInActivityCard(),
+          const SizedBox(height: 12),
+        ],
         _buildRentalActivityCard(),
       ],
     );
   }
 
-  Widget _buildTradeInActivityCard() {
-    return GestureDetector(
-      onTap: () => _navigateOrRequireLogin(2),
-      child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha:0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0E7FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.autorenew, color: Color(0xFF0C5AD2)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('iPhone 13', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const Text('Pro Trade-In', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 2),
-                    Text('Order #TRD-8321', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.access_time, size: 12, color: Colors.orange),
-                    SizedBox(width: 4),
-                    Text('Inspecting', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _buildTradeInTimeline(),
-        ],
-      ),
-    ),);
+  String _formatWrappedText(String text, {required int limitPerLine, int? maxLines}) {
+    if (text.trim().isEmpty) return '';
+    final rawWords = text.trim().split(RegExp(r'\s+'));
+    final List<String> words = [];
+    for (final w in rawWords) {
+      String rem = w;
+      while (rem.length > limitPerLine) {
+        words.add(rem.substring(0, limitPerLine));
+        rem = rem.substring(limitPerLine);
+      }
+      if (rem.isNotEmpty) words.add(rem);
+    }
+
+    final List<String> lines = [];
+    String currentLine = '';
+
+    for (final word in words) {
+      if (currentLine.isEmpty) {
+        currentLine = word;
+      } else if ((currentLine.length + 1 + word.length) <= limitPerLine) {
+        currentLine = '$currentLine $word';
+      } else {
+        lines.add(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine.isNotEmpty) {
+      lines.add(currentLine);
+    }
+
+    if (maxLines != null && lines.length > maxLines) {
+      final kept = lines.sublist(0, maxLines);
+      String last = kept[maxLines - 1];
+      if (last.length + 3 <= limitPerLine) {
+        last = '$last...';
+      } else {
+        final int cutLen = (limitPerLine - 3).clamp(0, last.length);
+        last = '${last.substring(0, cutLen)}...';
+      }
+      kept[maxLines - 1] = last;
+      return kept.join('\n');
+    }
+
+    return lines.join('\n');
   }
 
-  Widget _buildTradeInTimeline() {
+  Widget _buildTradeInActivityCard() {
+    final DeviceModel? device = TradeInFlowSession.currentDevice;
+    final String brand = device?.brand ?? 'Smartphone';
+    final String model = device?.model ?? 'Trade-In';
+    final String reqId = TradeInFlowSession.currentTradeInRequestId ?? 'TRD-ACTIVE';
+
+    final bool isPage8 = TradeInFlowSession.isAtPage8;
+    final bool isPage7 = TradeInFlowSession.isAtPage7;
+    final String statusLabel = isPage8
+        ? 'Quoted'
+        : (isPage7 ? 'Evaluated' : 'Evaluation Pending');
+
+    return GestureDetector(
+      onTap: () {
+        if (!_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        final deviceObj = device ?? DeviceModel(
+          deviceID: '',
+          brand: brand,
+          model: model,
+          storageCapacity: '',
+          colour: '',
+        );
+
+        if (isPage8) {
+          // Continue to Preliminary Trade-In Quotation (Page 8)
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PreliminaryQuotationPage(
+                device: deviceObj,
+                tradeInRequestID: reqId,
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+              ),
+            ),
+          );
+        } else if (isPage7) {
+          // Continue to Assessment Result (Page 7)
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AssessmentResultPage(
+                device: deviceObj,
+                tradeInRequestID: reqId,
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+              ),
+            ),
+          );
+        } else {
+          // Continue from Page 5
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ImproveAssessmentPage(
+                device: deviceObj,
+                tradeInRequestID: reqId,
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0E7FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.autorenew, color: Color(0xFF0C5AD2)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _formatWrappedText(brand, limitPerLine: 24, maxLines: 2),
+                        textAlign: TextAlign.justify,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      Text(
+                        _formatWrappedText(model, limitPerLine: 24, maxLines: 2),
+                        textAlign: TextAlign.justify,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Order #$reqId', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (isPage7 || isPage8) ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: (isPage7 || isPage8) ? const Color(0xFFA7F3D0) : const Color(0xFFBFDBFE),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        (isPage7 || isPage8) ? Icons.check_circle_outline : Icons.play_circle_outline,
+                        size: 12,
+                        color: (isPage7 || isPage8) ? const Color(0xFF10B981) : const Color(0xFF0C5AD2),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatWrappedText(statusLabel, limitPerLine: 10),
+                        textAlign: TextAlign.justify,
+                        style: TextStyle(
+                          color: (isPage7 || isPage8) ? const Color(0xFF10B981) : const Color(0xFF0C5AD2),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildTradeInTimeline(isPage7: isPage7, isPage8: isPage8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTradeInTimeline({required bool isPage7, required bool isPage8}) {
+    // 5 Clean Checkpoints in one single progress bar: Info -> Photos -> IMEI -> Evaluation -> Offer
+    final bool evaluationCompleted = isPage7 || isPage8;
+    final bool evaluationActive = !evaluationCompleted;
+    final bool offerActive = evaluationCompleted; // checkpoint still at offer once evaluated / quoted
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildTimelineStep('Quote', true, false),
+        _buildTimelineStep('Info', true, false),
         _buildTimelineLine(true),
-        _buildTimelineStep('Shipped', true, false),
+        _buildTimelineStep('Photos', true, false),
         _buildTimelineLine(true),
-        _buildTimelineStep('Inspecting', false, true),
-        _buildTimelineLine(false),
-        _buildTimelineStep('Payment', false, false),
+        _buildTimelineStep('IMEI', true, false),
+        _buildTimelineLine(true),
+        _buildTimelineStep('Evaluation', evaluationCompleted, evaluationActive),
+        _buildTimelineLine(evaluationCompleted),
+        _buildTimelineStep('Offer', false, offerActive),
       ],
     );
   }

@@ -14,12 +14,14 @@ class DeviceInfoStepPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final DeviceModel? device;
 
   const DeviceInfoStepPage({
     super.key,
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.device,
   });
 
   @override
@@ -42,11 +44,15 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
   @override
   void initState() {
     super.initState();
+    TradeInFlowSession.currentStep = 2;
     _deviceAgeController.addListener(_onFieldChanged);
 
-    // If user navigated back from Page 3/4 or resumed a pending session, populate values!
-    final activeDevice = TradeInFlowSession.currentDevice;
+    // If user navigated back from Page 3/4 or passed a device or resumed a pending session, populate values!
+    final activeDevice = widget.device ?? TradeInFlowSession.currentDevice;
     if (activeDevice != null) {
+      if (TradeInFlowSession.currentDevice == null) {
+        TradeInFlowSession.setCurrentDevice(activeDevice);
+      }
       _selectedBrand = activeDevice.brand.isNotEmpty ? activeDevice.brand : null;
       _selectedModel = activeDevice.model.isNotEmpty ? activeDevice.model : null;
       _selectedModelCode = activeDevice.modelCode;

@@ -1156,6 +1156,152 @@ router.get("/active-pending", async (req, res) => {
     }
 });
 
+// POST /update-status - Updates tradeInRequest requestStatus (e.g. 'Evaluated') and device status
+router.post("/update-status", async (req, res) => {
+    try {
+        const { tradeInRequestID, status } = req.body;
+        if (!tradeInRequestID || !status) {
+            return res.status(400).json({ success: false, message: "Missing tradeInRequestID or status." });
+        }
+
+        if (db) {
+            const requestRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+            const doc = await requestRef.get();
+            if (!doc.exists) {
+                return res.status(404).json({ success: false, message: "Trade-in request not found." });
+            }
+
+            await requestRef.update({
+                requestStatus: status,
+                evaluatedAt: new Date()
+            });
+
+            const reqData = doc.data();
+            if (reqData && reqData.deviceID) {
+                await db.collection("devices").doc(reqData.deviceID).update({
+                    status: status.toLowerCase()
+                }).catch(() => {});
+            }
+
+            return res.status(200).json({
+                success: true,
+                tradeInRequestID,
+                status,
+                message: `Trade-in request updated to ${status}.`
+            });
+        }
+
+        return res.status(200).json({ success: true });
+    } catch (err) {
+        console.error("update-status error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /active-submitted - Search for trade in request with 'Submitted' or 'Evaluated' status for active activity
+router.get("/active-submitted", async (req, res) => {
+    try {
+        const { userEmail } = req.query;
+        if (!userEmail || !db) {
+            return res.status(200).json({ success: true, submittedRequest: null });
+        }
+
+        const snapshot = await db.collection("tradeInRequests")
+            .where("userEmail", "==", userEmail)
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(200).json({ success: true, submittedRequest: null });
+        }
+
+        // Filter for active statuses: 'Submitted', 'Evaluated', or 'Quoted'
+        const validDocs = snapshot.docs
+            .map(d => d.data())
+            .filter(d => {
+                const s = (d.requestStatus || '').toLowerCase();
+                return s === 'submitted' || s === 'evaluated' || s === 'quoted';
+            });
+
+        if (validDocs.length === 0) {
+            return res.status(200).json({ success: true, submittedRequest: null });
+        }
+
+        // Sort descending by submittedAt or createdAt in memory if multiple
+        const toMs = (ts) => {
+            if (!ts) return 0;
+            if (ts.toDate && typeof ts.toDate === "function") return ts.toDate().getTime();
+            if (ts._seconds) return ts._seconds * 1000 + (ts._nanoseconds || 0) / 1e6;
+            if (typeof ts === "string" || typeof ts === "number") return new Date(ts).getTime() || 0;
+            if (ts instanceof Date) return ts.getTime();
+            return 0;
+        };
+
+        const docs = snapshot.docs.map(d => d.data());
+        docs.sort((a, b) => {
+            const timeA = toMs(a.submittedAt) || toMs(a.createdAt);
+            const timeB = toMs(b.submittedAt) || toMs(b.createdAt);
+            return timeB - timeA;
+        });
+
+        const reqData = docs[0];
+        let deviceData = null;
+        if (reqData && reqData.deviceID) {
+            const devDoc = await db.collection("devices").doc(reqData.deviceID).get();
+            if (devDoc.exists) {
+                deviceData = devDoc.data();
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            submittedRequest: reqData,
+            device: deviceData
+        });
+    } catch (err) {
+        console.error("active-submitted error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /cancel-requests - Cancel existing Pending/Submitted/Evaluated/Quoted trade-in requests for a user when starting a new flow
+router.post("/cancel-requests", async (req, res) => {
+    try {
+        const { userEmail } = req.body;
+        if (!userEmail || !db) {
+            return res.status(200).json({ success: true, count: 0 });
+        }
+
+        const snapshot = await db.collection("tradeInRequests")
+            .where("userEmail", "==", userEmail)
+            .get();
+
+        let count = 0;
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            const status = (data.requestStatus || '').toLowerCase();
+            if (status === 'pending' || status === 'submitted' || status === 'evaluated' || status === 'quoted') {
+                await doc.ref.update({
+                    requestStatus: 'Cancelled',
+                    cancelledAt: new Date()
+                }).catch(() => {});
+
+                // Also update associated device status
+                if (data.deviceID) {
+                    await db.collection("devices").doc(data.deviceID).update({
+                        status: 'cancelled'
+                    }).catch(() => {});
+                }
+                count++;
+            }
+        }
+
+        return res.status(200).json({ success: true, count });
+    } catch (err) {
+        console.error("cancel-requests error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // Helper: Luhn Checksum Algorithm for IMEI
 function isValidLuhnIMEI(imei) {
     if (!/^\d{15}$/.test(imei)) return false;
