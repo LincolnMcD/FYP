@@ -6,6 +6,10 @@ import 'touchscreen_test_page.dart';
 import 'display_test_page.dart';
 import 'camera_test_page.dart';
 import 'microphone_test_page.dart';
+import 'speaker_test_page.dart';
+import 'sensor_test_page.dart';
+import 'network_test_page.dart';
+import 'gps_test_page.dart';
 
 class DiagnosticSuitePage extends StatefulWidget {
   final DeviceModel? device;
@@ -37,7 +41,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
     {
       'title': 'Display',
       'icon': Icons.phone_android_outlined,
-      'isAvailable': false,
+      'isAvailable': true,
     },
     {
       'title': 'Camera',
@@ -52,22 +56,22 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
     {
       'title': 'Speaker',
       'icon': Icons.volume_up_outlined,
-      'isAvailable': false,
+      'isAvailable': true,
     },
     {
       'title': 'Sensors',
       'icon': Icons.sensors_outlined,
-      'isAvailable': false,
+      'isAvailable': true,
     },
     {
       'title': 'Wi-Fi',
       'icon': Icons.wifi_outlined,
-      'isAvailable': false,
+      'isAvailable': true,
     },
     {
       'title': 'GPS',
       'icon': Icons.location_on_outlined,
-      'isAvailable': false,
+      'isAvailable': true,
     },
   ];
 
@@ -133,11 +137,78 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
           ),
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${item['title']} test will run during the diagnostic suite.'),
-          duration: const Duration(seconds: 2),
+    } else if (item['title'] == 'Speaker') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SpeakerTestPage(
+            device: widget.device,
+            tradeInRequestID: widget.tradeInRequestID,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
+            touchScore: 100,
+            displayScore: 100,
+            cameraScore: 100,
+            micScore: 100,
+          ),
+        ),
+      );
+    } else if (item['title'] == 'Sensors') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SensorTestPage(
+            device: widget.device,
+            tradeInRequestID: widget.tradeInRequestID,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
+            touchScore: 100,
+            displayScore: 100,
+            cameraScore: 100,
+            micScore: 100,
+            speakerScore: 100,
+          ),
+        ),
+      );
+    } else if (item['title'] == 'Wi-Fi') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NetworkTestPage(
+            device: widget.device,
+            tradeInRequestID: widget.tradeInRequestID,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
+            touchScore: 100,
+            displayScore: 100,
+            cameraScore: 100,
+            micScore: 100,
+            speakerScore: 100,
+            sensorScore: 100,
+          ),
+        ),
+      );
+    } else if (item['title'] == 'GPS') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GpsTestPage(
+            device: widget.device,
+            tradeInRequestID: widget.tradeInRequestID,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
+            touchScore: 100,
+            displayScore: 100,
+            cameraScore: 100,
+            micScore: 100,
+            speakerScore: 100,
+            sensorScore: 100,
+            networkScore: 100,
+          ),
         ),
       );
     }

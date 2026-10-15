@@ -84,10 +84,18 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
                       Icon(
                         isSkipped
                             ? Icons.skip_next_rounded
-                            : (score >= 80 ? Icons.check_circle_rounded : Icons.info_outline_rounded),
+                            : (score == 100
+                                ? Icons.check_circle_rounded
+                                : (score >= 50
+                                    ? Icons.info_outline_rounded
+                                    : (score >= 1 ? Icons.warning_amber_rounded : Icons.cancel_rounded))),
                         color: isSkipped
                             ? const Color(0xFFF59E0B)
-                            : (score >= 80 ? const Color(0xFF16A34A) : const Color(0xFF0C5AD2)),
+                            : (score == 100
+                                ? const Color(0xFF16A34A)
+                                : (score >= 50
+                                    ? const Color(0xFF0C5AD2)
+                                    : (score >= 1 ? const Color(0xFFD97706) : const Color(0xFFE11D48)))),
                         size: 24,
                       ),
                       const SizedBox(width: 8),
@@ -125,21 +133,17 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
               const SizedBox(height: 28),
               Row(
                 children: [
-                  // For success pop-up (score == 100), no need RETRY button
                   if (score < 100) ...[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          _resetTest(); // Retry test
-                        },
+                        onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         child: const Text(
-                          'RETRY',
+                          'CLOSE',
                           style: TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.bold,
@@ -203,31 +207,22 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.skip_next_rounded,
-                        color: Color(0xFFF59E0B),
-                        size: 24,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Skip Touchscreen Test?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.skip_next_rounded,
+                    color: Color(0xFFF59E0B),
+                    size: 24,
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, false),
-                    child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Skip Touchscreen Test?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                 ],
               ),
@@ -337,6 +332,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
               const SizedBox(height: 16),
               const Text(
                 'Are you sure you want to exit the Touchscreen test? Your current progress will be lost.',
+                textAlign: TextAlign.justify,
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
               ),
               const SizedBox(height: 32),
@@ -645,7 +641,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
                         ),
                         const SizedBox(height: 8),
 
-                        // Fail Action Button
+                        // Next Test Action Button
                         IgnorePointer(
                           ignoring: !_controlsVisible,
                           child: AnimatedOpacity(
@@ -657,7 +653,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
                               child: ElevatedButton(
                                 onPressed: () => _onTestComplete(isPassed: false),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE50914),
+                                  backgroundColor: const Color(0xFF0C5AD2),
                                   foregroundColor: Colors.white,
                                   elevation: _controlsVisible ? 2 : 0,
                                   shape: RoundedRectangleBorder(
@@ -665,7 +661,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
                                   ),
                                 ),
                                 child: const Text(
-                                  'Fail',
+                                  'Next Test',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700,

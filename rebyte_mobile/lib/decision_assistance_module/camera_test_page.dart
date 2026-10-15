@@ -177,10 +177,18 @@ class _CameraTestPageState extends State<CameraTestPage> {
                       Icon(
                         isSkipped
                             ? Icons.skip_next_rounded
-                            : (cameraScore >= 80 ? Icons.check_circle_rounded : Icons.assignment_late_rounded),
+                            : (cameraScore == 100
+                                ? Icons.check_circle_rounded
+                                : (cameraScore >= 50
+                                    ? Icons.info_outline_rounded
+                                    : (cameraScore >= 1 ? Icons.warning_amber_rounded : Icons.cancel_rounded))),
                         color: isSkipped
                             ? const Color(0xFFF59E0B)
-                            : (cameraScore >= 80 ? const Color(0xFF16A34A) : const Color(0xFF0C5AD2)),
+                            : (cameraScore == 100
+                                ? const Color(0xFF16A34A)
+                                : (cameraScore >= 50
+                                    ? const Color(0xFF0C5AD2)
+                                    : (cameraScore >= 1 ? const Color(0xFFD97706) : const Color(0xFFE11D48)))),
                         size: 24,
                       ),
                       const SizedBox(width: 8),
@@ -194,7 +202,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
                       ),
                     ],
                   ),
-                  if (cameraScore < 100)
+                  if (cameraScore != 100)
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
@@ -218,29 +226,17 @@ class _CameraTestPageState extends State<CameraTestPage> {
               const SizedBox(height: 28),
               Row(
                 children: [
-                  // For success pop-up (cameraScore == 100), no need RETRY button
-                  if (cameraScore < 100) ...[
+                  if (cameraScore != 100) ...[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          setState(() {
-                            _currentStage = 0; // Restart test
-                            _rearPhoto = null;
-                            _frontPhoto = null;
-                            _rearHasIssue = null;
-                            _frontHasIssue = null;
-                            _rearSelectedIssues.clear();
-                            _frontSelectedIssues.clear();
-                          });
-                        },
+                        onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         child: const Text(
-                          'RETRY',
+                          'CLOSE',
                           style: TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.bold,
@@ -436,6 +432,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
               const SizedBox(height: 16),
               const Text(
                 'Are you sure you want to exit the Camera test? Your current progress will be lost.',
+                textAlign: TextAlign.justify,
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
               ),
               const SizedBox(height: 32),
@@ -526,50 +523,43 @@ class _CameraTestPageState extends State<CameraTestPage> {
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
                 onPressed: _handleBack,
               ),
+              ElevatedButton(
+                onPressed: _handleSkip,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0848AA),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Skip Test',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFFEBF3FF),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
                   '3/8',
                   style: TextStyle(
-                    color: Color(0xFF0C5AD2),
+                    color: Color(0xFF0848AA),
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
                 ),
               ),
             ],
-          ),
-        ),
-
-        // Skip Button
-        Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 8),
-          child: Center(
-            child: SizedBox(
-              width: 110,
-              height: 36,
-              child: ElevatedButton(
-                onPressed: _handleSkip,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0848AA),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  padding: EdgeInsets.zero,
-                ),
-                child: const Text(
-                  'Skip Test',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
           ),
         ),
 
@@ -643,7 +633,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text(
-                'Done & Inspect Quality',
+                'Inspect Camera Quality',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
@@ -952,7 +942,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text(
-                    'COMPLETE TEST',
+                    'Done & Next Test',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),

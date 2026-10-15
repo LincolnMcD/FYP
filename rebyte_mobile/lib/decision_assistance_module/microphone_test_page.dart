@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../device_tradein_module/models/device_model.dart';
-import 'diagnostic_result_page.dart';
+import 'speaker_test_page.dart';
 
 class MicrophoneTestPage extends StatefulWidget {
   final DeviceModel? device;
@@ -176,7 +176,9 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
             .listen((amp) {
           if (!mounted) return;
 
-          final double currentDb = amp.current;
+          // Guard against -infinity or NaN from audio recorder when mic inputs complete digital silence or initializes
+          final double rawDb = amp.current;
+          final double currentDb = (rawDb.isInfinite || rawDb.isNaN || rawDb < -90.0) ? -90.0 : rawDb;
 
           // If simulating dropoff, cut out voice at seconds 3 & 2
           final bool isDroppingOut = _isSimulatingDropoff &&
@@ -411,10 +413,18 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                       Icon(
                         isSkipped
                             ? Icons.skip_next_rounded
-                            : (micScore >= 80 ? Icons.check_circle_rounded : Icons.assignment_late_rounded),
+                            : (micScore == 100
+                                ? Icons.check_circle_rounded
+                                : (micScore >= 50
+                                    ? Icons.info_outline_rounded
+                                    : (micScore >= 1 ? Icons.warning_amber_rounded : Icons.cancel_rounded))),
                         color: isSkipped
                             ? const Color(0xFFF59E0B)
-                            : (micScore >= 80 ? const Color(0xFF16A34A) : const Color(0xFF0C5AD2)),
+                            : (micScore == 100
+                                ? const Color(0xFF16A34A)
+                                : (micScore >= 50
+                                    ? const Color(0xFF0C5AD2)
+                                    : (micScore >= 1 ? const Color(0xFFD97706) : const Color(0xFFE11D48)))),
                         size: 24,
                       ),
                       const SizedBox(width: 8),
@@ -428,7 +438,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                       ),
                     ],
                   ),
-                  if (micScore < 100)
+                  if (micScore != 100)
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
@@ -452,29 +462,17 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
               const SizedBox(height: 28),
               Row(
                 children: [
-                  if (micScore < 100) ...[
+                  if (micScore != 100) ...[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          setState(() {
-                            _phase = MicTestPhase.ready;
-                            _userClarityScore = null;
-                            _volumeDeduction = 0;
-                            _noiseDeduction = 0;
-                            _sysIntermittent = false;
-                            _sysRecordingFailed = false;
-                            _volumeLevel = 0.05;
-                            _isPlaying = false;
-                          });
-                        },
+                        onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         child: const Text(
-                          'RETRY',
+                          'CLOSE',
                           style: TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.bold,
@@ -492,7 +490,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => DiagnosticResultPage(
+                            builder: (context) => SpeakerTestPage(
                               device: widget.device,
                               tradeInRequestID: widget.tradeInRequestID,
                               isLoggedIn: widget.isLoggedIn,
@@ -518,7 +516,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                         elevation: 0,
                       ),
                       child: const Text(
-                        'VIEW RESULTS',
+                        'NEXT TEST',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ),
@@ -623,7 +621,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => DiagnosticResultPage(
+          builder: (context) => SpeakerTestPage(
             device: widget.device,
             tradeInRequestID: widget.tradeInRequestID,
             isLoggedIn: widget.isLoggedIn,
@@ -674,6 +672,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
               const SizedBox(height: 16),
               const Text(
                 'Are you sure you want to exit the Microphone test? Your current progress will be lost.',
+                textAlign: TextAlign.justify,
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
               ),
               const SizedBox(height: 32),
@@ -750,52 +749,45 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                       icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
                       onPressed: _handleBack,
                     ),
+                    ElevatedButton(
+                      onPressed: _handleSkip,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0848AA),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Skip Test',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(20),
+                        color: const Color(0xFFEBF3FF),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
                         '4/8',
-                      style: TextStyle(
-                        color: Color(0xFF0C5AD2),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        style: TextStyle(
+                          color: Color(0xFF0848AA),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Skip Test Button (With Confirm Skip Pop-Up)
-            Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: 8),
-              child: Center(
-                child: SizedBox(
-                  width: 110,
-                  height: 36,
-                  child: ElevatedButton(
-                    onPressed: _handleSkip,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0848AA),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: const Text(
-                      'Skip Test',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
               ),
-            ),
 
             // Title and Subtitle Instructions
             const Text(
@@ -967,12 +959,16 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'QA: Dropoff Voice Simulation',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F254B),
+                    const Flexible(
+                      child: Text(
+                        'QA: Dropoff Voice Simulation',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F254B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -1221,8 +1217,12 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
 
   // Section 2: Comprehensive Evaluation (System & User Clarity)
   Widget _buildEvaluationSection() {
-    final String formattedSpeechDb = _calculatedSpeechRmsDbfs.toStringAsFixed(1);
-    final String formattedNoiseDb = _calculatedNoiseFloorDbfs.toStringAsFixed(1);
+    final String formattedSpeechDb = (_calculatedSpeechRmsDbfs.isInfinite || _calculatedSpeechRmsDbfs.isNaN)
+        ? '-90.0'
+        : _calculatedSpeechRmsDbfs.toStringAsFixed(1);
+    final String formattedNoiseDb = (_calculatedNoiseFloorDbfs.isInfinite || _calculatedNoiseFloorDbfs.isNaN)
+        ? '-90.0'
+        : _calculatedNoiseFloorDbfs.toStringAsFixed(1);
 
     // Voice Volume status label
     String volumeStatusText;
@@ -1304,7 +1304,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                   ),
                   const SizedBox(width: 8),
                   _buildClarityChoiceButton(
-                    title: 'Partially clear',
+                    title: 'Partial Clear',
                     score: 50,
                     color: const Color(0xFFD97706),
                   ),
@@ -1588,7 +1588,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 child: const Text(
-                  'DONE',
+                  'Done & Next Test',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
               ),

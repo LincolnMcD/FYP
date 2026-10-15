@@ -130,12 +130,9 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
   late final List<String> _q3Options = _q3ScoreMap.keys.toList();
   String? _selectedQ3Severity;
 
-  // Maximum possible severity score (all severity marks added together):
-  // Q1 all options: 10 + 25 + 15 + 20 + 30 + 25 + 15 = 140
-  // Q2 all options: 5 + 10 + 5 + 5 + 5 = 30
-  // Q3 all options: 5 + 15 + 30 = 50
-  // Total sum of all severity marks = 140 + 30 + 50 = 220
-  static const int _maxDisplaySeverityScore = 220;
+  // Maximum possible severity score:
+  // Total severity mark of defect types (Q1: 140) + defect positions (Q2: 30) + severe type mark (Q3: 30) = 200
+  static const int _maxDisplaySeverityScore = 200;
 
   int _calculateDisplayScore({required bool isPassed, bool isSkipped = false}) {
     if (isSkipped) return 0;
@@ -143,26 +140,26 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
 
     int gainedSeverityMark = 0;
 
-    // Sum gained severity mark for Q1 issues
+    // Sum gained severity mark for Q1 issues (Defect types)
     for (final opt in _q1IssueOptions) {
       if (_selectedQ1Issues.contains(opt['title'])) {
         gainedSeverityMark += (opt['score'] as int? ?? 15);
       }
     }
 
-    // Sum gained severity mark for Q2 locations
+    // Sum gained severity mark for Q2 locations (Positions)
     for (final loc in _selectedQ2Locations) {
       gainedSeverityMark += (_q2ScoreMap[loc] ?? 5);
     }
 
-    // Sum gained severity mark for Q3 severity
+    // Sum gained severity mark for Q3 severity (Minor: 5, Moderate: 15, Severe: 30)
     if (_selectedQ3Severity != null) {
       gainedSeverityMark += (_q3ScoreMap[_selectedQ3Severity] ?? 0);
     }
 
-    // Formula: (total - gained severity mark) / total * 100
-    final double scoreFraction = (_maxDisplaySeverityScore - gainedSeverityMark) / _maxDisplaySeverityScore;
-    final int finalScore = (scoreFraction * 100).round().clamp(0, 100);
+    // Formula: 100 - (gainedSeverityMark / 200 * 100)
+    final double deduction = (gainedSeverityMark / _maxDisplaySeverityScore) * 100.0;
+    final int finalScore = (100.0 - deduction).round().clamp(0, 100);
 
     return finalScore;
   }
@@ -198,10 +195,18 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                       Icon(
                         isSkipped
                             ? Icons.skip_next_rounded
-                            : (displayScore >= 80 ? Icons.check_circle_rounded : Icons.assignment_late_rounded),
+                            : (displayScore == 100
+                                ? Icons.check_circle_rounded
+                                : (displayScore >= 50
+                                    ? Icons.info_outline_rounded
+                                    : (displayScore >= 1 ? Icons.warning_amber_rounded : Icons.cancel_rounded))),
                         color: isSkipped
                             ? const Color(0xFFF59E0B)
-                            : (displayScore >= 80 ? const Color(0xFF16A34A) : const Color(0xFF0C5AD2)),
+                            : (displayScore == 100
+                                ? const Color(0xFF16A34A)
+                                : (displayScore >= 50
+                                    ? const Color(0xFF0C5AD2)
+                                    : (displayScore >= 1 ? const Color(0xFFD97706) : const Color(0xFFE11D48)))),
                         size: 24,
                       ),
                       const SizedBox(width: 8),
@@ -215,7 +220,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                       ),
                     ],
                   ),
-                  if (displayScore < 100)
+                  if (displayScore != 100)
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
@@ -239,26 +244,17 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
               const SizedBox(height: 28),
               Row(
                 children: [
-                  // For success pop-up (displayScore == 100), no need RETRY button
-                  if (displayScore < 100) ...[
+                  if (displayScore != 100) ...[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          setState(() {
-                            _currentStage = 0; // Restart test
-                            _selectedQ1Issues.clear();
-                            _selectedQ2Locations.clear();
-                            _selectedQ3Severity = null;
-                          });
-                        },
+                        onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           side: BorderSide(color: Colors.grey.shade300),
                         ),
                         child: const Text(
-                          'RETRY',
+                          'CLOSE',
                           style: TextStyle(
                             color: Color(0xFF64748B),
                             fontWeight: FontWeight.bold,
@@ -324,31 +320,21 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const Row(
                 children: [
-                  const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.skip_next_rounded,
-                        color: Color(0xFFF59E0B),
-                        size: 24,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Skip Display Test?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.skip_next_rounded,
+                    color: Color(0xFFF59E0B),
+                    size: 24,
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, false),
-                    child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Skip Display Test?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                 ],
               ),
@@ -460,6 +446,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
               const SizedBox(height: 16),
               const Text(
                 'Are you sure you want to exit the Display test? Your current progress will be lost.',
+                textAlign: TextAlign.justify,
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
               ),
               const SizedBox(height: 32),
@@ -713,13 +700,13 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
               ),
             ),
 
-            // Top exit button if needed
+            // Top exit button returning to initial Test 2 page
             Positioned(
               top: 12,
-              left: 12,
+              right: 12,
               child: IconButton(
                 icon: Icon(Icons.close, color: textColor),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => setState(() => _currentStage = 0),
               ),
             ),
           ],
@@ -827,7 +814,6 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
@@ -837,6 +823,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
+              const SizedBox(width: 12),
               const Text(
                 'Report Display Issue',
                 style: TextStyle(
@@ -844,12 +831,6 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F172A),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Color(0xFF64748B), size: 22),
-                onPressed: () => Navigator.pop(context),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
               ),
             ],
           ),
@@ -982,7 +963,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text(
-                    'DONE',
+                    'Done & Next Test',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),
