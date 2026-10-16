@@ -12,6 +12,9 @@ import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../device_tradein_module/services/trade_in_service.dart';
 import '../device_tradein_module/models/device_model.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
+import '../shop_module/shop_page.dart';
+import '../shop_module/cart_page.dart';
+import '../shop_module/notification_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -38,12 +41,13 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late int _selectedIndex = widget.initialIndex;
-  late bool _isLoggedIn = widget.isLoggedIn;
+  late final bool _isLoggedIn = widget.isLoggedIn;
   late String? _email = widget.email;
   late String? _name = widget.name;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey _activeActivityKey = GlobalKey();
+  final GlobalKey<ShopPageState> _shopPageKey = GlobalKey<ShopPageState>();
   final ScrollController _homeScrollController = ScrollController();
 
   String? _toastMessage;
@@ -286,7 +290,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              const Center(child: Text('Shop Page - Under Construction')),
+              ShopPage(
+                key: _shopPageKey,
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+                onCartUpdated: () {
+                  _shopPageKey.currentState?.loadProducts();
+                },
+                onOpenCart: () {
+                  _openCartPage();
+                },
+              ),
               TradeInLandingPage(
                 isLoggedIn: _isLoggedIn,
                 email: _email,
@@ -378,6 +393,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   }),
                   _buildDrawerItem(Icons.phonelink_setup_rounded, 'Test My Device', onTap: () {
                     Navigator.pop(context);
+                    if (!_isLoggedIn) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const WelcomePage()),
+                      );
+                      return;
+                    }
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -395,8 +417,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
                     ),
                     _buildDrawerItem(Icons.inventory_2_outlined, 'My Orders'),
-                    _buildDrawerItem(Icons.shopping_bag_outlined, 'My Cart'),
-                    _buildDrawerItem(Icons.notifications_none, 'Notifications', badge: '3'),
+                    _buildDrawerItem(
+                      Icons.shopping_bag_outlined,
+                      'My Cart',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openCartPage();
+                      },
+                    ),
+                    _buildDrawerItem(
+                      Icons.notifications_none,
+                      'Notifications',
+                      badge: '3',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openNotificationPage();
+                      },
+                    ),
                   ],
                 ],
               ),
@@ -598,6 +635,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _openCartPage() {
+    if (!_isLoggedIn) {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CartPage(
+          isLoggedIn: _isLoggedIn,
+          email: _email,
+          name: _name,
+          onCartUpdated: () {
+            _shopPageKey.currentState?.loadProducts();
+          },
+        ),
+      ),
+    ).then((_) {
+      _shopPageKey.currentState?.loadProducts();
+    });
+  }
+
+  void _openNotificationPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NotificationPage(
+          isLoggedIn: _isLoggedIn,
+          email: _email,
+          name: _name,
+        ),
+      ),
+    );
+  }
+
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
@@ -625,27 +697,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ],
       ),
       actions: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.black87),
-              onPressed: () {},
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
+        if (_selectedIndex == 1)
+          IconButton(
+            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+            onPressed: _openCartPage,
+          )
+        else
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: Colors.black87),
+                onPressed: _openNotificationPage,
+              ),
+              Positioned(
+                right: 12,
+                top: 12,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF97316),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -784,6 +862,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             itemWidth,
             iconColor: const Color(0xFF059669),
             onTap: () {
+              if (!_isLoggedIn) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WelcomePage()),
+                );
+                return;
+              }
               Navigator.push(
                 context,
                 MaterialPageRoute(

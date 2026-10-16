@@ -4,17 +4,28 @@ import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
+import '../shop_module/cart_page.dart';
+import '../shop_module/notification_page.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final VoidCallback? onMenuPressed;
   final VoidCallback? onNotificationPressed;
+  final VoidCallback? onCartPressed;
+  final int cartItemCount;
+  final bool showNotificationDot;
+
+  final bool isShopPage;
 
   const ReByteAppBar({
     super.key,
     this.scaffoldKey,
     this.onMenuPressed,
     this.onNotificationPressed,
+    this.onCartPressed,
+    this.cartItemCount = 0,
+    this.showNotificationDot = true,
+    this.isShopPage = false,
   });
 
   @override
@@ -54,27 +65,76 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.black87),
-              onPressed: onNotificationPressed ?? () {},
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
+        if (isShopPage)
+          // Shopping cart icon ONLY on shop page
+          IconButton(
+            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+            onPressed: () async {
+              if (onCartPressed != null) {
+                onCartPressed!();
+              } else {
+                final session = await SessionService.getSession();
+                if (context.mounted) {
+                  if (session.isEmpty) {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CartPage(
+                          isLoggedIn: true,
+                          email: session['email'],
+                          name: session['name'],
+                        ),
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+          )
+        else
+          // Bell Notification icon on all other pages
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: Colors.black87),
+                onPressed: () async {
+                  if (onNotificationPressed != null) {
+                    onNotificationPressed!();
+                  } else {
+                    final session = await SessionService.getSession();
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => NotificationPage(
+                            isLoggedIn: session.isNotEmpty,
+                            email: session['email'],
+                            name: session['name'],
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
               ),
-            ),
-          ],
-        ),
+              if (showNotificationDot)
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF97316),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
@@ -173,8 +233,16 @@ class ReByteDrawer extends StatelessWidget {
                     _buildDrawerItem(
                       Icons.phonelink_setup_rounded,
                       'Test My Device',
+                      isSelected: selectedIndex == 5,
                       onTap: () {
                         Navigator.pop(context);
+                        if (!isLoggedIn) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const WelcomePage()),
+                          );
+                          return;
+                        }
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -200,9 +268,45 @@ class ReByteDrawer extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _buildDrawerItem(Icons.inventory_2_outlined, 'My Orders'),
-                      _buildDrawerItem(Icons.shopping_bag_outlined, 'My Cart'),
-                      _buildDrawerItem(Icons.notifications_none, 'Notifications', badge: '3'),
+                      _buildDrawerItem(
+                        Icons.inventory_2_outlined,
+                        'My Orders',
+                      ),
+                      _buildDrawerItem(
+                        Icons.shopping_bag_outlined,
+                        'My Cart',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CartPage(
+                                isLoggedIn: isLoggedIn,
+                                email: email,
+                                name: name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildDrawerItem(
+                        Icons.notifications_none,
+                        'Notifications',
+                        badge: '3',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => NotificationPage(
+                                isLoggedIn: isLoggedIn,
+                                email: email,
+                                name: name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ],
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../device_tradein_module/models/device_model.dart';
+import '../account_management_module/welcome_page.dart';
 import 'touchscreen_test_page.dart';
 import 'display_test_page.dart';
 import 'camera_test_page.dart';
@@ -75,7 +76,20 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
     },
   ];
 
+  bool _checkLoginRequired() {
+    if (!widget.isLoggedIn) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const WelcomePage()),
+      );
+      return false;
+    }
+    return true;
+  }
+
   void _onStartDiagnostic() {
+    if (!_checkLoginRequired()) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -91,6 +105,8 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
   }
 
   void _onTileTapped(Map<String, dynamic> item) {
+    if (!_checkLoginRequired()) return;
+
     if (item['title'] == 'Touchscreen') {
       _onStartDiagnostic();
     } else if (item['title'] == 'Display') {
@@ -223,7 +239,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
         isLoggedIn: widget.isLoggedIn,
         email: widget.email,
         name: widget.name,
-        selectedIndex: 2,
+        selectedIndex: 5,
       ),
       body: SafeArea(
         child: Column(
@@ -363,7 +379,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
         ),
       ),
       bottomNavigationBar: const ReByteBottomNavBar(
-        selectedIndex: 2,
+        selectedIndex: -1,
       ),
     );
   }

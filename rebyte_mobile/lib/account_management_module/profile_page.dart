@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'edit_profile_page.dart';
+import 'manage_address_page.dart';
+import 'manage_payment_method_page.dart';
 import 'services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 
@@ -112,9 +114,31 @@ class ProfilePage extends StatelessWidget {
         children: [
           _buildMenuItem(Icons.person_outline, 'Account Details'),
           _buildDivider(),
-          _buildMenuItem(Icons.location_on_outlined, 'Delivery Address'),
+          _buildMenuItem(
+            Icons.location_on_outlined,
+            'Delivery Address',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ManageAddressPage(email: email ?? 'default_user'),
+                ),
+              );
+            },
+          ),
           _buildDivider(),
-          _buildMenuItem(Icons.credit_card_outlined, 'Payment Accounts'),
+          _buildMenuItem(
+            Icons.credit_card_outlined,
+            'Payment Accounts',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ManagePaymentMethodPage(email: email ?? 'default_user'),
+                ),
+              );
+            },
+          ),
           _buildDivider(),
           _buildMenuItem(Icons.inventory_2_outlined, 'My Orders'),
           _buildDivider(),

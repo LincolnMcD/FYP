@@ -166,7 +166,7 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
         isLoggedIn: widget.isLoggedIn,
         email: widget.email,
         name: widget.name,
-        selectedIndex: 2,
+        selectedIndex: 5,
       ),
       body: SafeArea(
         child: Stack(

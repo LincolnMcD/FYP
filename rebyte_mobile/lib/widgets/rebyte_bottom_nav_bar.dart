@@ -103,13 +103,19 @@ class ReByteBottomNavBar extends StatelessWidget {
         ],
       ),
       child: BottomNavigationBar(
-        currentIndex: selectedIndex,
+        currentIndex: (selectedIndex >= 0 && selectedIndex <= 4) ? selectedIndex : 0,
         onTap: (index) => _handleNavigation(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF0C5AD2),
+        selectedItemColor: (selectedIndex >= 0 && selectedIndex <= 4) ? const Color(0xFF0C5AD2) : Colors.grey.shade500,
         unselectedItemColor: Colors.grey.shade500,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+        selectedLabelStyle: TextStyle(
+          fontWeight: (selectedIndex >= 0 && selectedIndex <= 4) ? FontWeight.bold : FontWeight.normal,
+          fontSize: 10,
+        ),
+        selectedIconTheme: IconThemeData(
+          color: (selectedIndex >= 0 && selectedIndex <= 4) ? const Color(0xFF0C5AD2) : Colors.grey.shade500,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 10),
         elevation: 0,
         items: const [
