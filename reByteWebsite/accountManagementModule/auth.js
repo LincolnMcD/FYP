@@ -888,7 +888,11 @@ const ReByteAuth = {
       });
       if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
       const data = await response.json();
-      return response.ok ? { success: true } : { success: false, archived: data.archived === true, error: data.error || 'Staff session has ended.' };
+      if (response.ok && data.profile) {
+        const current = this.getUser() || {};
+        this.setUser({ ...current, ...data.profile, role: current.role || 'Staff' });
+      }
+      return response.ok ? { success: true, profile: data.profile } : { success: false, archived: data.archived === true, error: data.error || 'Staff session has ended.' };
     } catch (err) {
       if (this.isPasswordChangeInProgress()) return { success: true, skipped: true };
       if (err?.code?.startsWith('auth/')) {
@@ -996,29 +1000,101 @@ document.addEventListener('DOMContentLoaded', () => {
     history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
     setTimeout(() => ReByteAuth.showToast('This account has been archived. Please contact administrator.', 'error'), 100);
   }
-  let accountSessionCheckInProgress = false;
-  const checkActiveSession = async () => {
-    if (accountSessionCheckInProgress || !ReByteAuth.isLoggedIn()) return;
-    accountSessionCheckInProgress = true;
+  let sessionStreamController = null;
+  let sessionStreamRetry = 0;
+  let sessionStreamRetryTimer = null;
+  const startSessionStream = async (firebaseUser) => {
+    if (!firebaseUser || !ReByteAuth.isLoggedIn()) return;
+    sessionStreamController?.abort();
+    const controller = new AbortController();
+    sessionStreamController = controller;
     try {
-      const user = ReByteAuth.getUser();
-      if (String(user?.role || '').toLowerCase() === 'staff') {
-        const result = await ReByteAuth.checkStaffSession();
-        if (!result.success && !result.transient && !result.skipped) {
-          ReByteAuth.forceSessionLogout(result.archived === true);
-        }
-      } else {
-        const result = await ReByteAuth.checkAccountSession();
-        if (result.expired) ReByteAuth.forceSessionLogout(result.archived === true, result.status);
+      const token = await firebaseUser.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/account-session/stream`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (response.status === 401) {
+        const state = await response.json().catch(() => ({}));
+        ReByteAuth.forceSessionLogout(state.archived === true, state.status);
+        return;
       }
+      if (!response.ok || !response.body) throw new Error(`Session stream unavailable (${response.status})`);
+      sessionStreamRetry = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (ReByteAuth.isLoggedIn()) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        for (const event of events) {
+          const line = event.split('\n').find((entry) => entry.startsWith('data:'));
+          if (!line) continue;
+          const state = JSON.parse(line.slice(5).trim());
+          if (state.expired) {
+            if (ReByteAuth.isPasswordChangeInProgress() && typeof firebase !== 'undefined' && firebase.auth()?.currentUser) {
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+              const refreshedUser = firebase.auth().currentUser;
+              if (refreshedUser) {
+                try {
+                  await refreshedUser.getIdToken(true);
+                  controller.abort();
+                  startSessionStream(refreshedUser);
+                  return;
+                } catch (_) {}
+              }
+            }
+            controller.abort();
+            ReByteAuth.forceSessionLogout(state.archived === true, state.status);
+            return;
+          }
+          const account = ReByteAuth.getUser();
+          if (state.active && state.changed && state.profile && account) {
+            ReByteAuth.setUser({
+              ...account,
+              name: state.profile.fullName || account.name,
+              email: state.profile.email || account.email
+            });
+            ReByteAuth.initHeader();
+          }
+          const normalizeRole = (value) => String(value || '').toLowerCase() === 'administrator' ? 'admin' : String(value || '').toLowerCase();
+          const expectedRole = normalizeRole(account?.role);
+          if (state.active && state.role && expectedRole && normalizeRole(state.role) !== expectedRole) {
+            controller.abort();
+            ReByteAuth.forceSessionLogout(false);
+            return;
+          }
+          if (state.active && state.changed && state.role === 'staff') {
+            const result = await ReByteAuth.checkStaffSession();
+            if (!result.success && !result.skipped && !result.transient) {
+              controller.abort();
+              ReByteAuth.forceSessionLogout(result.archived === true);
+              return;
+            }
+            if (result.success && result.profile) ReByteAuth.initHeader();
+          }
+          if (state.transient) throw new Error('Account status listener failed');
+        }
+      }
+    } catch (error) {
+      if (error.name === 'AbortError' || !ReByteAuth.isLoggedIn()) return;
     } finally {
-      accountSessionCheckInProgress = false;
+      if (ReByteAuth.isLoggedIn() && sessionStreamController === controller && !controller.signal.aborted) {
+        sessionStreamRetry = Math.min(sessionStreamRetry + 1, 6);
+        const delay = Math.min(2000 * (2 ** (sessionStreamRetry - 1)), 120000);
+        clearTimeout(sessionStreamRetryTimer);
+        sessionStreamRetryTimer = setTimeout(() => startSessionStream(firebase.auth().currentUser), delay + Math.floor(Math.random() * 1000));
+      }
     }
   };
-  setTimeout(checkActiveSession, 1000);
-  window.setInterval(checkActiveSession, 1000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkActiveSession();
-  });
-  window.addEventListener('focus', checkActiveSession);
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onIdTokenChanged((user) => {
+      sessionStreamController?.abort();
+      clearTimeout(sessionStreamRetryTimer);
+      if (user && ReByteAuth.isLoggedIn()) startSessionStream(user);
+    });
+  }
 });

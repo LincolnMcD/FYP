@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'session_service.dart';
+import 'account_session_watch_service.dart';
 
 class AuthService {
   // Token revocation happens before this device can reauthenticate with the new
@@ -377,6 +378,7 @@ class AuthService {
             email: email.trim(),
             password: newPassword,
           );
+          AccountSessionWatchService.restartCurrent();
         } catch (_) {
           // The password update already succeeded; keep reporting that result.
         }

@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'account_session_watch_service.dart';
 
 class SessionService {
   static const String _keyEmail = 'session_email';
@@ -40,6 +41,7 @@ class SessionService {
   }
 
   static Future<void> clearSession() async {
+    AccountSessionWatchService.stop();
     try {
       await FirebaseAuth.instance.signOut();
     } catch (_) {}

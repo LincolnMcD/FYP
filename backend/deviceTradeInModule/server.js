@@ -1208,6 +1208,8 @@ router.get("/active-submitted", async (req, res) => {
 
         const snapshot = await db.collection("tradeInRequests")
             .where("userEmail", "==", userEmail)
+            .where("requestStatus", "in", ["Submitted", "Evaluated", "Quoted"])
+            .limit(20)
             .get();
 
         if (snapshot.empty) {
@@ -1215,12 +1217,7 @@ router.get("/active-submitted", async (req, res) => {
         }
 
         // Filter for active statuses: 'Submitted', 'Evaluated', or 'Quoted'
-        const validDocs = snapshot.docs
-            .map(d => d.data())
-            .filter(d => {
-                const s = (d.requestStatus || '').toLowerCase();
-                return s === 'submitted' || s === 'evaluated' || s === 'quoted';
-            });
+        const validDocs = snapshot.docs.map(d => d.data());
 
         if (validDocs.length === 0) {
             return res.status(200).json({ success: true, submittedRequest: null });
@@ -1236,14 +1233,13 @@ router.get("/active-submitted", async (req, res) => {
             return 0;
         };
 
-        const docs = snapshot.docs.map(d => d.data());
-        docs.sort((a, b) => {
+        validDocs.sort((a, b) => {
             const timeA = toMs(a.submittedAt) || toMs(a.createdAt);
             const timeB = toMs(b.submittedAt) || toMs(b.createdAt);
             return timeB - timeA;
         });
 
-        const reqData = docs[0];
+        const reqData = validDocs[0];
         let deviceData = null;
         if (reqData && reqData.deviceID) {
             const devDoc = await db.collection("devices").doc(reqData.deviceID).get();
@@ -1273,6 +1269,7 @@ router.post("/cancel-requests", async (req, res) => {
 
         const snapshot = await db.collection("tradeInRequests")
             .where("userEmail", "==", userEmail)
+            .where("requestStatus", "in", ["Pending", "Submitted", "Evaluated", "Quoted"])
             .get();
 
         let count = 0;

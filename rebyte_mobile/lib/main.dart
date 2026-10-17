@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'account_management_module/home_page.dart';
 import 'staff_module/staff_home_page.dart';
 import 'account_management_module/services/session_service.dart';
+import 'account_management_module/services/app_route_observer.dart';
 import 'device_tradein_module/services/trade_in_flow_session.dart';
 
 void main() async {
@@ -40,6 +41,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0C5AD2)),
         useMaterial3: true,
       ),
+      navigatorObservers: [appRouteObserver],
       home: (isLoggedIn && role?.toLowerCase() == 'staff')
           ? const StaffHomePage()
           : HomePage(isLoggedIn: isLoggedIn, email: email, name: name),

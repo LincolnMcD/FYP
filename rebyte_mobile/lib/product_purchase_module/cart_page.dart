@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/cart_item_model.dart';
 import 'services/shop_service.dart';
+import 'checkout_page.dart';
 
 class CartPage extends StatefulWidget {
   final bool isLoggedIn;
@@ -23,7 +24,6 @@ class CartPage extends StatefulWidget {
 class _CartPageState extends State<CartPage> {
   List<CartItemModel> _cartItems = [];
   bool _isLoading = true;
-  bool _isCheckingOut = false;
   bool _isDeleting = false;
   String? _toastMessage;
   bool _isToastError = false;
@@ -31,7 +31,7 @@ class _CartPageState extends State<CartPage> {
   @override
   void initState() {
     super.initState();
-    _loadCart();
+    _loadCart(forceRefresh: true);
   }
 
   void _showTopToast(String message, {bool isError = false}) {
@@ -48,7 +48,7 @@ class _CartPageState extends State<CartPage> {
     });
   }
 
-  Future<void> _loadCart() async {
+  Future<void> _loadCart({bool forceRefresh = false}) async {
     if (widget.email == null || widget.email!.isEmpty) {
       setState(() {
         _cartItems = [];
@@ -58,7 +58,7 @@ class _CartPageState extends State<CartPage> {
     }
 
     setState(() => _isLoading = true);
-    final items = await ShopService.fetchCart(email: widget.email!);
+    final items = await ShopService.fetchCart(email: widget.email!, forceRefresh: forceRefresh);
     if (mounted) {
       setState(() {
         _cartItems = items;
@@ -85,7 +85,7 @@ class _CartPageState extends State<CartPage> {
         widget.onCartUpdated?.call();
         _showTopToast('${item.displayTitle} has been removed from cart');
       } else {
-        _loadCart();
+        _loadCart(forceRefresh: true);
         _showTopToast('Failed to remove item', isError: true);
       }
     }
@@ -130,19 +130,20 @@ class _CartPageState extends State<CartPage> {
 
     setState(() => _isDeleting = true);
 
-    bool allSuccess = true;
-    for (final item in selectedItems) {
-      final ok = await ShopService.removeFromCart(
-        email: widget.email!,
-        productID: item.productID,
-      );
-      if (!ok) allSuccess = false;
-    }
+    final allSuccess = await ShopService.removeManyFromCart(
+      email: widget.email!,
+      productIDs: selectedItems.map((item) => item.productID).toList(),
+    );
 
     if (mounted) {
       setState(() => _isDeleting = false);
       widget.onCartUpdated?.call();
-      await _loadCart();
+      if (allSuccess) {
+        final removedIds = selectedItems.map((item) => item.productID).toSet();
+        setState(() => _cartItems.removeWhere((item) => removedIds.contains(item.productID)));
+      } else {
+        await _loadCart(forceRefresh: true);
+      }
       if (!mounted) return;
 
       _showTopToast(
@@ -152,7 +153,7 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
-  /// Batch purchase selected non-sold items
+  /// Batch purchase selected non-sold items via dedicated Checkout Page
   Future<void> _handleProceedToCheckout() async {
     final selectedPurchasableItems = _cartItems
         .where((i) => i.isSelected && !i.isSold)
@@ -163,83 +164,24 @@ class _CartPageState extends State<CartPage> {
       return;
     }
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm Purchase', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text(
-          'Complete purchase of ${selectedPurchasableItems.length} items for RM ${_calculateTotal().toStringAsFixed(2)}?',
-          textAlign: TextAlign.justify,
-          style: const TextStyle(fontSize: 13),
+    // Navigate to CheckoutPage
+    final purchased = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutPage(
+          email: widget.email!,
+          name: widget.name,
+          items: selectedPurchasableItems,
+          onCartUpdated: widget.onCartUpdated,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0C5AD2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Confirm & Pay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
 
-    if (confirm != true) return;
-
-    setState(() => _isCheckingOut = true);
-
-    final productIDs = selectedPurchasableItems.map((i) => i.productID).toList();
-    final result = await ShopService.purchaseItems(
-      email: widget.email!,
-      productIDs: productIDs,
-    );
-
-    if (mounted) {
-      setState(() => _isCheckingOut = false);
-
-      if (result['success'] == true) {
-        widget.onCartUpdated?.call();
-        await _loadCart();
-
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: const [
-                  Icon(Icons.check_circle, color: Colors.green, size: 28),
-                  SizedBox(width: 8),
-                  Text('Purchase Successful!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              content: const Text(
-                'Your order has been placed successfully. Thank you for choosing ReByte!',
-                style: TextStyle(fontSize: 13),
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0C5AD2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('OK', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            ),
-          );
-        }
-      } else {
-        _showTopToast(result['error']?.toString() ?? 'Purchase failed', isError: true);
-        _loadCart();
-      }
+    if (purchased == true && mounted) {
+      widget.onCartUpdated?.call();
+      final purchasedIds = selectedPurchasableItems.map((i) => i.productID).toSet();
+      setState(() => _cartItems.removeWhere((item) => purchasedIds.contains(item.productID)));
+      await _loadCart(forceRefresh: true);
     }
   }
 
@@ -261,12 +203,9 @@ class _CartPageState extends State<CartPage> {
     return sum;
   }
 
-  double _calculateTax() {
-    return _calculateSubtotal() * 0.05;
-  }
-
+  // NO TAX CHARGED
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateTax();
+    return _calculateSubtotal();
   }
 
   int get _selectedCount {
@@ -308,108 +247,129 @@ class _CartPageState extends State<CartPage> {
         ),
         actions: const [],
       ),
-      body: Stack(
-        children: [
-          _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadCart,
-                  color: const Color(0xFF0C5AD2),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header with item count & Select All / Batch Delete
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Shopping Cart',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            Text(
-                              '${_cartItems.length} Items',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_cartItems.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Checkbox(
-                                      value: _isAllSelected,
-                                      activeColor: const Color(0xFF0C5AD2),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                      onChanged: (val) => _toggleSelectAll(val ?? false),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+                  )
+                : Column(
+                    children: [
+                      // Scrollable cart items area
+                      Expanded(
+                        child: RefreshIndicator(
+                          onRefresh: () => _loadCart(forceRefresh: true),
+                          color: const Color(0xFF0C5AD2),
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header with item count & Select All / Batch Delete
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Shopping Cart',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F172A),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  GestureDetector(
-                                    onTap: () => _toggleSelectAll(!_isAllSelected),
-                                    child: const Text(
-                                      'Select All',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                                    Text(
+                                      '${_cartItems.length} Items',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
+                                  ],
+                                ),
+                                if (_cartItems.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: Checkbox(
+                                              value: _isAllSelected,
+                                              activeColor: const Color(0xFF0C5AD2),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                              onChanged: (val) => _toggleSelectAll(val ?? false),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          GestureDetector(
+                                            onTap: () => _toggleSelectAll(!_isAllSelected),
+                                            child: const Text(
+                                              'Select All',
+                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (hasSelectedItems)
+                                        TextButton.icon(
+                                          onPressed: _isDeleting ? null : _handleBatchDelete,
+                                          icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFEF4444)),
+                                          label: Text(
+                                            'Delete Selected (${_cartItems.where((i) => i.isSelected).length})',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFFEF4444),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ],
-                              ),
-                              if (hasSelectedItems)
-                                TextButton.icon(
-                                  onPressed: _isDeleting ? null : _handleBatchDelete,
-                                  icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFEF4444)),
-                                  label: Text(
-                                    'Delete Selected (${_cartItems.where((i) => i.isSelected).length})',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFEF4444),
-                                    ),
+                                const SizedBox(height: 12),
+                                if (_cartItems.isEmpty)
+                                  _buildEmptyState()
+                                else
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: _cartItems.length,
+                                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                                    itemBuilder: (context, index) {
+                                      final item = _cartItems[index];
+                                      return _buildCartItemCard(item);
+                                    },
                                   ),
-                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Sticky Order Summary with Proceed to Checkout button at the bottom
+                      if (_cartItems.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, -3),
+                              ),
                             ],
                           ),
-                        ],
-                        const SizedBox(height: 12),
-                        if (_cartItems.isEmpty)
-                          _buildEmptyState()
-                        else ...[
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _cartItems.length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final item = _cartItems[index];
-                              return _buildCartItemCard(item);
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          _buildOrderSummary(),
-                        ],
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                          child: _buildOrderSummary(),
+                        ),
+                    ],
                   ),
-                ),
           // Consistent ReByte top toast
           if (_toastMessage != null)
             Positioned(
@@ -457,6 +417,7 @@ class _CartPageState extends State<CartPage> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -686,7 +647,6 @@ class _CartPageState extends State<CartPage> {
 
   Widget _buildOrderSummary() {
     final subtotal = _calculateSubtotal();
-    final tax = _calculateTax();
     final total = _calculateTotal();
 
     return Container(
@@ -721,8 +681,6 @@ class _CartPageState extends State<CartPage> {
           ),
           const SizedBox(height: 10),
           _buildSummaryRow('Estimated Shipping', 'Free'),
-          const SizedBox(height: 10),
-          _buildSummaryRow('Estimated Tax (5%)', 'RM${tax.toStringAsFixed(2)}'),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12.0),
             child: Divider(color: Color(0xFFE2E8F0), height: 1),
@@ -752,7 +710,7 @@ class _CartPageState extends State<CartPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isCheckingOut || _selectedCount == 0 ? null : _handleProceedToCheckout,
+              onPressed: _selectedCount == 0 ? null : _handleProceedToCheckout,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C5AD2),
                 disabledBackgroundColor: Colors.grey.shade300,
@@ -760,27 +718,21 @@ class _CartPageState extends State<CartPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                 elevation: 0,
               ),
-              child: _isCheckingOut
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Proceed to Checkout ($_selectedCount)',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward, size: 16, color: Colors.white),
-                      ],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Proceed to Checkout ($_selectedCount)',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward, size: 16, color: Colors.white),
+                ],
+              ),
             ),
           ),
         ],

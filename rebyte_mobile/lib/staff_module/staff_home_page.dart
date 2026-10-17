@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'staff_profile_page.dart';
 import '../account_management_module/services/session_service.dart';
 import '../account_management_module/services/auth_service.dart';
+import '../account_management_module/services/account_session_watch_service.dart';
+import '../account_management_module/services/app_route_observer.dart';
 import '../account_management_module/home_page.dart';
 import 'staff_commission_page.dart';
 
@@ -14,15 +16,37 @@ class StaffHomePage extends StatefulWidget {
   State<StaffHomePage> createState() => _StaffHomePageState();
 }
 
-class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserver {
+class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserver, RouteAware {
   int _selectedIndex = 0;
   String? _name;
   String? _email;
   String? _toastMessage;
   final bool _isToastError = false;
-  Timer? _staffSessionTimer;
   bool _staffSessionCheckInProgress = false;
   bool _staffSessionEnding = false;
+  int _sessionCheckFailures = 0;
+  DateTime? _nextSessionCheckAt;
+  ModalRoute<dynamic>? _observedRoute;
+
+  bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _observedRoute) {
+      if (_observedRoute != null) appRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      if (route != null) appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (!_staffSessionEnding) {
+      AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
+    }
+  }
   
   @override
   void initState() {
@@ -34,29 +58,54 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
         if (mounted) setState(() => _toastMessage = null);
       });
     }
-    _loadSession().then((_) => _verifyStaffSession());
-    _staffSessionTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _verifyStaffSession(),
-    );
+    _loadSession();
+    AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _verifyStaffSession();
+    if (state == AppLifecycleState.resumed && _isCurrentRoute) {
+      AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
+    }
+  }
+
+  Future<void> _handleStaffSessionState(Map<String, dynamic> state) async {
+    if (!mounted || _staffSessionEnding || AccountSessionWatchService.isSuspendedForPublicFlow) return;
+    if (state['expired'] == true || (state['active'] == true && state['role'] != 'staff')) {
+      if (AuthService.passwordChangeInProgress) {
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (mounted && !_staffSessionEnding) {
+            AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
+          }
+        });
+        return;
+      }
+      await _endStaffSession(archived: state['archived'] == true);
+    } else if (state['active'] == true && state['changed'] == true) {
+      await _verifyStaffSession();
+    }
   }
 
   Future<void> _verifyStaffSession() async {
     if (_staffSessionCheckInProgress || _staffSessionEnding) return;
+    if (_nextSessionCheckAt != null && DateTime.now().isBefore(_nextSessionCheckAt!)) return;
     _staffSessionCheckInProgress = true;
     try {
       final result = await AuthService.checkStaffSession();
       if (result['expired'] == true) {
         await _endStaffSession(archived: result['archived'] == true);
-      } else if (result['success'] == true && result['profile'] is Map) {
-        await _applyStaffProfile(Map<String, dynamic>.from(result['profile'] as Map));
       } else if (result['success'] == true) {
-        await _loadFreshStaffProfile();
+        _sessionCheckFailures = 0;
+        _nextSessionCheckAt = null;
+        if (result['profile'] is Map) {
+          await _applyStaffProfile(Map<String, dynamic>.from(result['profile'] as Map));
+        } else {
+          await _loadFreshStaffProfile();
+        }
+      } else if (result['transient'] == true) {
+        _sessionCheckFailures = (_sessionCheckFailures + 1).clamp(1, 5).toInt();
+        final seconds = (15 * (1 << (_sessionCheckFailures - 1))).clamp(15, 300).toInt();
+        _nextSessionCheckAt = DateTime.now().add(Duration(seconds: seconds));
       }
     } finally {
       _staffSessionCheckInProgress = false;
@@ -66,7 +115,6 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   Future<void> _endStaffSession({bool archived = false}) async {
     if (_staffSessionEnding) return;
     _staffSessionEnding = true;
-    _staffSessionTimer?.cancel();
     await SessionService.clearSession();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -86,8 +134,8 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    _staffSessionTimer?.cancel();
     super.dispose();
   }
 

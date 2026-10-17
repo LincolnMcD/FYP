@@ -331,22 +331,26 @@
               <button class="edit-specialization-toggle" id="editSpecializationToggle" type="button" aria-expanded="false" aria-disabled="true"><span class="edit-specialization-label" id="editSpecializationLabel">Select devices</span><svg class="edit-specialization-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
               <div class="edit-specialization-menu" id="editSpecializationMenu">
                 <input class="edit-brand-search" id="editBrandSearch" type="search" placeholder="Search..." aria-label="Search device specialization">
-                <label class="edit-brand-option"><input type="checkbox" value="Apple (iPhone)"> Apple (iPhone)</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Apple"> Apple</label>
                 <label class="edit-brand-option"><input type="checkbox" value="Samsung"> Samsung</label>
                 <label class="edit-brand-option"><input type="checkbox" value="Xiaomi"> Xiaomi</label>
-                <label class="edit-brand-option"><input type="checkbox" value="POCO"> POCO</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Honor"> Honor</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Realme"> Realme</label>
+                <label class="edit-brand-option"><input type="checkbox" value="OPPO"> OPPO</label>
+                <label class="edit-brand-option"><input type="checkbox" value="HONOR"> HONOR</label>
+                <label class="edit-brand-option"><input type="checkbox" value="vivo"> vivo</label>
+                <label class="edit-brand-option"><input type="checkbox" value="realme"> realme</label>
                 <label class="edit-brand-option"><input type="checkbox" value="Huawei"> Huawei</label>
-                <label class="edit-brand-option"><input type="checkbox" value="ZTE"> ZTE</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Oppo"> Oppo</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Vivo"> Vivo</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Infinix"> Infinix</label>
-                <label class="edit-brand-option"><input type="checkbox" value="ASUS"> ASUS</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Google (Pixel)"> Google (Pixel)</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Redmi"> Redmi</label>
+                <label class="edit-brand-option"><input type="checkbox" value="POCO"> POCO</label>
                 <label class="edit-brand-option"><input type="checkbox" value="OnePlus"> OnePlus</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Sony"> Sony</label>
                 <label class="edit-brand-option"><input type="checkbox" value="Nothing"> Nothing</label>
+                <label class="edit-brand-option"><input type="checkbox" value="ASUS"> ASUS</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Google Pixel"> Google Pixel</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Motorola"> Motorola</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Infinix"> Infinix</label>
+                <label class="edit-brand-option"><input type="checkbox" value="TECNO"> TECNO</label>
+                <label class="edit-brand-option"><input type="checkbox" value="ZTE"> ZTE</label>
+                <label class="edit-brand-option"><input type="checkbox" value="nubia"> nubia</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Sony"> Sony</label>
               </div>
             </div>
           </div>
@@ -440,6 +444,11 @@
       return editBrandCheckboxes.filter(box => box.checked).map(box => box.value);
     }
 
+    function canonicalSpecialization(value) {
+      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google Pixel' };
+      return aliases[String(value || '').trim().toLowerCase()] || String(value || '').trim();
+    }
+
     function validateEditForm(showErrors = false) {
       const nameValid = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(editNameInput.value.trim());
       const phoneResult = ReByteAuth.validatePhoneNumber(editPhoneInput.value);
@@ -493,11 +502,9 @@
       phoneDigits = phoneDigits.replace(/^60/, '').replace(/^0/, '');
       editPhoneInput.value = phoneDigits;
       editPositionInput.value = ['Inspector', 'Deliverer', 'Both'].includes(staff.position) ? staff.position : 'Deliverer';
-      const selected = Array.isArray(staff.specialization) ? staff.specialization : (staff.specialization ? [staff.specialization] : []);
+      const selected = (Array.isArray(staff.specialization) ? staff.specialization : (staff.specialization ? [staff.specialization] : [])).map(canonicalSpecialization);
       editBrandCheckboxes.forEach(box => {
-        box.checked = selected.includes(box.value) ||
-          (box.value === 'Apple (iPhone)' && selected.includes('Apple')) ||
-          (box.value === 'Google (Pixel)' && selected.includes('Google Pixel'));
+        box.checked = selected.includes(box.value);
       });
       editBrandSearch.value = '';
       editSpecializationMenu.classList.remove('show');

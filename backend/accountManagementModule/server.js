@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { getAuth } = require("firebase-admin/auth");
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
@@ -38,8 +38,25 @@ const Staff = require("../models/staffModel");
 const db = require("../config/firebase");
 
 const router = express.Router();
+const accountSessionWatchers = new Map();
 const CUSTOMER_SUSPENSION_MS = 7 * 24 * 60 * 60 * 1000;
+const STAFF_SPECIALIZATIONS = [
+    "Apple", "Samsung", "Xiaomi", "OPPO", "HONOR", "vivo", "realme", "Huawei", "Redmi", "POCO",
+    "OnePlus", "Nothing", "ASUS", "Google Pixel", "Motorola", "Infinix", "TECNO", "ZTE", "nubia", "Sony"
+];
+const STAFF_SPECIALIZATION_ALIASES = new Map([
+    ["apple (iphone)", "Apple"], ["google (pixel)", "Google Pixel"], ["oppo", "OPPO"],
+    ["honor", "HONOR"], ["vivo", "vivo"], ["realme", "realme"]
+]);
 let suspensionSweepInProgress = false;
+
+function normalizeStaffSpecializations(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(item => {
+        const label = String(item || "").trim();
+        return STAFF_SPECIALIZATION_ALIASES.get(label.toLowerCase()) || label;
+    });
+}
 
 function timestampMillis(value) {
     if (!value) return NaN;
@@ -74,24 +91,44 @@ async function sendCustomerStatusEmail(customer, status, reason) {
     });
 }
 
+async function queryUsersByRole(role) {
+    const roles = [role, role.toLowerCase()];
+    const usersRef = db.collection("users");
+    const snapshots = await Promise.all([
+        usersRef.where("role", "in", roles).get(),
+        usersRef.where("systemRole", "in", roles).get()
+    ]);
+    const documents = new Map();
+    for (const snapshot of snapshots) {
+        for (const doc of snapshot.docs) documents.set(doc.id, doc);
+    }
+    return [...documents.values()];
+}
+
 async function reactivateExpiredCustomerSuspensions() {
     if (suspensionSweepInProgress) return;
     suspensionSweepInProgress = true;
     try {
-        const snapshot = await db.collection("users").where("status", "==", "Suspended").get();
-        const now = Date.now();
+        // Only read suspensions that are actually due. The previous query read
+        // every suspended user once a minute and filtered future expiries in JS.
+        const snapshot = await db.collection("users")
+            .where("suspendedUntil", "<=", Timestamp.now())
+            .limit(100)
+            .get();
         for (const customerDoc of snapshot.docs) {
             const customer = customerDoc.data();
-            if (timestampMillis(customer.suspendedUntil) > now) continue;
+            if (String(customer.status || "").toLowerCase() !== "suspended") continue;
             if (!Number.isFinite(timestampMillis(customer.suspendedUntil))) continue;
             const authUid = customer.userId || customerDoc.id;
             try {
                 await getAuth().updateUser(authUid, { disabled: false });
-                const reactivated = await db.runTransaction(async transaction => {
+                const result = await db.runTransaction(async transaction => {
                     const latestDoc = await transaction.get(customerDoc.ref);
-                    if (!latestDoc.exists) return false;
+                    if (!latestDoc.exists) return { reactivated: false, disabled: true };
                     const latest = latestDoc.data();
-                    if (latest.status !== "Suspended" || timestampMillis(latest.suspendedUntil) > Date.now()) return false;
+                    if (String(latest.status || "").toLowerCase() !== "suspended" || timestampMillis(latest.suspendedUntil) > Date.now()) {
+                        return { reactivated: false, disabled: String(latest.status || "active").toLowerCase() !== "active" };
+                    }
                     transaction.update(customerDoc.ref, {
                         status: "Active",
                         suspensionReason: FieldValue.delete(),
@@ -99,9 +136,9 @@ async function reactivateExpiredCustomerSuspensions() {
                         suspendedUntil: FieldValue.delete(),
                         updatedAt: FieldValue.serverTimestamp()
                     });
-                    return true;
+                    return { reactivated: true, disabled: false };
                 });
-                if (reactivated) {
+                if (result.reactivated) {
                     await db.collection("customerAccountAudit").add({
                         customerId: customerDoc.id,
                         userId: authUid,
@@ -113,10 +150,8 @@ async function reactivateExpiredCustomerSuspensions() {
                         createdAt: FieldValue.serverTimestamp()
                     });
                 }
-                if (!reactivated) {
-                    const latestDoc = await customerDoc.ref.get();
-                    const latestStatus = latestDoc.exists ? String(latestDoc.data().status || "Active") : "Active";
-                    await getAuth().updateUser(authUid, { disabled: latestStatus !== "Active" });
+                if (!result.reactivated) {
+                    await getAuth().updateUser(authUid, { disabled: result.disabled });
                 }
             } catch (err) {
                 console.error(`Could not auto-reactivate suspended customer ${customerDoc.id}:`, err.message);
@@ -208,9 +243,10 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
     if (!["Inspector", "Deliverer", "Both"].includes(position)) {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
-    const mobileBrands = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
-    const selectedBrands = Array.isArray(specialization) ? specialization : [];
-    if (selectedBrands.some(brand => !mobileBrands.includes(brand)) ||
+    const selectedBrands = normalizeStaffSpecializations(specialization);
+    if (selectedBrands.length !== (Array.isArray(specialization) ? specialization.length : 0) ||
+        selectedBrands.some(brand => !STAFF_SPECIALIZATIONS.includes(brand)) ||
+        new Set(selectedBrands).size !== selectedBrands.length ||
         (position !== "Deliverer" && (selectedBrands.length < 1 || selectedBrands.length > 3)) ||
         (position === "Deliverer" && selectedBrands.length > 0)) {
         return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
@@ -326,6 +362,8 @@ router.get("/account-session", async (req, res) => {
         const decoded = await getAuth().verifyIdToken(idToken, false);
         const authUser = await getAuth().getUser(decoded.uid);
         const usersRef = db.collection("users");
+        // Application accounts are stored under the Firebase UID. The indexed
+        // legacy lookups remain as a compatibility path for older records.
         let userDoc = await usersRef.doc(decoded.uid).get();
         if (!userDoc.exists) {
             const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
@@ -364,6 +402,134 @@ router.get("/account-session", async (req, res) => {
         if (statusCode === 500) console.error("Account session check failed:", err);
         return res.status(statusCode).json({ expired: statusCode === 401, archived: err.code === "auth/user-disabled", error: statusCode === 401 ? "Session expired. Please log in again." : "Could not verify account session." });
     }
+});
+
+// One Admin SDK snapshot listener per Firebase UID per backend process. Browser
+// tabs and mobile sessions share the watch, instead of each polling Firestore.
+router.get("/account-session/stream", async (req, res) => {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).end();
+    let decoded;
+    let userRef;
+    try {
+        decoded = await getAuth().verifyIdToken(idToken, false);
+        const existingWatcher = accountSessionWatchers.get(decoded.uid);
+        let accountSnapshot = existingWatcher?.lastSnapshot || null;
+        if (existingWatcher) {
+            userRef = existingWatcher.ref;
+        } else {
+            userRef = db.collection("users").doc(decoded.uid);
+            accountSnapshot = await userRef.get();
+            if (!accountSnapshot.exists) {
+                const legacy = await db.collection("users").where("userId", "==", decoded.uid).limit(1).get();
+                if (!legacy.empty) {
+                    userRef = legacy.docs[0].ref;
+                    accountSnapshot = legacy.docs[0];
+                } else if (decoded.email) {
+                    const byEmail = await db.collection("users").where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+                    if (!byEmail.empty) {
+                        userRef = byEmail.docs[0].ref;
+                        accountSnapshot = byEmail.docs[0];
+                    }
+                }
+            }
+        }
+        const status = accountSnapshot?.exists ? String(accountSnapshot.get("status") || "active").toLowerCase() : "";
+        if (status === "suspended" || status === "banned") {
+            return res.status(401).json({ expired: true, status, error: status === "suspended" ? "Your account is being suspended. Please view the email for more detail." : "Your account is being banned. Please view the email for more detail." });
+        }
+        if (status === "archived") return res.status(401).json({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
+        const authUser = await getAuth().getUser(decoded.uid);
+        if (authUser.disabled) {
+            return res.status(401).json({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
+        }
+        await getAuth().verifyIdToken(idToken, true);
+    } catch (err) {
+        const archived = err.code === "auth/user-disabled";
+        return res.status(401).json({ expired: true, archived, error: archived ? "This account has been archived. Please contact administrator." : "Session expired. Please log in again." });
+    }
+
+    res.status(200);
+    res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.flushHeaders?.();
+    const send = (data) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`); };
+    let watcher = accountSessionWatchers.get(decoded.uid);
+    if (!watcher || watcher.ref.path !== userRef.path) {
+        watcher?.unsubscribe?.();
+        watcher = { ref: userRef, clients: new Set(), unsubscribe: null, lastSnapshot: null, initialized: false };
+        watcher.unsubscribe = userRef.onSnapshot(snapshot => {
+            const changed = watcher.initialized;
+            watcher.initialized = true;
+            watcher.lastSnapshot = snapshot;
+            for (const client of watcher.clients) client.handleSnapshot(snapshot, changed);
+        }, error => {
+            console.error("Account status listener failed:", error);
+            for (const client of watcher.clients) {
+                client.send({ transient: true });
+                client.close();
+            }
+            watcher.unsubscribe?.();
+            accountSessionWatchers.delete(decoded.uid);
+        });
+        accountSessionWatchers.set(decoded.uid, watcher);
+    }
+
+    const client = {
+        send,
+        close: () => { if (!res.writableEnded) res.end(); },
+        handleSnapshot: async (snapshot, changed) => {
+            try {
+                if (!snapshot.exists) return send({ expired: true, error: "Session expired. Please log in again." });
+                const data = snapshot.data() || {};
+                const role = String(data.role || data.systemRole || "customer").toLowerCase();
+                const status = String(data.status || "active").toLowerCase();
+                if (status === "suspended" || status === "banned") {
+                    return send({ expired: true, status, error: status === "suspended" ? "Your account is being suspended. Please view the email for more detail." : "Your account is being banned. Please view the email for more detail." });
+                }
+                if (status === "archived") {
+                    return send({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
+                }
+                await getAuth().verifyIdToken(idToken, true);
+                const authUser = await getAuth().getUser(decoded.uid);
+                if (authUser.disabled) {
+                    return send({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
+                }
+                if (!["staff", "customer", "admin", "administrator"].includes(role)) {
+                    return send({ expired: true, error: "Your account is no longer active." });
+                }
+                send({
+                    active: true,
+                    role,
+                    staff: role === "staff",
+                    changed: changed === true,
+                    ...(changed === true && role === "customer" ? {
+                        profile: {
+                            fullName: data.fullName || authUser.displayName || "ReByte User",
+                            email: data.email || decoded.email || ""
+                        }
+                    } : {})
+                });
+            } catch (err) {
+                const currentStatus = snapshot.exists ? String(snapshot.get("status") || "").toLowerCase() : "";
+                if (currentStatus === "suspended" || currentStatus === "banned") {
+                    return send({ expired: true, status: currentStatus, error: currentStatus === "suspended" ? "Your account is being suspended. Please view the email for more detail." : "Your account is being banned. Please view the email for more detail." });
+                }
+                const expired = ["auth/id-token-revoked", "auth/id-token-expired", "auth/user-disabled", "auth/user-not-found"].includes(err.code);
+                send(expired ? { expired: true, archived: currentStatus === "archived" || err.code === "auth/user-disabled", error: currentStatus === "archived" || err.code === "auth/user-disabled" ? "This account has been archived. Please contact administrator." : "Your session has ended. Please sign in again." } : { transient: true });
+            }
+        }
+    };
+    watcher.clients.add(client);
+    if (watcher.lastSnapshot) client.handleSnapshot(watcher.lastSnapshot, false);
+    const heartbeat = setInterval(() => { if (!res.writableEnded) res.write(": keep-alive\n\n"); }, 25000);
+    res.on("close", () => {
+        clearInterval(heartbeat);
+        watcher.clients.delete(client);
+        if (watcher.clients.size === 0) {
+            watcher.unsubscribe?.();
+            accountSessionWatchers.delete(decoded.uid);
+        }
+    });
 });
 
 router.get("/staff-profile", async (req, res) => {
@@ -411,11 +577,11 @@ router.patch("/staff-profile", async (req, res) => {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
 
-    const allowedSpecializations = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
-    const selectedSpecializations = Array.isArray(specialization) ? specialization : [];
+    const selectedSpecializations = normalizeStaffSpecializations(specialization);
     const uniqueSpecializations = [...new Set(selectedSpecializations)];
     if (uniqueSpecializations.length !== selectedSpecializations.length ||
-        selectedSpecializations.some(value => !allowedSpecializations.includes(value)) ||
+        selectedSpecializations.length !== (Array.isArray(specialization) ? specialization.length : 0) ||
+        selectedSpecializations.some(value => !STAFF_SPECIALIZATIONS.includes(value)) ||
         (position === "Deliverer" && selectedSpecializations.length !== 0) ||
         (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
         return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
@@ -741,6 +907,7 @@ router.post("/forgot-password/reset", async (req, res) => {
         try {
             await getAuth().updateUser(uid, { password: newPassword });
             await getAuth().revokeRefreshTokens(uid);
+            await db.collection("users").doc(uid).set({ sessionUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
         } catch (err) {
             await db.runTransaction(async transaction => {
                 const current = await transaction.get(otpRef);
@@ -1035,6 +1202,7 @@ router.post("/change-password", async (req, res) => {
         // Successfully verified! Apply the password change using Admin SDK
         await getAuth().updateUser(data.localId, { password: newPassword });
         await getAuth().revokeRefreshTokens(data.localId);
+        await db.collection("users").doc(data.localId).set({ sessionUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
         // Issue a fresh token after the credential update so staff session checks
         // do not mistake a stale token for an archived account.
@@ -1068,11 +1236,16 @@ router.post("/change-password", async (req, res) => {
 
 router.get("/staff-list", requireAdmin, async (req, res) => {
     try {
-        const usersRef = db.collection("users");
-        // Get both Staff and Admin if possible, or just anyone with staffNo
-        const snapshot = await usersRef.get();
+        // Read only staff-role records. Older records that identify staff by
+        // staffNo are queried separately and merged without duplicates.
+        const [staffDocuments, staffNoSnapshot] = await Promise.all([
+            queryUsersByRole("Staff"),
+            db.collection("users").where("staffNo", "!=", null).get()
+        ]);
+        const documentsById = new Map(staffDocuments.map(doc => [doc.id, doc]));
+        for (const doc of staffNoSnapshot.docs) documentsById.set(doc.id, doc);
         const staffList = [];
-        snapshot.forEach(doc => {
+        for (const doc of documentsById.values()) {
             const data = doc.data();
             const isStaff = [data.role, data.systemRole]
                 .some(role => typeof role === "string" && role.trim().toLowerCase() === "staff");
@@ -1082,7 +1255,7 @@ router.get("/staff-list", requireAdmin, async (req, res) => {
                     ...data
                 });
             }
-        });
+        }
         
         // Sort by created date descending (newest first)
         staffList.sort((a, b) => {
@@ -1212,11 +1385,11 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
     if (!["Inspector", "Deliverer", "Both"].includes(position)) {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
-    const allowedSpecializations = ["Apple", "Samsung", "Xiaomi", "Huawei", "Oppo", "Vivo", "Google Pixel", "OnePlus"];
-    const selectedSpecializations = Array.isArray(specialization) ? specialization : [];
+    const selectedSpecializations = normalizeStaffSpecializations(specialization);
     const uniqueSpecializations = [...new Set(selectedSpecializations)];
     if (uniqueSpecializations.length !== selectedSpecializations.length ||
-        selectedSpecializations.some(value => !allowedSpecializations.includes(value)) ||
+        selectedSpecializations.length !== (Array.isArray(specialization) ? specialization.length : 0) ||
+        selectedSpecializations.some(value => !STAFF_SPECIALIZATIONS.includes(value)) ||
         (position === "Deliverer" && selectedSpecializations.length !== 0) ||
         (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
         return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
@@ -1257,15 +1430,14 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
 
 router.get("/customer-list", requireAdmin, async (req, res) => {
     try {
-        await reactivateExpiredCustomerSuspensions();
-        const snapshot = await db.collection("users").get();
+        const customerDocuments = await queryUsersByRole("Customer");
         const customers = [];
-        snapshot.forEach(doc => {
+        for (const doc of customerDocuments) {
             const data = doc.data();
             const role = String(data.role || data.systemRole || "").trim().toLowerCase();
-            if (role !== "customer") return;
+            if (role !== "customer") continue;
             customers.push({ ...data, id: doc.id });
-        });
+        }
         customers.sort((a, b) => {
             const timeA = a.createdAt?._seconds || 0;
             const timeB = b.createdAt?._seconds || 0;

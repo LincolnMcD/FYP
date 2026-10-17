@@ -167,6 +167,8 @@ router.get("/methods", async (req, res) => {
                     paymentAccountNo: payId, // backward-compat for mobile models expecting paymentAccountNo
                     customerID: data.customerID || customerID,
                     cardNumber: data.cardNumber || masked, // actual card number
+                    rawCardNumber: data.cardNumber || "",
+                    cvv: data.CVV || data.cvv || "",
                     maskedCardNumber: masked,
                     expiryDate: data.expiredDate || "",
                     expiredDate: data.expiredDate || "",
@@ -403,6 +405,164 @@ router.delete("/methods/:id", async (req, res) => {
     } catch (err) {
         console.error("Error deleting payment method:", err);
         return res.status(500).json({ error: "Failed to delete payment method" });
+    }
+});
+
+/**
+ * POST /create-invoice
+ * Creates a Xendit Invoice for checkout payments (FPX, E-Wallets, Cards)
+ */
+router.post("/create-invoice", async (req, res) => {
+    try {
+        const { email, amount, description, paymentMethodType, productIDs } = req.body;
+        if (!email || !amount) {
+            return res.status(400).json({ success: false, error: "email and amount are required" });
+        }
+
+        const externalId = `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        
+        // Lookup user profile to prefill customer details (email, phone, name)
+        let customerData = {
+            email: email
+        };
+        try {
+            const userSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+            if (!userSnap.empty) {
+                const u = userSnap.docs[0].data();
+                if (u.fullName) customerData.given_names = u.fullName;
+                if (u.phoneNumber) {
+                    // Remove +60 prefix from phone number as requested
+                    let rawPhone = String(u.phoneNumber).trim();
+                    if (rawPhone.startsWith("+60")) rawPhone = rawPhone.substring(3);
+                    else if (rawPhone.startsWith("60")) rawPhone = rawPhone.substring(2);
+                    else if (rawPhone.startsWith("0")) rawPhone = rawPhone.substring(1);
+                    customerData.mobile_number = rawPhone;
+                }
+            }
+        } catch (_) {}
+
+        const invoicePayload = {
+            external_id: externalId,
+            amount: Number(amount),
+            currency: "MYR",
+            description: description || "ReByte Purchase",
+            payer_email: email,
+            customer: customerData,
+            success_redirect_url: "https://rebyte.local/payment-success",
+            failure_redirect_url: "https://rebyte.local/payment-failure",
+        };
+
+        // Filter payment channels based on selected payment method
+        if (paymentMethodType === "ewallet") {
+            invoicePayload.payment_methods = ["TOUCHNGO", "GRABPAY", "SHOPEEPAY"];
+        } else if (paymentMethodType === "fpx") {
+            invoicePayload.payment_methods = [
+                "DD_PUBLIC_FPX", "DD_UOB_FPX", "DD_AFFIN_FPX", "DD_AGRO_FPX",
+                "DD_ALLIANCE_FPX", "DD_AMBANK_FPX", "DD_ISLAM_FPX", "DD_MUAMALAT_FPX",
+                "DD_BOC_FPX", "DD_RAKYAT_FPX", "DD_BSN_FPX", "DD_CIMB_FPX",
+                "DD_HLB_FPX", "DD_HSBC_FPX", "DD_KFH_FPX", "DD_MAYB2U_FPX",
+                "DD_OCBC_FPX", "DD_RHB_FPX", "DD_SCH_FPX", "DD_DUITNOW_PAY"
+            ];
+        } else if (paymentMethodType === "card") {
+            invoicePayload.payment_methods = ["CREDIT_CARD"];
+        }
+
+        const response = await axios.post("https://api.xendit.co/v2/invoices", invoicePayload, {
+            headers: getXenditAuthHeader()
+        });
+
+        return res.json({
+            success: true,
+            invoiceId: response.data.id,
+            invoiceUrl: response.data.invoice_url,
+            status: response.data.status,
+            amount: response.data.amount
+        });
+    } catch (err) {
+        console.error("Error creating Xendit invoice:", err.response ? err.response.data : err.message);
+        return res.status(500).json({
+            success: false,
+            error: err.response?.data?.message || "Failed to create payment session with Xendit"
+        });
+    }
+});
+
+/**
+ * POST /api/payment/refund-invoice
+ * Automatically refunds or expires a payment session if item inventory was lost to another user
+ */
+router.post("/refund-invoice", async (req, res) => {
+    try {
+        const { invoiceId, reason } = req.body;
+        if (!invoiceId) {
+            return res.status(400).json({ success: false, error: "invoiceId is required" });
+        }
+
+        // Map reason to Xendit's strict enum: ["FRAUDULENT","DUPLICATE","REQUESTED_BY_CUSTOMER","CANCELLATION","OTHERS"]
+        const validReasons = ["FRAUDULENT", "DUPLICATE", "REQUESTED_BY_CUSTOMER", "CANCELLATION", "OTHERS"];
+        const xenditReason = validReasons.includes(reason) ? reason : "CANCELLATION";
+
+        // Try refunding completed invoice
+        try {
+            const refundRes = await axios.post("https://api.xendit.co/refunds", {
+                invoice_id: invoiceId,
+                reason: xenditReason
+            }, {
+                headers: getXenditAuthHeader()
+            });
+
+            return res.json({
+                success: true,
+                action: "refunded",
+                refund: refundRes.data
+            });
+        } catch (refundErr) {
+            // If refund fails because invoice is not yet paid or still pending, expire it
+            try {
+                await axios.post(`https://api.xendit.co/invoices/${invoiceId}/expire!`, {}, {
+                    headers: getXenditAuthHeader()
+                });
+                return res.json({ success: true, action: "expired" });
+            } catch (expireErr) {
+                console.error("Failed to expire or refund invoice:", expireErr.response ? expireErr.response.data : expireErr.message);
+                return res.json({
+                    success: false,
+                    error: refundErr.response?.data?.message || "Could not process refund automatically"
+                });
+            }
+        }
+    } catch (err) {
+        console.error("Refund error:", err);
+        return res.status(500).json({ success: false, error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/payment/get-invoice?invoiceId=...
+ * Retrieves the current status of an invoice directly from Xendit
+ */
+router.get("/get-invoice", async (req, res) => {
+    try {
+        const { invoiceId } = req.query;
+        if (!invoiceId) {
+            return res.status(400).json({ success: false, error: "invoiceId is required" });
+        }
+
+        const response = await axios.get(`https://api.xendit.co/v2/invoices/${invoiceId}`, {
+            headers: getXenditAuthHeader()
+        });
+
+        return res.json({
+            success: true,
+            invoice: response.data,
+            status: response.data.status
+        });
+    } catch (err) {
+        console.error("Error retrieving Xendit invoice:", err.response ? err.response.data : err.message);
+        return res.status(500).json({
+            success: false,
+            error: err.response?.data?.message || "Failed to retrieve invoice status"
+        });
     }
 });
 

@@ -6,12 +6,19 @@ const paymentRouter = require("./accountManagementModule/paymentServer");
 const addressRouter = require("./accountManagementModule/addressServer");
 const deviceTradeInRouter = require("./deviceTradeInModule/server");
 const shopRouter = require("./accountManagementModule/shopServer");
+const { runWithRequest, recordRequest } = require("./config/firestoreMetrics");
 
 const app = express();
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cors());
+app.use((req, res, next) => {
+    const safePath = String(req.path || "/").replace(/(^|\/)([^/]{20,}|[^/]*@[^/]*)/g, "$1:id");
+    const path = `${req.method} ${safePath}`;
+    recordRequest(path);
+    runWithRequest(req, next);
+});
 
 // Mount the modular routers exactly at the root so existing endpoints (e.g., /login) remain perfectly unchanged
 app.use("/", accountManagementRouter);

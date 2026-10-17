@@ -1,6 +1,7 @@
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const path = require('path');
+const { instrumentFirestore } = require('./firestoreMetrics');
 
 let db;
 
@@ -13,6 +14,7 @@ try {
     });
 
     db = getFirestore();
+    instrumentFirestore();
     console.log('Firebase Database connected successfully');
 } catch (error) {
     console.log('Error initializing Firebase Admin SDK - make sure serviceAccountKey.json exists!');

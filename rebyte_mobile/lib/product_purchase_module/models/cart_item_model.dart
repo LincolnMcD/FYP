@@ -26,7 +26,7 @@ class CartItemModel {
     this.ram = '',
     this.color = '',
     this.condition = 'Good',
-    this.isSelected = true,
+    this.isSelected = false,
   });
 
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
@@ -43,7 +43,7 @@ class CartItemModel {
       ram: json['ram']?.toString() ?? '',
       color: json['color']?.toString() ?? '',
       condition: json['condition']?.toString() ?? 'Good',
-      isSelected: !(json['isSold'] == true || json['listingStatus'] == 'sold'),
+      isSelected: false,
     );
   }
 

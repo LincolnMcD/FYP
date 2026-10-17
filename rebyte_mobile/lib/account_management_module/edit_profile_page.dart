@@ -144,7 +144,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _selectDate(BuildContext context) async {
-    DateTime initialDate = DateTime.now().subtract(const Duration(days: 365 * 18));
+    final now = DateTime.now();
+    final firstDate = _yearsBefore(now, 99);
+    final lastDate = _yearsBefore(now, 12);
+    DateTime initialDate = _yearsBefore(now, 18);
     if (_birthdayController.text.isNotEmpty) {
       try {
         initialDate = DateFormat('dd/MM/yyyy').parse(_birthdayController.text);
@@ -152,12 +155,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
         // use default
       }
     }
+    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
+    if (initialDate.isAfter(lastDate)) initialDate = lastDate;
     
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 365 * 99)),
-      lastDate: DateTime.now().subtract(const Duration(days: 365 * 12)),
+      firstDate: firstDate,
+      lastDate: lastDate,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -174,6 +179,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _birthdayController.text = DateFormat('dd/MM/yyyy').format(picked);
       });
     }
+  }
+
+  DateTime _yearsBefore(DateTime date, int years) {
+    final year = date.year - years;
+    final lastDayOfMonth = DateUtils.getDaysInMonth(year, date.month);
+    return DateTime(year, date.month, date.day.clamp(1, lastDayOfMonth).toInt());
   }
 
   String? _nameError;

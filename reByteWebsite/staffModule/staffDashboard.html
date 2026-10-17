@@ -357,27 +357,6 @@
       ReByteAuth.logout();
     }
     
-    let staffSessionEnding = false;
-    let staffSessionCheckInProgress = false;
-    function endStaffSession(archived = false) {
-      if (staffSessionEnding) return;
-      staffSessionEnding = true;
-      localStorage.removeItem(ReByteAuth.SESSION_KEY);
-      if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut().catch(() => {});
-      window.location.replace(`../accountManagementModule/login.html${archived ? '?archived=1' : '?sessionExpired=1'}`);
-    }
-
-    async function verifyActiveStaffSession() {
-      if (staffSessionCheckInProgress || staffSessionEnding) return;
-      staffSessionCheckInProgress = true;
-      try {
-        const result = await ReByteAuth.checkStaffSession();
-        if (!result.success && !result.transient) endStaffSession(result.archived === true);
-      } finally {
-        staffSessionCheckInProgress = false;
-      }
-    }
-
     document.addEventListener('DOMContentLoaded', async () => {
       // Check auth if needed, redirect to login if not logged in
       if (!ReByteAuth.isLoggedIn()) {
@@ -391,8 +370,7 @@
           return;
         }
       }
-      await verifyActiveStaffSession();
-      if (!staffSessionEnding) window.setInterval(verifyActiveStaffSession, 2000);
+      // The shared account header owns the single staff session poll across web pages.
     });
   </script>
 </body>

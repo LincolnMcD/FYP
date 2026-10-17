@@ -321,8 +321,37 @@
     const today = new Date();
     const minDate = new Date(today.getFullYear() - 99, today.getMonth(), today.getDate());
     const maxDate = new Date(today.getFullYear() - 12, today.getMonth(), today.getDate());
-    editDob.min = minDate.toISOString().split('T')[0];
-    editDob.max = maxDate.toISOString().split('T')[0];
+    const toLocalDateInput = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    editDob.min = toLocalDateInput(minDate);
+    editDob.max = toLocalDateInput(maxDate);
+
+    function normalizeBirthDate(value) {
+      if (value == null || value === '') return '';
+      if (typeof value === 'string') {
+        const text = value.trim();
+        const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+        const dayFirstDate = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (dayFirstDate) {
+          return `${dayFirstDate[3]}-${dayFirstDate[2].padStart(2, '0')}-${dayFirstDate[1].padStart(2, '0')}`;
+        }
+        const parsedDate = new Date(text);
+        return Number.isNaN(parsedDate.getTime()) ? '' : toLocalDateInput(parsedDate);
+      }
+
+      let milliseconds;
+      if (typeof value === 'number') {
+        milliseconds = Math.abs(value) >= 1e12 ? value : value * 1000;
+      } else if (typeof value === 'object') {
+        const seconds = value._seconds ?? value.seconds;
+        if (typeof seconds !== 'number') return '';
+        milliseconds = seconds * 1000;
+      } else {
+        return '';
+      }
+      const parsedDate = new Date(milliseconds);
+      return Number.isNaN(parsedDate.getTime()) ? '' : toLocalDateInput(parsedDate);
+    }
 
     async function loadEditProfile() {
       if (!sessionUser) return;
@@ -344,7 +373,7 @@
             if (p.startsWith('+60')) p = p.substring(3);
             editPhone.value = p;
           }
-          if (profile.birthDate) editDob.value = profile.birthDate;
+          editDob.value = normalizeBirthDate(profile.birthDate);
           if (profile.gender) document.getElementById('editGender').value = profile.gender;
           
           // Save initials for comparison

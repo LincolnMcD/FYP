@@ -72,9 +72,16 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
               ? [data['specialization'] as String]
               : <String>[];
       final normalizedSpecializations = savedSpecializations.map((s) {
-        if (s == 'Apple') return 'Apple (iPhone)';
-        if (s == 'Google Pixel') return 'Google (Pixel)';
-        return s;
+        final normalized = switch (s.trim().toLowerCase()) {
+          'apple (iphone)' => 'Apple',
+          'google (pixel)' => 'Google Pixel',
+          'oppo' => 'OPPO',
+          'honor' => 'HONOR',
+          'vivo' => 'vivo',
+          'realme' => 'realme',
+          _ => s.trim(),
+        };
+        return _brands.firstWhere((brand) => brand.toLowerCase() == normalized.toLowerCase(), orElse: () => normalized);
       }).toList();
       _specializations = normalizedSpecializations.where(_brands.contains).take(3).toList();
       _nameController.text = (data['fullName'] ?? '').toString();
@@ -180,7 +187,13 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
         const SizedBox(height: 20), _label('Position'),
         DropdownButtonFormField<String>(value: _position, decoration: _inputDecoration(), items: const [DropdownMenuItem(value: 'Inspector', child: Text('Inspector')), DropdownMenuItem(value: 'Deliverer', child: Text('Deliverer')), DropdownMenuItem(value: 'Both', child: Text('Inspector & Deliverer'))], onChanged: (value) { if (value == null) return; setState(() { _position = value; if (value == 'Deliverer') { _specializations = []; _specializationError = null; } }); _validate(); }),
         const SizedBox(height: 20), _label('Device Specialization', helper: _position == 'Deliverer' ? 'Not required' : '${_specializations.length} selected'),
-        Opacity(opacity: _position == 'Deliverer' ? .55 : 1, child: IgnorePointer(ignoring: _position == 'Deliverer', child: Wrap(spacing: 8, runSpacing: 8, children: _brands.map((brand) => FilterChip(label: Text(brand), selected: _specializations.contains(brand), onSelected: (selected) { setState(() { if (selected && _specializations.length < 3) _specializations.add(brand); else if (!selected) _specializations.remove(brand); }); _validate(); }, selectedColor: const Color(0xFFE0EAFF), checkmarkColor: _blue)).toList()))),
+        Opacity(
+          opacity: _position == 'Deliverer' ? .55 : 1,
+          child: IgnorePointer(
+            ignoring: _position == 'Deliverer',
+            child: _buildSpecializationGrid(),
+          ),
+        ),
         if (_position == 'Deliverer') Padding(padding: const EdgeInsets.only(top: 6), child: Text('Device specialization is not available for Deliverers.', style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500)))
         else Padding(padding: const EdgeInsets.only(top: 6), child: Text(_specializationError ?? 'Select 1 to 3 specializations for Inspector.', style: TextStyle(color: _specializationError == null ? Colors.grey.shade600 : Colors.red, fontSize: 11))),
         const SizedBox(height: 30),
@@ -190,6 +203,69 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
       ]),
     );
   }
+
+  Widget _buildSpecializationGrid() => GridView.builder(
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    itemCount: _brands.length,
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 2,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      mainAxisExtent: 48,
+    ),
+    itemBuilder: (context, index) {
+      final brand = _brands[index];
+      final selected = _specializations.contains(brand);
+      final atLimit = !selected && _specializations.length >= 3;
+      return Material(
+        color: selected ? const Color(0xFFEAF1FF) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: atLimit ? null : () {
+            setState(() {
+              if (selected) {
+                _specializations.remove(brand);
+              } else {
+                _specializations.add(brand);
+              }
+            });
+            _validate();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            decoration: BoxDecoration(
+              border: Border.all(color: selected ? _blue : const Color(0xFFD7DEE8)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                  size: 19,
+                  color: selected ? _blue : (atLimit ? const Color(0xFFB7C0CC) : const Color(0xFF7B8794)),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    brand,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: atLimit ? const Color(0xFF9AA4B2) : const Color(0xFF334155),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
   Widget _label(String value, {String? helper}) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [Expanded(child: Text(value, style: const TextStyle(fontSize: 12,fontWeight:FontWeight.bold,color:Color(0xFF475569)))), if (helper != null) Text(helper, style: const TextStyle(fontSize: 11,color:Color(0xFF64748B)))]));
   Widget _lockedField(String value, String help) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [TextFormField(initialValue:value, enabled:false, style:TextStyle(color:Colors.grey.shade600,fontSize:14), decoration:_inputDecoration(disabled:true)), const SizedBox(height:6), Text(help,style:TextStyle(fontSize:11,color:Colors.grey.shade600,fontWeight:FontWeight.w500))]);

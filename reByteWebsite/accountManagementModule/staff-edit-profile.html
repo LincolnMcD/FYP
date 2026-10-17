@@ -107,10 +107,16 @@
       }
     });
     const brands = [
-      'Apple (iPhone)', 'Samsung', 'Xiaomi', 'POCO', 'Oppo', 'Vivo',
-      'Honor', 'Realme', 'Huawei', 'ZTE', 'OnePlus', 'Infinix',
-      'ASUS', 'Google (Pixel)', 'Sony', 'Nothing'
+      'Apple', 'Samsung', 'Xiaomi', 'OPPO', 'HONOR', 'vivo', 'realme', 'Huawei',
+      'Redmi', 'POCO', 'OnePlus', 'Nothing', 'ASUS', 'Google Pixel', 'Motorola',
+      'Infinix', 'TECNO', 'ZTE', 'nubia', 'Sony'
     ];
+    function canonicalSpecialization(value) {
+      const name = String(value || '').trim();
+      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google Pixel', 'oppo': 'OPPO', 'honor': 'HONOR' };
+      const canonical = aliases[name.toLowerCase()] || name;
+      return brands.find(brand => brand.toLowerCase() === canonical.toLowerCase()) || canonical;
+    }
     const fields = ['editName','editPhone','editPosition'];
     const editName = document.getElementById('editName');
     const editPhone = document.getElementById('editPhone');
@@ -182,11 +188,7 @@
         editName.value = profile.fullName || sessionUser.name || '';
         editPhone.value = String(profile.phoneNumber || '').replace(/^\+60/, '').replace(/\D/g, '');
         editPosition.value = ['Inspector','Deliverer','Both'].includes(profile.position) ? profile.position : 'Inspector';
-        const savedBrands = (Array.isArray(profile.specialization) ? profile.specialization : profile.specialization ? [profile.specialization] : []).map(b => {
-          if (b === 'Apple') return 'Apple (iPhone)';
-          if (b === 'Google Pixel') return 'Google (Pixel)';
-          return b;
-        });
+        const savedBrands = (Array.isArray(profile.specialization) ? profile.specialization : profile.specialization ? [profile.specialization] : []).map(canonicalSpecialization);
         selectedBrands = savedBrands.filter(brand => brands.includes(brand)).slice(0,3);
         initial = { fullName:editName.value.trim(), phone:editPhone.value.trim(), position:editPosition.value, specialization:[...selectedBrands] };
         renderBrands(); refreshForm();

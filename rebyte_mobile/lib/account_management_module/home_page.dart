@@ -1,9 +1,10 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'welcome_page.dart';
 import 'profile_page.dart';
 import 'services/auth_service.dart';
 import 'services/session_service.dart';
+import 'services/account_session_watch_service.dart';
+import 'services/app_route_observer.dart';
 import '../device_tradein_module/trade_in_landing_page.dart';
 import '../device_tradein_module/improve_assessment_page.dart';
 import '../device_tradein_module/assessment_result_page.dart';
@@ -12,9 +13,11 @@ import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../device_tradein_module/services/trade_in_service.dart';
 import '../device_tradein_module/models/device_model.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
-import '../shop_module/shop_page.dart';
-import '../shop_module/cart_page.dart';
-import '../shop_module/notification_page.dart';
+import '../product_purchase_module/shop_page.dart';
+import '../product_purchase_module/cart_page.dart';
+import '../product_purchase_module/notification_page.dart';
+import '../product_purchase_module/order_details_page.dart';
+import '../product_purchase_module/models/cart_item_model.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -39,7 +42,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteAware {
   late int _selectedIndex = widget.initialIndex;
   late final bool _isLoggedIn = widget.isLoggedIn;
   late String? _email = widget.email;
@@ -52,9 +55,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String? _toastMessage;
   bool _isToastError = false;
-  Timer? _accountSessionTimer;
-  bool _accountSessionCheckInProgress = false;
   bool _accountSessionEnding = false;
+  ModalRoute<dynamic>? _observedRoute;
+
+  bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _observedRoute) {
+      if (_observedRoute != null) appRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      if (route != null) appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (_isLoggedIn && !_accountSessionEnding) {
+      AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
+      _syncActiveTradeIn();
+    }
+  }
 
   @override
   void initState() {
@@ -78,8 +101,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     }
     if (_isLoggedIn) {
-      _accountSessionTimer = Timer.periodic(const Duration(seconds: 1), (_) => _verifyAccountSession());
-      Future.delayed(const Duration(seconds: 1), _verifyAccountSession);
+      AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
     } else {
       _syncActiveTradeIn();
@@ -152,32 +174,50 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _verifyAccountSession();
+    if (state == AppLifecycleState.resumed && _isLoggedIn && _isCurrentRoute) {
+      AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
     }
   }
 
-  Future<void> _verifyAccountSession() async {
-    if (!_isLoggedIn || _accountSessionCheckInProgress || _accountSessionEnding) return;
-    _accountSessionCheckInProgress = true;
-    try {
-      final result = await AuthService.checkAccountSession();
-      if (result['expired'] == true) {
-        await _endExpiredAccountSession(
-          archived: result['archived'] == true,
-          accountStatus: result['status'] as String?,
-        );
+  Future<void> _handleAccountSessionState(Map<String, dynamic> state) async {
+    if (_accountSessionEnding || !mounted || AccountSessionWatchService.isSuspendedForPublicFlow) return;
+    if (state['expired'] == true) {
+      if (AuthService.passwordChangeInProgress) {
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (mounted && !_accountSessionEnding) {
+            AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
+          }
+        });
+        return;
       }
-    } finally {
-      _accountSessionCheckInProgress = false;
+      await _endExpiredAccountSession(archived: state['archived'] == true, accountStatus: state['status'] as String?);
+    } else if (state['active'] == true && state['role'] != 'customer') {
+      await _endExpiredAccountSession();
+    } else if (state['active'] == true && state['changed'] == true && state['profile'] is Map) {
+      final profile = Map<String, dynamic>.from(state['profile'] as Map);
+      final updatedName = profile['fullName']?.toString().trim();
+      final updatedEmail = profile['email']?.toString().trim();
+      if ((updatedName?.isNotEmpty == true && updatedName != _name) ||
+          (updatedEmail?.isNotEmpty == true && updatedEmail != _email)) {
+        final email = updatedEmail?.isNotEmpty == true ? updatedEmail! : _email;
+        final name = updatedName?.isNotEmpty == true ? updatedName! : (_name ?? 'ReByte User');
+        if (email != null && email.isNotEmpty) {
+          await SessionService.saveSession(email: email, name: name, role: 'Customer');
+          if (mounted) {
+            setState(() {
+              _email = email;
+              _name = name;
+            });
+          }
+        }
+      }
     }
   }
 
   Future<void> _endExpiredAccountSession({bool archived = false, String? accountStatus}) async {
     if (_accountSessionEnding) return;
     _accountSessionEnding = true;
-    _accountSessionTimer?.cancel();
     await SessionService.clearSession();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -201,8 +241,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    _accountSessionTimer?.cancel();
     super.dispose();
   }
 
@@ -416,7 +456,50 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
                       child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
                     ),
-                    _buildDrawerItem(Icons.inventory_2_outlined, 'My Orders'),
+                    _buildDrawerItem(
+                      Icons.inventory_2_outlined,
+                      'My Orders',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OrderDetailsPage(
+                              orderNumber: '#RB-9921',
+                              amountPaid: 1648.00,
+                              email: _email ?? 'customer@rebyte.com',
+                              name: _name ?? 'Peter',
+                              paidAt: DateTime(2026, 10, 24, 14, 23),
+                              items: [
+                                CartItemModel(
+                                  productID: 'sample_iphone14_pm',
+                                  description: 'iPhone 14 Pro Max 512GB - Good Condition',
+                                  sellingPrice: 799.00,
+                                  imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
+                                  brand: 'Apple',
+                                  model: 'iPhone 14 Pro Max',
+                                  storage: '512GB',
+                                  color: 'Phantom Black',
+                                  condition: 'Good',
+                                ),
+                                CartItemModel(
+                                  productID: 'sample_s23_ultra',
+                                  description: 'Samsung Galaxy S23 Ultra 512GB - Good Condition',
+                                  sellingPrice: 849.00,
+                                  imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
+                                  brand: 'Samsung',
+                                  model: 'Samsung Galaxy S23 Ultra',
+                                  storage: '512GB',
+                                  color: 'Phantom Black',
+                                  condition: 'Good',
+                                ),
+                              ],
+                              paymentTitle: '**** **** **** 4242',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     _buildDrawerItem(
                       Icons.shopping_bag_outlined,
                       'My Cart',

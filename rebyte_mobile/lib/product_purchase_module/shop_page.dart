@@ -33,10 +33,17 @@ class ShopPage extends StatefulWidget {
 
 class ShopPageState extends State<ShopPage> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  Timer? _searchDebounce;
   String _selectedBrand = 'All Brands';
   PriceSortOption _priceSort = PriceSortOption.none;
   List<ProductModel> _products = [];
   bool _isLoading = true;
+  String? _productLoadError;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
+  String? _nextCursor;
+  int _productRequestGeneration = 0;
   final Set<String> _addingProductIds = {};
   String? _toastMessage;
   bool _isToastError = false;
@@ -49,6 +56,7 @@ class ShopPageState extends State<ShopPage> {
     super.initState();
     // Build brand list from trade-in module PhoneBrandsData
     _allBrands = ['All Brands', ...PhoneBrandsData.wellKnownPhoneBrands];
+    _scrollController.addListener(_handleScroll);
 
     loadProducts();
   }
@@ -56,6 +64,9 @@ class ShopPageState extends State<ShopPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchDebounce?.cancel();
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -73,42 +84,72 @@ class ShopPageState extends State<ShopPage> {
     });
   }
 
-  Future<void> loadProducts() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  String get _sortKey => switch (_priceSort) {
+    PriceSortOption.lowToHigh => 'low',
+    PriceSortOption.highToLow => 'high',
+    PriceSortOption.none => 'none',
+  };
 
-    final rawProducts = await ShopService.fetchProducts(
+  void _handleScroll() {
+    if (_scrollController.hasClients && _scrollController.position.extentAfter < 500) {
+      _loadMoreProducts();
+    }
+  }
+
+  Future<void> loadProducts({bool forceRefresh = false}) async {
+    if (!mounted) return;
+    final generation = ++_productRequestGeneration;
+    setState(() {
+      _isLoading = true;
+      _productLoadError = null;
+      _isLoadingMore = false;
+      _hasMore = false;
+      _nextCursor = null;
+      _products = [];
+    });
+    final result = await ShopService.fetchProductPage(
       email: widget.email,
       search: _searchController.text.trim(),
       brand: _selectedBrand == 'All Brands' ? null : _selectedBrand,
+      sort: _sortKey,
+      forceRefresh: forceRefresh,
     );
-
-    // Apply client-side search filtering fallback in case of exact substring matching
-    final query = _searchController.text.trim().toLowerCase();
-    List<ProductModel> filtered = rawProducts;
-    if (query.isNotEmpty) {
-      filtered = filtered.where((p) {
-        final d = p.description.toLowerCase();
-        final t = p.displayTitle.toLowerCase();
-        final b = p.brand.toLowerCase();
-        final m = p.model.toLowerCase();
-        return d.contains(query) || t.contains(query) || b.contains(query) || m.contains(query);
-      }).toList();
-    }
-
-    // Apply price sorting
-    if (_priceSort == PriceSortOption.lowToHigh) {
-      filtered.sort((a, b) => a.sellingPrice.compareTo(b.sellingPrice));
-    } else if (_priceSort == PriceSortOption.highToLow) {
-      filtered.sort((a, b) => b.sellingPrice.compareTo(a.sellingPrice));
-    }
-
-    if (mounted) {
+    if (mounted && generation == _productRequestGeneration) {
       setState(() {
-        _products = filtered;
+        _products = List<ProductModel>.from(result['products'] as List<ProductModel>);
+        _nextCursor = result['nextCursor'] as String?;
+        _hasMore = result['hasMore'] == true;
+        _productLoadError = result['error']?.toString();
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _loadMoreProducts() async {
+    if (!mounted || _isLoading || _isLoadingMore || !_hasMore || _nextCursor == null) return;
+    final generation = _productRequestGeneration;
+    setState(() => _isLoadingMore = true);
+    final result = await ShopService.fetchProductPage(
+      email: widget.email,
+      search: _searchController.text.trim(),
+      brand: _selectedBrand == 'All Brands' ? null : _selectedBrand,
+      sort: _sortKey,
+      cursor: _nextCursor,
+    );
+    if (!mounted || generation != _productRequestGeneration) return;
+    setState(() {
+      final existing = _products.map((product) => product.productID).toSet();
+      _products.addAll((result['products'] as List<ProductModel>).where((item) => !existing.contains(item.productID)));
+      _nextCursor = result['nextCursor'] as String?;
+      _hasMore = result['hasMore'] == true;
+      _isLoadingMore = false;
+    });
+  }
+
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    if (mounted) setState(() {});
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () => loadProducts());
   }
 
   Future<void> _handleAddToCart(ProductModel product) async {
@@ -309,9 +350,10 @@ class ShopPageState extends State<ShopPage> {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: loadProducts,
+      onRefresh: () => loadProducts(forceRefresh: true),
             color: const Color(0xFF0C5AD2),
-            child: SingleChildScrollView(
+              child: SingleChildScrollView(
+                controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               child: Column(
@@ -329,7 +371,7 @@ class ShopPageState extends State<ShopPage> {
                       ),
                     )
                   else if (_products.isEmpty)
-                    _buildEmptyState()
+                    _buildEmptyState(_productLoadError)
                   else
                     ListView.separated(
                       shrinkWrap: true,
@@ -340,6 +382,11 @@ class ShopPageState extends State<ShopPage> {
                         final product = _products[index];
                         return _buildProductCard(product);
                       },
+                    ),
+                  if (_isLoadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator(color: Color(0xFF0C5AD2))),
                     ),
                   const SizedBox(height: 24),
                 ],
@@ -420,7 +467,7 @@ class ShopPageState extends State<ShopPage> {
                 contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
               style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
-              onChanged: (_) => loadProducts(),
+              onChanged: (_) => _scheduleSearch(),
               onSubmitted: (_) => loadProducts(),
             ),
           ),
@@ -677,23 +724,32 @@ class ShopPageState extends State<ShopPage> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState([String? error]) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
       alignment: Alignment.center,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(error == null ? Icons.inventory_2_outlined : Icons.cloud_off_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          const Text(
-            'no product found',
+          Text(
+            error ?? 'No products found.',
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: Color(0xFF334155),
             ),
           ),
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => loadProducts(forceRefresh: true),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ],
         ],
       ),
     );

@@ -4,8 +4,10 @@ import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
-import '../shop_module/cart_page.dart';
-import '../shop_module/notification_page.dart';
+import '../product_purchase_module/cart_page.dart';
+import '../product_purchase_module/notification_page.dart';
+import '../product_purchase_module/order_details_page.dart';
+import '../product_purchase_module/models/cart_item_model.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -271,6 +273,46 @@ class ReByteDrawer extends StatelessWidget {
                       _buildDrawerItem(
                         Icons.inventory_2_outlined,
                         'My Orders',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => OrderDetailsPage(
+                                orderNumber: '#RB-9921',
+                                amountPaid: 1648.00,
+                                email: email ?? 'customer@rebyte.com',
+                                name: name ?? 'Peter',
+                                paidAt: DateTime(2026, 10, 24, 14, 23),
+                                items: [
+                                  CartItemModel(
+                                    productID: 'sample_iphone14_pm',
+                                    description: 'iPhone 14 Pro Max 512GB - Good Condition',
+                                    sellingPrice: 799.00,
+                                    imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
+                                    brand: 'Apple',
+                                    model: 'iPhone 14 Pro Max',
+                                    storage: '512GB',
+                                    color: 'Phantom Black',
+                                    condition: 'Good',
+                                  ),
+                                  CartItemModel(
+                                    productID: 'sample_s23_ultra',
+                                    description: 'Samsung Galaxy S23 Ultra 512GB - Good Condition',
+                                    sellingPrice: 849.00,
+                                    imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
+                                    brand: 'Samsung',
+                                    model: 'Samsung Galaxy S23 Ultra',
+                                    storage: '512GB',
+                                    color: 'Phantom Black',
+                                    condition: 'Good',
+                                  ),
+                                ],
+                                paymentTitle: '**** **** **** 4242',
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       _buildDrawerItem(
                         Icons.shopping_bag_outlined,

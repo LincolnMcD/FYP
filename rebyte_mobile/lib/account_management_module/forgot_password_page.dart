@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rebyte_mobile/account_management_module/services/auth_service.dart';
+import 'package:rebyte_mobile/account_management_module/services/account_session_watch_service.dart';
 import 'package:rebyte_mobile/account_management_module/forgot_password_otp_page.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -13,6 +14,19 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final TextEditingController _emailController = TextEditingController();
   String? _emailError;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AccountSessionWatchService.suspendForPublicFlow();
+  }
+
+  @override
+  void dispose() {
+    AccountSessionWatchService.resumeAfterPublicFlow();
+    _emailController.dispose();
+    super.dispose();
+  }
 
   void _validateEmail(String value) {
     if (value.isEmpty || value.trim().isEmpty) setState(() => _emailError = 'Email cannot be empty');

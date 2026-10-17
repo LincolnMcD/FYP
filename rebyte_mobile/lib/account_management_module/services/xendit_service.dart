@@ -118,7 +118,6 @@ class XenditService {
       final rawBrand = cardInfo?['brand']?.toString() ??
           data['card_brand']?.toString() ??
           metadata?['brand']?.toString();
-      final bankName = (cardInfo?['bank']?.toString() ?? metadata?['bank']?.toString() ?? '').toUpperCase();
 
       String? cardBrand;
       if (rawBrand != null && rawBrand.isNotEmpty && rawBrand.toUpperCase() != 'UNKNOWN') {
@@ -431,5 +430,355 @@ class XenditService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Creates a Xendit Invoice for checkout payments
+  static Future<Map<String, dynamic>> createInvoice({
+    required String email,
+    required double amount,
+    required String description,
+    required String paymentMethodType,
+    List<String>? productIDs,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${AuthService.baseUrl}/api/payment/create-invoice'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'amount': amount,
+          'description': description,
+          'paymentMethodType': paymentMethodType,
+          'productIDs': productIDs ?? [],
+        }),
+      );
+      final data = jsonDecode(res.body);
+      return data is Map<String, dynamic> ? data : {'success': false, 'error': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Requests automatic refund or expiration if inventory was lost during payment
+  static Future<Map<String, dynamic>> refundInvoice({
+    required String invoiceId,
+    String? reason,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${AuthService.baseUrl}/api/payment/refund-invoice'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'invoiceId': invoiceId,
+          'reason': reason ?? 'ITEM_UNAVAILABLE_RACE_CONDITION',
+        }),
+      );
+      final data = jsonDecode(res.body);
+      return data is Map<String, dynamic> ? data : {'success': false};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Checks live invoice status directly from Xendit
+  static Future<Map<String, dynamic>> getInvoiceStatus(String invoiceId) async {
+    try {
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/api/payment/get-invoice?invoiceId=$invoiceId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      final data = jsonDecode(res.body);
+      return data is Map<String, dynamic> ? data : {'success': false};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Opens Xendit Payment Page via InAppWebView modal and waits for completion
+  /// Returns a map: {'status': 'success' | 'failed' | 'cancelled', 'errorMessage': String?}
+  static Future<Map<String, dynamic>> launchPaymentWebView({
+    required BuildContext context,
+    required String invoiceUrl,
+    required String title,
+    String? invoiceId,
+    Map<String, dynamic>? cardData,
+  }) async {
+    String paymentResult = 'cancelled';
+    String? failReason;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.90,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          clipBehavior: Clip.antiAliasWithSaveLayer,
+          child: Column(
+            children: [
+              Container(
+                color: const Color(0xFF0F254B),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.lock_outline, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () async {
+                        // Before marking cancelled, check if invoice was actually paid in Xendit
+                        if (invoiceId != null && invoiceId.isNotEmpty) {
+                          try {
+                            final check = await getInvoiceStatus(invoiceId);
+                            final invStatus = check['status']?.toString().toUpperCase() ?? '';
+                            if (invStatus == 'PAID' || invStatus == 'SETTLED' || invStatus == 'COMPLETED') {
+                              paymentResult = 'success';
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              return;
+                            }
+                          } catch (_) {}
+                        }
+                        paymentResult = 'cancelled';
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: InAppWebView(
+                  initialUrlRequest: URLRequest(url: WebUri(invoiceUrl)),
+                  initialSettings: InAppWebViewSettings(
+                    javaScriptEnabled: true,
+                    javaScriptCanOpenWindowsAutomatically: true,
+                    useShouldOverrideUrlLoading: true,
+                    transparentBackground: false,
+                    supportMultipleWindows: true,
+                  ),
+                  onLoadStart: (controller, url) {
+                    final strUrl = url?.toString().toLowerCase() ?? '';
+                    if (strUrl.contains('payment-success') ||
+                        strUrl.contains('status=paid') ||
+                        strUrl.contains('status=settled') ||
+                        strUrl.contains('status=completed') ||
+                        strUrl.contains('action=success')) {
+                      paymentResult = 'success';
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      });
+                    } else if (strUrl.contains('payment-failure') ||
+                               strUrl.contains('status=failed') ||
+                               strUrl.contains('action=failed') ||
+                               strUrl.contains('error=declined') ||
+                               strUrl.contains('insufficient_balance')) {
+                      paymentResult = 'failed';
+                      if (strUrl.contains('insufficient_balance') || strUrl.contains('insufficient_funds')) {
+                        failReason = 'Selected account has insufficient balance.';
+                      } else {
+                        failReason = 'Payment was declined by your bank or card issuer.';
+                      }
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      });
+                    }
+                  },
+                  onLoadStop: (controller, url) async {
+                    if (cardData != null) {
+                      // Extract raw 16-digit card number (fallback to cardNumber if unmasked)
+                      String rawNumber = (cardData['rawCardNumber'] ?? cardData['cardNumber'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+                      final expiry = (cardData['expiryDate'] ?? cardData['expiredDate'] ?? '').toString();
+                      final cvv = (cardData['cvv'] ?? cardData['CVV'] ?? '').toString().trim();
+                      final holderName = (cardData['cardHolderName'] ?? '').toString();
+                      final email = (cardData['email'] ?? '').toString().trim();
+                      
+                      // Strip +60 or 60 or leading 0 if needed for Malaysian phone input
+                      String phone = (cardData['phone'] ?? cardData['phoneNumber'] ?? '').toString().trim();
+                      if (phone.startsWith('+60')) {
+                        phone = phone.substring(3);
+                      } else if (phone.startsWith('60')) {
+                        phone = phone.substring(2);
+                      } else if (phone.startsWith('0')) {
+                        phone = phone.substring(1);
+                      }
+
+                      await controller.evaluateJavascript(source: '''
+                        (function() {
+                          function setNativeValue(element, value) {
+                            if (!element || !value) return;
+                            if (element.value === value) return;
+                            try {
+                              var valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+                              var prototype = Object.getPrototypeOf(element);
+                              var prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+                              if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+                                prototypeValueSetter.call(element, value);
+                              } else if (valueSetter) {
+                                valueSetter.call(element, value);
+                              } else {
+                                element.value = value;
+                              }
+                              element.dispatchEvent(new Event('input', { bubbles: true }));
+                              element.dispatchEvent(new Event('change', { bubbles: true }));
+                            } catch(e) {
+                              try {
+                                element.value = value;
+                                element.dispatchEvent(new Event('input', { bubbles: true }));
+                                element.dispatchEvent(new Event('change', { bubbles: true }));
+                              } catch(err) {}
+                            }
+                          }
+
+                          function prefillDocument(doc) {
+                            if (!doc) return;
+                            try {
+                              // 1. Card Number
+                              var numInput = doc.querySelector('input[name="card_number"]') ||
+                                             doc.querySelector('input[name*="card"]') ||
+                                             doc.querySelector('input[autocomplete="cc-number"]') ||
+                                             doc.querySelector('input[placeholder*="Card number"]') ||
+                                             doc.querySelector('input[id*="card-number"]');
+                              if (numInput && (!numInput.value || numInput.value.length < 10) && '$rawNumber') {
+                                setNativeValue(numInput, '$rawNumber');
+                              }
+
+                              // 2. Expiry (MM/YY)
+                              var expInput = doc.querySelector('input[name="expiry"]') ||
+                                             doc.querySelector('input[name*="exp"]') ||
+                                             doc.querySelector('input[autocomplete="cc-exp"]') ||
+                                             doc.querySelector('input[placeholder*="MM/YY"]') ||
+                                             doc.querySelector('input[placeholder*="MM / YY"]') ||
+                                             doc.querySelector('input[id*="expiry"]');
+                              if (expInput && !expInput.value && '$expiry') {
+                                setNativeValue(expInput, '$expiry');
+                              }
+
+                              // 3. CVV / CVC
+                              var cvvInput = doc.querySelector('input[name="cvn"]') ||
+                                             doc.querySelector('input[name="cvv"]') ||
+                                             doc.querySelector('input[name="cvc"]') ||
+                                             doc.querySelector('input[autocomplete="cc-csc"]') ||
+                                             doc.querySelector('input[placeholder*="CVV"]') ||
+                                             doc.querySelector('input[placeholder*="CVC"]') ||
+                                             doc.querySelector('input[id*="cvv"]') ||
+                                             doc.querySelector('input[id*="cvc"]');
+                              if (cvvInput && !cvvInput.value && '$cvv') {
+                                setNativeValue(cvvInput, '$cvv');
+                              }
+
+                              // 4. Cardholder Name
+                              var nameInput = doc.querySelector('input[name="holder_name"]') ||
+                                              doc.querySelector('input[name*="holder"]') ||
+                                              doc.querySelector('input[autocomplete="cc-name"]') ||
+                                              doc.querySelector('input[placeholder*="Name on card"]');
+                              if (nameInput && !nameInput.value && '$holderName') {
+                                setNativeValue(nameInput, '$holderName');
+                              }
+
+                              // 5. Email - prefill user's email into any email input
+                              var emailInput = doc.querySelector('input[name="email"]') ||
+                                               doc.querySelector('input[type="email"]') ||
+                                               doc.querySelector('input[name*="email"]') ||
+                                               doc.querySelector('input[autocomplete="email"]') ||
+                                               doc.querySelector('input[placeholder*="email" i]') ||
+                                               doc.querySelector('input[id*="email" i]');
+                              if (emailInput && (!emailInput.value || emailInput.value.trim() === '') && '$email') {
+                                setNativeValue(emailInput, '$email');
+                              }
+
+                              // 6. Phone Number (without +60)
+                              var phoneInput = doc.querySelector('input[name="phone"]') ||
+                                               doc.querySelector('input[name="mobile"]') ||
+                                               doc.querySelector('input[name*="phone"]') ||
+                                               doc.querySelector('input[name*="mobile"]') ||
+                                               doc.querySelector('input[type="tel"]') ||
+                                               doc.querySelector('input[placeholder*="Phone" i]') ||
+                                               doc.querySelector('input[placeholder*="Mobile" i]');
+                              if (phoneInput && (!phoneInput.value || phoneInput.value.trim() === '') && '$phone') {
+                                setNativeValue(phoneInput, '$phone');
+                              }
+                            } catch(e) {}
+                          }
+
+                          function runAll() {
+                            prefillDocument(document);
+                            try {
+                              var iframes = document.querySelectorAll('iframe');
+                              for (var i = 0; i < iframes.length; i++) {
+                                try {
+                                  prefillDocument(iframes[i].contentDocument || iframes[i].contentWindow.document);
+                                } catch(e) {}
+                              }
+                            } catch(e) {}
+                          }
+
+                          setTimeout(runAll, 300);
+                          setTimeout(runAll, 800);
+                          setTimeout(runAll, 1600);
+                          setTimeout(runAll, 2800);
+                        })();
+                      ''');
+                    }
+                  },
+                  shouldOverrideUrlLoading: (controller, navigationAction) async {
+                    final uri = navigationAction.request.url?.toString().toLowerCase() ?? '';
+                    if (uri.contains('payment-success') ||
+                        uri.contains('status=paid') ||
+                        uri.contains('status=settled') ||
+                        uri.contains('status=completed')) {
+                      paymentResult = 'success';
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      });
+                      return NavigationActionPolicy.CANCEL;
+                    } else if (uri.contains('payment-failure') ||
+                               uri.contains('status=failed') ||
+                               uri.contains('action=failed') ||
+                               uri.contains('error=declined') ||
+                               uri.contains('insufficient_balance')) {
+                      paymentResult = 'failed';
+                      if (uri.contains('insufficient_balance') || uri.contains('insufficient_funds')) {
+                        failReason = 'Selected account has insufficient balance.';
+                      } else {
+                        failReason = 'Payment was declined by your bank or card issuer.';
+                      }
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      });
+                      return NavigationActionPolicy.CANCEL;
+                    }
+                    return NavigationActionPolicy.ALLOW;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    return {
+      'status': paymentResult,
+      'errorMessage': failReason,
+    };
   }
 }
