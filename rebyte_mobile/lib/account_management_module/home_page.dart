@@ -16,8 +16,8 @@ import '../decision_assistance_module/diagnostic_suite_page.dart';
 import '../product_purchase_module/shop_page.dart';
 import '../product_purchase_module/cart_page.dart';
 import '../product_purchase_module/notification_page.dart';
-import '../product_purchase_module/order_details_page.dart';
-import '../product_purchase_module/models/cart_item_model.dart';
+import '../product_purchase_module/my_orders_page.dart';
+import '../product_purchase_module/services/shop_service.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -57,8 +57,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   bool _isToastError = false;
   bool _accountSessionEnding = false;
   ModalRoute<dynamic>? _observedRoute;
+  int _cartItemCount = 0;
 
   bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
+
+  Future<void> _loadCartCount() async {
+    if (!_isLoggedIn || _email == null || _email!.isEmpty) {
+      if (mounted && _cartItemCount != 0) setState(() => _cartItemCount = 0);
+      return;
+    }
+    try {
+      final items = await ShopService.fetchCart(email: _email!);
+      if (mounted) setState(() => _cartItemCount = items.length);
+    } catch (_) {}
+  }
 
   @override
   void didChangeDependencies() {
@@ -76,6 +88,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     if (_isLoggedIn && !_accountSessionEnding) {
       AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
+      _loadCartCount();
     }
   }
 
@@ -103,6 +116,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     if (_isLoggedIn) {
       AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
+      _loadCartCount();
     } else {
       _syncActiveTradeIn();
     }
@@ -337,6 +351,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 name: _name,
                 onCartUpdated: () {
                   _shopPageKey.currentState?.loadProducts();
+                  _loadCartCount();
                 },
                 onOpenCart: () {
                   _openCartPage();
@@ -464,37 +479,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => OrderDetailsPage(
-                              orderNumber: '#RB-9921',
-                              amountPaid: 1648.00,
+                            builder: (context) => MyOrdersPage(
                               email: _email ?? 'customer@rebyte.com',
-                              name: _name ?? 'Peter',
-                              paidAt: DateTime(2026, 10, 24, 14, 23),
-                              items: [
-                                CartItemModel(
-                                  productID: 'sample_iphone14_pm',
-                                  description: 'iPhone 14 Pro Max 512GB - Good Condition',
-                                  sellingPrice: 799.00,
-                                  imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
-                                  brand: 'Apple',
-                                  model: 'iPhone 14 Pro Max',
-                                  storage: '512GB',
-                                  color: 'Phantom Black',
-                                  condition: 'Good',
-                                ),
-                                CartItemModel(
-                                  productID: 'sample_s23_ultra',
-                                  description: 'Samsung Galaxy S23 Ultra 512GB - Good Condition',
-                                  sellingPrice: 849.00,
-                                  imageUrl: 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
-                                  brand: 'Samsung',
-                                  model: 'Samsung Galaxy S23 Ultra',
-                                  storage: '512GB',
-                                  color: 'Phantom Black',
-                                  condition: 'Good',
-                                ),
-                              ],
-                              paymentTitle: '**** **** **** 4242',
+                              name: _name,
                             ),
                           ),
                         );
@@ -732,11 +719,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
           name: _name,
           onCartUpdated: () {
             _shopPageKey.currentState?.loadProducts();
+            _loadCartCount();
           },
         ),
       ),
     ).then((_) {
       _shopPageKey.currentState?.loadProducts();
+      _loadCartCount();
     });
   }
 
@@ -782,7 +771,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       actions: [
         if (_selectedIndex == 1)
           IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+                if (_cartItemCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE11D48),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '$_cartItemCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             onPressed: _openCartPage,
           )
         else

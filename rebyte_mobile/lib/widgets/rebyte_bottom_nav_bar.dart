@@ -58,8 +58,7 @@ class ReByteBottomNavBar extends StatelessWidget {
     }
 
     if (index == 2) {
-      // User tapped Trade-In tab (Page 1) - clear current flow session per requirement
-      TradeInFlowSession.clear();
+      // User tapped Trade-In tab (Page 1)
       Navigator.push(
         context,
         MaterialPageRoute(

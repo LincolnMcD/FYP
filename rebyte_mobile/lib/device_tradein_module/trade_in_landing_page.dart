@@ -25,7 +25,6 @@ class TradeInLandingPage extends StatelessWidget {
   });
 
   void _handleBack(BuildContext context) {
-    TradeInFlowSession.clear();
     if (isEmbedded) {
       if (onBackToHome != null) {
         onBackToHome!();

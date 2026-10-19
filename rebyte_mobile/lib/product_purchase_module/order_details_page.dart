@@ -3,8 +3,9 @@ import 'package:intl/intl.dart';
 import 'models/cart_item_model.dart';
 import '../account_management_module/models/address_model.dart';
 import '../account_management_module/home_page.dart';
+import '../../widgets/rebyte_app_bar.dart';
 
-class OrderDetailsPage extends StatelessWidget {
+class OrderDetailsPage extends StatefulWidget {
   final String orderNumber;
   final double amountPaid;
   final String email;
@@ -13,6 +14,11 @@ class OrderDetailsPage extends StatelessWidget {
   final List<CartItemModel> items;
   final AddressModel? deliveryAddress;
   final String paymentTitle;
+  final String paymentType;
+  final String paymentAccountID;
+  final String taskStatus;
+  final String orderStatus;
+  final String failReason;
 
   const OrderDetailsPage({
     super.key,
@@ -24,43 +30,66 @@ class OrderDetailsPage extends StatelessWidget {
     required this.items,
     this.deliveryAddress,
     required this.paymentTitle,
+    this.paymentType = 'card',
+    this.paymentAccountID = '',
+    this.taskStatus = 'Packaging',
+    this.orderStatus = 'Delivering',
+    this.failReason = '',
   });
+
+  @override
+  State<OrderDetailsPage> createState() => _OrderDetailsPageState();
+}
+
+class _OrderDetailsPageState extends State<OrderDetailsPage> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  int _getStepIndex(String taskStatus) {
+    final s = taskStatus.toLowerCase().trim();
+    if (s == 'delivered' || s == 'completed' || s == 'delivery') return 4;
+    if (s == 'shipping' || s == 'in transit') return 3;
+    if (s == 'packaging' || s == 'packaged' || s == 'packing') return 2;
+    return 1; // Confirmed
+  }
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM dd, yyyy');
+    final currentStep = _getStepIndex(widget.taskStatus);
+
+    // Resolve Payment Method display
+    IconData paymentIcon;
+    String displayPaymentText;
+    String paymentSubtitle;
+
+    final payAccId = widget.paymentAccountID.toLowerCase();
+    final payType = widget.paymentType.toLowerCase();
+
+    if (payAccId == 'ewallet_all' || payType == 'ewallet') {
+      paymentIcon = Icons.account_balance_wallet_outlined;
+      displayPaymentText = 'E-Wallet';
+      paymentSubtitle = 'Touch \'n Go / GrabPay / Boost';
+    } else if (payAccId == 'fpx_online_banking' || payAccId == 'fpx' || payType == 'fpx') {
+      paymentIcon = Icons.account_balance_outlined;
+      displayPaymentText = 'FPX transfer';
+      paymentSubtitle = 'Online Banking';
+    } else {
+      paymentIcon = Icons.credit_card;
+      displayPaymentText = widget.paymentTitle;
+      paymentSubtitle = 'Secured Card Payment';
+    }
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8F9FB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/images/rebyte_logo.png', height: 32),
-            const SizedBox(width: 8),
-            const Text(
-              'ReByte',
-              style: TextStyle(
-                color: Color(0xFF0F172A),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Color(0xFF1E293B)),
-            onPressed: () {},
-          ),
-        ],
+      appBar: ReByteAppBar(
+        scaffoldKey: _scaffoldKey,
+      ),
+      drawer: ReByteDrawer(
+        isLoggedIn: true,
+        email: widget.email,
+        name: widget.name,
+        isMyOrdersSelected: true,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -80,8 +109,8 @@ class OrderDetailsPage extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) => HomePage(
                   isLoggedIn: true,
-                  email: email,
-                  name: name,
+                  email: widget.email,
+                  name: widget.name,
                   initialIndex: index,
                 ),
               ),
@@ -166,7 +195,7 @@ class OrderDetailsPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              orderNumber,
+                              widget.orderNumber,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -175,34 +204,65 @@ class OrderDetailsPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        // Paid Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.check, size: 12, color: Color(0xFF16A34A)),
-                              SizedBox(width: 4),
-                              Text(
-                                'Paid',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF16A34A),
-                                ),
+                        // Status Badge
+                        Builder(
+                          builder: (context) {
+                            final oStatus = widget.orderStatus.trim().toLowerCase();
+                            Color bgColor = const Color(0xFFDCFCE7);
+                            Color textColor = const Color(0xFF16A34A);
+                            IconData icon = Icons.check;
+                            String label = 'Paid';
+
+                            if (oStatus == 'cancelled' || oStatus == 'canceled') {
+                              bgColor = const Color(0xFFFEE2E2);
+                              textColor = const Color(0xFFDC2626);
+                              icon = Icons.close;
+                              label = 'Cancelled';
+                            } else if (oStatus == 'fail' || oStatus == 'failed') {
+                              bgColor = const Color(0xFFFEE2E2);
+                              textColor = const Color(0xFFDC2626);
+                              icon = Icons.error_outline;
+                              label = 'Failed';
+                            } else if (oStatus == 'completed' || oStatus == 'delivered') {
+                              bgColor = const Color(0xFFDCFCE7);
+                              textColor = const Color(0xFF16A34A);
+                              icon = Icons.check_circle_outline;
+                              label = 'Completed';
+                            } else {
+                              label = widget.orderStatus.isNotEmpty
+                                  ? widget.orderStatus[0].toUpperCase() + widget.orderStatus.substring(1)
+                                  : 'Paid';
+                            }
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                            ],
-                          ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(icon, size: 12, color: textColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Placed on ${dateFormat.format(paidAt)}',
+                      'Placed on ${dateFormat.format(widget.paidAt)}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF64748B),
@@ -213,77 +273,166 @@ class OrderDetailsPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // 2. Delivery Status Stepper Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Delivery Status',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+              // 2. Delivery Status Stepper Card OR Failure Reason Card
+              Builder(
+                builder: (context) {
+                  final oStatus = widget.orderStatus.trim().toLowerCase();
+                  final isFailed = oStatus == 'fail' || oStatus == 'failed';
+                  final isCancelled = oStatus == 'cancelled' || oStatus == 'canceled';
+                  final isCompleted = oStatus == 'completed' || oStatus == 'delivered';
 
-                    // Stepper row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // If failed: replace delivery block with reason card
+                  if (isFailed) {
+                    final reasonText = widget.failReason.isNotEmpty
+                        ? widget.failReason
+                        : 'Payment was declined by your bank or payment gateway. Please try again or use another payment method.';
+                    return Column(
                       children: [
-                        _buildStepItem(icon: Icons.check, label: 'Confirmed', isActive: true, isCompleted: true),
-                        _buildStepConnector(isCompleted: true),
-                        _buildStepItem(icon: Icons.inventory_2, label: 'Packaged', isActive: true, isCompleted: true),
-                        _buildStepConnector(isCompleted: true),
-                        _buildStepItem(icon: Icons.local_shipping, label: 'Shipping', isActive: true, isCompleted: false),
-                        _buildStepConnector(isCompleted: false),
-                        _buildStepItem(icon: Icons.home_outlined, label: 'Delivery', isActive: false, isCompleted: false),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Track on Map button
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF0C5AD2)),
-                        label: const Text(
-                          'Track on Map',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0C5AD2),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.error_outline, size: 18, color: Color(0xFFDC2626)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Reason of Failure',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF991B1B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                reasonText,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.4,
+                                  color: Color(0xFF7F1D1D),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Color(0xFFBFDBFE)),
-                          backgroundColor: const Color(0xFFF1F5FD),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        const SizedBox(height: 16),
+                      ],
+                    );
+                  }
+
+                  // If cancelled or completed: no delivery status block
+                  if (isCancelled || isCompleted) {
+                    return const SizedBox.shrink();
+                  }
+
+                  // Active / in-progress order: show Delivery Status Stepper
+                  return Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Delivery Status',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Stepper row based on taskStatus
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildStepItem(
+                                  icon: Icons.check,
+                                  label: 'Confirmed',
+                                  isActive: currentStep >= 1,
+                                  isCompleted: currentStep >= 1,
+                                ),
+                                _buildStepConnector(isCompleted: currentStep >= 2),
+                                _buildStepItem(
+                                  icon: (currentStep > 2 || currentStep == 4) ? Icons.check : Icons.inventory_2,
+                                  label: 'Packaging',
+                                  isActive: currentStep >= 2,
+                                  isCompleted: currentStep > 2 || currentStep == 4,
+                                ),
+                                _buildStepConnector(isCompleted: currentStep >= 3),
+                                _buildStepItem(
+                                  icon: (currentStep > 3 || currentStep == 4) ? Icons.check : Icons.local_shipping,
+                                  label: 'Shipping',
+                                  isActive: currentStep >= 3,
+                                  isCompleted: currentStep > 3 || currentStep == 4,
+                                ),
+                                _buildStepConnector(isCompleted: currentStep >= 4),
+                                _buildStepItem(
+                                  icon: currentStep == 4 ? Icons.check : Icons.home_outlined,
+                                  label: 'Delivered',
+                                  isActive: currentStep >= 4,
+                                  isCompleted: currentStep == 4,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Track on Map button
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {},
+                                icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF0C5AD2)),
+                                label: const Text(
+                                  'Track on Map',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0C5AD2),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                  backgroundColor: const Color(0xFFF1F5FD),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
 
@@ -323,7 +472,7 @@ class OrderDetailsPage extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Product item cards
-                    ...items.map((item) => _buildOrderItemCard(item)),
+                    ...widget.items.map((item) => _buildOrderItemCard(item)),
 
                     const SizedBox(height: 16),
                     const Divider(color: Color(0xFFF1F5F9), height: 1),
@@ -338,7 +487,7 @@ class OrderDetailsPage extends StatelessWidget {
                           style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                         ),
                         Text(
-                          'RM${amountPaid.toStringAsFixed(2)}',
+                          'RM${widget.amountPaid.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
                         ),
                       ],
@@ -370,7 +519,7 @@ class OrderDetailsPage extends StatelessWidget {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                         ),
                         Text(
-                          'RM${amountPaid.toStringAsFixed(2)}',
+                          'RM${widget.amountPaid.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0C5AD2)),
                         ),
                       ],
@@ -418,7 +567,7 @@ class OrderDetailsPage extends StatelessWidget {
                       child: Divider(color: Color(0xFFF1F5F9), height: 1),
                     ),
                     Text(
-                      deliveryAddress?.recipientName ?? name ?? 'Customer',
+                      widget.deliveryAddress?.recipientName ?? widget.name ?? 'Customer',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -427,8 +576,8 @@ class OrderDetailsPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      deliveryAddress != null
-                          ? '${deliveryAddress!.addressLine}, ${deliveryAddress!.postcode} ${deliveryAddress!.city}, ${deliveryAddress!.state}, Malaysia'
+                      widget.deliveryAddress != null
+                          ? '${widget.deliveryAddress!.addressLine}, ${widget.deliveryAddress!.postcode} ${widget.deliveryAddress!.city}, ${widget.deliveryAddress!.state}, Malaysia'
                           : '12, Jalan SS 15/4, SS 15, 47500 Subang Jaya, Selangor, Malaysia',
                       style: const TextStyle(
                         fontSize: 12,
@@ -488,14 +637,18 @@ class OrderDetailsPage extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xFFBFDBFE)),
                           ),
-                          child: const Icon(Icons.credit_card, size: 20, color: Color(0xFF0C5AD2)),
+                          child: Icon(
+                            paymentIcon,
+                            size: 20,
+                            color: const Color(0xFF0C5AD2),
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              paymentTitle,
+                              displayPaymentText,
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -503,9 +656,9 @@ class OrderDetailsPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              'Exp: 12/25',
-                              style: TextStyle(
+                            Text(
+                              paymentSubtitle,
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFF64748B),
                               ),

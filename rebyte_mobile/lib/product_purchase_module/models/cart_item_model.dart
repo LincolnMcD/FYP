@@ -11,6 +11,8 @@ class CartItemModel {
   final String ram;
   final String color;
   final String condition;
+  final String deviceID;
+  final String modelCode;
   bool isSelected;
 
   CartItemModel({
@@ -26,6 +28,8 @@ class CartItemModel {
     this.ram = '',
     this.color = '',
     this.condition = 'Good',
+    this.deviceID = '',
+    this.modelCode = '',
     this.isSelected = false,
   });
 
@@ -43,6 +47,8 @@ class CartItemModel {
       ram: json['ram']?.toString() ?? '',
       color: json['color']?.toString() ?? '',
       condition: json['condition']?.toString() ?? 'Good',
+      deviceID: json['deviceID']?.toString() ?? '',
+      modelCode: json['modelCode']?.toString() ?? '',
       isSelected: false,
     );
   }

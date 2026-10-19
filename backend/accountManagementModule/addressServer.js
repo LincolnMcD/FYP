@@ -123,7 +123,7 @@ router.get("/reverse-geocode", async (req, res) => {
             return res.status(400).json({ success: false, error: "Latitude and longitude are required" });
         }
 
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1`;
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=en`;
         const response = await fetch(url, {
             headers: {
                 "User-Agent": "ReByteApp/1.0 (lincoln@rebyte.com)"
@@ -176,6 +176,71 @@ router.get("/reverse-geocode", async (req, res) => {
     } catch (err) {
         console.error("Reverse geocoding error:", err);
         return res.status(500).json({ success: false, error: "Failed to reverse geocode location" });
+    }
+});
+
+/**
+ * GET /api/address/search?q=...
+ * Search places/addresses via Nominatim
+ */
+router.get("/search", async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || !q.trim()) {
+            return res.status(400).json({ success: false, error: "Search query is required" });
+        }
+
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q.trim())}&addressdetails=1&accept-language=en&limit=6`;
+        const response = await fetch(url, {
+            headers: {
+                "User-Agent": "ReByteApp/1.0 (lincoln@rebyte.com)"
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(502).json({ success: false, error: "Search geocoding service unavailable" });
+        }
+
+        const results = await response.json();
+        const mapped = results.map(item => {
+            const addr = item.address || {};
+            const countryCode = String(addr.country_code || "").toLowerCase();
+            const countryName = String(addr.country || "").toLowerCase();
+            const isMalaysia = countryCode === "my" || countryName.includes("malaysia");
+
+            const roadParts = [
+                addr.house_number,
+                addr.building,
+                addr.road,
+                addr.suburb,
+                addr.neighbourhood || addr.residential
+            ].filter(Boolean);
+
+            const addressLine = roadParts.join(", ") || item.name || (item.display_name ? item.display_name.split(",").slice(0, 2).join(",") : "");
+            const postcode = addr.postcode || "";
+            const city = addr.city || addr.town || addr.municipality || addr.county || addr.district || "";
+            const state = matchMalaysianState(addr.state, city, item.display_name) || addr.state || "";
+
+            return {
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+                displayName: item.display_name,
+                name: item.name || addressLine,
+                isMalaysia,
+                address: {
+                    addressLine,
+                    postcode,
+                    city,
+                    state,
+                    displayName: item.display_name
+                }
+            };
+        });
+
+        return res.json({ success: true, results: mapped });
+    } catch (err) {
+        console.error("Geocoding search error:", err);
+        return res.status(500).json({ success: false, error: "Failed to search location" });
     }
 });
 

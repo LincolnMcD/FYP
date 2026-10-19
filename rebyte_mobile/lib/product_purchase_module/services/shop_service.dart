@@ -110,6 +110,54 @@ class ShopService {
     }
   }
 
+  /// Fetch single product by ID
+  static Future<ProductModel?> fetchProductById(String productId) async {
+    if (productId.isEmpty) return null;
+    try {
+      final uri = Uri.parse('$baseUrl/api/shop/products/$productId');
+      final response = await http.get(uri, headers: await _headers()).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['product'] is Map<String, dynamic>) {
+          return ProductModel.fromJson(data['product'] as Map<String, dynamic>);
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('ShopService.fetchProductById error: $e');
+      return null;
+    }
+  }
+
+  /// Fetch full technical specifications for a product (via deviceID -> modelCode -> GetTechAPI)
+  static Future<Map<String, dynamic>?> fetchProductSpecs(String productId, {String deviceID = '', bool forceRefresh = false}) async {
+    if (productId.isEmpty) return null;
+    final cacheKey = 'specs|$productId|$deviceID';
+    if (!forceRefresh) {
+      final cached = _cached(cacheKey);
+      if (cached is Map<String, dynamic>) return cached;
+    }
+
+    try {
+      final queryParam = forceRefresh ? '?refresh=true' : '';
+      final uri = Uri.parse('$baseUrl/api/shop/products/$productId/specs$queryParam');
+      final response = await http.get(uri, headers: await _headers()).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final result = data as Map<String, dynamic>;
+          final actualDeviceId = result['deviceID']?.toString() ?? deviceID;
+          _cacheValue('specs|$productId|$actualDeviceId', result, ttl: const Duration(minutes: 30));
+          return result;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('ShopService.fetchProductSpecs error: $e');
+      return null;
+    }
+  }
+
   /// Fetch user's cart items
   static Future<List<CartItemModel>> fetchCart({required String email, bool forceRefresh = false}) async {
     if (email.isEmpty) return [];
@@ -416,6 +464,26 @@ class ShopService {
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Fetch orders for user
+  static Future<List<Map<String, dynamic>>> fetchOrders({required String email}) async {
+    if (email.isEmpty) return [];
+    try {
+      final uri = Uri.parse('$baseUrl/api/shop/orders').replace(queryParameters: {'email': email});
+      final response = await http.get(uri, headers: await _headers()).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['orders'] is List) {
+          return List<Map<String, dynamic>>.from(data['orders'] as List);
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint('ShopService.fetchOrders error: $e');
+      return [];
     }
   }
 }

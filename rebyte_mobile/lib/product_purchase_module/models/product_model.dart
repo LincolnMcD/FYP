@@ -11,6 +11,8 @@ class ProductModel {
   final String color;
   final String condition;
   final String listingStatus;
+  final String deviceID;
+  final String modelCode;
 
   ProductModel({
     required this.id,
@@ -25,6 +27,8 @@ class ProductModel {
     required this.color,
     required this.condition,
     required this.listingStatus,
+    this.deviceID = '',
+    this.modelCode = '',
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class ProductModel {
       color: json['color']?.toString() ?? '',
       condition: json['condition']?.toString() ?? 'Good',
       listingStatus: json['listingStatus']?.toString() ?? 'listed',
+      deviceID: json['deviceID']?.toString() ?? '',
+      modelCode: json['modelCode']?.toString() ?? '',
     );
   }
 

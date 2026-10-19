@@ -309,21 +309,26 @@ class AuthService {
     required String phoneNumber,
     required String position,
     required List<String> specialization,
+    Map<String, dynamic>? workLocation,
   }) async {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
       final token = await currentUser.getIdToken(true);
       if (token == null) return {'success': false, 'error': 'Your staff session has expired. Please sign in again.'};
+      final payload = <String, dynamic>{
+        'fullName': fullName,
+        'phoneNumber': phoneNumber,
+        'position': position,
+        'specialization': specialization,
+      };
+      if (workLocation != null) {
+        payload['workLocation'] = workLocation;
+      }
       final response = await http.patch(
         Uri.parse('$baseUrl/staff-profile'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({
-          'fullName': fullName,
-          'phoneNumber': phoneNumber,
-          'position': position,
-          'specialization': specialization,
-        }),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 10));
       final body = jsonDecode(response.body);
       if (response.statusCode == 200) return {'success': true, 'data': body['profile'], 'message': body['message']};

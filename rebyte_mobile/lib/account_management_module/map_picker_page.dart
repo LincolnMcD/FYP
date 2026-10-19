@@ -3,7 +3,16 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'services/address_service.dart';
 
 class MapPickerPage extends StatefulWidget {
-  const MapPickerPage({super.key});
+  final double? initialLat;
+  final double? initialLng;
+  final String? initialAddress;
+
+  const MapPickerPage({
+    super.key,
+    this.initialLat,
+    this.initialLng,
+    this.initialAddress,
+  });
 
   @override
   State<MapPickerPage> createState() => _MapPickerPageState();
@@ -16,11 +25,13 @@ class _MapPickerPageState extends State<MapPickerPage> {
   bool _isFetchingDetails = false;
   String? _errorMessage;
 
-  // Initial center default (will be replaced by GPS / network location on load)
+  // Initial center default
   double _currentLat = 3.1390;
   double _currentLng = 101.6869;
 
-  String _pickedAddressSummary = 'Tap or drag map to point delivery location';
+  late String _pickedAddressSummary = widget.initialAddress?.isNotEmpty == true
+      ? widget.initialAddress!
+      : 'Tap or drag map to point delivery location';
 
   @override
   void initState() {
@@ -29,6 +40,21 @@ class _MapPickerPageState extends State<MapPickerPage> {
   }
 
   Future<void> _loadInitialLocation() async {
+    // If a selected location was passed in (e.g. from existing profile/staff work location), use it directly
+    if (widget.initialLat != null && widget.initialLng != null) {
+      final lat = widget.initialLat!;
+      final lng = widget.initialLng!;
+      if (mounted) {
+        setState(() {
+          _currentLat = lat;
+          _currentLng = lng;
+          _isLocating = false;
+        });
+        _onLocationReceived(lat, lng);
+      }
+      return;
+    }
+
     final loc = await AddressService.getCurrentLocation();
     double lat = 3.1390;
     double lng = 101.6869;
@@ -185,7 +211,9 @@ class _MapPickerPageState extends State<MapPickerPage> {
     setState(() => _isFetchingDetails = false);
 
     if (res['success'] == true && res['isMalaysia'] == true) {
-      final addr = res['address'] as Map<String, dynamic>? ?? {};
+      final addr = Map<String, dynamic>.from(res['address'] as Map? ?? {});
+      addr['lat'] = _currentLat;
+      addr['lng'] = _currentLng;
       Navigator.pop(context, addr);
     } else {
       final err = res['error']?.toString() ?? 'Sorry, only able to select Malaysia region';

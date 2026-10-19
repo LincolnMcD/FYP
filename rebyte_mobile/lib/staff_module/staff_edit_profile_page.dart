@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../account_management_module/services/auth_service.dart';
 import '../account_management_module/services/session_service.dart';
+import '../account_management_module/map_picker_page.dart';
 import '../device_tradein_module/data/phone_brands_data.dart';
 
 class StaffEditProfilePage extends StatefulWidget {
@@ -27,6 +28,7 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
   String _position = 'Inspector';
   String _loginMethod = 'Email';
   List<String> _specializations = [];
+  Map<String, dynamic>? _workLocation;
   Map<String, dynamic> _profile = {};
   Map<String, dynamic> _initial = {};
   String? _nameError;
@@ -61,11 +63,16 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
     final data = Map<String, dynamic>.from(response['data'] as Map);
     final position = ['Inspector', 'Deliverer', 'Both'].contains(data['position']) ? data['position'] as String : 'Inspector';
     final phone = (data['phoneNumber'] ?? '').toString().replaceFirst(RegExp(r'^\+60'), '').replaceAll(RegExp(r'\D'), '');
+    Map<String, dynamic>? parsedWorkLoc;
+    if (data['workLocation'] is Map) {
+      parsedWorkLoc = Map<String, dynamic>.from(data['workLocation'] as Map);
+    }
     setState(() {
       _profile = data;
       _staffId = (data['staffNo'] ?? data['staffId'] ?? '').toString();
       _loginMethod = (data['loginMethod'] ?? 'Email').toString();
       _position = position;
+      _workLocation = parsedWorkLoc;
       final savedSpecializations = data['specialization'] is List
           ? List<String>.from(data['specialization'])
           : data['specialization'] is String && (data['specialization'] as String).isNotEmpty
@@ -96,6 +103,9 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
     'phone': _phoneController.text.trim(),
     'position': _position,
     'specialization': List<String>.from(_specializations),
+    'workLocationAddress': _workLocation?['address'] ?? '',
+    'workLocationLat': _workLocation?['lat'],
+    'workLocationLng': _workLocation?['lng'],
   };
 
   bool _validate({bool reveal = true}) {
@@ -119,11 +129,56 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
 
   bool get _hasChanges {
     final now = _currentValues();
-    return now['fullName'] != _initial['fullName'] || now['phone'] != _initial['phone'] || now['position'] != _initial['position'] ||
-      !_sameList(now['specialization'] as List<String>, _initial['specialization'] as List<String>);
+    return now['fullName'] != _initial['fullName'] ||
+        now['phone'] != _initial['phone'] ||
+        now['position'] != _initial['position'] ||
+        now['workLocationAddress'] != _initial['workLocationAddress'] ||
+        now['workLocationLat'] != _initial['workLocationLat'] ||
+        now['workLocationLng'] != _initial['workLocationLng'] ||
+        !_sameList(now['specialization'] as List<String>, _initial['specialization'] as List<String>);
   }
 
   bool _sameList(List<String> a, List<String> b) => a.length == b.length && a.toSet().containsAll(b);
+
+  Future<void> _pickWorkLocation() async {
+    double? initLat;
+    double? initLng;
+    if (_workLocation != null) {
+      final rawLat = _workLocation!['lat'];
+      final rawLng = _workLocation!['lng'];
+      if (rawLat is num) initLat = rawLat.toDouble();
+      if (rawLng is num) initLng = rawLng.toDouble();
+      if (initLat == null && rawLat != null) initLat = double.tryParse(rawLat.toString());
+      if (initLng == null && rawLng != null) initLng = double.tryParse(rawLng.toString());
+    }
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapPickerPage(
+          initialLat: initLat,
+          initialLng: initLng,
+          initialAddress: _workLocation?['address']?.toString(),
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      final line = result['addressLine']?.toString() ?? '';
+      final post = result['postcode']?.toString() ?? '';
+      final city = result['city']?.toString() ?? '';
+      final state = result['state']?.toString() ?? '';
+      final parts = [line, post, city, state].where((s) => s.trim().isNotEmpty).toList();
+      final fullAddr = parts.isNotEmpty ? parts.join(', ') : 'Selected location';
+      setState(() {
+        _workLocation = {
+          'address': fullAddr,
+          'lat': result['lat'],
+          'lng': result['lng'],
+        };
+      });
+      _validate();
+    }
+  }
 
   Future<void> _save() async {
     if (!_validate()) return;
@@ -134,6 +189,7 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
       phoneNumber: '+60${_phoneController.text.trim()}',
       position: _position,
       specialization: _position == 'Deliverer' ? [] : _specializations,
+      workLocation: _workLocation,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -186,6 +242,40 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(height: 52, padding: const EdgeInsets.symmetric(horizontal: 16), alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), border: Border.all(color: Colors.grey.shade300), borderRadius: const BorderRadius.horizontal(left: Radius.circular(8))), child: const Text('+60', style: TextStyle(color: Color(0xFF475569)))), Expanded(child: TextField(controller: _phoneController, keyboardType: TextInputType.phone, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) { _validate(); setState(() {}); }, decoration: _inputDecoration(error: _phoneError, joined: true)))]),
         const SizedBox(height: 20), _label('Position'),
         DropdownButtonFormField<String>(value: _position, decoration: _inputDecoration(), items: const [DropdownMenuItem(value: 'Inspector', child: Text('Inspector')), DropdownMenuItem(value: 'Deliverer', child: Text('Deliverer')), DropdownMenuItem(value: 'Both', child: Text('Inspector & Deliverer'))], onChanged: (value) { if (value == null) return; setState(() { _position = value; if (value == 'Deliverer') { _specializations = []; _specializationError = null; } }); _validate(); }),
+        const SizedBox(height: 20), _label('Work Base Location', helper: 'Starting base for route planning'),
+        InkWell(
+          onTap: _pickWorkLocation,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: _blue, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _workLocation != null && (_workLocation!['address']?.toString().isNotEmpty ?? false)
+                        ? _workLocation!['address'].toString()
+                        : 'Tap to choose Work Base Location from map',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _workLocation != null ? const Color(0xFF1E293B) : Colors.grey.shade500,
+                      fontWeight: _workLocation != null ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.map_outlined, color: Color(0xFF64748B), size: 20),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 20), _label('Device Specialization', helper: _position == 'Deliverer' ? 'Not required' : '${_specializations.length} selected'),
         Opacity(
           opacity: _position == 'Deliverer' ? .55 : 1,

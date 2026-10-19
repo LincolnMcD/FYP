@@ -7,6 +7,7 @@ import '../account_management_module/services/account_session_watch_service.dart
 import '../account_management_module/services/app_route_observer.dart';
 import '../account_management_module/home_page.dart';
 import 'staff_commission_page.dart';
+import '../task_assignment_module/staff_assigned_tasks_page.dart';
 
 class StaffHomePage extends StatefulWidget {
   final String? toastMessage;
@@ -59,6 +60,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
       });
     }
     _loadSession();
+    _loadFreshStaffProfile();
     AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
   }
 
@@ -228,12 +230,18 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
       ),
       body: Stack(
         children: [
-          _selectedIndex == 3 ? StaffProfilePage(
-            name: _name,
-            email: _email,
-            onLogout: _showLogoutDialog,
-            onProfileUpdated: () async { await _loadFreshStaffProfile(); },
-          ) : SafeArea(
+          _selectedIndex == 3
+              ? StaffProfilePage(
+                  name: _name,
+                  email: _email,
+                  onLogout: _showLogoutDialog,
+                  onProfileUpdated: () async { await _loadFreshStaffProfile(); },
+                )
+              : _selectedIndex == 2
+                  ? StaffAssignedTasksPage(
+                      email: _email,
+                    )
+                  : SafeArea(
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -72,7 +72,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   /// If user leaves checkout without completing payment, mark order as cancelled
   Future<void> _handleLeaveCheckout() async {
     if (!_isOrderPaid && _currentOrderID != null) {
-      await ShopService.updateOrderStatus(
+      ShopService.updateOrderStatus(
         orderID: _currentOrderID!,
         orderStatus: 'cancelled',
       );
@@ -328,11 +328,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
         final finalOrderID = _currentOrderID ?? ('#RB-${1000 + (DateTime.now().millisecondsSinceEpoch % 9000)}');
 
-        // Update Order record to 'success' in Firebase
+        // Update Order record to 'Delivering' in Firebase
         if (_currentOrderID != null) {
           ShopService.updateOrderStatus(
             orderID: _currentOrderID!,
-            orderStatus: 'success',
+            orderStatus: 'Delivering',
             addressID: _selectedAddress?.addressID ?? _selectedAddress?.id,
           );
         }
@@ -466,7 +466,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(context, _isOrderPaid ? 'paid' : 'cancelled');
             },
           ),
         title: Row(

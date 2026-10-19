@@ -2,6 +2,7 @@ const express = require("express");
 const { FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const db = require("../config/firebase");
+const { assignDeliveryTask } = require("../taskAssignmentModule/taskAssignmentService");
 
 const router = express.Router();
 const PRODUCT_PAGE_SIZE = 20;
@@ -83,7 +84,9 @@ function cartProduct(productId, product) {
         storage: product.storage,
         ram: product.ram,
         color: product.color,
-        condition: product.condition
+        condition: product.condition,
+        deviceID: product.deviceID || "",
+        modelCode: product.modelCode || ""
     };
 }
 
@@ -113,9 +116,16 @@ function serializeProduct(doc) {
                 : condition.includes("grade a") || condition.includes("excellent") ? "Good" : "Fair";
         }
     }
+    const deviceID = data.deviceID || "";
+    let modelCode = data.modelCode || "";
+    if (Array.isArray(modelCode)) {
+        modelCode = modelCode.join(", ");
+    }
     const product = {
         id: doc.id,
         productID: pid,
+        deviceID,
+        modelCode: modelCode ? String(modelCode) : "",
         description,
         brand: brandName,
         model: modelName,
@@ -331,10 +341,474 @@ router.get("/products/:productId", async (req, res) => {
             product = serializeProduct(doc);
         }
         if (product._missing) return res.status(404).json({ success: false, error: "Product not found." });
+
+        // Ensure device record is resolved by deviceID to get modelCode
+        if (product.deviceID && (!product.modelCode || product.modelCode.trim().length === 0)) {
+            try {
+                let devDoc = await db.collection("devices").doc(product.deviceID).get();
+                if (!devDoc.exists) {
+                    const devSnap = await db.collection("devices").where("deviceID", "==", product.deviceID).limit(1).get();
+                    if (!devSnap.empty) devDoc = devSnap.docs[0];
+                }
+                if (devDoc && devDoc.exists) {
+                    const devData = devDoc.data();
+                    let mCode = devData.modelCode || "";
+                    if (Array.isArray(mCode)) mCode = mCode.join(", ");
+                    if (mCode) product.modelCode = String(mCode);
+                }
+            } catch (devErr) {
+                console.error("Error looking up device for product:", devErr);
+            }
+        }
+
         return res.json({ success: true, product });
     } catch (err) {
         console.error("Error fetching product detail:", err);
         return res.status(500).json({ success: false, error: "Failed to fetch product." });
+    }
+});
+
+// Cache for device specs
+const specCache = new Map();
+
+/**
+ * Helper to build comprehensive structured specs fallback when external TechEngine is offline
+ */
+function buildFallbackSpecs(brand, model, modelCode) {
+    const bLower = (brand || "").toLowerCase();
+    const mLower = (model || "").toLowerCase();
+    const isApple = bLower.includes("apple") || mLower.includes("iphone");
+    const isSamsung = bLower.includes("samsung") || mLower.includes("galaxy");
+    const isPixel = bLower.includes("google") || mLower.includes("pixel");
+    const isXiaomi = bLower.includes("xiaomi") || mLower.includes("poco") || mLower.includes("redmi");
+
+    let screenDesc = '6.7" Super Retina XDR OLED (120Hz ProMotion, 2000 nits)';
+    let socName = 'Apple A17 Pro (3nm)';
+    let socGpu = 'Apple 6-core GPU';
+    let ram = '8 GB LPDDR5';
+    let battery = '4,422 mAh';
+    let wiredCharging = '25W PD wired';
+    let wirelessCharging = '15W MagSafe / Qi2';
+    let mainCam = '48 MP, f/1.78, 24mm, sensor-shift OIS';
+    let ultraCam = '12 MP, f/2.2, 13mm, 120˚';
+    let teleCam = '12 MP 5x optical periscope zoom';
+    let selfieCam = '12 MP, f/1.9 TrueDepth';
+    let dimensions = '159.9 x 76.7 x 8.25 mm';
+    let weight = '221 g';
+    let ipRating = 'IP68 dust/water resistant (up to 6m for 30 mins)';
+    let os = 'iOS 17 (upgradable to latest)';
+    let connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2 Gen 2 (10Gbps)';
+
+    if (mLower.includes("15 pro max")) {
+        screenDesc = '6.7" Super Retina XDR OLED (120Hz ProMotion, 2000 nits, 2796 x 1290, 460 ppi)';
+        socName = 'Apple A17 Pro (3nm, 6-core CPU)';
+        socGpu = 'Apple 6-core GPU (Hardware Ray Tracing)';
+        battery = '4,422 mAh';
+        teleCam = '12 MP, f/2.8, 120mm (5x optical zoom), 3D sensor-shift OIS';
+    } else if (mLower.includes("15 pro")) {
+        screenDesc = '6.1" Super Retina XDR OLED (120Hz ProMotion, 2000 nits, 2556 x 1179, 460 ppi)';
+        socName = 'Apple A17 Pro (3nm, 6-core CPU)';
+        socGpu = 'Apple 6-core GPU (Hardware Ray Tracing)';
+        battery = '3,274 mAh';
+        teleCam = '12 MP, f/2.8, 77mm (3x optical zoom), OIS';
+        dimensions = '146.6 x 70.6 x 8.25 mm';
+        weight = '187 g';
+    } else if (mLower.includes("14 pro max")) {
+        screenDesc = '6.7" Super Retina XDR OLED (120Hz ProMotion, 2000 nits, 2796 x 1290, 460 ppi)';
+        socName = 'Apple A16 Bionic (4nm, 6-core CPU)';
+        socGpu = 'Apple 5-core GPU';
+        battery = '4,323 mAh';
+        ram = '6 GB LPDDR5';
+        dimensions = '160.7 x 77.6 x 7.85 mm';
+        weight = '240 g';
+    } else if (mLower.includes("14")) {
+        screenDesc = '6.1" Super Retina XDR OLED (60Hz, 1200 nits, 2532 x 1170, 460 ppi)';
+        socName = 'Apple A15 Bionic (5nm, 6-core CPU)';
+        socGpu = 'Apple 5-core GPU';
+        ram = '6 GB LPDDR4X';
+        battery = '3,279 mAh';
+        mainCam = '12 MP, f/1.5, 26mm, sensor-shift OIS';
+        teleCam = 'None';
+        dimensions = '146.7 x 71.5 x 7.8 mm';
+        weight = '172 g';
+    } else if (mLower.includes("13")) {
+        screenDesc = '6.1" Super Retina XDR OLED (60Hz, 1200 nits, 2532 x 1170, 460 ppi)';
+        socName = 'Apple A15 Bionic (5nm, 6-core CPU)';
+        socGpu = 'Apple 4-core GPU';
+        ram = '4 GB LPDDR4X';
+        battery = '3,227 mAh';
+        mainCam = '12 MP, f/1.6, 26mm, sensor-shift OIS';
+        teleCam = 'None';
+        dimensions = '146.7 x 71.5 x 7.65 mm';
+        weight = '174 g';
+    } else if (mLower.includes("s24 ultra")) {
+        screenDesc = '6.8" Dynamic LTPO AMOLED 2X (1-120Hz, 2600 nits, 3120 x 1440, 505 ppi, Gorilla Armor)';
+        socName = 'Qualcomm Snapdragon 8 Gen 3 for Galaxy (4nm)';
+        socGpu = 'Adreno 750 (1 GHz)';
+        ram = '12 GB LPDDR5X';
+        battery = '5,000 mAh';
+        wiredCharging = '45W wired, PD3.0';
+        wirelessCharging = '15W wireless (Qi/PMA), 4.5W reverse wireless';
+        mainCam = '200 MP, f/1.7, 24mm, multi-directional PDAF, Laser AF, OIS';
+        ultraCam = '12 MP, f/2.2, 13mm, 120˚, Dual Pixel PDAF';
+        teleCam = '50 MP 5x periscope OIS + 10 MP 3x optical OIS';
+        selfieCam = '12 MP, f/2.2, 26mm, Dual Pixel PDAF';
+        dimensions = '162.3 x 79 x 8.6 mm';
+        weight = '232 g';
+        ipRating = 'IP68 dust/water resistant (up to 1.5m for 30 mins), Armor Aluminum frame';
+        os = 'Android 14, One UI 6.1 (7 years OS upgrades)';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.3, NFC, UWB, USB-C 3.2 DisplayPort';
+    } else if (mLower.includes("s24")) {
+        screenDesc = '6.2" Dynamic LTPO AMOLED 2X (1-120Hz, 2600 nits, 2340 x 1080, 416 ppi)';
+        socName = 'Qualcomm Snapdragon 8 Gen 3 / Exynos 2400 (4nm)';
+        socGpu = 'Adreno 750 / Xclipse 940';
+        ram = '8 GB LPDDR5X';
+        battery = '4,000 mAh';
+        wiredCharging = '25W wired, PD3.0';
+        wirelessCharging = '15W wireless, 4.5W reverse wireless';
+        mainCam = '50 MP, f/1.8, 24mm, Dual Pixel PDAF, OIS';
+        ultraCam = '12 MP, f/2.2, 13mm, 120˚';
+        teleCam = '10 MP, f/2.4, 67mm (3x optical zoom), PDAF, OIS';
+        selfieCam = '12 MP, f/2.2, Dual Pixel PDAF';
+        dimensions = '147 x 70.6 x 7.6 mm';
+        weight = '167 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'Android 14, One UI 6.1';
+        connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2';
+    } else if (mLower.includes("s23 ultra")) {
+        screenDesc = '6.8" Dynamic AMOLED 2X (120Hz, 1750 nits, 3088 x 1440, 500 ppi)';
+        socName = 'Qualcomm Snapdragon 8 Gen 2 for Galaxy (4nm)';
+        socGpu = 'Adreno 740';
+        ram = '8 GB / 12 GB LPDDR5X';
+        battery = '5,000 mAh';
+        wiredCharging = '45W wired, PD3.0';
+        wirelessCharging = '15W wireless';
+        mainCam = '200 MP, f/1.7, 24mm, Laser AF, OIS';
+        ultraCam = '12 MP, f/2.2, 13mm, 120˚';
+        teleCam = '10 MP 10x periscope + 10 MP 3x optical zoom, OIS';
+        selfieCam = '12 MP, f/2.2, 26mm, Dual Pixel PDAF';
+        dimensions = '163.4 x 78.1 x 8.9 mm';
+        weight = '234 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'Android 13 (upgradable to Android 14)';
+        connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2';
+    } else if (mLower.includes("s23")) {
+        screenDesc = '6.1" Dynamic AMOLED 2X (120Hz, 1750 nits, 2340 x 1080, 425 ppi)';
+        socName = 'Qualcomm Snapdragon 8 Gen 2 for Galaxy (4nm)';
+        socGpu = 'Adreno 740';
+        ram = '8 GB LPDDR5X';
+        battery = '3,900 mAh';
+        wiredCharging = '25W wired';
+        wirelessCharging = '15W wireless';
+        mainCam = '50 MP, f/1.8, 24mm, Dual Pixel PDAF, OIS';
+        ultraCam = '12 MP, f/2.2, 13mm, 120˚';
+        teleCam = '10 MP, f/2.4, 70mm (3x optical zoom), OIS';
+        selfieCam = '12 MP, f/2.2';
+        dimensions = '146.3 x 70.9 x 7.6 mm';
+        weight = '168 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'Android 13, One UI';
+        connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2';
+    } else if (mLower.includes("z flip 5")) {
+        screenDesc = '6.7" Foldable Dynamic AMOLED 2X (120Hz) + 3.4" Super AMOLED Flex Window';
+        socName = 'Qualcomm Snapdragon 8 Gen 2 for Galaxy (4nm)';
+        socGpu = 'Adreno 740';
+        ram = '8 GB LPDDR5X';
+        battery = '3,700 mAh';
+        wiredCharging = '25W wired';
+        wirelessCharging = '15W wireless';
+        mainCam = '12 MP, f/1.8, 24mm, Dual Pixel PDAF, OIS';
+        ultraCam = '12 MP, f/2.2, 123˚';
+        teleCam = 'None';
+        selfieCam = '10 MP, f/2.2, 23mm';
+        dimensions = '165.1 x 71.9 x 6.9 mm (Folded: 85.1 x 71.9 x 15.1 mm)';
+        weight = '187 g';
+        ipRating = 'IPX8 water resistant (up to 1.5m for 30 mins)';
+        os = 'Android 13, One UI';
+        connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2';
+    } else if (mLower.includes("pixel 8 pro")) {
+        screenDesc = '6.7" LTPO OLED Super Actua display (1-120Hz, 2400 nits, 2992 x 1344, 489 ppi)';
+        socName = 'Google Tensor G3 (4nm, 9-core CPU) + Titan M2 security coprocessor';
+        socGpu = 'Immortalis-G715s MC10';
+        ram = '12 GB LPDDR5X';
+        battery = '5,050 mAh';
+        wiredCharging = '30W fast charging, PD3.0';
+        wirelessCharging = '23W fast wireless (Pixel Stand)';
+        mainCam = '50 MP Octa PD, f/1.68, 25mm, Laser AF, OIS';
+        ultraCam = '48 MP Quad PD, f/1.95, 126˚ with Macro Focus';
+        teleCam = '48 MP Quad PD 5x optical telephoto zoom, up to 30x Super Res Zoom, OIS';
+        selfieCam = '10.5 MP Dual PD, f/2.2, autofocus';
+        dimensions = '162.6 x 76.5 x 8.8 mm';
+        weight = '213 g';
+        ipRating = 'IP68 dust and water resistance';
+        os = 'Android 14 (7 years of OS & security updates)';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.3, NFC, Ultra-Wideband (UWB), USB-C 3.2';
+    } else if (mLower.includes("pixel 7 pro")) {
+        screenDesc = '6.7" LTPO AMOLED (120Hz, 1500 nits, 3120 x 1440, 512 ppi)';
+        socName = 'Google Tensor G2 (5nm) + Titan M2 security coprocessor';
+        socGpu = 'Mali-G710 MP7';
+        ram = '12 GB LPDDR5';
+        battery = '5,000 mAh';
+        wiredCharging = '23W wired, PD3.0';
+        wirelessCharging = '23W wireless';
+        mainCam = '50 MP, f/1.85, 25mm, Laser AF, OIS';
+        ultraCam = '12 MP, f/2.2, 126˚';
+        teleCam = '48 MP, f/3.5, 120mm (5x optical zoom), OIS';
+        selfieCam = '10.8 MP, f/2.2';
+        dimensions = '162.9 x 76.6 x 8.9 mm';
+        weight = '212 g';
+        ipRating = 'IP68 dust and water resistance';
+        os = 'Android 13 (upgradable to Android 14)';
+        connectivity = 'Wi-Fi 6E, Bluetooth 5.2, NFC, USB-C 3.2';
+    } else if (mLower.includes("xiaomi 14 pro") || mLower.includes("14 pro")) {
+        screenDesc = '6.73" LTPO AMOLED (1-120Hz, 3000 nits peak, 3200 x 1440, 522 ppi, Dolby Vision)';
+        socName = 'Qualcomm Snapdragon 8 Gen 3 (4nm, Octa-Core up to 3.3 GHz)';
+        socGpu = 'Adreno 750';
+        ram = '16 GB LPDDR5X';
+        battery = '4,880 mAh';
+        wiredCharging = '120W HyperCharge wired (100% in 18 min)';
+        wirelessCharging = '50W wireless HyperCharge, 10W reverse wireless';
+        mainCam = '50 MP Leica Light Hunter 900, f/1.42-f/4.0 stepless variable aperture, 23mm, OIS';
+        ultraCam = '50 MP Leica 115˚ ultra-wide, f/2.2, 14mm, AF';
+        teleCam = '50 MP Leica 75mm floating telephoto, f/2.0, OIS, 3.2x optical zoom';
+        selfieCam = '32 MP, f/2.0 wide angle';
+        dimensions = '161.4 x 75.3 x 8.5 mm';
+        weight = '223 g';
+        ipRating = 'IP68 dust/water resistant (up to 1.5m for 30 mins)';
+        os = 'Xiaomi HyperOS based on Android 14';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, Dual NFC, USB-C 3.2 Gen 2';
+    } else if (mLower.includes("13 ultra")) {
+        screenDesc = '6.73" LTPO AMOLED (1-120Hz, 2600 nits, 3200 x 1440, 522 ppi)';
+        socName = 'Qualcomm Snapdragon 8 Gen 2 (4nm)';
+        socGpu = 'Adreno 740';
+        ram = '16 GB LPDDR5X';
+        battery = '5,000 mAh';
+        wiredCharging = '90W wired';
+        wirelessCharging = '50W wireless';
+        mainCam = '50 MP 1-inch Sony IMX989, f/1.9-f/4.0 variable aperture, OIS';
+        ultraCam = '50 MP, f/1.8, 12mm, 122˚';
+        teleCam = '50 MP 3.2x optical + 50 MP 5x periscope zoom, OIS';
+        selfieCam = '32 MP, f/2.0';
+        dimensions = '163.2 x 74.6 x 9.06 mm';
+        weight = '227 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'MIUI / HyperOS based on Android 13';
+        connectivity = 'Wi-Fi 6E/7, Bluetooth 5.3, NFC, USB-C 3.2 Gen 1';
+    } else if (mLower.includes("13t pro")) {
+        screenDesc = '6.67" CrystalRes AMOLED (144Hz, 2600 nits, 2712 x 1220, 446 ppi)';
+        socName = 'MediaTek Dimensity 9200+ (4nm)';
+        socGpu = 'Immortalis-G715 MC11';
+        ram = '12 GB LPDDR5X';
+        battery = '5,000 mAh';
+        wiredCharging = '120W HyperCharge (100% in 19 min)';
+        wirelessCharging = 'None';
+        mainCam = '50 MP Leica, f/1.9, 24mm, OIS';
+        ultraCam = '12 MP Leica, f/2.2, 15mm';
+        teleCam = '50 MP Leica 2x optical zoom, f/1.9, 50mm';
+        selfieCam = '20 MP, f/2.2';
+        dimensions = '162.2 x 75.7 x 8.49 mm';
+        weight = '206 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'MIUI 14 / HyperOS based on Android 13';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, NFC, USB-C 2.0';
+    } else if (mLower.includes("oneplus 12")) {
+        screenDesc = '6.82" 2K ProXDR LTPO AMOLED (1-120Hz, 4500 nits peak, 3168 x 1440, 510 ppi)';
+        socName = 'Qualcomm Snapdragon 8 Gen 3 (4nm)';
+        socGpu = 'Adreno 750';
+        ram = '16 GB LPDDR5X';
+        battery = '5,400 mAh Dual-Cell';
+        wiredCharging = '100W SUPERVOOC (1-100% in 26 min)';
+        wirelessCharging = '50W AIRVOOC wireless';
+        mainCam = '50 MP Sony LYT-808, f/1.6, 23mm, ALC anti-reflective coating, OIS';
+        ultraCam = '48 MP Sony IMX581, f/2.2, 114˚ with Macro';
+        teleCam = '64 MP OmniVision OV64B 3x periscope zoom (up to 120x digital), OIS';
+        selfieCam = '32 MP Sony IMX615, f/2.4';
+        dimensions = '164.3 x 75.8 x 9.15 mm';
+        weight = '220 g';
+        ipRating = 'IP65 water & dust resistance with Aqua Touch';
+        os = 'OxygenOS 14 based on Android 14';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, NFC, USB-C 3.2 Gen 1';
+    } else if (mLower.includes("a15")) {
+        screenDesc = '6.5" Super AMOLED (90Hz, 800 nits, 2340 x 1080 FHD+)';
+        socName = 'MediaTek Helio G99 (6nm, Octa-Core)';
+        socGpu = 'Mali-G57 MC2';
+        ram = '4 GB / 8 GB';
+        battery = '5,000 mAh';
+        wiredCharging = '25W Super Fast Charging';
+        wirelessCharging = 'None';
+        mainCam = '50 MP, f/1.8 main camera, AF';
+        ultraCam = '5 MP, f/2.2 ultra-wide';
+        teleCam = '2 MP macro';
+        selfieCam = '13 MP, f/2.0';
+        dimensions = '160.1 x 76.8 x 8.4 mm';
+        weight = '200 g';
+        ipRating = 'Standard enclosure';
+        os = 'Android 14, One UI 6.0';
+        connectivity = 'Wi-Fi 5, Bluetooth 5.3, NFC, 3.5mm jack, USB-C 2.0';
+    } else if (mLower.includes("y9 prime")) {
+        screenDesc = '6.59" TFT LCD Ultra FullView (2340 x 1080 FHD+, 391 ppi)';
+        socName = 'HiSilicon Kirin 710F (12nm, Octa-Core)';
+        socGpu = 'Mali-G51 MP4';
+        ram = '4 GB';
+        battery = '4,000 mAh';
+        wiredCharging = '10W standard';
+        wirelessCharging = 'None';
+        mainCam = '16 MP, f/1.8, PDAF';
+        ultraCam = '8 MP, f/2.4, 120˚ ultra-wide';
+        teleCam = '2 MP depth sensor';
+        selfieCam = '16 MP, f/2.0 motorized pop-up camera';
+        dimensions = '163.5 x 77.3 x 8.8 mm';
+        weight = '196.8 g';
+        ipRating = 'Standard splash resistance';
+        os = 'EMUI 9.1 based on Android 9 (upgradable)';
+        connectivity = 'Wi-Fi 802.11 a/b/g/n/ac, Bluetooth 5.0, 3.5mm jack, USB-C';
+    }
+
+    return {
+        screen: screenDesc,
+        soc: socName,
+        gpu: socGpu,
+        ram: ram,
+        battery: battery,
+        wired_charging: wiredCharging,
+        wireless_charging: wirelessCharging,
+        main_camera: mainCam,
+        ultra_camera: ultraCam,
+        tele_camera: teleCam,
+        selfie_camera: selfieCam,
+        dimensions: dimensions,
+        weight: weight,
+        ip_rating: ipRating,
+        os: os,
+        connectivity: connectivity
+    };
+}
+
+/**
+ * GET /api/shop/products/:productId/specs
+ * Links product to device record using deviceID to get modelCode,
+ * then retrieves spec details from GetTechAPI (http://localhost:8000/v1/smartphones/{slug}),
+ * and falls back gracefully to local specs if the microservice is offline.
+ */
+router.get("/products/:productId/specs", async (req, res) => {
+    try {
+        const productId = String(req.params.productId || "").trim();
+        if (!productId) return res.status(400).json({ success: false, error: "Product ID is required." });
+
+        // 1. Fetch product record
+        let productDoc = await db.collection("product").doc(productId).get();
+        if (!productDoc.exists) {
+            return res.status(404).json({ success: false, error: "Product not found." });
+        }
+        const pData = productDoc.data();
+        const serialized = serializeProduct(productDoc);
+        const deviceID = pData.deviceID || serialized.deviceID || "";
+
+        const cacheKey = `${productId}|${deviceID}`;
+        const isForceRefresh = req.query.refresh === "true";
+        if (!isForceRefresh) {
+            const cached = cacheGet(specCache, cacheKey);
+            if (cached) return res.json({ success: true, ...cached, cached: true });
+        }
+
+        // 2. Fetch device record by deviceID
+        let deviceData = null;
+        let modelCode = "";
+        if (deviceID) {
+            let devDoc = await db.collection("devices").doc(deviceID).get();
+            if (!devDoc.exists) {
+                const devSnap = await db.collection("devices").where("deviceID", "==", deviceID).limit(1).get();
+                if (!devSnap.empty) devDoc = devSnap.docs[0];
+            }
+            if (devDoc && devDoc.exists) {
+                deviceData = devDoc.data();
+                const rawCode = deviceData.modelCode;
+                if (Array.isArray(rawCode)) {
+                    modelCode = rawCode.join(", ");
+                } else if (rawCode) {
+                    modelCode = String(rawCode);
+                }
+            }
+        }
+
+        // Always prioritize the linked device record's brand and model over the product's static description!
+        const brand = (deviceData && deviceData.brand) ? deviceData.brand : (serialized.brand || "");
+        const model = (deviceData && deviceData.model) ? deviceData.model : (serialized.model || "");
+
+        // 3. Prepare query slug for GetTechAPI (e.g. "galaxy-s24", "iphone-15-pro-max", "xiaomi-14-pro")
+        const primaryCode = modelCode ? modelCode.split(",")[0].trim() : "";
+        const slug = (model || primaryCode || serialized.displayTitle || "smartphone")
+            .toLowerCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^a-z0-9-]/g, "")
+            .replace(/-+/g, "-");
+
+        let techApiData = null;
+        let source = "fallback";
+
+        // 4. Try querying GetTechAPI at http://localhost:8000/v1/smartphones/{slug}
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+
+            // First try slug endpoint, then try search with primaryCode or slug
+            const techUrl = `http://localhost:8000/v1/smartphones/${encodeURIComponent(slug)}`;
+            const response = await fetch(techUrl, {
+                signal: controller.signal,
+                headers: { "Accept": "application/json" }
+            });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const json = await response.json();
+                techApiData = json;
+                source = "GetTechAPI";
+            }
+        } catch (apiErr) {
+            // GetTechAPI is offline or unreachable - proceed to fallback specs
+        }
+
+        // Format standardized specification payload
+        let specs = {};
+        if (techApiData) {
+            specs = {
+                screen: techApiData.display ? `${techApiData.display.size_inch || ''}" ${techApiData.display.type || 'OLED'} (${techApiData.display.refresh_hz || 120}Hz, ${techApiData.display.resolution || ''})` : "",
+                soc: techApiData.soc ? `${techApiData.soc.name || ''} (${techApiData.soc.manufacturer || ''} ${techApiData.soc.process_nm ? techApiData.soc.process_nm + 'nm' : ''})` : "",
+                gpu: techApiData.soc ? (techApiData.soc.gpu_name || "") : "",
+                ram: techApiData.ram_gb ? `${techApiData.ram_gb} GB` : serialized.ram || "",
+                battery: techApiData.battery_mah ? `${techApiData.battery_mah} mAh` : "",
+                wired_charging: techApiData.charging_wired_w ? `${techApiData.charging_wired_w}W wired` : "",
+                wireless_charging: techApiData.charging_wireless_w ? `${techApiData.charging_wireless_w}W wireless` : "",
+                main_camera: Array.isArray(techApiData.cameras) && techApiData.cameras[0] ? `${techApiData.cameras[0].mp} MP (${techApiData.cameras[0].type || 'Main'})` : "",
+                ultra_camera: Array.isArray(techApiData.cameras) && techApiData.cameras[1] ? `${techApiData.cameras[1].mp} MP (${techApiData.cameras[1].type || 'Ultrawide'})` : "",
+                tele_camera: Array.isArray(techApiData.cameras) && techApiData.cameras[2] ? `${techApiData.cameras[2].mp} MP (${techApiData.cameras[2].type || 'Telephoto'})` : "",
+                dimensions: techApiData.dimensions ? `${techApiData.dimensions.height_mm} x ${techApiData.dimensions.width_mm} x ${techApiData.dimensions.depth_mm} mm` : "",
+                weight: techApiData.weight_g ? `${techApiData.weight_g} g` : "",
+                ip_rating: techApiData.ip_rating || "",
+                os: techApiData.os ? `${techApiData.os} ${techApiData.os_version || ''}`.trim() : "",
+                connectivity: techApiData.connectivity ? Object.entries(techApiData.connectivity).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(", ") : ""
+            };
+        } else {
+            specs = buildFallbackSpecs(brand, model, modelCode);
+        }
+
+        const payload = {
+            productID: productId,
+            deviceID,
+            modelCode,
+            brand,
+            model,
+            storage: serialized.storage,
+            color: serialized.color,
+            source,
+            specs
+        };
+
+        cacheSet(specCache, cacheKey, payload, 300);
+        return res.json({ success: true, ...payload });
+    } catch (err) {
+        console.error("Error retrieving device specs for product:", err);
+        return res.status(500).json({ success: false, error: "Failed to retrieve device specs." });
     }
 });
 
@@ -493,7 +967,6 @@ router.post("/purchase", requireShopUser, async (req, res) => {
                 const pid = uniqueProductIDs[index];
                 const product = freshProducts[index];
                 const data = product.data() || {};
-                if (!currentCart.has(pid)) throw Object.assign(new Error("One or more selected items are no longer in your cart."), { code: "CART_CHANGED" });
                 if (!product.exists || data.listingStatus !== "listed") throw Object.assign(new Error("One or more products are no longer available. Refresh your cart."), { code: "ITEM_UNAVAILABLE" });
                 if (expectedPrices[pid] !== undefined && Number(expectedPrices[pid]) !== Number(data.sellingPrice || 0)) {
                     throw Object.assign(new Error("A product price changed. Review the updated cart total and try again."), { code: "PRICE_CHANGED" });
@@ -750,11 +1223,11 @@ router.post("/order/create", requireShopUser, async (req, res) => {
         const orderID = await generateOrderID();
         const now = new Date();
 
-        // Normalize status to proper Case (Pending, Success, Cancelled, Fail)
+        // Normalize status to proper Case (Pending, Delivering, Cancelled, Fail)
         let normalizedStatus = "Pending";
         if (req.body.orderStatus) {
             const s = String(req.body.orderStatus).trim().toLowerCase();
-            if (s === "success") normalizedStatus = "Success";
+            if (s === "success" || s === "delivering" || s === "shipping") normalizedStatus = "Delivering";
             else if (s === "cancelled" || s === "canceled") normalizedStatus = "Cancelled";
             else if (s === "fail" || s === "failed") normalizedStatus = "Fail";
         }
@@ -772,6 +1245,21 @@ router.post("/order/create", requireShopUser, async (req, res) => {
         };
 
         await db.collection("order").doc(orderID).set(orderData);
+
+        if (normalizedStatus === "Delivering") {
+            const taskID = `TSK-${orderID}`;
+            await db.collection("task").doc(taskID).set({
+                taskID: taskID,
+                taskType: "deliver",
+                taskStatus: "Packaging",
+                taskStartTime: null,
+                estimatedDuration: null,
+                scheduleID: null,
+                orderID: orderID,
+                appointmentID: null,
+                createdAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
 
         return res.json({
             success: true,
@@ -797,7 +1285,7 @@ router.post("/order/update-status", requireShopUser, async (req, res) => {
 
         let normalizedStatus = "Pending";
         const s = String(orderStatus).trim().toLowerCase();
-        if (s === "success") normalizedStatus = "Success";
+        if (s === "success" || s === "delivering" || s === "shipping") normalizedStatus = "Delivering";
         else if (s === "cancelled" || s === "canceled") normalizedStatus = "Cancelled";
         else if (s === "fail" || s === "failed") normalizedStatus = "Fail";
 
@@ -811,6 +1299,35 @@ router.post("/order/update-status", requireShopUser, async (req, res) => {
         }
 
         await db.collection("order").doc(orderID).set(updateData, { merge: true });
+
+        // If orderStatus is Delivering, create task and trigger task assignment
+        if (normalizedStatus === "Delivering") {
+            const taskID = `TSK-${orderID}`;
+            const taskDocRef = db.collection("task").doc(taskID);
+            const taskSnap = await taskDocRef.get();
+            if (!taskSnap.exists) {
+                await taskDocRef.set({
+                    taskID: taskID,
+                    taskType: "deliver",
+                    taskStatus: "Packaging",
+                    taskStartTime: null,
+                    estimatedDuration: null,
+                    scheduleID: null,
+                    orderID: orderID,
+                    appointmentID: null,
+                    createdAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // Trigger automated task assignment via OSRM algorithm
+            assignDeliveryTask({
+                orderID,
+                addressID: addressID || updateData.addressID,
+                requestedDate: new Date()
+            }).catch(err => {
+                console.error(`Automatic task assignment for order ${orderID} failed:`, err);
+            });
+        }
 
         return res.json({ success: true, orderID, orderStatus: normalizedStatus });
     } catch (err) {
@@ -999,6 +1516,200 @@ router.post("/send-receipt-email", requireShopUser, async (req, res) => {
     } catch (err) {
         console.error("Error sending receipt email:", err);
         return res.status(500).json({ success: false, error: "Failed to send receipt email: " + err.message });
+    }
+});
+
+/**
+ * GET /api/shop/orders
+ * Retrieves all orders for the current authenticated user, populated with product items
+ */
+router.get("/orders", requireShopUser, async (req, res) => {
+    try {
+        const email = String(req.query.email || "").trim().toLowerCase();
+        if (!email) {
+            return res.status(400).json({ success: false, error: "email is required" });
+        }
+
+        const userDoc = req.shopUserDoc;
+        const customerID = userDoc ? userDoc.id : await resolveCustomerID(email);
+
+        // Fetch orders by customerID or email
+        let ordersSnap = await db.collection("order")
+            .where("customerID", "==", customerID)
+            .get();
+
+        if (ordersSnap.empty && email) {
+            ordersSnap = await db.collection("order")
+                .where("email", "==", email)
+                .get();
+        }
+
+        const ordersList = await Promise.all(ordersSnap.docs.map(async (doc) => {
+            const data = doc.data();
+            const orderID = data.orderID || doc.id;
+            const pIds = Array.isArray(data.productIDs) ? data.productIDs : [];
+
+            // Populate products concurrently
+            const itemPromises = pIds.map(async (pid) => {
+                try {
+                    let prod = cacheGet(productCache, pid);
+                    if (!prod) {
+                        const pDoc = await db.collection("product").doc(pid).get();
+                        if (pDoc.exists) {
+                            prod = serializeProduct(pDoc);
+                        }
+                    }
+                    if (prod) {
+                        return {
+                            productID: prod.productID || pid,
+                            description: prod.description || "",
+                            sellingPrice: Number(prod.sellingPrice || 0),
+                            imageUrl: prod.imageUrl || "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg",
+                            brand: prod.brand || "",
+                            model: prod.model || "",
+                            storage: prod.storage || "",
+                            ram: prod.ram || "",
+                            color: prod.color || "",
+                            condition: prod.condition || "Good",
+                            listingStatus: prod.listingStatus || "sold"
+                        };
+                    }
+                } catch (_) {}
+                return null;
+            });
+
+            // Populate delivery address concurrently
+            const addressPromise = (async () => {
+                if (!data.addressID) return null;
+                try {
+                    const aDoc = await db.collection("address").doc(data.addressID).get();
+                    if (aDoc.exists) {
+                        const aData = aDoc.data();
+                        return {
+                            id: aDoc.id,
+                            addressID: aData.addressID || aDoc.id,
+                            addressLine: aData.addressLine || "",
+                            city: aData.city || "",
+                            state: aData.state || "",
+                            postcode: aData.postcode || "",
+                            recipentName: aData.recipentName || aData.recipientName || "",
+                            phoneNumber: aData.phoneNumber || "",
+                            addressType: aData.addressType || "Home",
+                            isDefault: !!aData.isDefault
+                        };
+                    }
+                } catch (_) {}
+                return null;
+            })();
+
+            // Lookup transaction payment concurrently
+            const paymentPromise = (async () => {
+                let paymentTitle = "Online Payment";
+                let paymentAccountID = "";
+                let paymentType = "card";
+
+                try {
+                    const tSnap = await db.collection("transaction").where("orderID", "==", orderID).limit(1).get();
+                    if (!tSnap.empty) {
+                        const tData = tSnap.docs[0].data();
+                        paymentAccountID = tData.paymentAccountID || "";
+
+                        if (paymentAccountID === "ewallet_all") {
+                            paymentTitle = "E-Wallet";
+                            paymentType = "ewallet";
+                        } else if (paymentAccountID === "fpx_online_banking" || paymentAccountID === "fpx") {
+                            paymentTitle = "FPX Online Banking";
+                            paymentType = "fpx";
+                        } else if (paymentAccountID) {
+                            paymentType = "card";
+                            try {
+                                const pDoc = await db.collection("paymentAccount").doc(paymentAccountID).get();
+                                if (pDoc.exists && pDoc.data().cardNumber) {
+                                    const cNum = String(pDoc.data().cardNumber).replace(/\s+/g, "");
+                                    const last4 = cNum.slice(-4);
+                                    paymentTitle = `************ ${last4}`;
+                                } else {
+                                    paymentTitle = `************ ${String(paymentAccountID).slice(-4)}`;
+                                }
+                            } catch (_) {
+                                paymentTitle = `************ ${String(paymentAccountID).slice(-4)}`;
+                            }
+                        } else if (tData.gatewayTransactionID) {
+                            paymentTitle = "Online Payment";
+                            paymentType = "card";
+                        }
+                    }
+                } catch (_) {}
+                return { paymentTitle, paymentAccountID, paymentType };
+            })();
+
+            // Lookup task status concurrently
+            const taskPromise = (async () => {
+                let taskStatus = "Packaging";
+                try {
+                    const taskID = `TSK-${orderID}`;
+                    const taskDoc = await db.collection("task").doc(taskID).get();
+                    if (taskDoc.exists && taskDoc.data().taskStatus) {
+                        taskStatus = taskDoc.data().taskStatus;
+                    }
+                } catch (_) {}
+                return taskStatus;
+            })();
+
+            const [itemsRaw, deliveryAddress, paymentInfo, taskStatus] = await Promise.all([
+                Promise.all(itemPromises),
+                addressPromise,
+                paymentPromise,
+                taskPromise
+            ]);
+
+            const items = itemsRaw.filter(Boolean);
+
+            // Convert orderDate
+            let paidAtDate = new Date();
+            if (data.orderDate && data.orderDate.toDate) {
+                paidAtDate = data.orderDate.toDate();
+            } else if (data.orderDate) {
+                paidAtDate = new Date(data.orderDate);
+            } else if (data.createdAt && data.createdAt.toDate) {
+                paidAtDate = data.createdAt.toDate();
+            }
+
+            let displayStatus = data.orderStatus || "Delivering";
+            if (String(displayStatus).trim().toLowerCase() === "success") {
+                displayStatus = "Delivering";
+            }
+
+            return {
+                orderID,
+                orderNumber: orderID.startsWith("#") ? orderID : `#${orderID}`,
+                orderStatus: displayStatus,
+                taskStatus,
+                failReason: data.failReason || data.cancelledReason || data.cancelReason || "",
+                subtotal: Number(data.subtotal || data.totalAmount || 0),
+                shippingFee: Number(data.shippingFee || 0),
+                totalAmount: Number(data.totalAmount || data.subtotal || 0),
+                amountPaid: Number(data.totalAmount || data.subtotal || 0),
+                addressID: data.addressID || "",
+                deliveryAddress,
+                paymentTitle: paymentInfo.paymentTitle,
+                paymentAccountID: paymentInfo.paymentAccountID,
+                paymentType: paymentInfo.paymentType,
+                paidAt: paidAtDate.toISOString(),
+                items
+            };
+        }));
+
+        // Sort orders newest first
+        ordersList.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+
+        return res.json({
+            success: true,
+            orders: ordersList
+        });
+    } catch (err) {
+        console.error("Error fetching orders:", err);
+        return res.status(500).json({ success: false, error: "Failed to fetch orders" });
     }
 });
 

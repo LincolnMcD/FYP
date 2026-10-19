@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'models/cart_item_model.dart';
+import 'models/product_model.dart';
 import 'services/shop_service.dart';
 import 'checkout_page.dart';
+import 'product_detail_page.dart';
 
 class CartPage extends StatefulWidget {
   final bool isLoggedIn;
@@ -165,7 +167,7 @@ class _CartPageState extends State<CartPage> {
     }
 
     // Navigate to CheckoutPage
-    final purchased = await Navigator.push<bool>(
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (context) => CheckoutPage(
@@ -177,11 +179,17 @@ class _CartPageState extends State<CartPage> {
       ),
     );
 
-    if (purchased == true && mounted) {
-      widget.onCartUpdated?.call();
-      final purchasedIds = selectedPurchasableItems.map((i) => i.productID).toSet();
-      setState(() => _cartItems.removeWhere((item) => purchasedIds.contains(item.productID)));
-      await _loadCart(forceRefresh: true);
+    if (result == true || result == 'paid') {
+      if (mounted) {
+        widget.onCartUpdated?.call();
+        final purchasedIds = selectedPurchasableItems.map((i) => i.productID).toSet();
+        setState(() => _cartItems.removeWhere((item) => purchasedIds.contains(item.productID)));
+        await _loadCart(forceRefresh: true);
+      }
+    } else if (result == 'cancelled' || result == null) {
+      if (mounted) {
+        _showTopToast('Order has been cancelled', isError: true);
+      }
     }
   }
 
@@ -461,106 +469,148 @@ class _CartPageState extends State<CartPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Image thumbnail
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(4),
-                    child: Image.network(
-                      item.imageUrl,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Icon(Icons.smartphone, size: 36, color: Colors.grey.shade400),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Details
+                  // Image thumbnail & details (clickable to view product details)
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.displayTitle,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F172A),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                    child: InkWell(
+                      onTap: () async {
+                        final product = ProductModel(
+                          id: item.productID,
+                          productID: item.productID,
+                          description: item.description,
+                          sellingPrice: item.sellingPrice,
+                          imageUrl: item.imageUrl,
+                          brand: item.brand,
+                          model: item.model,
+                          storage: item.storage,
+                          ram: item.ram,
+                          color: item.color,
+                          condition: item.condition,
+                          listingStatus: item.listingStatus,
+                          deviceID: item.deviceID,
+                          modelCode: item.modelCode,
+                        );
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProductDetailPage(
+                              product: product,
+                              isLoggedIn: widget.isLoggedIn,
+                              email: widget.email,
+                              name: widget.name,
+                              onCartUpdated: () {
+                                widget.onCartUpdated?.call();
+                                _loadCart(forceRefresh: true);
+                              },
                             ),
-                            // Red bin icon for single delete
-                            InkWell(
-                              onTap: () => _removeItem(item),
-                              child: const Padding(
-                                padding: EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  color: Color(0xFFEF4444), // RED BIN ICON
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE0F2FE),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.thumb_up_alt_outlined, size: 10, color: Color(0xFF0284C7)),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    item.condition,
-                                    style: const TextStyle(
-                                      color: Color(0xFF0284C7),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                item.displaySpecs,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF64748B),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'RM${item.sellingPrice.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
                           ),
-                        ),
-                      ],
+                        );
+                        _loadCart(forceRefresh: true);
+                      },
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Image.network(
+                              item.imageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(Icons.smartphone, size: 36, color: Colors.grey.shade400),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        item.displayTitle,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    // Red bin icon for single delete
+                                    InkWell(
+                                      onTap: () => _removeItem(item),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(4.0),
+                                        child: Icon(
+                                          Icons.delete_outline,
+                                          color: Color(0xFFEF4444), // RED BIN ICON
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE0F2FE),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.thumb_up_alt_outlined, size: 10, color: Color(0xFF0284C7)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            item.condition,
+                                            style: const TextStyle(
+                                              color: Color(0xFF0284C7),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        item.displaySpecs,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'RM${item.sellingPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

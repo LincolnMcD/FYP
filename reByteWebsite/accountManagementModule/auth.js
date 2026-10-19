@@ -42,6 +42,40 @@ const ReByteAuth = {
   },
 
   /**
+   * Get valid fresh ID token (checks firebase.auth().currentUser first)
+   */
+  async getToken() {
+    const user = this.getUser();
+    if (!user) return '';
+
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      try {
+        const currentUser = firebase.auth().currentUser;
+        if (currentUser) {
+          const freshToken = await currentUser.getIdToken(false);
+          if (freshToken) {
+            user.token = freshToken;
+            this.setUser(user);
+            return freshToken;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not refresh Firebase token via SDK:', err.message);
+        if (err?.code && (
+          err.code === 'auth/user-disabled' ||
+          err.code === 'auth/user-token-expired' ||
+          err.code === 'auth/invalid-user-token' ||
+          err.code === 'auth/null-user'
+        )) {
+          this.forceSessionLogout(err.code === 'auth/user-disabled');
+          return '';
+        }
+      }
+    }
+    return user?.token || '';
+  },
+
+  /**
    * Save user session
    */
   setUser(userData) {
@@ -713,13 +747,42 @@ const ReByteAuth = {
     }
   },
 
-  async checkStaffEmail(email) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+  /**
+   * Helper to perform authenticated requests and handle session expiration automatically
+   */
+  async authFetch(url, options = {}) {
+    const token = await this.getToken();
+    if (!token) {
+      this.forceSessionLogout(false);
+      return { ok: false, status: 401, json: async () => ({ error: 'Your session has expired. Please sign in again.' }) };
+    }
+
+    const headers = {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    };
+
     try {
-      const response = await fetch(`${API_BASE_URL}/check-staff-email`, {
+      const response = await fetch(url, { ...options, headers });
+      if (response.status === 401 || response.status === 403) {
+        let errData = {};
+        try { errData = await response.clone().json(); } catch (_) {}
+        const msg = (errData?.error || '').toLowerCase();
+        if (msg.includes('expired') || msg.includes('sign in') || msg.includes('token') || response.status === 401) {
+          this.forceSessionLogout(false);
+        }
+      }
+      return response;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  async checkStaffEmail(email) {
+    try {
+      const response = await this.authFetch(`${API_BASE_URL}/check-staff-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       });
       const data = await response.json();
@@ -730,12 +793,10 @@ const ReByteAuth = {
   },
 
   async registerStaff(staffData) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/register-staff`, {
+      const response = await this.authFetch(`${API_BASE_URL}/register-staff`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(staffData)
       });
       const data = await response.json();
@@ -745,13 +806,21 @@ const ReByteAuth = {
     }
   },
 
-  async updateStaff(staffId, staffData) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
+  async getStaffById(staffId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
+      const response = await this.authFetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}?_t=${Date.now()}`);
+      const data = await response.json();
+      return response.ok ? { success: true, staff: data.staff } : { success: false, error: data.error || 'Failed to load staff details.' };
+    } catch (err) {
+      return { success: false, error: 'Connection failed. Ensure backend is running.' };
+    }
+  },
+
+  async updateStaff(staffId, staffData) {
+    try {
+      const response = await this.authFetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(staffData)
       });
       const data = await response.json();
@@ -762,17 +831,16 @@ const ReByteAuth = {
   },
 
   async updateOwnStaffProfile(profileData) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your staff session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/staff-profile`, {
+      const response = await this.authFetch(`${API_BASE_URL}/staff-profile`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData)
       });
       const data = await response.json();
       if (!response.ok) return { success: false, error: data.error || 'Could not update staff profile.' };
-      this.setUser({ ...user, name: data.profile?.fullName || profileData.fullName });
+      const user = this.getUser();
+      if (user) this.setUser({ ...user, name: data.profile?.fullName || profileData.fullName });
       return { success: true, message: data.message || 'Staff profile updated successfully.', profile: data.profile };
     } catch (err) {
       return { success: false, error: 'Connection failed. Ensure backend is running.' };
@@ -780,12 +848,8 @@ const ReByteAuth = {
   },
 
   async getOwnStaffProfile() {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your staff session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/staff-profile`, {
-        headers: { Authorization: `Bearer ${user.token}` }
-      });
+      const response = await this.authFetch(`${API_BASE_URL}/staff-profile`);
       const data = await response.json();
       return response.ok ? { success: true, profile: data.profile } : { success: false, error: data.error || 'Could not load staff profile.' };
     } catch (err) {
@@ -794,12 +858,9 @@ const ReByteAuth = {
   },
 
   async archiveStaff(staffId) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/archive`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${user.token}` }
+      const response = await this.authFetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/archive`, {
+        method: 'POST'
       });
       const data = await response.json();
       return response.ok ? { success: true, message: data.message || 'Staff member archived.' } : { success: false, error: data.error || 'Staff archive failed.' };
@@ -809,12 +870,9 @@ const ReByteAuth = {
   },
 
   async restoreStaff(staffId) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/restore`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${user.token}` }
+      const response = await this.authFetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}/restore`, {
+        method: 'POST'
       });
       const data = await response.json();
       return response.ok ? { success: true, message: data.message || 'Staff member restored.' } : { success: false, error: data.error || 'Staff restore failed.' };
@@ -824,12 +882,9 @@ const ReByteAuth = {
   },
 
   async deleteStaff(staffId) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+      const response = await this.authFetch(`${API_BASE_URL}/staff/${encodeURIComponent(staffId)}`, {
+        method: 'DELETE'
       });
       const data = await response.json();
       return response.ok ? { success: true, message: data.message || 'Staff member permanently deleted.' } : { success: false, error: data.error || 'Staff deletion failed.' };
@@ -839,12 +894,8 @@ const ReByteAuth = {
   },
 
   async getCustomerList() {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/customer-list`, {
-        headers: { Authorization: `Bearer ${user.token}` }
-      });
+      const response = await this.authFetch(`${API_BASE_URL}/customer-list`);
       const data = await response.json();
       return response.ok ? { success: true, data } : { success: false, error: data.error || 'Could not load customer records.' };
     } catch (err) {
@@ -853,12 +904,10 @@ const ReByteAuth = {
   },
 
   async setCustomerStatus(customerId, status, options = {}) {
-    const user = this.getUser();
-    if (!user?.token) return { success: false, error: 'Your admin session has expired. Please sign in again.' };
     try {
-      const response = await fetch(`${API_BASE_URL}/customers/${encodeURIComponent(customerId)}/status`, {
+      const response = await this.authFetch(`${API_BASE_URL}/customers/${encodeURIComponent(customerId)}/status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status,
           reason: options.reason || '',
@@ -965,9 +1014,14 @@ const ReByteAuth = {
         : 'Session expired. Please log in again.'), 'error');
       return;
     }
-    const loginPath = window.location.pathname.toLowerCase().includes('/staffmodule/')
-      ? '../accountManagementModule/login.html'
-      : 'login.html';
+    let loginPath = 'login.html';
+    const currentPath = window.location.pathname.toLowerCase();
+    if (currentPath.includes('/adminmodule/') || currentPath.includes('/staffmodule/')) {
+      loginPath = '../accountManagementModule/login.html';
+    } else if (!currentPath.includes('/accountmanagementmodule/')) {
+      loginPath = 'accountManagementModule/login.html';
+    }
+
     const reason = accountStatusKey === 'suspended' || accountStatusKey === 'banned'
       ? `accountStatus=${accountStatusKey}`
       : archived ? 'archived=1' : 'sessionExpired=1';

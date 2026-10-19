@@ -6,6 +6,7 @@ const paymentRouter = require("./accountManagementModule/paymentServer");
 const addressRouter = require("./accountManagementModule/addressServer");
 const deviceTradeInRouter = require("./deviceTradeInModule/server");
 const shopRouter = require("./accountManagementModule/shopServer");
+const taskAssignmentRouter = require("./taskAssignmentModule/server");
 const { runWithRequest, recordRequest } = require("./config/firestoreMetrics");
 
 const app = express();
@@ -30,6 +31,8 @@ app.use("/api/tradein", deviceTradeInRouter);
 app.use("/tradein", deviceTradeInRouter);
 app.use("/api/shop", shopRouter);
 app.use("/shop", shopRouter);
+app.use("/api/task-assignment", taskAssignmentRouter);
+app.use("/task-assignment", taskAssignmentRouter);
 
 const PORT = 3000;
 app.listen(PORT, "0.0.0.0", () => {

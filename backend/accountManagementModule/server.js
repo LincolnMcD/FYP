@@ -276,6 +276,24 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
         staffData.createdAt = FieldValue.serverTimestamp();
         staffData.updatedAt = FieldValue.serverTimestamp();
 
+        if (req.body.workLocation && typeof req.body.workLocation === "object") {
+            const rawLat = Number(req.body.workLocation.lat);
+            const rawLng = Number(req.body.workLocation.lng);
+            const validCoords = !isNaN(rawLat) && !isNaN(rawLng) && (rawLat !== 0 || rawLng !== 0);
+
+            staffData.workLocation = {
+                address: String(req.body.workLocation.address || "ReByte Central Hub, Penang").trim(),
+                lat: validCoords ? rawLat : 5.453240417145323,
+                lng: validCoords ? rawLng : 100.2848625551094
+            };
+        } else {
+            staffData.workLocation = {
+                address: "ReByte Central Hub, Penang",
+                lat: 5.453240417145323,
+                lng: 100.2848625551094
+            };
+        }
+
         try {
             await usersRef.doc(userRecord.uid).set(staffData);
         } catch (writeError) {
@@ -561,7 +579,7 @@ router.patch("/staff-profile", async (req, res) => {
     const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!idToken) return res.status(401).json({ error: "Please sign in to update your staff profile." });
 
-    const { fullName, phoneNumber, position, specialization } = req.body;
+    const { fullName, phoneNumber, position, specialization, workLocation } = req.body;
     const normalizedName = typeof fullName === "string" ? fullName.trim() : "";
     if (!/^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(normalizedName)) {
         return res.status(400).json({ error: "Full name can contain letters and spaces only." });
@@ -614,6 +632,19 @@ router.patch("/staff-profile", async (req, res) => {
             position,
             specialization: position === "Deliverer" ? [] : selectedSpecializations
         };
+
+        if (workLocation && typeof workLocation === "object") {
+            const rawLat = Number(workLocation.lat);
+            const rawLng = Number(workLocation.lng);
+            const validCoords = !isNaN(rawLat) && !isNaN(rawLng) && (rawLat !== 0 || rawLng !== 0);
+
+            profile.workLocation = {
+                address: String(workLocation.address || "").trim(),
+                lat: validCoords ? rawLat : 5.453240417145323,
+                lng: validCoords ? rawLng : 100.2848625551094
+            };
+        }
+
         await staffRef.update({ ...profile, updatedAt: FieldValue.serverTimestamp() });
         try {
             await getAuth().updateUser(authUid, { displayName: normalizedName });
@@ -626,6 +657,7 @@ router.patch("/staff-profile", async (req, res) => {
             message: "Staff profile updated successfully.",
             profile: {
                 ...profile,
+                workLocation: profile.workLocation || staff.workLocation || null,
                 staffNo: staff.staffNo || "",
                 email: staff.email || decoded.email || ""
             }
@@ -1368,6 +1400,26 @@ router.delete("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
+router.get("/staff/:staffId", requireAdmin, async (req, res) => {
+    try {
+        const staffRef = db.collection("users").doc(req.params.staffId);
+        const staffDoc = await staffRef.get();
+        if (!staffDoc.exists) return res.status(404).json({ error: "Staff account not found." });
+        const staffData = staffDoc.data();
+        const role = String(staffData.role || staffData.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" && !staffData.staffNo) return res.status(404).json({ error: "Staff account not found." });
+        return res.status(200).json({
+            staff: {
+                id: staffDoc.id,
+                ...staffData
+            }
+        });
+    } catch (err) {
+        console.error("Fetch single staff failed:", err);
+        return res.status(500).json({ error: "Failed to fetch staff record." });
+    }
+});
+
 router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
     const { fullName, phoneNumber, position, specialization } = req.body;
     const normalizedName = typeof fullName === "string" ? fullName.trim() : "";
@@ -1412,6 +1464,19 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
             specialization: position === "Deliverer" ? [] : selectedSpecializations,
             updatedAt: FieldValue.serverTimestamp()
         };
+
+        if (req.body.workLocation && typeof req.body.workLocation === "object") {
+            const rawLat = Number(req.body.workLocation.lat);
+            const rawLng = Number(req.body.workLocation.lng);
+            const validCoords = !isNaN(rawLat) && !isNaN(rawLng) && (rawLat !== 0 || rawLng !== 0);
+
+            updatedFields.workLocation = {
+                address: String(req.body.workLocation.address || "").trim(),
+                lat: validCoords ? rawLat : 5.453240417145323,
+                lng: validCoords ? rawLng : 100.2848625551094
+            };
+        }
+
         await staffRef.update(updatedFields);
 
         const authUid = currentStaff.userId || staffDoc.id;
