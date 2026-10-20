@@ -33,9 +33,13 @@ async function getOsrmRoute(from, to) {
             const route = res.data.routes[0];
             const durationSeconds = route.duration || 0;
             const distanceMeters = route.distance || 0;
+            const durationMinutes = distanceMeters === 0 || durationSeconds === 0 
+                ? 0 
+                : Math.max(1, Math.ceil(durationSeconds / 60));
+
             return {
                 durationSeconds: Math.round(durationSeconds),
-                durationMinutes: Math.max(1, Math.ceil(durationSeconds / 60)),
+                durationMinutes,
                 distanceMeters: Math.round(distanceMeters),
                 distanceKm: Number((distanceMeters / 1000).toFixed(2))
             };

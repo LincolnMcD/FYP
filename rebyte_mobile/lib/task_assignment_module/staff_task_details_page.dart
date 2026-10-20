@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:intl/intl.dart';
 import 'services/task_assignment_service.dart';
+import 'staff_navigation_page.dart';
 
 class StaffTaskDetailsPage extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -662,27 +663,58 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                   onPressed: _isActionLoading
                       ? null
                       : () async {
-                          setState(() => _isActionLoading = true);
-                          final nextStatus = isAssigned ? 'Shipping' : 'Delivered';
-                          await TaskAssignmentService.updateTaskStatus(
-                            taskID: taskID,
-                            orderID: orderID,
-                            scheduleID: scheduleID,
-                            status: nextStatus,
-                          );
-                          widget.onTaskUpdated?.call();
-                          if (!context.mounted) return;
-                          setState(() {
-                            _currentTask['taskStatus'] = nextStatus;
-                            _currentTask['scheduleStatus'] = isAssigned ? 'ongoing' : 'completed';
-                            _isActionLoading = false;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isAssigned ? 'Navigation started! Task moved to Ongoing.' : 'Delivery completed successfully!'),
-                              backgroundColor: const Color(0xFF0C5AD2),
-                            ),
-                          );
+                          if (isAssigned) {
+                            setState(() => _isActionLoading = true);
+                            await TaskAssignmentService.updateTaskStatus(
+                              taskID: taskID,
+                              orderID: orderID,
+                              scheduleID: scheduleID,
+                              status: 'Shipping',
+                            );
+                            widget.onTaskUpdated?.call();
+                            if (!context.mounted) return;
+                            setState(() {
+                              _currentTask['taskStatus'] = 'Shipping';
+                              _currentTask['scheduleStatus'] = 'ongoing';
+                              _isActionLoading = false;
+                            });
+
+                            // Transition directly to Navigation Page
+                            final completed = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StaffNavigationPage(
+                                  task: _currentTask,
+                                  onTaskUpdated: widget.onTaskUpdated,
+                                ),
+                              ),
+                            );
+
+                            if (completed == true && mounted) {
+                              setState(() {
+                                _currentTask['taskStatus'] = 'Delivered';
+                                _currentTask['scheduleStatus'] = 'completed';
+                              });
+                            }
+                          } else if (isShipping) {
+                            // Already ongoing -> open navigation map directly
+                            final completed = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StaffNavigationPage(
+                                  task: _currentTask,
+                                  onTaskUpdated: widget.onTaskUpdated,
+                                ),
+                              ),
+                            );
+
+                            if (completed == true && mounted) {
+                              setState(() {
+                                _currentTask['taskStatus'] = 'Delivered';
+                                _currentTask['scheduleStatus'] = 'completed';
+                              });
+                            }
+                          }
                         },
                   icon: _isActionLoading
                       ? const SizedBox(
@@ -695,7 +727,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                     isAssigned
                         ? 'Start Navigation'
                         : isShipping
-                            ? 'Complete Delivery'
+                            ? 'Continue Navigation'
                             : 'Completed',
                     style: const TextStyle(
                       fontSize: 14,

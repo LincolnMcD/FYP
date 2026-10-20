@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/task_assignment_service.dart';
+import 'staff_navigation_page.dart';
 import 'staff_task_details_page.dart';
 
 class StaffAssignedTasksPage extends StatefulWidget {
@@ -463,7 +464,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                 child: ElevatedButton(
                   onPressed: () async {
                     if (isAssigned) {
-                      // Move to Shipping (In Progress)
+                      // Move to Shipping (In Progress) and transition to Navigation Page
                       await TaskAssignmentService.updateTaskStatus(
                         taskID: taskID,
                         orderID: orderID,
@@ -471,13 +472,33 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                         status: 'Shipping',
                       );
                       _loadTasks();
+
+                      final ongoingTask = Map<String, dynamic>.from(task);
+                      ongoingTask['taskStatus'] = 'Shipping';
+                      ongoingTask['scheduleStatus'] = 'ongoing';
+
+                      if (!mounted) return;
+                      await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StaffNavigationPage(
+                            task: ongoingTask,
+                            onTaskUpdated: _loadTasks,
+                          ),
+                        ),
+                      );
+                      _loadTasks();
                     } else if (isShipping) {
-                      // Mark Delivered (Completed)
-                      await TaskAssignmentService.updateTaskStatus(
-                        taskID: taskID,
-                        orderID: orderID,
-                        scheduleID: scheduleID,
-                        status: 'Delivered',
+                      // Already in shipping -> open Navigation Page directly
+                      if (!mounted) return;
+                      await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StaffNavigationPage(
+                            task: task,
+                            onTaskUpdated: _loadTasks,
+                          ),
+                        ),
                       );
                       _loadTasks();
                     }
@@ -494,7 +515,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                     isAssigned
                         ? 'Start Delivery'
                         : isShipping
-                            ? 'Complete Delivery'
+                            ? 'Continue Navigation'
                             : 'Completed',
                     style: const TextStyle(
                       fontSize: 13,

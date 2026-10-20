@@ -11,14 +11,15 @@ import '../task_assignment_module/staff_assigned_tasks_page.dart';
 
 class StaffHomePage extends StatefulWidget {
   final String? toastMessage;
-  const StaffHomePage({super.key, this.toastMessage});
+  final int? initialIndex;
+  const StaffHomePage({super.key, this.toastMessage, this.initialIndex});
 
   @override
   State<StaffHomePage> createState() => _StaffHomePageState();
 }
 
 class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserver, RouteAware {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
   String? _name;
   String? _email;
   String? _toastMessage;
@@ -52,6 +53,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialIndex ?? 0;
     WidgetsBinding.instance.addObserver(this);
     _toastMessage = widget.toastMessage;
     if (_toastMessage != null) {
