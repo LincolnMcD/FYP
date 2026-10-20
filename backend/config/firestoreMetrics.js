@@ -31,7 +31,9 @@ function startMetricsFlush() {
             .map(([operation, value]) => ({ operation, ...value }))
             .sort((a, b) => b.readDocuments - a.readDocuments || b.calls - a.calls);
         counters.clear();
-        console.info("[firestore-read-metrics] last 60s", JSON.stringify(summary));
+        if (process.env.ENABLE_FIRESTORE_METRICS === "true") {
+            console.info("[firestore-read-metrics] last 60s", JSON.stringify(summary));
+        }
     }, WINDOW_MS);
     flushTimer.unref?.();
 }

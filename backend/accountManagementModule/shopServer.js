@@ -1643,20 +1643,34 @@ router.get("/orders", requireShopUser, async (req, res) => {
                 return { paymentTitle, paymentAccountID, paymentType };
             })();
 
-            // Lookup task status concurrently
+            // Lookup task status and schedule timing concurrently
             const taskPromise = (async () => {
                 let taskStatus = "Packaging";
+                let estimatedEndTime = null;
+                let scheduleDate = null;
+                let estimatedDuration = null;
                 try {
                     const taskID = `TSK-${orderID}`;
                     const taskDoc = await db.collection("task").doc(taskID).get();
-                    if (taskDoc.exists && taskDoc.data().taskStatus) {
-                        taskStatus = taskDoc.data().taskStatus;
+                    if (taskDoc.exists) {
+                        const tData = taskDoc.data();
+                        if (tData.taskStatus) taskStatus = tData.taskStatus;
+                        if (tData.estimatedDuration) estimatedDuration = tData.estimatedDuration;
+
+                        if (tData.scheduleID) {
+                            const sDoc = await db.collection("schedule").doc(tData.scheduleID).get();
+                            if (sDoc.exists) {
+                                const sData = sDoc.data();
+                                estimatedEndTime = sData.scheduleEndTime || null;
+                                scheduleDate = sData.scheduleDate || null;
+                            }
+                        }
                     }
                 } catch (_) {}
-                return taskStatus;
+                return { taskStatus, estimatedEndTime, scheduleDate, estimatedDuration };
             })();
 
-            const [itemsRaw, deliveryAddress, paymentInfo, taskStatus] = await Promise.all([
+            const [itemsRaw, deliveryAddress, paymentInfo, taskInfo] = await Promise.all([
                 Promise.all(itemPromises),
                 addressPromise,
                 paymentPromise,
@@ -1684,7 +1698,10 @@ router.get("/orders", requireShopUser, async (req, res) => {
                 orderID,
                 orderNumber: orderID.startsWith("#") ? orderID : `#${orderID}`,
                 orderStatus: displayStatus,
-                taskStatus,
+                taskStatus: taskInfo.taskStatus,
+                estimatedEndTime: taskInfo.estimatedEndTime,
+                scheduleDate: taskInfo.scheduleDate,
+                estimatedDuration: taskInfo.estimatedDuration,
                 failReason: data.failReason || data.cancelledReason || data.cancelReason || "",
                 subtotal: Number(data.subtotal || data.totalAmount || 0),
                 shippingFee: Number(data.shippingFee || 0),

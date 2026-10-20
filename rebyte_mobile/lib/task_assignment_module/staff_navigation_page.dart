@@ -145,107 +145,26 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
     }
   }
 
-  /// 2. Launch Turn-by-Turn Navigation App or show in-app guidance modal
+  /// 2. Launch Google Maps Turn-by-Turn Navigation directly
   Future<void> _handleDirectionsGuide() async {
     // Zoom map smoothly to full path overview
     _webViewController?.evaluateJavascript(source: 'fitFullRoute();');
 
-    // Prompt user to launch native Turn-by-Turn GPS Navigation
     final googleMapsUrl = Uri.parse('google.navigation:q=$_destLat,$_destLng&mode=d');
     final webMapsUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$_staffOriginLat,$_staffOriginLng&destination=$_destLat,$_destLng&travelmode=driving');
-    final wazeUrl = Uri.parse('waze://?ll=$_destLat,$_destLng&navigate=yes');
 
-    if (!mounted) return;
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const Text(
-                'Start Live Navigation',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Destination: $_address',
-                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.navigation, color: Color(0xFF0C5AD2)),
-                ),
-                title: const Text('Google Maps Turn-by-Turn', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                subtitle: const Text('Live voice guidance & traffic routing', style: TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF94A3B8)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  if (await canLaunchUrl(googleMapsUrl)) {
-                    await launchUrl(googleMapsUrl);
-                  } else {
-                    await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.alt_route, color: Color(0xFF16A34A)),
-                ),
-                title: const Text('Waze Navigation', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                subtitle: const Text('Fastest route with community alerts', style: TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF94A3B8)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  if (await canLaunchUrl(wazeUrl)) {
-                    await launchUrl(wazeUrl);
-                  } else {
-                    await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    try {
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(googleMapsUrl);
+      } else {
+        await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Launch Google Maps error: $e');
+      if (await canLaunchUrl(webMapsUrl)) {
+        await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
+      }
+    }
   }
 
   /// 3. Verify staff live GPS is at customer destination
@@ -291,8 +210,8 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
         _destLng,
       );
 
-      // Within 200m radius of destination is considered arrived at the same location
-      if (distanceMeters <= 200) {
+      // Strict GPS Verification: Must be within 150m of order destination
+      if (distanceMeters <= 150) {
         return true;
       } else {
         if (!mounted) return false;
@@ -300,31 +219,42 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
             ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
             : '${distanceMeters.toStringAsFixed(0)} meters';
 
-        final proceedAnyway = await showDialog<bool>(
+        await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Location Verification'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.location_off_rounded, color: Color(0xFFDC2626), size: 24),
+                SizedBox(width: 8),
+                Text('Location Mismatch', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              ],
+            ),
             content: Text(
-              'Your GPS shows you are $distStr away from the customer delivery address.\n\nAre you sure you have arrived at the destination?',
+              'You cannot complete this delivery yet.\n\nYour current GPS location is $distStr away from the customer delivery destination.\n\nPlease arrive at the order destination before completing.',
+              style: const TextStyle(fontSize: 13.5, height: 1.4, color: Color(0xFF334155)),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
               ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0C5AD2)),
-                child: const Text('Yes, Complete Delivery', style: TextStyle(color: Colors.white)),
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0C5AD2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
         );
-        return proceedAnyway == true;
+        return false;
       }
     } catch (e) {
       debugPrint('Geolocator verification error: $e');
-      return true; // allow fallback if hardware error
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to read live GPS location: $e')),
+      );
+      return false;
     }
   }
 
@@ -349,13 +279,7 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
 
     if (success) {
       widget.onTaskUpdated?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Delivery completed successfully!'),
-          backgroundColor: Color(0xFF16A34A),
-        ),
-      );
-      Navigator.pop(context, true);
+      Navigator.pop(context, 'Delivery completed successfully!');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -589,30 +513,42 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
                         // Complete Deliver Button: checks staff GPS matches destination
                         Expanded(
                           flex: 1,
-                          child: ElevatedButton.icon(
+                          child: ElevatedButton(
                             onPressed: _isActionLoading ? null : _handleCompleteDelivery,
-                            icon: _isActionLoading
-                                ? const SizedBox(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0C5AD2),
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_isActionLoading)
+                                  const SizedBox(
                                     width: 16,
                                     height: 16,
                                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                   )
-                                : const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                            label: const Text(
-                              'Complete Deliver',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0C5AD2),
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                                else
+                                  const Icon(Icons.check_circle_outline, color: Colors.white, size: 17),
+                                const SizedBox(width: 5),
+                                const Flexible(
+                                  child: Text(
+                                    'Complete Deliver',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

@@ -19,6 +19,9 @@ class OrderDetailsPage extends StatefulWidget {
   final String taskStatus;
   final String orderStatus;
   final String failReason;
+  final String? estimatedEndTime;
+  final String? scheduleDate;
+  final int? estimatedDuration;
 
   const OrderDetailsPage({
     super.key,
@@ -35,6 +38,9 @@ class OrderDetailsPage extends StatefulWidget {
     this.taskStatus = 'Packaging',
     this.orderStatus = 'Delivering',
     this.failReason = '',
+    this.estimatedEndTime,
+    this.scheduleDate,
+    this.estimatedDuration,
   });
 
   @override
@@ -56,6 +62,24 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM dd, yyyy');
     final currentStep = _getStepIndex(widget.taskStatus);
+
+    final isShipping = widget.taskStatus.trim().toLowerCase() == 'shipping' || widget.orderStatus.trim().toLowerCase() == 'shipping';
+    String? estimatedArrivalText;
+    if (isShipping && widget.estimatedEndTime != null && widget.estimatedEndTime!.isNotEmpty) {
+      final rawEndTime = widget.estimatedEndTime!;
+      final cleanTime = rawEndTime.contains('T')
+          ? rawEndTime.split('T').last.split('.').first
+          : (rawEndTime.length == 5 ? '$rawEndTime:00' : rawEndTime);
+      final datePart = widget.scheduleDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final parsedDt = DateTime.tryParse('${datePart}T$cleanTime');
+      if (parsedDt != null) {
+        final formattedDateStr = DateFormat('MMM dd, yyyy').format(parsedDt);
+        final formattedTimeStr = DateFormat('h:mm a').format(parsedDt);
+        estimatedArrivalText = '$formattedDateStr by $formattedTimeStr';
+      } else {
+        estimatedArrivalText = '${widget.scheduleDate ?? ''} ${widget.estimatedEndTime}'.trim();
+      }
+    }
 
     // Resolve Payment Method display
     IconData paymentIcon;
@@ -204,59 +228,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                             ),
                           ],
                         ),
-                        // Status Badge
-                        Builder(
-                          builder: (context) {
-                            final oStatus = widget.orderStatus.trim().toLowerCase();
-                            Color bgColor = const Color(0xFFDCFCE7);
-                            Color textColor = const Color(0xFF16A34A);
-                            IconData icon = Icons.check;
-                            String label = 'Paid';
-
-                            if (oStatus == 'cancelled' || oStatus == 'canceled') {
-                              bgColor = const Color(0xFFFEE2E2);
-                              textColor = const Color(0xFFDC2626);
-                              icon = Icons.close;
-                              label = 'Cancelled';
-                            } else if (oStatus == 'fail' || oStatus == 'failed') {
-                              bgColor = const Color(0xFFFEE2E2);
-                              textColor = const Color(0xFFDC2626);
-                              icon = Icons.error_outline;
-                              label = 'Failed';
-                            } else if (oStatus == 'completed' || oStatus == 'delivered') {
-                              bgColor = const Color(0xFFDCFCE7);
-                              textColor = const Color(0xFF16A34A);
-                              icon = Icons.check_circle_outline;
-                              label = 'Completed';
-                            } else {
-                              label = widget.orderStatus.isNotEmpty
-                                  ? widget.orderStatus[0].toUpperCase() + widget.orderStatus.substring(1)
-                                  : 'Paid';
-                            }
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: bgColor,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(icon, size: 12, color: textColor),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    label,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                        // Status Badge using same live pill design
+                        _buildTaskStatusPill(
+                          widget.taskStatus.isNotEmpty ? widget.taskStatus : widget.orderStatus,
                         ),
                       ],
                     ),
@@ -268,6 +242,40 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         color: Color(0xFF64748B),
                       ),
                     ),
+                    // Estimated Arrival Banner (when Shipping)
+                    if (isShipping && estimatedArrivalText != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.local_shipping_rounded, size: 18, color: Color(0xFF1D4ED8)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    const TextSpan(
+                                      text: 'Estimated Arrival: ',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E3A8A)),
+                                    ),
+                                    TextSpan(
+                                      text: estimatedArrivalText,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0C5AD2)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -789,6 +797,59 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               fontSize: 13,
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskStatusPill(String taskStatus) {
+    final s = taskStatus.toLowerCase().trim();
+    Color bgColor = const Color(0xFFF1F5F9);
+    Color textColor = const Color(0xFF475569);
+    IconData icon = Icons.inventory_2_outlined;
+
+    if (s == 'delivered' || s == 'completed') {
+      bgColor = const Color(0xFFDCFCE7);
+      textColor = const Color(0xFF16A34A);
+      icon = Icons.check_circle_outline;
+    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing') {
+      bgColor = const Color(0xFFE0E7FF);
+      textColor = const Color(0xFF4338CA);
+      icon = Icons.directions_car_outlined;
+    } else if (s == 'packaging' || s == 'packaged' || s == 'packing') {
+      bgColor = const Color(0xFFFEF3C7);
+      textColor = const Color(0xFFD97706);
+      icon = Icons.inventory_2_outlined;
+    } else if (s == 'unassigned') {
+      bgColor = const Color(0xFFFEE2E2);
+      textColor = const Color(0xFFDC2626);
+      icon = Icons.schedule_outlined;
+    } else if (s == 'rejected' || s == 'cancelled' || s == 'failed') {
+      bgColor = const Color(0xFFFEE2E2);
+      textColor = const Color(0xFFDC2626);
+      icon = Icons.error_outline;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            taskStatus.isNotEmpty ? (taskStatus[0].toUpperCase() + taskStatus.substring(1)) : 'Packaging',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: textColor,
             ),
           ),
         ],

@@ -358,10 +358,20 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
                 for (const item of group) {
                     const staff = item.staff;
                     const staffToHub = await getOsrmRoute(staff.workBaseLocation, companyLocation);
-                    const totalDuration = staffToHub.durationMinutes + WORKING_HOUR_CONFIG.bufferMinutes + hubToCustomerRoute.durationMinutes;
-                    const totalDistance = Number((staffToHub.distanceKm + hubToCustomerRoute.distanceKm).toFixed(2));
-                    const taskStartTime = slotStart;
-                    const taskEndTime = new Date(taskStartTime.getTime() + (totalDuration * 60 * 1000));
+
+                    // Staff leaves home at slotStart (e.g. 09:00), reaches ReByte Central Hub at departFromHubTime (e.g. 09:16)
+                    const departFromHubTime = new Date(slotStart.getTime() + (staffToHub.durationMinutes * 60 * 1000));
+
+                    // Task leg: ReByte Central Hub -> Customer
+                    const appliedBuffer = getBufferMinutes(hubToCustomerRoute.distanceKm);
+                    const taskDuration = hubToCustomerRoute.durationMinutes + appliedBuffer;
+                    const taskDistance = hubToCustomerRoute.distanceKm;
+
+                    const taskStartTime = departFromHubTime;
+                    const taskEndTime = new Date(taskStartTime.getTime() + (taskDuration * 60 * 1000));
+
+                    const overallRouteDuration = staffToHub.durationMinutes + taskDuration;
+                    const overallRouteDistance = Number((staffToHub.distanceKm + taskDistance).toFixed(2));
 
                     const endOfWorkday = new Date(slotStart.getFullYear(), slotStart.getMonth(), slotStart.getDate(), WORKING_HOUR_CONFIG.endHour, 0, 0);
                     if (taskEndTime <= endOfWorkday) {
@@ -369,15 +379,15 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
                             staff,
                             taskStartTime,
                             taskEndTime,
-                            totalDuration,
-                            totalDistance,
-                            overallRouteDuration: totalDuration,
-                            overallRouteDistance: totalDistance,
+                            totalDuration: taskDuration,
+                            totalDistance: taskDistance,
+                            overallRouteDuration,
+                            overallRouteDistance,
                             slotStart
                         });
                         logStep(`   Staff [${staff.staffNo}] ${staff.fullName}:`);
-                        logStep(`      Sequence: Location -> ReByte -> New Task (${orderID})`);
-                        logStep(`      Status: VALID -> Total Duration: ${totalDuration}m, Total Distance: ${totalDistance}km, Window: ${formatTimeOnly(taskStartTime)} - ${formatTimeOnly(taskEndTime)}`);
+                        logStep(`      Sequence: Location -> ReByte (arrives ${formatTimeOnly(departFromHubTime)}) -> New Task (${orderID})`);
+                        logStep(`      Status: VALID -> Task Window: ${formatTimeOnly(taskStartTime)} - ${formatTimeOnly(taskEndTime)} (Task Dur: ${taskDuration}m, Dist: ${taskDistance}km) | Overall Route: ${overallRouteDuration}m, ${overallRouteDistance}km`);
                     } else {
                         logStep(`   Staff [${staff.staffNo}] ${staff.fullName}:`);
                         logStep(`      Sequence: Location -> ReByte -> New Task (${orderID})`);

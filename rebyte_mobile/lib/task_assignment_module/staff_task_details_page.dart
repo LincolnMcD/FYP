@@ -582,7 +582,9 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: isDelivered
+          ? null
+          : SafeArea(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -605,31 +607,19 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                   onPressed: _isActionLoading
                       ? null
                       : () async {
-                          final confirm = await showDialog<bool>(
+                          final result = await showDialog<Map<String, dynamic>>(
                             context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Reject Task'),
-                              content: const Text('Are you sure you want to reject this assigned delivery task?'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
-                                  child: const Text('Reject', style: TextStyle(color: Colors.white)),
-                                ),
-                              ],
-                            ),
+                            builder: (ctx) => RejectTaskDialog(taskID: taskID.isNotEmpty ? taskID : orderID),
                           );
-                          if (confirm == true) {
+                          if (result != null && result['confirmed'] == true) {
                             setState(() => _isActionLoading = true);
                             await TaskAssignmentService.updateTaskStatus(
                               taskID: taskID,
                               orderID: orderID,
                               scheduleID: scheduleID,
                               status: 'Rejected',
+                              rejectionReason: result['reason'],
+                              rejectionNotes: result['notes'],
                             );
                             widget.onTaskUpdated?.call();
                             if (!context.mounted) return;
@@ -680,7 +670,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                             });
 
                             // Transition directly to Navigation Page
-                            final completed = await Navigator.push<bool>(
+                            final completed = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => StaffNavigationPage(
@@ -690,15 +680,13 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                               ),
                             );
 
-                            if (completed == true && mounted) {
-                              setState(() {
-                                _currentTask['taskStatus'] = 'Delivered';
-                                _currentTask['scheduleStatus'] = 'completed';
-                              });
+                            if (completed != null && completed != false) {
+                              if (!context.mounted) return;
+                              Navigator.pop(context, completed);
                             }
                           } else if (isShipping) {
                             // Already ongoing -> open navigation map directly
-                            final completed = await Navigator.push<bool>(
+                            final completed = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => StaffNavigationPage(
@@ -708,11 +696,9 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                               ),
                             );
 
-                            if (completed == true && mounted) {
-                              setState(() {
-                                _currentTask['taskStatus'] = 'Delivered';
-                                _currentTask['scheduleStatus'] = 'completed';
-                              });
+                            if (completed != null && completed != false) {
+                              if (!context.mounted) return;
+                              Navigator.pop(context, completed);
                             }
                           }
                         },
@@ -806,3 +792,305 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
 ''';
   }
 }
+
+class RejectTaskDialog extends StatefulWidget {
+  final String taskID;
+
+  const RejectTaskDialog({
+    super.key,
+    required this.taskID,
+  });
+
+  @override
+  State<RejectTaskDialog> createState() => _RejectTaskDialogState();
+}
+
+class _RejectTaskDialogState extends State<RejectTaskDialog> {
+  String? _selectedReason;
+  final TextEditingController _notesController = TextEditingController();
+
+  final List<String> _reasons = [
+    'Vehicle breakdown / technical issue',
+    'Emergency / personal illness',
+    'Severe traffic / road blockage',
+    'Customer unreachable / wrong address',
+    'Exceeds working capacity today',
+    'Other reason'
+  ];
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      elevation: 6,
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: SingleChildScrollView(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Stack(
+            children: [
+              // Top-right cross close button
+              Positioned(
+                top: -6,
+                right: -6,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF94A3B8)),
+                  splashRadius: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Red Alert Warning Icon Container
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFE4E6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.warning_rounded,
+                        color: Color(0xFFBE123C),
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+              // Title
+              const Text(
+                'Reject Task',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Description
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF475569),
+                    height: 1.35,
+                  ),
+                  children: [
+                    const TextSpan(text: 'You are about to reject the assigned task\n'),
+                    TextSpan(
+                      text: '#${widget.taskID}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const TextSpan(text: '. Please provide a reason. This action cannot be undone.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              const Divider(color: Color(0xFFF1F5F9), thickness: 1, height: 1),
+              const SizedBox(height: 12),
+
+              // REJECTION REASON label
+              Align(
+                alignment: Alignment.centerLeft,
+                child: const Text(
+                  'REJECTION REASON',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Rejection Reason Dropdown
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: _selectedReason,
+                    hint: const Text(
+                      'Select a reason...',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF475569), size: 20),
+                    items: _reasons.map((r) {
+                      return DropdownMenuItem<String>(
+                        value: r,
+                        child: Text(
+                          r,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) => setState(() => _selectedReason = val),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ADDITIONAL NOTES label
+              Align(
+                alignment: Alignment.centerLeft,
+                child: const Text(
+                  'ADDITIONAL NOTES',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Additional Notes Text Area (3 lines max, compact)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: TextField(
+                  controller: _notesController,
+                  maxLines: 2,
+                  maxLength: 250,
+                  buildCounter: (ctx, {required currentLength, required isFocused, maxLength}) => null,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    hintText: 'Provide any additional details...',
+                    hintStyle: TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+
+              // 0 / 250 counter
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${_notesController.text.length} / 250',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Confirm Reject Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _selectedReason == null
+                      ? null
+                      : () {
+                          Navigator.pop(context, {
+                            'confirmed': true,
+                            'reason': _selectedReason,
+                            'notes': _notesController.text.trim(),
+                          });
+                        },
+                  icon: const Icon(Icons.cancel, color: Colors.white, size: 16),
+                  label: const Text(
+                    'Confirm Reject',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB91C1C),
+                    disabledBackgroundColor: const Color(0xFFFCA5A5),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Cancel Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

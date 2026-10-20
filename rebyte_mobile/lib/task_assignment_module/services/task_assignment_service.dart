@@ -38,6 +38,8 @@ class TaskAssignmentService {
     required String orderID,
     String? scheduleID,
     required String status,
+    String? rejectionReason,
+    String? rejectionNotes,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/task-assignment/update-status');
@@ -49,6 +51,8 @@ class TaskAssignmentService {
           'orderID': orderID,
           ...?scheduleID != null ? {'scheduleID': scheduleID} : null,
           'status': status,
+          ...?rejectionReason != null ? {'rejectionReason': rejectionReason} : null,
+          ...?rejectionNotes != null ? {'rejectionNotes': rejectionNotes} : null,
         }),
       ).timeout(const Duration(seconds: 10));
 

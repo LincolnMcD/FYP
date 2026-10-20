@@ -244,6 +244,10 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     final paymentType = order['paymentType']?.toString() ?? 'card';
     final paymentAccountID = order['paymentAccountID']?.toString() ?? '';
     final taskStatus = order['taskStatus']?.toString() ?? 'Packaging';
+    final estimatedEndTime = order['estimatedEndTime']?.toString();
+    final scheduleDate = order['scheduleDate']?.toString();
+    final estimatedDuration = order['estimatedDuration'] != null ? NumberFormat().tryParse(order['estimatedDuration'].toString())?.toInt() : null;
+
     AddressModel? address;
     if (order['deliveryAddress'] != null && order['deliveryAddress'] is Map) {
       address = AddressModel.fromJson(Map<String, dynamic>.from(order['deliveryAddress'] as Map));
@@ -251,6 +255,24 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
 
     final failReason = order['failReason']?.toString() ?? '';
     final isPast = !_isActiveOrder(status);
+    final isShipping = taskStatus.trim().toLowerCase() == 'shipping' || status.trim().toLowerCase() == 'shipping';
+
+    // Format estimated arrival display
+    String? estimatedArrivalText;
+    if (isShipping && estimatedEndTime != null && estimatedEndTime.isNotEmpty) {
+      final cleanTime = estimatedEndTime.contains('T')
+          ? estimatedEndTime.split('T').last.split('.').first
+          : (estimatedEndTime.length == 5 ? '$estimatedEndTime:00' : estimatedEndTime);
+      final datePart = scheduleDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final parsedDt = DateTime.tryParse('${datePart}T$cleanTime');
+      if (parsedDt != null) {
+        final formattedDateStr = DateFormat('MMM dd, yyyy').format(parsedDt);
+        final formattedTimeStr = DateFormat('h:mm a').format(parsedDt);
+        estimatedArrivalText = '$formattedDateStr by $formattedTimeStr';
+      } else {
+        estimatedArrivalText = '${scheduleDate ?? ''} $estimatedEndTime'.trim();
+      }
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -269,7 +291,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Order Number & Status Pill
+          // Order Number & Live Status Pill
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -287,7 +309,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                   ],
                 ),
               ),
-              _buildStatusPill(status),
+              _buildTaskStatusPill(taskStatus.isNotEmpty ? taskStatus : status),
             ],
           ),
           const SizedBox(height: 4),
@@ -295,6 +317,41 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
             'Placed on $formattedDate',
             style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
           ),
+
+          // Estimated Arrival Banner (when Shipping)
+          if (isShipping && estimatedArrivalText != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_shipping_rounded, size: 16, color: Color(0xFF1D4ED8)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(
+                            text: 'Estimated Arrival: ',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E3A8A)),
+                          ),
+                          TextSpan(
+                            text: estimatedArrivalText,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0C5AD2)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           // Items List inside Order Card
@@ -329,6 +386,9 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                         taskStatus: taskStatus,
                         orderStatus: status,
                         failReason: failReason,
+                        estimatedEndTime: estimatedEndTime,
+                        scheduleDate: scheduleDate,
+                        estimatedDuration: estimatedDuration,
                       ),
                     ),
                   );
@@ -357,39 +417,50 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildStatusPill(String status) {
-    final s = status.toLowerCase();
-    Color bgColor = const Color(0xFFDBEAFE);
-    Color textColor = const Color(0xFF1D4ED8);
-    IconData icon = Icons.local_shipping_outlined;
+
+
+  Widget _buildTaskStatusPill(String taskStatus) {
+    final s = taskStatus.toLowerCase().trim();
+    Color bgColor = const Color(0xFFF1F5F9);
+    Color textColor = const Color(0xFF475569);
+    IconData icon = Icons.inventory_2_outlined;
 
     if (s == 'delivered' || s == 'completed') {
       bgColor = const Color(0xFFDCFCE7);
       textColor = const Color(0xFF16A34A);
       icon = Icons.check_circle_outline;
-    } else if (s == 'fail' || s == 'failed' || s == 'cancelled' || s == 'canceled') {
+    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing') {
+      bgColor = const Color(0xFFE0E7FF);
+      textColor = const Color(0xFF4338CA);
+      icon = Icons.directions_car_outlined;
+    } else if (s == 'packaging' || s == 'packaged' || s == 'packing') {
+      bgColor = const Color(0xFFFEF3C7);
+      textColor = const Color(0xFFD97706);
+      icon = Icons.inventory_2_outlined;
+    } else if (s == 'unassigned') {
       bgColor = const Color(0xFFFEE2E2);
       textColor = const Color(0xFFDC2626);
-      icon = Icons.cancel_outlined;
-    } else if (s == 'delivering' || s == 'shipping') {
-      bgColor = const Color(0xFFDBEAFE);
-      textColor = const Color(0xFF1D4ED8);
-      icon = Icons.local_shipping_outlined;
+      icon = Icons.schedule_outlined;
+    } else if (s == 'rejected' || s == 'cancelled' || s == 'failed') {
+      bgColor = const Color(0xFFFEE2E2);
+      textColor = const Color(0xFFDC2626);
+      icon = Icons.error_outline;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: textColor),
+          Icon(icon, size: 12, color: textColor),
           const SizedBox(width: 4),
           Text(
-            status[0].toUpperCase() + status.substring(1),
+            taskStatus,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,

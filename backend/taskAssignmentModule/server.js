@@ -256,23 +256,28 @@ router.get("/staff-tasks", async (req, res) => {
  */
 router.patch("/update-status", async (req, res) => {
     try {
-        const { taskID, orderID, scheduleID, status } = req.body;
-        // status can be 'Packaging', 'Shipping' (In Progress), 'Delivered' (Completed)
+        const { taskID, orderID, scheduleID, status, rejectionReason, rejectionNotes } = req.body;
+        // status can be 'Packaging', 'Shipping' (In Progress), 'Delivered' (Completed), 'Rejected'
         const normalized = String(status || "").trim();
 
         const batch = db.batch();
 
         if (taskID) {
-            batch.set(db.collection("task").doc(taskID), {
+            const taskUpdate = {
                 taskStatus: normalized,
                 updatedAt: new Date()
-            }, { merge: true });
+            };
+            if (rejectionReason) taskUpdate.rejectionReason = rejectionReason;
+            if (rejectionNotes) taskUpdate.rejectionNotes = rejectionNotes;
+
+            batch.set(db.collection("task").doc(taskID), taskUpdate, { merge: true });
         }
 
         if (scheduleID) {
             let schedStatus = "assigned";
             if (normalized === "Shipping" || normalized === "In Progress" || normalized === "ongoing") schedStatus = "ongoing";
             if (normalized === "Delivered" || normalized === "Completed" || normalized === "completed") schedStatus = "completed";
+            if (normalized === "Rejected" || normalized === "rejected") schedStatus = "cancelled";
 
             // Update scheduleStatus without Timestamp objects
             batch.set(db.collection("schedule").doc(scheduleID), {
@@ -301,6 +306,46 @@ router.patch("/update-status", async (req, res) => {
                 orderStatus: "Delivered",
                 updatedAt: new Date()
             }, { merge: true });
+
+            // Send notification to customer for delivered order
+            try {
+                const ordSnap = await db.collection("order").doc(orderID).get();
+                if (ordSnap.exists) {
+                    const ordData = ordSnap.data() || {};
+                    let custEmail = ordData.email || ordData.userEmail || "";
+                    let custId = ordData.customerID || ordData.userId || "";
+
+                    // If email missing, lookup from address or users
+                    if (!custEmail && ordData.addressID) {
+                        const addrSnap = await db.collection("address").doc(ordData.addressID).get();
+                        if (addrSnap.exists) {
+                            custEmail = addrSnap.data().email || "";
+                        }
+                    }
+                    if (!custEmail && custId) {
+                        const userSnap = await db.collection("users").doc(custId).get();
+                        if (userSnap.exists) {
+                            custEmail = userSnap.data().email || "";
+                        }
+                    }
+
+                    if (custEmail) {
+                        const notifRef = db.collection("notification").doc();
+                        batch.set(notifRef, {
+                            email: custEmail,
+                            userId: custId,
+                            type: "order",
+                            title: "Order Delivered",
+                            message: `Package Delivered: Your order #${orderID} has been successfully delivered. Thank you for choosing ReByte!`,
+                            orderID: orderID,
+                            isRead: false,
+                            createdAt: new Date()
+                        });
+                    }
+                }
+            } catch (notifErr) {
+                console.error("Error creating delivery notification:", notifErr);
+            }
         }
 
         await batch.commit();

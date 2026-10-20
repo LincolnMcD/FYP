@@ -22,11 +22,23 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   int _selectedTabIndex = 0; // 0: Assigned, 1: In Progress, 2: Completed
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
+  String? _toast;
+  bool _toastError = false;
 
   @override
   void initState() {
     super.initState();
     _loadTasks();
+  }
+
+  void _showToast(String message, [bool isError = false]) {
+    setState(() {
+      _toast = message;
+      _toastError = isError;
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _toast = null);
+    });
   }
 
   Future<void> _loadTasks() async {
@@ -84,83 +96,127 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            // Header: Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                children: const [
-                  Text(
-                    'Assigned Tasks',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                    ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                // Header: Title
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Row(
+                    children: const [
+                      Text(
+                        'Assigned Tasks',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-            // Tab bar: Assigned (badge), In Progress (badge), Completed
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  _buildTabItem(0, 'Assigned', _assignedTasks.length),
-                  const SizedBox(width: 12),
-                  _buildTabItem(1, 'In Progress', _inProgressTasks.length),
-                  const SizedBox(width: 12),
-                  _buildTabItem(2, 'Completed', 0),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Divider(color: Color(0xFFE2E8F0), thickness: 1, height: 1),
+                // Tab bar: Assigned (badge), In Progress (badge), Completed
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildTabItem(0, 'Assigned', _assignedTasks.length)),
+                      Expanded(child: _buildTabItem(1, 'In Progress', _inProgressTasks.length)),
+                      Expanded(child: _buildTabItem(2, 'Completed', 0)),
+                    ],
+                  ),
+                ),
+                const Divider(color: Color(0xFFE2E8F0), thickness: 1, height: 1),
 
-            // Task list or loading
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF0C5AD2)))
-                  : RefreshIndicator(
-                      onRefresh: _loadTasks,
-                      color: const Color(0xFF0C5AD2),
-                      child: _currentTabTasks.isEmpty
-                          ? ListView(
-                              children: [
-                                SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-                                Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No ${_selectedTabIndex == 0 ? "assigned" : _selectedTabIndex == 1 ? "in-progress" : "completed"} tasks found',
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w600),
+                // Task list or loading
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: Color(0xFF0C5AD2)))
+                      : RefreshIndicator(
+                          onRefresh: _loadTasks,
+                          color: const Color(0xFF0C5AD2),
+                          child: _currentTabTasks.isEmpty
+                              ? ListView(
+                                  children: [
+                                    SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                                    Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'No ${_selectedTabIndex == 0 ? "assigned" : _selectedTabIndex == 1 ? "in-progress" : "completed"} tasks found',
+                                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  itemCount: _currentTabTasks.length,
+                                  separatorBuilder: (_, _) => const SizedBox(height: 14),
+                                  itemBuilder: (context, index) {
+                                    return _buildTaskCard(_currentTabTasks[index]);
+                                  },
                                 ),
-                              ],
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                              itemCount: _currentTabTasks.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 14),
-                              itemBuilder: (context, index) {
-                                return _buildTaskCard(_currentTabTasks[index]);
-                              },
-                            ),
-                    ),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (_toast != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 16,
+              right: 16,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: _toastError ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _toastError ? Icons.error_outline : Icons.check_circle_outline,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _toast!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -168,27 +224,34 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   Widget _buildTabItem(int index, String label, int badgeCount) {
     final isSelected = _selectedTabIndex == index;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => _selectedTabIndex = index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                    color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFF64748B),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                      color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFF64748B),
+                    ),
                   ),
                 ),
                 if (badgeCount > 0) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFFE2E8F0),
                       borderRadius: BorderRadius.circular(12),
@@ -196,7 +259,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                     child: Text(
                       badgeCount.toString(),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.bold,
                         color: isSelected ? Colors.white : const Color(0xFF475569),
                       ),
@@ -207,9 +270,13 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
             ),
           ),
           Container(
-            height: 2.5,
-            width: 70,
-            color: isSelected ? const Color(0xFF0C5AD2) : Colors.transparent,
+            height: 3.0,
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF0C5AD2) : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ],
       ),
@@ -280,11 +347,14 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
       imageUrl = first['imageUrl']?.toString();
     }
 
-    final isAssigned = scheduleStatus == 'assigned' || taskStatus == 'Packaging';
-    final isShipping = scheduleStatus == 'ongoing' || taskStatus == 'Shipping';
+    final lowerStatus = taskStatus.toLowerCase();
+    final lowerSched = scheduleStatus.toLowerCase();
+    final isAssigned = lowerSched == 'assigned' || lowerStatus == 'packaging';
+    final isShipping = lowerSched == 'ongoing' || lowerStatus == 'shipping' || lowerStatus == 'in progress';
+    final isCompleted = lowerSched == 'completed' || lowerStatus == 'delivered';
 
-    void navigateToDetails() {
-      Navigator.push(
+    void navigateToDetails() async {
+      final res = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => StaffTaskDetailsPage(
@@ -293,6 +363,12 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
           ),
         ),
       );
+      if (res != null) {
+        _loadTasks();
+        if (mounted) {
+          _showToast(res is String ? res : 'Delivery completed successfully!');
+        }
+      }
     }
 
     return Material(
@@ -454,101 +530,106 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          // Action Buttons: Start Inspection/Delivery & Details (only for non-completed tasks)
+          if (!isCompleted) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (isAssigned) {
+                        // Move to Shipping (In Progress) and transition to Navigation Page
+                        await TaskAssignmentService.updateTaskStatus(
+                          taskID: taskID,
+                          orderID: orderID,
+                          scheduleID: scheduleID,
+                          status: 'Shipping',
+                        );
+                        _loadTasks();
 
-          // Action Buttons: Start Inspection/Delivery & Details
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (isAssigned) {
-                      // Move to Shipping (In Progress) and transition to Navigation Page
-                      await TaskAssignmentService.updateTaskStatus(
-                        taskID: taskID,
-                        orderID: orderID,
-                        scheduleID: scheduleID,
-                        status: 'Shipping',
-                      );
-                      _loadTasks();
+                        final ongoingTask = Map<String, dynamic>.from(task);
+                        ongoingTask['taskStatus'] = 'Shipping';
+                        ongoingTask['scheduleStatus'] = 'ongoing';
 
-                      final ongoingTask = Map<String, dynamic>.from(task);
-                      ongoingTask['taskStatus'] = 'Shipping';
-                      ongoingTask['scheduleStatus'] = 'ongoing';
-
-                      if (!mounted) return;
-                      await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StaffNavigationPage(
-                            task: ongoingTask,
-                            onTaskUpdated: _loadTasks,
+                        if (!mounted) return;
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StaffNavigationPage(
+                              task: ongoingTask,
+                              onTaskUpdated: _loadTasks,
+                            ),
                           ),
-                        ),
-                      );
-                      _loadTasks();
-                    } else if (isShipping) {
-                      // Already in shipping -> open Navigation Page directly
-                      if (!mounted) return;
-                      await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StaffNavigationPage(
-                            task: task,
-                            onTaskUpdated: _loadTasks,
+                        );
+                        _loadTasks();
+                        if (res != null && mounted) {
+                          _showToast(res is String ? res : 'Delivery completed successfully!');
+                        }
+                      } else if (isShipping) {
+                        // Already in shipping -> open Navigation Page directly
+                        if (!mounted) return;
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StaffNavigationPage(
+                              task: task,
+                              onTaskUpdated: _loadTasks,
+                            ),
                           ),
-                        ),
-                      );
-                      _loadTasks();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0C5AD2),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                        );
+                        _loadTasks();
+                        if (res != null && mounted) {
+                          _showToast(res is String ? res : 'Delivery completed successfully!');
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0C5AD2),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    isAssigned
-                        ? 'Start Delivery'
-                        : isShipping
-                            ? 'Continue Navigation'
-                            : 'Completed',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                    child: Text(
+                      isAssigned
+                          ? 'Start Delivery'
+                          : 'Continue Navigation',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 1,
-                child: OutlinedButton(
-                  onPressed: navigateToDetails,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 1,
+                  child: OutlinedButton(
+                    onPressed: navigateToDetails,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                  ),
-                  child: const Text(
-                    'Details',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+                    child: const Text(
+                      'Details',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     ),
