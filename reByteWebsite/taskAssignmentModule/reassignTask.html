@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reassign Task - ReByte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0646a5;
+      --blue-accent: #0265dc;
+      --blue-light: #eff6ff;
+      --page: #f8fafc;
+      --border: #e2e8f0;
+      --text: #172033;
+      --text-muted: #64748b;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: 'Roboto', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    /* Sticky Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .brand {
+      height: 90px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+
+    .brand img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+    }
+
+    .brand span {
+      color: #10264b;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 20px 16px;
+      margin: 0;
+      display: grid;
+      gap: 6px;
+      flex: 1;
+      align-content: start;
+    }
+
+    .nav-item {
+      min-height: 46px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 10px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .nav-item svg {
+      width: 19px;
+      height: 19px;
+      flex-shrink: 0;
+    }
+
+    .nav-item:hover {
+      background: #f1f4f9;
+      color: #10264b;
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: #0646a5;
+      font-weight: 600;
+    }
+
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid #edf0f4;
+    }
+
+    .sidebar-footer .nav-item {
+      min-height: 42px;
+    }
+
+    /* Main Container */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Topbar Header */
+    .topbar {
+      min-height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 44px;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-title {
+      color: #10264b;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      color: #7a8496;
+      font-size: 14px;
+    }
+
+    .profile-avatar-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      display: grid;
+      place-items: center;
+      color: #64748b;
+      cursor: pointer;
+      position: relative;
+    }
+
+    /* Content Area */
+    .content {
+      padding: 28px 44px 60px;
+      max-width: 1380px;
+      width: 100%;
+    }
+
+    /* Back Link Arrow */
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      color: #475569;
+      text-decoration: none;
+      margin-bottom: 12px;
+      margin-left: -4px;
+      transition: all 0.15s ease;
+    }
+
+    .back-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Header Typography */
+    .page-title {
+      margin: 0 0 6px;
+      font-size: 32px;
+      font-weight: 800;
+      color: #10264b;
+      letter-spacing: -0.5px;
+    }
+
+    .page-subtitle {
+      margin: 0 0 28px;
+      font-size: 15px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    /* Two-Column Grid */
+    .reassign-grid {
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 42px;
+      align-items: start;
+    }
+
+    /* LEFT COLUMN: Task Summary Card */
+    .task-summary-card {
+      background: #fff;
+      border-radius: 20px;
+      border: 1px solid #eef2f6;
+      box-shadow: 0 6px 24px rgba(16, 38, 75, 0.04);
+      padding: 32px 28px;
+    }
+
+    .task-header-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .task-badge-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      display: grid;
+      place-items: center;
+      color: #dc2626;
+      flex-shrink: 0;
+    }
+
+    .task-badge-icon.delivery {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #2563eb;
+    }
+
+    .task-badge-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .task-title-group h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #10264b;
+    }
+
+    .task-sub-status {
+      font-size: 13px;
+      font-weight: 500;
+      color: #dc2626;
+    }
+
+    .task-divider-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    /* Order Date & Time Section */
+    .order-time-box {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 12px 16px;
+    }
+
+    .order-time-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      display: grid;
+      place-items: center;
+      color: #2563eb;
+      flex-shrink: 0;
+    }
+
+    .order-time-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .order-time-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .order-time-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .order-time-sub {
+      font-size: 12px;
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* Device Card Section */
+    .device-box {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .device-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      display: grid;
+      place-items: center;
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    .device-icon-box svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .device-details h4 {
+      margin: 0 0 3px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .device-details p {
+      margin: 0;
+      font-size: 12.5px;
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* Rejection Reason Bubble */
+    .reason-box {
+      margin-bottom: 28px;
+    }
+
+    .reason-bubble {
+      background: #f0f5fc;
+      border-radius: 16px;
+      padding: 18px 20px;
+      color: #1e3a8a;
+      font-size: 13.5px;
+      line-height: 1.55;
+      position: relative;
+    }
+
+    /* Location & Priority Row */
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding-top: 24px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .meta-col {
+      flex: 1;
+    }
+
+    .meta-col .val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 4px;
+    }
+
+    #taskLocation {
+      text-align: justify;
+      text-justify: inter-word;
+      word-break: break-word;
+      line-height: 1.45;
+    }
+
+    .priority-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #fee2e2;
+      color: #dc2626;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 12.5px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .priority-pill.normal {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+
+    /* RIGHT COLUMN: Available Staff */
+    .staff-column {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Toolbar: Search input & staff counter */
+    .staff-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      height: 42px;
+      background: #fff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 21px;
+      width: min(340px, 100%);
+      transition: all 0.15s ease;
+    }
+
+    .search-box:focus-within {
+      border-color: #0646a5;
+      box-shadow: 0 0 0 3px rgba(6, 70, 165, 0.12);
+    }
+
+    .search-box svg {
+      width: 17px;
+      height: 17px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+
+    .search-box input {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 13.5px;
+      color: #1e293b;
+      width: 100%;
+    }
+
+    .eligible-count {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    /* Staff Cards List - Max 5 cards shown, scrollable */
+    .staff-cards-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 24px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+
+    /* Slim custom scrollbar */
+    .staff-cards-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .staff-cards-list::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 4px;
+    }
+    .staff-cards-list::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .staff-cards-list::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .staff-card {
+      background: #fff;
+      border: 1.5px solid #eef2f6;
+      border-radius: 18px;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 10px rgba(16, 38, 75, 0.02);
+      flex-shrink: 0;
+    }
+
+    .staff-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 6px 18px rgba(16, 38, 75, 0.06);
+    }
+
+    .staff-card.selected {
+      border: 2px solid #0265dc;
+      background: #f8fbff;
+      box-shadow: 0 6px 20px rgba(2, 101, 220, 0.1);
+    }
+
+    .staff-card-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Avatar */
+    .staff-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #e0f2fe;
+      color: #0369a1;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    .staff-info-block {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .staff-top-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .staff-name {
+      margin: 0;
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #10264b;
+    }
+
+    .spec-pill {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: #e0f2fe;
+      color: #0284c7;
+    }
+
+    .spec-pill.courier {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
+
+    .spec-pill.both {
+      background: #fef3c7;
+      color: #b45309;
+    }
+
+    /* 3 Metrics Row */
+    .metrics-row {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .metric-val-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metric-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .metric-value.immediate {
+      color: #10b981;
+    }
+
+    /* Workload Bar */
+    .workload-bar-wrap {
+      width: 68px;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .workload-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.25s ease;
+    }
+
+    .bar-low {
+      background: #10b981;
+    }
+
+    .bar-mid {
+      background: #f59e0b;
+    }
+
+    .bar-high {
+      background: #ef4444;
+    }
+
+    /* Radio button selector */
+    .radio-circle {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid #cbd5e1;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+      background: #fff;
+    }
+
+    .staff-card.selected .radio-circle {
+      border-color: #0265dc;
+    }
+
+    .radio-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #0265dc;
+      display: none;
+    }
+
+    .staff-card.selected .radio-dot {
+      display: block;
+    }
+
+    /* Bottom Action Bar */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+    }
+
+    .btn-cancel {
+      min-height: 46px;
+      padding: 0 26px;
+      border-radius: 23px;
+      border: 1.5px solid #cbd5e1;
+      background: #fff;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-cancel:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: #0f172a;
+    }
+
+    .btn-confirm {
+      min-height: 46px;
+      padding: 0 28px;
+      border-radius: 23px;
+      border: none;
+      background: #0646a5;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s ease;
+      box-shadow: 0 4px 14px rgba(6, 70, 165, 0.2);
+    }
+
+    .btn-confirm:hover:not(:disabled) {
+      background: #083782;
+    }
+
+    .btn-confirm:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-confirm svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    /* Empty state */
+    .empty-staff-msg {
+      padding: 40px 20px;
+      text-align: center;
+      color: #64748b;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px dashed #cbd5e1;
+    }
+
+    @media (max-width: 1024px) {
+      .reassign-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 13h6"></path></svg>
+        Listings
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        System Config
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>
+        Analytics
+      </a>
+      <a href="taskAssignment.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>
+        Task Assignment
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>
+        Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Communication
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../accountManagementModule/profile.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Profile
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main">
+    <!-- Topbar Header -->
+    <header class="topbar">
+      <div class="topbar-title">Task Assignment</div>
+      <div class="topbar-right">
+        <span id="currentDateDisplay">October 24th, 2023</span>
+        <div class="profile-avatar-wrap" title="Admin Account">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Back Arrow -->
+      <a href="taskAssignment.html" class="back-btn" title="Back to Task Assignment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </a>
+
+      <!-- Page Headings -->
+      <h1 class="page-title">Reassign Task</h1>
+      <p class="page-subtitle" id="pageSubtitle">Select an available deliverer to take over this task.</p>
+
+      <!-- Two-Column Grid -->
+      <div class="reassign-grid">
+        
+        <!-- LEFT: Task Detail Card -->
+        <section class="task-summary-card" aria-label="Task Details">
+          <div class="task-header-row">
+            <div class="task-badge-icon" id="taskIconWrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </div>
+            <div class="task-title-group">
+              <h3 id="taskTypeTitle">Task Details</h3>
+              <div class="task-sub-status" id="taskSubStatus">Unassigned</div>
+            </div>
+          </div>
+
+          <div class="task-divider-label">Order Date &amp; Time</div>
+          <div class="order-time-box">
+            <div class="order-time-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="order-time-details">
+              <div class="order-time-val" id="orderDateTimeText">Loading...</div>
+              <div class="order-time-sub" id="orderRefText">Order Reference</div>
+            </div>
+          </div>
+
+          <div class="task-divider-label">Device</div>
+          <div class="device-box">
+            <div class="device-icon-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+            </div>
+            <div class="device-details">
+              <h4 id="deviceName">Electronics Device</h4>
+              <p id="deviceImei">IMEI: —</p>
+            </div>
+          </div>
+
+          <div class="reason-box">
+            <div class="task-divider-label">Reason for Cancellation / Reassignment</div>
+            <div class="reason-bubble" id="rejectionReasonText">
+              "Task needs immediate reassignment to clear queue."
+            </div>
+          </div>
+
+          <div class="meta-row">
+            <div class="meta-col">
+              <div class="task-divider-label">Location</div>
+              <div class="val" id="taskLocation">Hub C - Bay 4</div>
+            </div>
+            <div class="meta-col" style="text-align: right;">
+              <div class="task-divider-label">Priority</div>
+              <div>
+                <span class="priority-pill" id="priorityBadge">! High</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT: Available Staff Section -->
+        <section class="staff-column" aria-label="Available Staff">
+          <!-- Filter Toolbar with Search and Count -->
+          <div class="staff-toolbar">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="search" id="staffSearchInput" placeholder="Search staff name or email..." aria-label="Search available staff">
+            </div>
+            <div class="eligible-count" id="eligibleCountText">Loading eligible staff...</div>
+          </div>
+
+          <!-- Staff Cards Stack - Max 5 visible, scrollable -->
+          <div class="staff-cards-list" id="staffCardsContainer">
+            <!-- Dynamically populated staff cards -->
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="action-bar">
+            <button type="button" class="btn-cancel" onclick="handleCancel()">Cancel</button>
+            <button type="button" class="btn-confirm" id="btnConfirmReassign" onclick="handleConfirmReassignment()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 12 17 18 10"></polyline></svg>
+              Confirm Reassignment
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = (function() {
+      if (window.location.port === '3000') return '';
+      const hostname = window.location.hostname || 'localhost';
+      return 'http://' + hostname + ':3000';
+    })();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderID = urlParams.get('orderID') || '261021ORD00006';
+
+    let allEligibleStaff = [];
+    let selectedStaffID = null;
+    let currentTaskData = null;
+    let searchQuery = '';
+
+    function formatHeaderDate() {
+      const now = new Date();
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const d = now.getDate();
+      let suffix = "th";
+      if (d % 10 === 1 && d !== 11) suffix = "st";
+      else if (d % 10 === 2 && d !== 12) suffix = "nd";
+      else if (d % 10 === 3 && d !== 13) suffix = "rd";
+      const year = now.getFullYear();
+      const dateEl = document.getElementById('currentDateDisplay');
+      if (dateEl) dateEl.textContent = monthNames[now.getMonth()] + ' ' + d + suffix + ', ' + year;
+    }
+
+    async function loadReassignData() {
+      formatHeaderDate();
+
+      const candidates = [
+        API_BASE,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ].filter((v, i, arr) => arr.indexOf(v) === i);
+
+      let data = null;
+      for (const base of candidates) {
+        try {
+          const res = await fetch(base + '/api/task-assignment/admin/reassign-candidates?orderID=' + encodeURIComponent(orderID));
+          if (res.ok) {
+            data = await res.json();
+            if (data.success) break;
+          }
+        } catch (e) {
+          console.warn('Could not reach ' + base + ':', e.message);
+        }
+      }
+
+      if (data && data.success) {
+        currentTaskData = data.taskDetail;
+        allEligibleStaff = data.staff || [];
+        renderTaskDetails(currentTaskData);
+        renderStaffList();
+      } else {
+        renderMockFallback();
+      }
+
+      // Initialize live search input
+      const searchInput = document.getElementById('staffSearchInput');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchQuery = e.target.value.trim().toLowerCase();
+          renderStaffList();
+        });
+      }
+    }
+
+    function renderTaskDetails(task) {
+      const isDeliver = task.taskType === 'deliver' || (task.fulfillmentType && task.fulfillmentType.toLowerCase().includes('deliver'));
+      
+      const typeTitle = document.getElementById('taskTypeTitle');
+      const subStatus = document.getElementById('taskSubStatus');
+      const pageSubtitle = document.getElementById('pageSubtitle');
+      const taskIconWrap = document.getElementById('taskIconWrap');
+
+      if (isDeliver) {
+        if (typeTitle) typeTitle.textContent = "Delivery Task";
+        if (pageSubtitle) pageSubtitle.textContent = "Select an available deliverer to take over this cancelled delivery.";
+        if (taskIconWrap) {
+          taskIconWrap.className = "task-badge-icon delivery";
+          taskIconWrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>';
+        }
+      } else {
+        if (typeTitle) typeTitle.textContent = "Inspection Task";
+        if (pageSubtitle) pageSubtitle.textContent = "Select an available technician to take over this cancelled inspection.";
+        if (taskIconWrap) {
+          taskIconWrap.className = "task-badge-icon";
+          taskIconWrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+        }
+      }
+
+      if (subStatus) {
+        subStatus.textContent = task.previousStaffName ? ('Cancelled by ' + task.previousStaffName) : "Unassigned Task";
+      }
+
+      const devNameEl = document.getElementById('deviceName');
+      const devImeiEl = document.getElementById('deviceImei');
+      if (devNameEl && task.device) {
+        devNameEl.textContent = task.device.name || "Electronics Device";
+      }
+      if (devImeiEl && task.device) {
+        devImeiEl.textContent = 'IMEI: ' + (task.device.imei || '354678091234567');
+      }
+
+      const reasonEl = document.getElementById('rejectionReasonText');
+      if (reasonEl) {
+        reasonEl.textContent = '"' + (task.cancellationReason || 'Client arrived late and I have a conflicting with next task. Needs immediate reassignment to clear queue.') + '"';
+      }
+
+      const locEl = document.getElementById('taskLocation');
+      if (locEl) locEl.textContent = task.location || "Hub C - Bay 4";
+
+      const prioEl = document.getElementById('priorityBadge');
+      if (prioEl) {
+        if (task.priority === 'High') {
+          prioEl.className = 'priority-pill';
+          prioEl.textContent = '! High';
+        } else {
+          prioEl.className = 'priority-pill normal';
+          prioEl.textContent = 'Normal';
+        }
+      }
+
+      // Populate Order Date & Time
+      const orderDateEl = document.getElementById('orderDateTimeText');
+      const orderRefEl = document.getElementById('orderRefText');
+      if (orderRefEl && task.orderID) {
+        orderRefEl.textContent = 'Order #' + task.orderID;
+      }
+      if (orderDateEl) {
+        let formatted = task.orderDateFormatted;
+        if (!formatted && (task.createdAtMs || task.createdAt || task.orderDate)) {
+          const raw = task.createdAtMs || task.createdAt || task.orderDate;
+          const dt = new Date(raw);
+          if (!isNaN(dt.getTime())) {
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mm = String(dt.getMinutes()).padStart(2, '0');
+            formatted = `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}, ${hh}:${mm}`;
+          }
+        }
+        orderDateEl.textContent = formatted || task.appointmentDate || '21 Oct 2026, 13:50';
+      }
+    }
+
+    function renderStaffList() {
+      const container = document.getElementById('staffCardsContainer');
+      const countEl = document.getElementById('eligibleCountText');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      let filtered = [...allEligibleStaff];
+
+      // Live search filter
+      if (searchQuery) {
+        filtered = filtered.filter(s => {
+          const match = (s.name + ' ' + (s.email || '') + ' ' + (s.specializationTag || '')).toLowerCase();
+          return match.includes(searchQuery);
+        });
+      }
+
+      const isDeliver = currentTaskData && (currentTaskData.taskType === 'deliver' || (currentTaskData.fulfillmentType && currentTaskData.fulfillmentType.toLowerCase().includes('deliver')));
+      const noun = isDeliver ? "Available Deliverers" : "Available Technicians";
+      if (countEl) {
+        countEl.textContent = filtered.length + ' ' + noun;
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-staff-msg"><p style="margin: 0; font-weight: 600;">No available staff found matching your search.</p><p style="margin: 6px 0 0; font-size: 13px;">Staff must be in the same state and have fewer than 8 tasks scheduled.</p></div>';
+        return;
+      }
+
+      if (!selectedStaffID || !filtered.some(s => s.staffID === selectedStaffID)) {
+        selectedStaffID = filtered[0].staffID;
+      }
+
+      filtered.forEach((staff) => {
+        const isSelected = (staff.staffID === selectedStaffID);
+
+        const card = document.createElement('div');
+        card.className = 'staff-card' + (isSelected ? ' selected' : '');
+        card.setAttribute('role', 'radio');
+        card.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        card.dataset.staffId = staff.staffID;
+
+        // Dynamic progress bar calculation (out of 8 tasks max)
+        const activeTasks = Number(staff.activeTasks || 0);
+        const maxTasks = Number(staff.maxTasks || 8);
+        const pct = (activeTasks > 0 && maxTasks > 0) ? Math.min(100, Math.round((activeTasks / maxTasks) * 100)) : 0;
+
+        let barClass = 'bar-low';
+        if (activeTasks >= 7) barClass = 'bar-high';
+        else if (activeTasks >= 4) barClass = 'bar-mid';
+
+        let avatarHtml = '<div class="staff-avatar">' + escapeHtml(staff.initials || 'ST') + '</div>';
+        if (staff.photoUrl) {
+          avatarHtml = '<img src="' + staff.photoUrl + '" class="staff-avatar" alt="' + escapeHtml(staff.name) + '">';
+        }
+
+        let specClass = 'spec-pill';
+        if (staff.specializationTag === 'Deliverer') specClass = 'spec-pill courier';
+        if (staff.specializationTag === 'Both') specClass = 'spec-pill both';
+
+        const isNow = String(staff.availableText || '').trim().toLowerCase() === 'now' || staff.isImmediate;
+        const availClass = isNow ? 'metric-value immediate' : 'metric-value';
+        const availText = staff.availableText || (isNow ? 'Now' : 'Tomorrow 09:00');
+
+        card.innerHTML = 
+          '<div class="staff-card-left">' +
+            avatarHtml +
+            '<div class="staff-info-block">' +
+              '<div class="staff-top-row">' +
+                '<h4 class="staff-name">' + escapeHtml(staff.name) + '</h4>' +
+                '<span class="' + specClass + '">' + escapeHtml(staff.specializationTag || 'Deliverer') + '</span>' +
+              '</div>' +
+              '<div class="metrics-row">' +
+                '<div class="metric-item">' +
+                  '<span class="metric-label">Workload</span>' +
+                  '<div class="metric-val-wrap">' +
+                    '<span class="metric-value">' + escapeHtml(activeTasks + '/' + maxTasks + ' tasks') + '</span>' +
+                    '<div class="workload-bar-wrap">' +
+                      '<div class="workload-bar-fill ' + barClass + '" style="width: ' + pct + '%;"></div>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="metric-item">' +
+                  '<span class="metric-label">Distance</span>' +
+                  '<div class="metric-val-wrap">' +
+                    '<span class="metric-value">📍 ' + Number(staff.distanceKm || 0).toFixed(1) + ' km</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="metric-item">' +
+                  '<span class="metric-label">Available</span>' +
+                  '<div class="metric-val-wrap">' +
+                    '<span class="' + availClass + '">⏱ ' + escapeHtml(availText) + '</span>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="radio-circle">' +
+            '<div class="radio-dot"></div>' +
+          '</div>';
+
+        card.addEventListener('click', () => {
+          selectedStaffID = staff.staffID;
+          document.querySelectorAll('.staff-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    function handleCancel() {
+      window.location.href = 'taskAssignment.html';
+    }
+
+    async function handleConfirmReassignment() {
+      if (!selectedStaffID) {
+        alert('Please select an eligible staff member to reassign this task.');
+        return;
+      }
+
+      const btn = document.getElementById('btnConfirmReassign');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Reassigning...</span>';
+
+      try {
+        const res = await fetch(API_BASE + '/api/task-assignment/admin/reassign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderID: orderID,
+            staffID: selectedStaffID
+          })
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          alert(result.message || 'Task reassigned successfully!');
+          window.location.href = 'taskAssignment.html';
+        } else {
+          alert('Reassignment failed: ' + (result.reason || result.error || 'Server error'));
+        }
+      } catch (err) {
+        alert('Network error while assigning task: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+
+    function renderMockFallback() {
+      currentTaskData = {
+        orderID: orderID,
+        taskID: 'TSK-' + orderID,
+        taskType: 'deliver',
+        taskTypeLabel: 'Delivery Task',
+        displayStatus: 'Cancelled',
+        previousStaffName: 'Sarah Jenkins',
+        cancellationReason: 'Client arrived late and I have a conflicting with next task. Needs immediate reassignment to clear queue.',
+        device: {
+          name: 'Apple iPhone 13 Pro',
+          brand: 'Apple',
+          model: 'iPhone 13 Pro',
+          storage: '256 GB',
+          imei: '354678091234567'
+        },
+        location: 'Hub C - Bay 4',
+        priority: 'High',
+        fulfillmentType: 'Delivery'
+      };
+
+      allEligibleStaff = [
+        {
+          staffID: 'qp3ZjysxzUZ8wrrOP50pDtuMxqv1',
+          name: 'Lincoln Lo Kah Junn',
+          initials: 'LL',
+          specializationTag: 'Deliverer',
+          activeTasks: 0,
+          maxTasks: 8,
+          distanceKm: 0.2,
+          availableText: 'Immediate',
+          isImmediate: true
+        }
+      ];
+
+      renderTaskDetails(currentTaskData);
+      renderStaffList();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    document.addEventListener('DOMContentLoaded', loadReassignData);
+  </script>
+</body>
+</html>

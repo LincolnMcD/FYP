@@ -486,6 +486,73 @@ class ShopService {
       return [];
     }
   }
+
+  /// Cancel order (allowed ONLY at Packaging status)
+  static Future<Map<String, dynamic>> cancelOrder({required String orderID}) async {
+    final cleanOrderID = orderID.replaceAll('#', '').trim();
+    if (cleanOrderID.isEmpty) {
+      return {'success': false, 'error': 'Missing order ID'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/shop/order/cancel');
+      final response = await http.post(
+        uri,
+        headers: await _headers(json: true),
+        body: jsonEncode({'orderID': cleanOrderID}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {'success': true, 'message': data['message'] ?? 'Order cancelled successfully'};
+      }
+      return {
+        'success': false,
+        'error': data['error'] ?? 'Failed to cancel order. Please try again.',
+      };
+    } catch (e) {
+      debugPrint('ShopService.cancelOrder error: $e');
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  /// Update order delivery address (allowed ONLY at Packaging status)
+  static Future<Map<String, dynamic>> updateOrderAddress({
+    required String orderID,
+    required String addressID,
+  }) async {
+    final cleanOrderID = orderID.replaceAll('#', '').trim();
+    if (cleanOrderID.isEmpty || addressID.isEmpty) {
+      return {'success': false, 'error': 'Missing order ID or address ID'};
+    }
+    try {
+      final uri = Uri.parse('$baseUrl/api/shop/order/update-address');
+      final response = await http.post(
+        uri,
+        headers: await _headers(json: true),
+        body: jsonEncode({'orderID': cleanOrderID, 'addressID': addressID}),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Delivery address is changed.',
+          'taskStatus': data['taskStatus'],
+          'orderStatus': data['orderStatus'],
+          'scheduleDate': data['scheduleDate'],
+          'estimatedEndTime': data['estimatedEndTime'],
+          'estimatedDuration': data['estimatedDuration'],
+        };
+      }
+      return {
+        'success': false,
+        'error': data['error'] ?? 'Failed to update address. Please try again.',
+      };
+    } catch (e) {
+      debugPrint('ShopService.updateOrderAddress error: $e');
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
 }
 
 class _CachedValue {

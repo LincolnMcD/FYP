@@ -108,6 +108,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       condition = first['condition']?.toString() ?? 'Good';
       imageUrl = first['imageUrl']?.toString();
     }
+    final proofOfDeliveryUrl = (_currentTask['proofOfDeliveryUrl'] ?? task['proofOfDeliveryUrl'])?.toString() ?? '';
 
     // Status styling
     Color statusBgColor = const Color(0xFFFEF3C7);
@@ -578,6 +579,60 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                 ],
               ),
             ),
+            if (proofOfDeliveryUrl.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Proof of Delivery',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        proofOfDeliveryUrl,
+                        width: double.infinity,
+                        height: 220,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 120,
+                          color: const Color(0xFFF1F5F9),
+                          alignment: Alignment.center,
+                          child: const Text('Could not load proof photo', style: TextStyle(color: Color(0xFF64748B))),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
         ),
@@ -623,7 +678,10 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                             );
                             widget.onTaskUpdated?.call();
                             if (!context.mounted) return;
-                            Navigator.pop(context);
+                            Navigator.pop(context, {
+                              'rejected': true,
+                              'message': 'Delivery task is rejected',
+                            });
                           }
                         },
                   icon: const Icon(Icons.close, color: Color(0xFFDC2626), size: 18),
@@ -1040,18 +1098,23 @@ class _RejectTaskDialogState extends State<RejectTaskDialog> {
                             'notes': _notesController.text.trim(),
                           });
                         },
-                  icon: const Icon(Icons.cancel, color: Colors.white, size: 16),
-                  label: const Text(
+                  icon: Icon(
+                    Icons.cancel,
+                    color: _selectedReason == null ? const Color(0xFF94A3B8) : Colors.white,
+                    size: 16,
+                  ),
+                  label: Text(
                     'Confirm Reject',
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: _selectedReason == null ? const Color(0xFF94A3B8) : Colors.white,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFB91C1C),
-                    disabledBackgroundColor: const Color(0xFFFCA5A5),
+                    disabledBackgroundColor: const Color(0xFFE2E8F0),
+                    disabledForegroundColor: const Color(0xFF94A3B8),
                     padding: const EdgeInsets.symmetric(vertical: 11),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),

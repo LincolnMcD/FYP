@@ -34,7 +34,25 @@ app.use("/shop", shopRouter);
 app.use("/api/task-assignment", taskAssignmentRouter);
 app.use("/task-assignment", taskAssignmentRouter);
 
+const http = require("http");
+const { Server } = require("socket.io");
+const { setupDeliverySocket } = require("./taskAssignmentModule/deliverySocket");
+
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Setup real-time delivery tracking via Socket.IO
+setupDeliverySocket(io);
+
+// Expose io instance to express app if needed
+app.set("io", io);
+
 const PORT = 3000;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Global ReByte Server running on port ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Global ReByte Server (with Socket.IO) running on port ${PORT}`);
 });

@@ -137,6 +137,54 @@ const ReByteAuth = {
   },
 
   /**
+   * Force immediate logout without a confirm dialog.
+   * Used when a token refresh fails (e.g. session expired, user disabled).
+   * Redirects to login page with ?sessionExpired=1 so a toast can be shown.
+   * @param {boolean} [disabled=false] - true if account was disabled
+   */
+  forceSessionLogout(disabled = false) {
+    try {
+      if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().signOut().catch(() => {});
+      }
+    } catch (_) {}
+    localStorage.removeItem(this.SESSION_KEY);
+
+    // Resolve correct path to login.html regardless of current module folder
+    const path = window.location.pathname;
+    let loginPath;
+    if (path.includes('/adminModule/') || path.includes('/staffModule/')) {
+      loginPath = '../accountManagementModule/login.html';
+    } else if (path.includes('/accountManagementModule/')) {
+      loginPath = 'login.html';
+    } else {
+      loginPath = '/reByteWebsite/accountManagementModule/login.html';
+    }
+
+    const reason = disabled ? 'accountDisabled' : 'sessionExpired';
+    window.location.href = `${loginPath}?${reason}=1`;
+  },
+
+  /**
+   * Authenticated fetch wrapper.
+   * Automatically injects the Authorization header and calls forceSessionLogout()
+   * if the server returns 401 or 403 (token rejected / expired).
+   * Usage: const data = await ReByteAuth.authFetch(url, options);
+   */
+  async authFetch(url, options = {}) {
+    const token = await this.getToken();
+    const headers = Object.assign({}, options.headers || {});
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401 || response.status === 403) {
+      this.forceSessionLogout();
+      // Return a never-resolving promise so the calling code doesn't continue
+      return new Promise(() => {});
+    }
+    return response;
+  },
+
+  /**
    * Initialize header navbar:
    * If logged in -> show profile icon with dropdown menu
    * If NOT logged in -> show Login and Register buttons directly (no welcome page needed)

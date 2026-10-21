@@ -10,6 +10,8 @@ class AddressModel {
   final String addressType; // 'Home', 'Office', or custom string (limit <= 20 char)
   final bool isDefault;
   final String customerID;
+  final double? latitude;
+  final double? longitude;
 
   AddressModel({
     required this.id,
@@ -23,10 +25,16 @@ class AddressModel {
     this.addressType = 'Home',
     this.isDefault = false,
     this.customerID = '',
+    this.latitude,
+    this.longitude,
   });
 
   // Backward compatibility alias for label
   String get label => addressType;
+
+  // Backward compatibility aliases for lat / lng
+  double? get lat => latitude;
+  double? get lng => longitude;
 
   // Formatted full address line
   String get fullAddress {
@@ -46,6 +54,8 @@ class AddressModel {
     String? addressType,
     bool? isDefault,
     String? customerID,
+    double? latitude,
+    double? longitude,
   }) {
     return AddressModel(
       id: id ?? this.id,
@@ -59,6 +69,8 @@ class AddressModel {
       addressType: addressType ?? this.addressType,
       isDefault: isDefault ?? this.isDefault,
       customerID: customerID ?? this.customerID,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 
@@ -75,10 +87,28 @@ class AddressModel {
       'addressType': addressType,
       'isDefault': isDefault,
       'customerID': customerID,
+      'lat': latitude,
+      'lng': longitude,
     };
   }
 
   factory AddressModel.fromJson(Map<String, dynamic> json) {
+    double? parsedLat;
+    final rawLat = json['latitude'] ?? json['lat'];
+    if (rawLat is num) {
+      parsedLat = rawLat.toDouble();
+    } else if (rawLat != null) {
+      parsedLat = double.tryParse(rawLat.toString());
+    }
+
+    double? parsedLng;
+    final rawLng = json['longitude'] ?? json['lng'];
+    if (rawLng is num) {
+      parsedLng = rawLng.toDouble();
+    } else if (rawLng != null) {
+      parsedLng = double.tryParse(rawLng.toString());
+    }
+
     return AddressModel(
       id: json['addressID']?.toString() ?? json['id']?.toString() ?? '',
       addressID: json['addressID']?.toString() ?? json['id']?.toString() ?? '',
@@ -91,6 +121,8 @@ class AddressModel {
       addressType: json['addressType']?.toString() ?? json['label']?.toString() ?? 'Home',
       isDefault: json['isDefault'] == true,
       customerID: json['customerID']?.toString() ?? '',
+      latitude: parsedLat,
+      longitude: parsedLng,
     );
   }
 }

@@ -326,6 +326,11 @@ router.get("/", async (req, res) => {
                     createdIso = String(data.createdAt);
                 }
 
+                let lat = data.lat !== undefined ? Number(data.lat) : (data.latitude !== undefined ? Number(data.latitude) : null);
+                let lng = data.lng !== undefined ? Number(data.lng) : (data.longitude !== undefined ? Number(data.longitude) : null);
+                if (isNaN(lat)) lat = null;
+                if (isNaN(lng)) lng = null;
+
                 return {
                     id: doc.id,
                     addressID: data.addressID || doc.id,
@@ -339,6 +344,10 @@ router.get("/", async (req, res) => {
                     isDefault: data.isDefault === true,
                     customerID: data.customerID || customerID,
                     status: data.status || "Active",
+                    latitude: lat,
+                    longitude: lng,
+                    lat: lat,
+                    lng: lng,
                     createdAt: createdIso,
                     updatedAt: updatedIso
                 };
@@ -373,7 +382,11 @@ router.post("/", async (req, res) => {
             recipentName,
             phoneNumber,
             addressType,
-            isDefault
+            isDefault,
+            latitude,
+            longitude,
+            lat,
+            lng
         } = req.body;
 
         if (!email || !addressLine || !postcode || !city || !state || !recipentName || !phoneNumber) {
@@ -435,6 +448,13 @@ router.post("/", async (req, res) => {
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
         };
+
+        const parsedLat = Number(lat !== undefined ? lat : latitude);
+        const parsedLng = Number(lng !== undefined ? lng : longitude);
+        if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+            addressDoc.lat = parsedLat;
+            addressDoc.lng = parsedLng;
+        }
 
         await db.collection("address").doc(addressID).set(addressDoc);
 
@@ -519,6 +539,21 @@ router.put("/:id", async (req, res) => {
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber.trim();
         if (addressType !== undefined) updateData.addressType = finalType;
         if (isDefault !== undefined) updateData.isDefault = shouldBeDefault;
+
+        if (req.body.lat !== undefined || req.body.latitude !== undefined) {
+            const parsedLat = Number(req.body.lat !== undefined ? req.body.lat : req.body.latitude);
+            if (!isNaN(parsedLat)) {
+                updateData.lat = parsedLat;
+                updateData.latitude = FieldValue.delete();
+            }
+        }
+        if (req.body.lng !== undefined || req.body.longitude !== undefined) {
+            const parsedLng = Number(req.body.lng !== undefined ? req.body.lng : req.body.longitude);
+            if (!isNaN(parsedLng)) {
+                updateData.lng = parsedLng;
+                updateData.longitude = FieldValue.delete();
+            }
+        }
 
         await docRef.update(updateData);
 

@@ -68,6 +68,9 @@ class AddAddressDialog {
       selectedState = null;
     }
 
+    double? selectedLat = address?.latitude;
+    double? selectedLng = address?.longitude;
+
     bool isDefault = isEditing ? address.isDefault : (isFirstAddress ? true : false);
     bool isSubmitting = false;
 
@@ -433,229 +436,285 @@ class AddAddressDialog {
                         ),
                         const SizedBox(height: 14),
 
-                        // Address Line with GPS Point on Map
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Address Line (Street address, unit no.)',
-                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                            ),
-                            InkWell(
-                              onTap: () async {
-                                final result = await Navigator.push<Map<String, dynamic>>(
-                                  sheetContext,
-                                  MaterialPageRoute(
-                                    builder: (ctx) => const MapPickerPage(),
-                                    settings: const RouteSettings(name: '/map_picker'),
+                        // Address Details - Disabled with Gray Overlay (Populated from Map Selection Only)
+                        Builder(
+                          builder: (bCtx) {
+                            Future<void> openMapPicker() async {
+                              final parts = [
+                                addressLineController.text.trim(),
+                                postcodeController.text.trim(),
+                                cityController.text.trim(),
+                                selectedState ?? '',
+                              ].where((s) => s.isNotEmpty).toList();
+                              final inputtedAddress = parts.isNotEmpty ? parts.join(', ') : null;
+
+                              final result = await Navigator.push<Map<String, dynamic>>(
+                                sheetContext,
+                                MaterialPageRoute(
+                                  builder: (ctx) => MapPickerPage(
+                                    initialLat: selectedLat,
+                                    initialLng: selectedLng,
+                                    initialAddress: inputtedAddress,
                                   ),
-                                );
+                                  settings: const RouteSettings(name: '/map_picker'),
+                                ),
+                              );
 
-                                if (result != null) {
-                                  setModalState(() {
-                                    if (result['addressLine'] != null && result['addressLine'].toString().isNotEmpty) {
-                                      final rawLine = result['addressLine'].toString();
-                                      addressLineController.text = rawLine.length > 65 ? rawLine.substring(0, 65) : rawLine;
-                                      addressLineError = null;
-                                    }
-                                    if (result['postcode'] != null && result['postcode'].toString().isNotEmpty) {
-                                      final rawPost = result['postcode'].toString();
-                                      postcodeController.text = rawPost.length > 5 ? rawPost.substring(0, 5) : rawPost;
-                                      postcodeError = null;
-                                    }
-                                    if (result['city'] != null && result['city'].toString().isNotEmpty) {
-                                      final rawCity = result['city'].toString();
-                                      cityController.text = rawCity.length > 20 ? rawCity.substring(0, 20) : rawCity;
-                                      cityError = null;
-                                    }
-                                    if (result['state'] != null && result['state'].toString().isNotEmpty) {
-                                      final matched = result['state'].toString();
-                                      if (malaysianStates.contains(matched)) {
-                                        selectedState = matched;
-                                        stateError = null;
-                                      }
-                                    }
-                                  });
-                                }
+                              if (result != null) {
+                                setModalState(() {
+                                  final rawLine = result['addressLine']?.toString() ?? '';
+                                  final rawPost = result['postcode']?.toString() ?? '';
+                                  final rawCity = result['city']?.toString() ?? '';
+                                  final rawState = result['state']?.toString() ?? '';
 
-                                if (sheetContext.mounted) {
-                                  FocusScope.of(sheetContext).unfocus();
-                                }
-                                FocusManager.instance.primaryFocus?.unfocus();
-                              },
-                              borderRadius: BorderRadius.circular(6),
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                child: Row(
+                                  addressLineController.text = rawLine.length > 65 ? rawLine.substring(0, 65) : rawLine;
+                                  addressLineError = null;
+
+                                  postcodeController.text = rawPost.length > 5 ? rawPost.substring(0, 5) : rawPost;
+                                  postcodeError = null;
+
+                                  cityController.text = rawCity.length > 20 ? rawCity.substring(0, 20) : rawCity;
+                                  cityError = null;
+
+                                  if (malaysianStates.contains(rawState)) {
+                                    selectedState = rawState;
+                                  } else {
+                                    selectedState = rawState.isNotEmpty ? rawState : null;
+                                  }
+                                  stateError = null;
+
+                                  if (result['lat'] != null) {
+                                    selectedLat = (result['lat'] as num).toDouble();
+                                  }
+                                  if (result['lng'] != null) {
+                                    selectedLng = (result['lng'] as num).toDouble();
+                                  }
+                                });
+                              }
+
+                              if (sheetContext.mounted) {
+                                FocusScope.of(sheetContext).unfocus();
+                              }
+                              FocusManager.instance.primaryFocus?.unfocus();
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF0C5AD2)),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'Point on Map',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF0C5AD2),
+                                    const Text(
+                                      'Delivery Address',
+                                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                                    ),
+                                    InkWell(
+                                      onTap: openMapPicker,
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: const Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF0C5AD2)),
+                                            SizedBox(width: 3),
+                                            Text(
+                                              'Point on Map',
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF0C5AD2),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: addressLineController,
-                          maxLength: 65,
-                          inputFormatters: [
-                            LengthLimitingTextInputFormatter(65),
-                          ],
-                          onChanged: (_) {
-                            setModalState(() {
-                              if (addressLineError != null) {
-                                final a = addressLineController.text.trim();
-                                addressLineError = a.isEmpty ? 'Street address is required' : (a.length > 65 ? 'Address line cannot exceed 65 characters' : null);
-                              }
-                            });
-                          },
-                          decoration: InputDecoration(
-                            counterText: '',
-                            hintText: 'e.g. No 12, Jalan SS 15/4, Subang Jaya',
-                            hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13.5),
-                            filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
-                            errorText: addressLineError,
-                            errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
+                                const SizedBox(height: 8),
 
-                        // Postcode & City Row
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Postcode',
-                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  TextField(
-                                    controller: postcodeController,
-                                    keyboardType: TextInputType.number,
-                                    maxLength: 5,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      LengthLimitingTextInputFormatter(5),
-                                    ],
-                                    onChanged: (_) {
-                                      setModalState(() {
-                                        if (postcodeError != null) {
-                                          final p = postcodeController.text.trim();
-                                          postcodeError = p.isEmpty ? 'Postcode is required' : (p.length != 5 ? 'Must be 5 digits' : null);
-                                        }
-                                      });
-                                    },
-                                    decoration: InputDecoration(
-                                      counterText: '',
-                                      hintText: '47500',
-                                      hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13.5),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      errorText: postcodeError,
-                                      errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                // Gray Overlay Card containing all disabled address inputs
+                                InkWell(
+                                  onTap: openMapPicker,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9), // Gray overlay background
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: (addressLineError != null || postcodeError != null || cityError != null || stateError != null)
+                                            ? const Color(0xFFEF4444)
+                                            : const Color(0xFFCBD5E1),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Tap prompt helper
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              addressLineController.text.trim().isEmpty ? Icons.touch_app_outlined : Icons.check_circle_outline,
+                                              size: 15,
+                                              color: addressLineController.text.trim().isEmpty ? const Color(0xFF0C5AD2) : const Color(0xFF10B981),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                addressLineController.text.trim().isEmpty
+                                                    ? 'Click here or "Point on Map" to select delivery location'
+                                                    : 'Location pointed on map (Tap to re-select)',
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: addressLineController.text.trim().isEmpty ? const Color(0xFF0C5AD2) : const Color(0xFF059669),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+
+                                        // Address Line (Street address, unit no.)
+                                        const Text(
+                                          'Address Line (Street address, unit no.)',
+                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        TextField(
+                                          controller: addressLineController,
+                                          enabled: false,
+                                          maxLines: 2,
+                                          style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            hintText: 'Point on map to fill address line',
+                                            hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+                                            filled: true,
+                                            fillColor: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
+                                            errorText: addressLineError,
+                                            errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
+                                            disabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                            ),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+
+                                        // Postcode & City Row
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 4,
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'Postcode',
+                                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  TextField(
+                                                    controller: postcodeController,
+                                                    enabled: false,
+                                                    style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                                    decoration: InputDecoration(
+                                                      isDense: true,
+                                                      hintText: '—',
+                                                      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+                                                      filled: true,
+                                                      fillColor: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
+                                                      errorText: postcodeError,
+                                                      errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
+                                                      disabledBorder: OutlineInputBorder(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                                      ),
+                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              flex: 6,
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'City',
+                                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  TextField(
+                                                    controller: cityController,
+                                                    enabled: false,
+                                                    style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                                    decoration: InputDecoration(
+                                                      isDense: true,
+                                                      hintText: '—',
+                                                      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+                                                      filled: true,
+                                                      fillColor: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
+                                                      errorText: cityError,
+                                                      errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
+                                                      disabledBorder: OutlineInputBorder(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                                      ),
+                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+
+                                        // State Row
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'State',
+                                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            TextField(
+                                              controller: TextEditingController(text: selectedState ?? ''),
+                                              enabled: false,
+                                              style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+                                              decoration: InputDecoration(
+                                                isDense: true,
+                                                hintText: '—',
+                                                hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+                                                filled: true,
+                                                fillColor: const Color(0xFFE2E8F0).withValues(alpha: 0.5),
+                                                errorText: stateError,
+                                                errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
+                                                disabledBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                                ),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'City',
-                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  TextField(
-                                    controller: cityController,
-                                    maxLength: 20,
-                                    inputFormatters: [
-                                      LengthLimitingTextInputFormatter(20),
-                                    ],
-                                    onChanged: (_) {
-                                      setModalState(() {
-                                        if (cityError != null) {
-                                          final c = cityController.text.trim();
-                                          cityError = c.isEmpty ? 'City is required' : (c.length > 20 ? 'City cannot exceed 20 characters' : null);
-                                        }
-                                      });
-                                    },
-                                    decoration: InputDecoration(
-                                      counterText: '',
-                                      hintText: 'e.g. Subang Jaya',
-                                      hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13.5),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      errorText: cityError,
-                                      errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-
-                        // State Dropdown
-                        const Text(
-                          'State',
-                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                        ),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedState,
-                          isExpanded: true,
-                          menuMaxHeight: 260,
-                          hint: const Text('Select State', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13.5)),
-                          items: malaysianStates.map((st) {
-                            return DropdownMenuItem<String>(
-                              value: st,
-                              child: Text(st, style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A))),
+                                ),
+                              ],
                             );
-                          }).toList(),
-                          onChanged: (val) {
-                            setModalState(() {
-                              selectedState = val;
-                              stateError = null;
-                            });
                           },
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
-                            errorText: stateError,
-                            errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFEF4444)),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
                         ),
                         const SizedBox(height: 14),
 
@@ -726,6 +785,8 @@ class AddAddressDialog {
                                             phoneNumber: formattedPhone,
                                             addressType: finalAddressType,
                                             isDefault: isDefault,
+                                            latitude: selectedLat,
+                                            longitude: selectedLng,
                                           );
 
                                           final res = await AddressService.updateAddress(email, updated);
@@ -751,6 +812,8 @@ class AddAddressDialog {
                                             phoneNumber: formattedPhone,
                                             addressType: finalAddressType,
                                             isDefault: isDefault,
+                                            latitude: selectedLat,
+                                            longitude: selectedLng,
                                           );
 
                                           final res = await AddressService.addAddress(email, newAddr);

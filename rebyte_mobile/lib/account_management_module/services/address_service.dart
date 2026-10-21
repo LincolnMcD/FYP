@@ -42,6 +42,8 @@ class AddressService {
           'phoneNumber': address.phoneNumber,
           'addressType': address.addressType,
           'isDefault': address.isDefault,
+          'lat': address.latitude,
+          'lng': address.longitude,
         }),
       ).timeout(const Duration(seconds: 8));
 
@@ -71,6 +73,8 @@ class AddressService {
           'phoneNumber': address.phoneNumber,
           'addressType': address.addressType,
           'isDefault': address.isDefault,
+          'lat': address.latitude,
+          'lng': address.longitude,
         }),
       ).timeout(const Duration(seconds: 8));
 
@@ -114,6 +118,68 @@ class AddressService {
       }
     } catch (_) {}
     return false;
+  }
+
+  /// Search coordinates for an inputted address query via /api/address/search with progressive fallbacks
+  static Future<Map<String, dynamic>?> searchAddress(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return null;
+
+    // Helper to query backend Nominatim proxy
+    Future<Map<String, dynamic>?> fetchSearch(String q) async {
+      try {
+        final encoded = Uri.encodeComponent(q);
+        final res = await http.get(
+          Uri.parse('${AuthService.baseUrl}/api/address/search?q=$encoded'),
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['success'] == true && data['results'] is List && (data['results'] as List).isNotEmpty) {
+            final first = (data['results'] as List).first as Map<String, dynamic>;
+            final lat = (first['lat'] as num?)?.toDouble();
+            final lng = (first['lng'] as num?)?.toDouble();
+            if (lat != null && lng != null) {
+              return {
+                'lat': lat,
+                'lng': lng,
+                'displayName': first['displayName'] ?? '',
+                'address': first['address'] ?? {},
+              };
+            }
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    // 1. Try full exact query
+    final exact = await fetchSearch(cleanQuery);
+    if (exact != null) return exact;
+
+    // 2. Try stripping common unit/level/block prefixes (e.g. "Unit 15-02, Block A, No. 12")
+    final stripped = cleanQuery
+        .replaceAll(RegExp(r'(?:unit|block|lot|level|tingkat|floor|apt|apartment|no\.?)\s*[\w\-\/]+[\s,]*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^[,\s]+|[,\s]+$'), '')
+        .trim();
+    if (stripped.isNotEmpty && stripped != cleanQuery) {
+      final strippedResult = await fetchSearch(stripped);
+      if (strippedResult != null) return strippedResult;
+    }
+
+    // 3. Try splitting comma parts and searching progressively broader (e.g. street + city + state)
+    final commaParts = cleanQuery.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    if (commaParts.length > 2) {
+      for (int i = 1; i < commaParts.length; i++) {
+        final subQuery = commaParts.sublist(i).join(', ');
+        if (subQuery.length >= 5) {
+          final subResult = await fetchSearch(subQuery);
+          if (subResult != null) return subResult;
+        }
+      }
+    }
+
+    return null;
   }
 
   /// Reverse geocode coordinates to fill address, postcode, city, and state

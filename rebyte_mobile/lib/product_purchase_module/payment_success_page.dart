@@ -142,12 +142,17 @@ class PaymentSuccessPage extends StatelessWidget {
                                   letterSpacing: 0.5,
                                 ),
                               ),
-                              Text(
-                                orderNumber,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0C5AD2),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  orderNumber,
+                                  textAlign: TextAlign.end,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0C5AD2),
+                                  ),
                                 ),
                               ),
                             ],

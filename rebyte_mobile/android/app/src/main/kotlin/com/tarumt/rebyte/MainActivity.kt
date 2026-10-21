@@ -37,6 +37,7 @@ class MainActivity : FlutterActivity(), SensorEventListener, LocationListener {
 
     private var tts: TextToSpeech? = null
     private var isTtsInitialized = false
+    private var pendingTtsText: String? = null
 
     private var sensorManager: SensorManager? = null
     private var accelerometer: Sensor? = null
@@ -105,6 +106,34 @@ class MainActivity : FlutterActivity(), SensorEventListener, LocationListener {
                     if (isTtsInitialized && tts != null) {
                         tts?.speak(spokenText, TextToSpeech.QUEUE_FLUSH, null, "DIGITS_TTS")
                         result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "speakText" -> {
+                    val text = call.argument<String>("text") ?: ""
+                    if (text.isNotEmpty()) {
+                        if (isTtsInitialized && tts != null) {
+                            tts?.stop()
+                            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "NAV_TTS")
+                            result.success(true)
+                        } else {
+                            pendingTtsText = text
+                            if (tts == null) {
+                                tts = TextToSpeech(this) { status ->
+                                    if (status == TextToSpeech.SUCCESS) {
+                                        tts?.language = Locale.US
+                                        tts?.setSpeechRate(0.95f)
+                                        isTtsInitialized = true
+                                        pendingTtsText?.let { pending ->
+                                            tts?.speak(pending, TextToSpeech.QUEUE_FLUSH, null, "NAV_TTS")
+                                            pendingTtsText = null
+                                        }
+                                    }
+                                }
+                            }
+                            result.success(true)
+                        }
                     } else {
                         result.success(false)
                     }

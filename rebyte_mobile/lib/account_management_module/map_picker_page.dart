@@ -40,7 +40,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
   }
 
   Future<void> _loadInitialLocation() async {
-    // If a selected location was passed in (e.g. from existing profile/staff work location), use it directly
+    // 1. If explicit coordinates were passed in, use them directly
     if (widget.initialLat != null && widget.initialLng != null) {
       final lat = widget.initialLat!;
       final lng = widget.initialLng!;
@@ -55,6 +55,26 @@ class _MapPickerPageState extends State<MapPickerPage> {
       return;
     }
 
+    // 2. If an inputted address was provided (e.g. from edit address form), geocode it
+    if (widget.initialAddress != null && widget.initialAddress!.trim().isNotEmpty) {
+      final searched = await AddressService.searchAddress(widget.initialAddress!);
+      if (searched != null && searched['lat'] != null && searched['lng'] != null) {
+        final lat = (searched['lat'] as num).toDouble();
+        final lng = (searched['lng'] as num).toDouble();
+        if (mounted) {
+          setState(() {
+            _currentLat = lat;
+            _currentLng = lng;
+            _isLocating = false;
+            _pickedAddressSummary = widget.initialAddress!;
+          });
+          _onLocationReceived(lat, lng);
+        }
+        return;
+      }
+    }
+
+    // 3. Fallback: Only if no inputted address was provided or geocoding failed, use device GPS
     final loc = await AddressService.getCurrentLocation();
     double lat = 3.1390;
     double lng = 101.6869;
@@ -287,15 +307,17 @@ class _MapPickerPageState extends State<MapPickerPage> {
       body: Stack(
         children: [
           if (_isLocating)
-            const Center(
+            Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: Color(0xFF0C5AD2)),
-                  SizedBox(height: 14),
+                  const CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+                  const SizedBox(height: 14),
                   Text(
-                    'Detecting current GPS location...',
-                    style: TextStyle(
+                    widget.initialAddress?.trim().isNotEmpty == true
+                        ? 'Locating inputted address on map...'
+                        : 'Detecting current GPS location...',
+                    style: const TextStyle(
                       color: Color(0xFF475569),
                       fontSize: 13,
                       fontWeight: FontWeight.w600,

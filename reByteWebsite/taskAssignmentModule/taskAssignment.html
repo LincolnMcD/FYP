@@ -1,0 +1,1960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Assignment - ReByte Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0c5ad2;
+      --blue-hover: #0a4cb3;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --text-muted: #64748b;
+      --card-border: #edf0f4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; }
+
+    /* Left Sidebar - Sticky with scroll */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 20;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+    
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active {
+      color: #fff;
+      background: var(--navy);
+      font-weight: 600;
+    }
+    .nav-item.active svg { color: #fff; }
+
+    /* Main Area */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .content {
+      padding: 30px 40px 48px;
+    }
+
+    /* Back Button - Consistent with Admin Module */
+    .back {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 28px -8px;
+      transition: color 0.15s ease;
+    }
+    .back:hover { color: #10264b; }
+    .back svg { width: 20px; height: 20px; }
+
+    .page-title-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin: 0 0 26px;
+      flex-wrap: wrap;
+    }
+    .page-title-row h1 {
+      margin: 0 0 8px;
+      color: #161a20;
+      font-size: clamp(25px, 2.2vw, 34px);
+      line-height: 1.2;
+      letter-spacing: -1px;
+    }
+    .page-title-row .subtitle {
+      margin: 0;
+      color: #5d6472;
+      font-size: 16px;
+    }
+
+    /* Top Action Buttons - Consistent with Add Staff / Admin Action Buttons */
+    .task-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-criteria {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 20px;
+      background: #fff;
+      border: 1px solid #c9cddd;
+      border-radius: 24px;
+      color: #4e5564;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-criteria:hover {
+      background: #f1f4f9;
+      border-color: #94a3b8;
+      color: #10264b;
+    }
+    .btn-criteria svg { width: 16px; height: 16px; }
+
+    .btn-manage-cancelled {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 22px;
+      background: #0646a5;
+      border: 0;
+      border-radius: 24px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      box-shadow: 0 4px 12px rgba(6, 70, 165, 0.18);
+    }
+    .btn-manage-cancelled:hover {
+      background: #0b4fb3;
+    }
+    .btn-manage-cancelled svg { width: 16px; height: 16px; }
+
+    /* Top KPI Summary Cards Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+      margin-bottom: 26px;
+    }
+    @media (max-width: 1450px) {
+      .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .kpi-card {
+      background: #fff;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px 18px;
+      box-shadow: 0 4px 14px rgba(26, 43, 69, 0.05);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 136px;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(26, 43, 69, 0.1);
+      border-color: #cbd5e1;
+    }
+    .kpi-card.selected {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(12, 90, 210, 0.2), 0 8px 22px rgba(12, 90, 210, 0.12);
+    }
+    .kpi-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .kpi-icon-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .kpi-icon-wrap.unassigned { background: #fef3c7; color: #b45309; }
+    .kpi-icon-wrap.assigned { background: #eff6ff; color: #0284c7; }
+    .kpi-icon-wrap.cancelled { background: #fee2e2; color: #b91c1c; }
+    .kpi-icon-wrap.refunded { background: #fdf2f8; color: #db2777; }
+    .kpi-icon-wrap.terminated { background: #f1f5f9; color: #475569; }
+    .kpi-icon-wrap.completed { background: #dcfce7; color: #166534; }
+    .kpi-icon-wrap svg { width: 22px; height: 22px; }
+
+    .kpi-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1px;
+    }
+    .kpi-badge::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .badge-action-needed { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .badge-on-track { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-review { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge-refunded { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
+    .badge-closed { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+    .badge-delivered { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+    .kpi-bottom { margin-top: 14px; }
+    .kpi-count {
+      font-size: 32px;
+      font-weight: 800;
+      color: #10264b;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+    .kpi-label {
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Main Table Container Card */
+    .task-card {
+      background: #fff;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      box-shadow: 0 4px 18px rgba(26, 43, 69, 0.05);
+      overflow: hidden;
+    }
+
+    /* Tabs Bar */
+    .tabs-bar {
+      display: flex;
+      align-items: stretch;
+      gap: 28px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      position: relative;
+      padding: 18px 4px;
+      background: none;
+      border: 0;
+      color: #64748b;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: color 0.15s ease;
+    }
+    .tab-btn:hover { color: #0f172a; }
+    .tab-btn.active {
+      color: #0646a5;
+      font-weight: 700;
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: #0646a5;
+      border-radius: 3px 3px 0 0;
+    }
+    .tab-pill {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 12px;
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 700;
+    }
+    .tab-btn.active .tab-pill {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    /* Toolbar: Filters & Search */
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 28px;
+      border-bottom: 1px solid #f1f5f9;
+      background: #fafbfc;
+      flex-wrap: wrap;
+    }
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 40px;
+      padding: 0 16px;
+      background: #fff;
+      border: 1px solid #c9cddd;
+      border-radius: 20px;
+      color: #4e5564;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tool-btn:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: #10264b;
+    }
+    .tool-btn.active {
+      border-color: #0646a5;
+      color: #0646a5;
+      background: #f0f5ff;
+      font-weight: 600;
+    }
+    .tool-btn svg { width: 15px; height: 15px; }
+
+    .search-box {
+      height: 44px;
+      width: min(320px, 100%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      background: #fafaff;
+      border: 1px solid #c9cddd;
+      border-radius: 14px;
+      color: #7d8493;
+      transition: all 0.15s ease;
+    }
+    .search-box:focus-within {
+      border-color: #0646a5;
+      box-shadow: 0 0 0 3px rgba(6, 70, 165, 0.12);
+      background: #fff;
+    }
+    .search-box svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .search-box input {
+      border: none;
+      outline: none;
+      background: transparent;
+      width: 100%;
+      font-size: 13.5px;
+      color: var(--text);
+    }
+    .toolbar-right {
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Table Styles - Matched to Customer Management Layout */
+    .table-container {
+      overflow-x: auto;
+      min-height: 280px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 960px;
+    }
+    th {
+      height: 54px;
+      padding: 0 16px;
+      text-align: left;
+      color: #555b68;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      font-weight: 700;
+      border-bottom: 1px solid #cfd4df;
+      background: #fff;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child {
+      padding-left: 20px;
+      width: 16%;
+    }
+    th:nth-child(2), td:nth-child(2) {
+      width: 28%;
+    }
+    th:nth-child(3), td:nth-child(3) {
+      width: 22%;
+    }
+    th:nth-child(4), td:nth-child(4) {
+      width: 16%;
+      text-align: left;
+    }
+    th:last-child, td:last-child {
+      width: 18%;
+      padding-right: 20px;
+      text-align: left;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #e9ebf0;
+      transition: background 0.15s ease;
+      cursor: pointer;
+    }
+    tbody tr:hover { background: #f7f9fd; }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      height: 76px;
+      padding: 0 16px;
+      font-size: 14px;
+      color: #6b7180;
+      border-bottom: 1px solid #e9ebf0;
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    /* Cell Content Styling */
+    .task-id-link {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #0b4fb3;
+      font-weight: 700;
+      font-size: 13.5px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .task-id-link:hover { text-decoration: underline; color: #083780; }
+
+    .cust-device-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      justify-content: center;
+    }
+    .customer-name {
+      font-weight: 600;
+      color: #25344f;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+    .device-desc {
+      font-size: 12.5px;
+      color: #6b7180;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      line-height: 1.3;
+    }
+
+    .appointment-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      justify-content: center;
+    }
+    .app-date {
+      font-weight: 600;
+      color: #25344f;
+      font-size: 13.5px;
+      line-height: 1.3;
+    }
+    .app-time {
+      font-size: 12.5px;
+      color: #6b7180;
+      line-height: 1.3;
+    }
+    .urgent-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #dc2626;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    /* Status Pills - Left aligned like Customer Management */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-pill::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .status-unassigned { background: #fef3c7; color: #b45309; }
+    .status-assigned { background: #dce5ff; color: #173a75; }
+    .status-cancelled { background: #ffdada; color: #b4232f; }
+    .status-refunded { background: #fdf2f8; color: #be185d; }
+    .status-terminated { background: #ffdfc9; color: #9a4d0b; }
+    .status-completed { background: #dcfce7; color: #15803d; }
+
+    /* Action Buttons - Left aligned directly under ACTIONS header */
+    .action-group {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+    .btn-act {
+      min-height: 34px;
+      padding: 0 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-reassign {
+      background: #e8f0fe;
+      color: #0646a5;
+      border: 1px solid #c8d8f8;
+    }
+    .btn-reassign:hover {
+      background: #d4e4fc;
+      border-color: #0646a5;
+    }
+    .btn-terminate {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .btn-terminate:hover {
+      background: #fecaca;
+      color: #7f1d1d;
+    }
+    .btn-details {
+      background: #fff;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-details:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+    .btn-pod {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+    }
+    .btn-pod:hover {
+      background: #bbf7d0;
+      color: #14532d;
+    }
+
+    /* Table Footer & Pagination - Consistent with Customer Management */
+    .card-footer {
+      min-height: 72px;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-top: 1px solid #edf0f4;
+      color: #5d6472;
+      font-size: 14px;
+      background: #fff;
+      flex-wrap: wrap;
+    }
+    .pagination {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .page-button {
+      min-width: 38px;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid #cbd1df;
+      border-radius: 12px;
+      background: #fff;
+      color: #52596a;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .page-button:hover:not(:disabled) {
+      background: #f1f4f9;
+      border-color: #94a3b8;
+      color: #10264b;
+    }
+    .page-button.current {
+      color: #fff;
+      border-color: #0646a5;
+      background: #0646a5;
+    }
+    .page-button:disabled {
+      color: #aeb3bd;
+      cursor: default;
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: #64748b;
+    }
+    .empty-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 12px;
+      color: #94a3b8;
+    }
+    .empty-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    .empty-desc {
+      font-size: 13.5px;
+      max-width: 380px;
+      margin: 0 auto;
+    }
+
+    /* Modals & Overlays */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+    }
+    .modal-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-dialog {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+      width: min(100%, 540px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: scale(0.96);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.show .modal-dialog {
+      transform: scale(1);
+    }
+    .modal-head {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-head h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: #10264b;
+    }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: #f1f5f9;
+      color: #64748b;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: all 0.15s ease;
+    }
+    .modal-close:hover { background: #e2e8f0; color: #0f172a; }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      font-size: 14px;
+      color: #334155;
+      line-height: 1.5;
+    }
+    .modal-foot {
+      padding: 16px 24px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      background: #fafbfc;
+    }
+    .btn-secondary {
+      min-height: 40px;
+      padding: 0 18px;
+      border-radius: 22px;
+      border: 1px solid #d4d9e3;
+      background: #fff;
+      color: #344054;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-secondary:hover { background: #f8fafc; }
+    .btn-primary {
+      min-height: 40px;
+      padding: 0 20px;
+      border-radius: 22px;
+      border: none;
+      background: #0646a5;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    .btn-primary:hover { background: #0b4fb3; }
+    .btn-danger {
+      min-height: 40px;
+      padding: 0 20px;
+      border-radius: 22px;
+      border: none;
+      background: #dc2626;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-danger:hover { background: #b91c1c; }
+
+    /* Form Fields */
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1.5px solid #cbd5e1;
+      font-size: 13.5px;
+      color: #172033;
+      background: #fff;
+    }
+    .form-control:focus {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
+    }
+
+    /* Criteria Cards list */
+    .criteria-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 10px;
+    }
+    .criteria-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #0284c7;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .criteria-title { font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+    .criteria-desc { font-size: 12.5px; color: #64748b; margin: 0; }
+
+    /* Proof of Delivery Image */
+    .pod-preview-wrap {
+      text-align: center;
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 10px;
+    }
+    .pod-img {
+      max-width: 100%;
+      max-height: 320px;
+      border-radius: 10px;
+      object-fit: contain;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 900px) {
+      .sidebar { width: 220px; }
+      .content { padding: 20px 16px; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 650px) {
+      body { display: block; }
+      .sidebar { width: 100%; height: auto; position: static; min-height: 0; }
+      .brand { height: 70px; }
+      .nav-list { flex-direction: row; overflow-x: auto; padding: 8px; }
+      .nav-item { min-height: 38px; padding: 0 10px; font-size: 12px; }
+      .nav-list .nav-item:not(.active) { display: none; }
+      .kpi-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 13h6"></path></svg>
+        Listings
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        System Config
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>
+        Analytics
+      </a>
+      <a href="taskAssignment.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>
+        Task Assignment
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>
+        Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Area -->
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Task Assignment"></header>
+
+    <div class="content">
+      <!-- Back button - Consistent with Customer & Staff Management -->
+      <a class="back" href="../adminModule/adminDashboard.html" aria-label="Back to admin dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg>
+      </a>
+
+      <!-- Page Title & Top Actions -->
+      <div class="page-title-row">
+        <div>
+          <h1>Task Assignment</h1>
+          <p class="subtitle">Overview and management of active recommerce tasks.</p>
+        </div>
+        <div class="task-top-actions">
+          <button type="button" class="btn-criteria" id="btnOpenCriteria">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+            Assignment Criteria
+          </button>
+          <button type="button" class="btn-manage-cancelled" id="btnManageCancelled">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10M6 10h10"></path></svg>
+            Manage Cancelled
+          </button>
+        </div>
+      </div>
+
+      <!-- 5 Summary KPI Cards -->
+      <section class="kpi-grid" aria-label="Task Status Summary">
+        <!-- 1. Unassigned -->
+        <div class="kpi-card" data-filter="unassigned" id="kpiUnassigned">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap unassigned">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <span class="kpi-badge badge-action-needed">Action Needed</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countUnassigned">—</div>
+            <div class="kpi-label">Unassigned Tasks</div>
+          </div>
+        </div>
+
+        <!-- 2. Assigned -->
+        <div class="kpi-card" data-filter="assigned" id="kpiAssigned">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap assigned">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><polyline points="9 14 12 17 18 10"></polyline></svg>
+            </div>
+            <span class="kpi-badge badge-on-track">On Track</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countAssigned">—</div>
+            <div class="kpi-label">Assigned Tasks</div>
+          </div>
+        </div>
+
+        <!-- 3. Cancelled -->
+        <div class="kpi-card" data-filter="cancelled" id="kpiCancelled">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap cancelled">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </div>
+            <span class="kpi-badge badge-review">Review</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countCancelled">—</div>
+            <div class="kpi-label">Cancelled Tasks</div>
+          </div>
+        </div>
+
+        <!-- 4. Refunded (Cancelled by Customer) -->
+        <div class="kpi-card" data-filter="refunded" id="kpiRefunded">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap refunded">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 5 5v2"></path><polyline points="7 6 3 10 7 14"></polyline></svg>
+            </div>
+            <span class="kpi-badge badge-refunded">Refunded</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countRefunded">—</div>
+            <div class="kpi-label">Refunded Orders</div>
+          </div>
+        </div>
+
+        <!-- 5. Terminated -->
+        <div class="kpi-card" data-filter="terminated" id="kpiTerminated">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap terminated">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+            </div>
+            <span class="kpi-badge badge-closed">Closed</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countTerminated">—</div>
+            <div class="kpi-label">Terminated Tasks</div>
+          </div>
+        </div>
+
+        <!-- 6. Completed -->
+        <div class="kpi-card" data-filter="completed" id="kpiCompleted">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap completed">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <span class="kpi-badge badge-delivered">Delivered</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countCompleted">—</div>
+            <div class="kpi-label">Completed Tasks</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Data Table Container -->
+      <section class="task-card" aria-label="Task Management Table">
+        <!-- 6 Status Tabs -->
+        <div class="tabs-bar" role="tablist">
+          <button type="button" class="tab-btn active" role="tab" data-tab="unassigned">
+            Unassigned
+            <span class="tab-pill" id="pillUnassigned">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="assigned">
+            Assigned
+            <span class="tab-pill" id="pillAssigned">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="cancelled">
+            Cancelled
+            <span class="tab-pill" id="pillCancelled">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="refunded">
+            Refunded
+            <span class="tab-pill" id="pillRefunded">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="terminated">
+            Terminated
+            <span class="tab-pill" id="pillTerminated">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="completed">
+            Completed
+            <span class="tab-pill" id="pillCompleted">0</span>
+          </button>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="table-toolbar">
+          <div class="toolbar-left">
+            <button type="button" class="tool-btn" id="btnToggleUrgentOnly" title="Filter urgent tasks">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <span>Filter: All</span>
+            </button>
+            <button type="button" class="tool-btn" id="btnSortToggle" title="Sort by Order Created date">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+              <span>Sort: Newest</span>
+            </button>
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="search" id="searchInput" placeholder="Search Task ID, Customer, Device..." aria-label="Search tasks">
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <span id="showingCountText">Showing 0 of 0</span>
+          </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>TASK ID</th>
+                <th>CUSTOMER &amp; DEVICE</th>
+                <th>APPOINTMENT</th>
+                <th>STATUS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+          <div class="empty-state" id="emptyState" style="display: none;">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <div class="empty-title">No tasks found</div>
+            <p class="empty-desc">There are no tasks matching this status or search query.</p>
+          </div>
+        </div>
+
+        <!-- Table Footer: Pagination (5 records per page) -->
+        <footer class="card-footer">
+          <span id="resultCount">Showing 0 entries</span>
+          <div class="pagination" id="taskPagination" aria-label="Task pages"></div>
+        </footer>
+      </section>
+    </div>
+  </main>
+
+  <!-- MODAL: Task Details -->
+  <div class="modal-overlay" id="taskDetailModal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 id="modalTaskTitle">Task Details</h3>
+        <button type="button" class="modal-close" onclick="closeModal('taskDetailModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modalTaskContent">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Reassign Task -->
+  <div class="modal-overlay" id="reassignModal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>Reassign Task</h3>
+        <button type="button" class="modal-close" onclick="closeModal('reassignModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px; margin-bottom: 18px;">
+          <div style="font-weight: 700; color: #1e40af; margin-bottom: 2px;" id="reassignTargetTitle">Task #TSK-XXXX</div>
+          <div style="font-size: 13px; color: #3b82f6;" id="reassignTargetSubtitle">Customer &bull; Device</div>
+        </div>
+
+        <div class="form-group">
+          <label for="assignMethodSelect">Assignment Mode</label>
+          <select id="assignMethodSelect" class="form-control" onchange="onAssignMethodChanged()">
+            <option value="auto">Automatic (Recommended - OSRM route &amp; workload balanced)</option>
+            <option value="manual">Manual Staff Selection</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="manualStaffGroup" style="display: none;">
+          <label for="staffSelect">Assign to Staff Member</label>
+          <select id="staffSelect" class="form-control">
+            <option value="">Loading available staff...</option>
+          </select>
+        </div>
+
+        <p style="font-size: 12.5px; color: #64748b; margin: 0;">
+          The system evaluates working hours (09:00 - 17:00), lunch exclusion (12:00 - 13:00), travel distance buffers, and max 8 deliveries per staff member.
+        </p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secondary" onclick="closeModal('reassignModal')">Cancel</button>
+        <button type="button" class="btn-primary" id="btnConfirmReassign">
+          <span>Confirm Assignment</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Terminate Task -->
+  <div class="modal-overlay" id="terminateModal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 style="color: #dc2626;">Terminate Order &amp; Task</h3>
+        <button type="button" class="modal-close" onclick="closeModal('terminateModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-top: 0; color: #475569;">
+          Are you sure you want to terminate this order? This action will set the order status to <strong>Terminated</strong> and remove it from active delivery dispatch.
+        </p>
+        <div class="form-group">
+          <label for="terminateReasonInput">Termination Reason *</label>
+          <textarea id="terminateReasonInput" class="form-control" rows="3" placeholder="Provide a reason (e.g. Self-pickup rejected by customer, delivery address out of coverage)..."></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secondary" onclick="closeModal('terminateModal')">Cancel</button>
+        <button type="button" class="btn-danger" id="btnConfirmTerminate">Terminate Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Assignment Criteria -->
+  <div class="modal-overlay" id="criteriaModal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>Assignment Criteria &amp; Rules</h3>
+        <button type="button" class="modal-close" onclick="closeModal('criteriaModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="criteria-item">
+          <div class="criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div>
+            <div class="criteria-title">Working Hours: 9:00 AM – 5:00 PM</div>
+            <p class="criteria-desc">Deliveries are strictly scheduled within 09:00 – 17:00. Orders submitted prior to 9:00 AM are queued with high priority.</p>
+          </div>
+        </div>
+
+        <div class="criteria-item">
+          <div class="criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+          </div>
+          <div>
+            <div class="criteria-title">Lunch Break Protection: 12:00 PM – 1:00 PM</div>
+            <p class="criteria-desc">The 12:00 to 13:00 window is reserved exclusively for staff meal breaks and cannot be assigned tasks.</p>
+          </div>
+        </div>
+
+        <div class="criteria-item">
+          <div class="criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          </div>
+          <div>
+            <div class="criteria-title">Dynamic Buffer Intervals</div>
+            <p class="criteria-desc">Standard 15-minute buffer between tasks. For closely located tasks (&lt; 500m), an optimized 10-minute buffer applies.</p>
+          </div>
+        </div>
+
+        <div class="criteria-item">
+          <div class="criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div>
+            <div class="criteria-title">Daily Task Cap: 8 Deliveries Per Staff</div>
+            <p class="criteria-desc">To ensure safety and service quality, staff members cannot exceed 8 assigned tasks on any calendar day.</p>
+          </div>
+        </div>
+
+        <div class="criteria-item">
+          <div class="criteria-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+          </div>
+          <div>
+            <div class="criteria-title">Routing &amp; State Boundaries</div>
+            <p class="criteria-desc">Live routing calculated through OpenStreetMap OSRM. Delivery staff only operate within their registered home state.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Proof of Delivery -->
+  <div class="modal-overlay" id="podModal">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>Proof of Delivery</h3>
+        <button type="button" class="modal-close" onclick="closeModal('podModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <div id="podContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase & ReByte Auth Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script src="../adminModule/adminHeader.js"></script>
+
+  <!-- Application Logic -->
+  <!-- Application Logic -->
+  <script>
+    const API_BASE = (function() {
+      if (window.location.port === '3000') return '';
+      const hostname = window.location.hostname || 'localhost';
+      return `http://${hostname}:3000`;
+    })();
+
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
+    let allTasks = [];
+    let activeTab = 'unassigned';
+    let searchQuery = '';
+    let urgentOnly = false;
+    let sortAsc = false;
+    let selectedTaskForAction = null;
+    let staffList = [];
+
+    function initApp() {
+      if (typeof ReByteAuth !== 'undefined') {
+        const user = ReByteAuth.getUser();
+        if (!user || user.role !== 'Admin') {
+          if (!user) {
+            console.warn('Admin user session not found. Operating in admin preview mode.');
+          }
+        }
+      }
+
+      initEvents();
+      loadTasks();
+      loadStaff();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+
+    function initEvents() {
+      // Tab Switching
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeTab = btn.dataset.tab;
+          currentPage = 1;
+          renderTable();
+        });
+      });
+
+      // KPI Card click switches tab
+      document.querySelectorAll('.kpi-card[data-filter]').forEach(card => {
+        card.addEventListener('click', () => {
+          const target = card.dataset.filter;
+          const tabBtn = document.querySelector(`.tab-btn[data-tab="${target}"]`);
+          if (tabBtn) {
+            currentPage = 1;
+            tabBtn.click();
+          }
+        });
+      });
+
+      // Search input
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchQuery = e.target.value.trim().toLowerCase();
+          currentPage = 1;
+          renderTable();
+        });
+      }
+
+      // Urgent toggle
+      const btnUrgent = document.getElementById('btnToggleUrgentOnly');
+      if (btnUrgent) {
+        btnUrgent.addEventListener('click', () => {
+          urgentOnly = !urgentOnly;
+          btnUrgent.classList.toggle('active', urgentOnly);
+          const sp = btnUrgent.querySelector('span');
+          if (sp) sp.textContent = urgentOnly ? 'Filter: Urgent Only' : 'Filter: All';
+          currentPage = 1;
+          renderTable();
+        });
+      }
+
+      // Sort toggle
+      const btnSort = document.getElementById('btnSortToggle');
+      if (btnSort) {
+        btnSort.addEventListener('click', () => {
+          sortAsc = !sortAsc;
+          const sp = btnSort.querySelector('span');
+          if (sp) sp.textContent = sortAsc ? 'Sort: Oldest' : 'Sort: Newest';
+          currentPage = 1;
+          renderTable();
+        });
+      }
+
+      // Pagination Click
+      const taskPagination = document.getElementById('taskPagination');
+      if (taskPagination) {
+        taskPagination.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-page]');
+          if (!btn || btn.disabled) return;
+          currentPage = Number(btn.dataset.page);
+          renderTable();
+        });
+      }
+
+      // Assignment Criteria button
+      const btnOpenCriteria = document.getElementById('btnOpenCriteria');
+      if (btnOpenCriteria) {
+        btnOpenCriteria.addEventListener('click', () => {
+          openModal('criteriaModal');
+        });
+      }
+
+      // Manage Cancelled button
+      const btnManageCancelled = document.getElementById('btnManageCancelled');
+      if (btnManageCancelled) {
+        btnManageCancelled.addEventListener('click', () => {
+          const cancelledTab = document.querySelector('.tab-btn[data-tab="cancelled"]');
+          if (cancelledTab) {
+            currentPage = 1;
+            cancelledTab.click();
+          }
+        });
+      }
+
+      // Confirm Reassign
+      const btnConfirmReassign = document.getElementById('btnConfirmReassign');
+      if (btnConfirmReassign) {
+        btnConfirmReassign.addEventListener('click', handleExecuteReassign);
+      }
+
+      // Confirm Terminate
+      const btnConfirmTerminate = document.getElementById('btnConfirmTerminate');
+      if (btnConfirmTerminate) {
+        btnConfirmTerminate.addEventListener('click', handleExecuteTerminate);
+      }
+    }
+
+    // Load Tasks from Backend API (with robust candidate URL fallbacks)
+    async function loadTasks() {
+      let data = null;
+      const candidates = [
+        API_BASE,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ].filter((v, i, arr) => arr.indexOf(v) === i);
+
+      for (const base of candidates) {
+        try {
+          const res = await fetch(`${base}/api/task-assignment/admin/tasks`);
+          if (res.ok) {
+            data = await res.json();
+            if (data.success && Array.isArray(data.tasks)) {
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not fetch tasks from ${base}:`, e.message);
+        }
+      }
+
+      if (data && data.success && Array.isArray(data.tasks)) {
+        allTasks = data.tasks;
+        updateCounts(data.counts || {});
+        renderTable();
+      } else {
+        console.error('All task endpoints failed. Showing error state.');
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) {
+          emptyState.style.display = 'block';
+          const title = emptyState.querySelector('.empty-title');
+          if (title) title.textContent = 'Unable to Load Tasks';
+          const desc = emptyState.querySelector('.empty-desc');
+          if (desc) desc.textContent = 'Failed to connect to the backend server at port 3000. Please ensure the server is running.';
+        }
+      }
+    }
+
+    // Load Available Staff for Reassign Modal
+    async function loadStaff() {
+      const candidates = [
+        API_BASE,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ].filter((v, i, arr) => arr.indexOf(v) === i);
+
+      for (const base of candidates) {
+        try {
+          const res = await fetch(`${base}/api/task-assignment/admin/staff`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.staff)) {
+              staffList = data.staff;
+              populateStaffSelect();
+              break;
+            }
+          }
+        } catch (err) {
+          console.warn(`Could not load staff from ${base}:`, err.message);
+        }
+      }
+    }
+
+    function populateStaffSelect() {
+      const select = document.getElementById('staffSelect');
+      if (!select) return;
+      select.innerHTML = '<option value="">-- Choose a Staff Member --</option>';
+      staffList.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.staffID;
+        opt.textContent = `${s.name} (${s.activeTasks} active tasks) &bull; ${s.email || 'Staff'}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function updateCounts(counts) {
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setVal('countUnassigned', counts.unassigned || 0);
+      setVal('countAssigned', counts.assigned || 0);
+      setVal('countCancelled', counts.cancelled || 0);
+      setVal('countRefunded', counts.refunded || 0);
+      setVal('countTerminated', counts.terminated || 0);
+      setVal('countCompleted', counts.completed || 0);
+
+      setVal('pillUnassigned', counts.unassigned || 0);
+      setVal('pillAssigned', counts.assigned || 0);
+      setVal('pillCancelled', counts.cancelled || 0);
+      setVal('pillRefunded', counts.refunded || 0);
+      setVal('pillTerminated', counts.terminated || 0);
+      setVal('pillCompleted', counts.completed || 0);
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('taskTableBody');
+      const emptyState = document.getElementById('emptyState');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      // 1. Filter by active tab (displayStatus)
+      let filtered = allTasks.filter(t => {
+        const status = String(t.displayStatus || '').trim().toLowerCase();
+        return status === activeTab.trim().toLowerCase();
+      });
+
+      // 2. Filter by search query
+      if (searchQuery) {
+        filtered = filtered.filter(t => {
+          const matchStr = `${t.taskID || ''} ${t.orderID || ''} ${t.customerName || ''} ${t.deviceSummary || ''} ${t.deliveryAddress || ''} ${t.staffName || ''}`.toLowerCase();
+          return matchStr.includes(searchQuery);
+        });
+      }
+
+      // 3. Filter by urgent
+      if (urgentOnly) {
+        filtered = filtered.filter(t => !!t.isUrgent);
+      }
+
+      // 4. Sort strictly based on order createdAt date time
+      filtered.sort((a, b) => {
+        const timeA = Number(a.createdAtMs) || (a.createdAt ? new Date(a.createdAt).getTime() : 0) || 0;
+        const timeB = Number(b.createdAtMs) || (b.createdAt ? new Date(b.createdAt).getTime() : 0) || 0;
+        return sortAsc ? timeA - timeB : timeB - timeA;
+      });
+
+      const totalFiltered = filtered.length;
+      const pageCount = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+      currentPage = Math.min(Math.max(1, currentPage), pageCount);
+      const start = totalFiltered ? (currentPage - 1) * PAGE_SIZE : 0;
+      const end = Math.min(start + PAGE_SIZE, totalFiltered);
+
+      // Update showing count
+      const countEl = document.getElementById('showingCountText');
+      if (countEl) {
+        countEl.textContent = totalFiltered ? `Showing ${start + 1}-${end} of ${totalFiltered}` : 'Showing 0 of 0';
+      }
+
+      const resultCount = document.getElementById('resultCount');
+      if (resultCount) {
+        resultCount.textContent = totalFiltered ? `Showing ${start + 1} to ${end} of ${totalFiltered} entries` : 'Showing 0 entries';
+      }
+
+      renderPagination(totalFiltered);
+
+      if (totalFiltered === 0) {
+        if (emptyState) emptyState.style.display = 'block';
+        return;
+      }
+      if (emptyState) emptyState.style.display = 'none';
+
+      const paged = filtered.slice(start, end);
+
+      paged.forEach(task => {
+        const tr = document.createElement('tr');
+
+        // Column 1: Task ID
+        const tdId = document.createElement('td');
+        tdId.innerHTML = `<a href="javascript:void(0)" class="task-id-link" onclick="openTaskDetails('${task.orderID}')">#${task.taskID}</a>`;
+
+        // Column 2: Customer & Device
+        const tdCust = document.createElement('td');
+        tdCust.innerHTML = `
+          <div class="cust-device-cell">
+            <span class="customer-name">${escapeHtml(task.customerName)}</span>
+            <span class="device-desc">${escapeHtml(task.deviceSummary)}</span>
+          </div>
+        `;
+
+        // Column 3: Appointment
+        const tdApp = document.createElement('td');
+        const urgentBadge = task.isUrgent ? `<span class="urgent-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Urgent</span>` : '';
+        tdApp.innerHTML = `
+          <div class="appointment-cell">
+            <span class="app-date">${task.appointmentDate}</span>
+            <span class="app-time">${task.appointmentTime}</span>
+            ${urgentBadge}
+          </div>
+        `;
+
+        // Column 4: Status (Single dot provided by .status-pill::before)
+        const tdStatus = document.createElement('td');
+        const pillClass = `status-${(task.displayStatus || 'unassigned').toLowerCase()}`;
+        tdStatus.innerHTML = `<span class="status-pill ${pillClass}">${escapeHtml(task.displayStatus)}</span>`;
+
+        // Column 5: Actions
+        const tdActions = document.createElement('td');
+        tdActions.innerHTML = buildActionButtons(task);
+
+        tr.appendChild(tdId);
+        tr.appendChild(tdCust);
+        tr.appendChild(tdApp);
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdActions);
+
+        // Row click opens details
+        tr.addEventListener('click', (e) => {
+          if (!e.target.closest('button') && !e.target.closest('a')) {
+            openTaskDetails(task.orderID);
+          }
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderPagination(totalFiltered) {
+      const paginationEl = document.getElementById('taskPagination');
+      if (!paginationEl) return;
+      const pageCount = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+      if (pageCount <= 1) {
+        paginationEl.innerHTML = '';
+        return;
+      }
+
+      const maxButtons = 5;
+      let startPage = currentPage;
+      let endPage = startPage + maxButtons - 1;
+
+      if (endPage > pageCount) {
+        endPage = pageCount;
+        startPage = Math.max(1, endPage - maxButtons + 1);
+      }
+      if (startPage < 1) {
+        startPage = 1;
+        endPage = Math.min(pageCount, startPage + maxButtons - 1);
+      }
+
+      let html = `<button class="page-button" type="button" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`;
+      for (let p = startPage; p <= endPage; p++) {
+        html += `<button class="page-button ${p === currentPage ? 'current' : ''}" type="button" data-page="${p}" ${p === currentPage ? 'aria-current="page"' : ''}>${p}</button>`;
+      }
+      html += `<button class="page-button" type="button" data-page="${currentPage + 1}" ${currentPage === pageCount ? 'disabled' : ''}>Next</button>`;
+      paginationEl.innerHTML = html;
+    }
+
+    function buildActionButtons(task) {
+      const status = (task.displayStatus || '').toLowerCase();
+      let btns = '<div class="action-group">';
+
+      if (status === 'unassigned') {
+        btns += `
+          <button type="button" class="btn-act btn-reassign" onclick="promptReassign('${task.orderID}')">Reassign</button>
+          <button type="button" class="btn-act btn-terminate" onclick="promptTerminate('${task.orderID}', '${task.taskID}')">Terminate</button>
+        `;
+      } else if (status === 'assigned') {
+        // Assigned tab: Details only, no reassign button
+        btns += `
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+        `;
+      } else if (status === 'cancelled') {
+        btns += `
+          <button type="button" class="btn-act btn-reassign" onclick="promptReassign('${task.orderID}')">Reassign</button>
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Reason</button>
+        `;
+      } else if (status === 'refunded') {
+        // Refunded tab: Details button to inspect customer cancellation
+        btns += `
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+        `;
+      } else if (status === 'completed') {
+        if (task.proofOfDeliveryUrl) {
+          btns += `<button type="button" class="btn-act btn-pod" onclick="openPodModal('${escapeHtml(task.proofOfDeliveryUrl)}', '${task.orderID}')">View POD</button>`;
+        }
+        btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+      } else {
+        // Terminated
+        btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+      }
+
+      btns += '</div>';
+      return btns;
+    }
+
+    // Modal Helpers
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.add('show');
+      }
+    }
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove('show');
+      }
+    }
+
+    // Open Task Details Modal
+    function openTaskDetails(orderID) {
+      const task = allTasks.find(t => t.orderID === orderID);
+      if (!task) return;
+
+      document.getElementById('modalTaskTitle').textContent = `Task #${task.taskID}`;
+      const statusPillClass = `status-${(task.displayStatus || 'unassigned').toLowerCase()}`;
+
+      let podHtml = '';
+      if (task.proofOfDeliveryUrl) {
+        podHtml = `
+          <div style="margin-top: 16px;">
+            <label style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase;">Proof of Delivery Photo</label>
+            <div class="pod-preview-wrap">
+              <img src="${task.proofOfDeliveryUrl}" class="pod-img" alt="Proof of Delivery">
+            </div>
+          </div>
+        `;
+      }
+
+      let rejectionHtml = '';
+      if (task.rejectionReason) {
+        rejectionHtml = `
+          <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 14px; margin-top: 14px;">
+            <div style="font-weight: 700; color: #b91c1c; font-size: 13px; margin-bottom: 2px;">Staff Rejection Notice</div>
+            <div style="font-size: 13px; color: #7f1d1d;"><strong>Reason:</strong> ${escapeHtml(task.rejectionReason)}</div>
+            ${task.rejectionNotes ? `<div style="font-size: 12px; color: #991b1b; margin-top: 4px;"><strong>Notes:</strong> ${escapeHtml(task.rejectionNotes)}</div>` : ''}
+          </div>
+        `;
+      }
+
+      // Format Order Date & Time
+      let orderDateTimeFormatted = '—';
+      const orderTs = Number(task.createdAtMs) || (task.createdAt ? new Date(task.createdAt).getTime() : 0);
+      if (orderTs) {
+        const dt = new Date(orderTs);
+        const day = dt.getDate();
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[dt.getMonth()];
+        const year = dt.getFullYear();
+        const hh = String(dt.getHours()).padStart(2, '0');
+        const mm = String(dt.getMinutes()).padStart(2, '0');
+        orderDateTimeFormatted = `${day} ${month} ${year}, ${hh}:${mm}`;
+      }
+
+      document.getElementById('modalTaskContent').innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #eef2f6;">
+          <div>
+            <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Order Reference</div>
+            <div style="font-size: 20px; font-weight: 800; color: #10264b; margin-top: 2px;">#${task.orderID}</div>
+            <div style="font-size: 13px; color: #475569; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span><strong>Ordered:</strong> ${orderDateTimeFormatted}</span>
+            </div>
+          </div>
+          <span class="status-pill ${statusPillClass}">${escapeHtml(task.displayStatus)}</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; padding: 18px 20px; border-radius: 14px; border: 1px solid #e2e8f0;">
+          <div>
+            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Customer</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: #1e293b;">${escapeHtml(task.customerName)}</div>
+            <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">${task.customerPhone || 'No phone'}</div>
+            <div style="font-size: 12.5px; color: #64748b; margin-top: 2px;">${task.customerEmail || ''}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Assigned Staff</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: #1e293b;">${escapeHtml(task.staffName || 'Unassigned')}</div>
+            <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">Schedule: ${task.appointmentDate}</div>
+            <div style="font-size: 12.5px; color: #64748b; margin-top: 2px;">Time Slot: ${task.appointmentTime}</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+          <label style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Delivery Address</label>
+          <div style="font-size: 13.5px; color: #1e293b; background: #f1f5f9; padding: 14px 18px; border-radius: 10px; line-height: 1.5; text-align: justify; text-justify: inter-word;">
+            ${escapeHtml(task.deliveryAddress)}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+          <label style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Device &amp; Product</label>
+          <div style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 14px 18px;">
+            <div style="font-size: 14.5px; font-weight: 700; color: #0f172a;">
+              ${escapeHtml(task.deviceSummary)}
+            </div>
+            <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Total Value: <strong style="color: #10264b;">RM ${Number(task.totalAmount).toFixed(2)}</strong></div>
+          </div>
+        </div>
+
+        ${rejectionHtml}
+        ${podHtml}
+      `;
+
+      openModal('taskDetailModal');
+    }
+
+    // Navigate to dedicated Reassign Task Page
+    function promptReassign(orderID) {
+      if (!orderID) return;
+      window.location.href = `reassignTask.html?orderID=${encodeURIComponent(orderID)}`;
+    }
+
+    function onAssignMethodChanged() {
+      const method = document.getElementById('assignMethodSelect').value;
+      document.getElementById('manualStaffGroup').style.display = (method === 'manual') ? 'block' : 'none';
+    }
+
+    // Execute Reassignment
+    async function handleExecuteReassign() {
+      if (!selectedTaskForAction) return;
+
+      const btn = document.getElementById('btnConfirmReassign');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Assigning...</span>';
+
+      const method = document.getElementById('assignMethodSelect').value;
+      const staffID = (method === 'manual') ? document.getElementById('staffSelect').value : 'auto';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/task-assignment/admin/reassign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderID: selectedTaskForAction.orderID,
+            staffID: staffID || 'auto'
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          closeModal('reassignModal');
+          await loadTasks();
+          alert(data.message || 'Task successfully reassigned!');
+        } else {
+          alert(`Assignment error: ${data.reason || data.error || 'No suitable staff slot available'}`);
+        }
+      } catch (err) {
+        alert('Network error while assigning task: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+
+    // Prompt Terminate Modal
+    function promptTerminate(orderID, taskID) {
+      selectedTaskForAction = { orderID, taskID };
+      document.getElementById('terminateReasonInput').value = '';
+      openModal('terminateModal');
+    }
+
+    // Execute Termination
+    async function handleExecuteTerminate() {
+      if (!selectedTaskForAction) return;
+
+      const reason = document.getElementById('terminateReasonInput').value.trim();
+      const btn = document.getElementById('btnConfirmTerminate');
+      btn.disabled = true;
+      btn.textContent = 'Terminating...';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/task-assignment/admin/terminate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderID: selectedTaskForAction.orderID,
+            taskID: selectedTaskForAction.taskID,
+            reason: reason || 'Terminated by administrator'
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          closeModal('terminateModal');
+          await loadTasks();
+          alert('Task and order terminated.');
+        } else {
+          alert('Error: ' + (data.error || 'Could not terminate task'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Terminate Task';
+      }
+    }
+
+    // Open Proof of Delivery Modal
+    function openPodModal(imageUrl, orderID) {
+      document.getElementById('podContent').innerHTML = `
+        <div style="font-weight: 700; color: #10264b; margin-bottom: 12px;">Delivered Order #${escapeHtml(orderID)}</div>
+        <img src="${imageUrl}" class="pod-img" alt="Proof of delivery">
+        <div style="font-size: 12px; color: #64748b; margin-top: 10px;">Cloudinary Secured Verification Photo</div>
+      `;
+      openModal('podModal');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

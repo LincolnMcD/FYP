@@ -51,15 +51,34 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     }
   }
 
-  bool _isActiveOrder(String status) {
-    final s = status.trim().toLowerCase();
-    return s == 'pending' || s == 'delivering' || s == 'shipping' || s == 'confirmed' || s == 'in transit';
+  bool _isActiveOrder(String orderStatus, [String? taskStatus]) {
+    final os = orderStatus.trim().toLowerCase();
+    final ts = (taskStatus ?? '').trim().toLowerCase();
+
+    // Terminal / Completed / Inactive statuses
+    const pastStatuses = {
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'fail',
+      'failed',
+      'terminated',
+      'refunded',
+      'returned',
+    };
+
+    if (pastStatuses.contains(os) || (ts.isNotEmpty && pastStatuses.contains(ts))) {
+      return false;
+    }
+
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeOrders = _orders.where((o) => _isActiveOrder(o['orderStatus']?.toString() ?? '')).toList();
-    final pastOrders = _orders.where((o) => !_isActiveOrder(o['orderStatus']?.toString() ?? '')).toList();
+    final activeOrders = _orders.where((o) => _isActiveOrder(o['orderStatus']?.toString() ?? '', o['taskStatus']?.toString())).toList();
+    final pastOrders = _orders.where((o) => !_isActiveOrder(o['orderStatus']?.toString() ?? '', o['taskStatus']?.toString())).toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -225,7 +244,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
 
   Widget _buildOrderCard(Map<String, dynamic> order) {
     final orderNumber = order['orderNumber']?.toString() ?? '#RB-9921';
-    final status = order['orderStatus']?.toString() ?? 'Shipping';
+    final status = order['orderStatus']?.toString() ?? 'Packaging';
     final paidAtStr = order['paidAt']?.toString();
     DateTime paidAt = DateTime.now();
     if (paidAtStr != null) {
@@ -254,8 +273,18 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     }
 
     final failReason = order['failReason']?.toString() ?? '';
-    final isPast = !_isActiveOrder(status);
+    final isPast = !_isActiveOrder(status, taskStatus);
     final isShipping = taskStatus.trim().toLowerCase() == 'shipping' || status.trim().toLowerCase() == 'shipping';
+
+    final effectiveStatus = () {
+      final os = status.trim().toLowerCase();
+      final ts = taskStatus.trim().toLowerCase();
+      if (os == 'cancelled' || os == 'canceled') return 'Cancelled';
+      if (os == 'fail' || os == 'failed') return 'Failed';
+      if (os == 'delivered' || os == 'completed') return 'Delivered';
+      if (ts == 'rejected' || os == 'rejected') return 'Unassigned';
+      return taskStatus.isNotEmpty ? taskStatus : status;
+    }();
 
     // Format estimated arrival display
     String? estimatedArrivalText;
@@ -309,7 +338,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                   ],
                 ),
               ),
-              _buildTaskStatusPill(taskStatus.isNotEmpty ? taskStatus : status),
+              _buildTaskStatusPill(effectiveStatus),
             ],
           ),
           const SizedBox(height: 4),
@@ -368,8 +397,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
             child: SizedBox(
               height: 38,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => OrderDetailsPage(
@@ -392,6 +421,9 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                       ),
                     ),
                   );
+                  if (mounted) {
+                    _loadOrders();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0C5AD2),
@@ -420,7 +452,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
 
 
   Widget _buildTaskStatusPill(String taskStatus) {
-    final s = taskStatus.toLowerCase().trim();
+    var s = taskStatus.toLowerCase().trim();
+    if (s == 'rejected') s = 'unassigned';
     Color bgColor = const Color(0xFFF1F5F9);
     Color textColor = const Color(0xFF475569);
     IconData icon = Icons.inventory_2_outlined;
@@ -433,19 +466,25 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       bgColor = const Color(0xFFE0E7FF);
       textColor = const Color(0xFF4338CA);
       icon = Icons.directions_car_outlined;
-    } else if (s == 'packaging' || s == 'packaged' || s == 'packing') {
+    } else if (s == 'packaging' || s == 'packaged' || s == 'packing' || s == 'processing' || s == 'confirmed') {
       bgColor = const Color(0xFFFEF3C7);
       textColor = const Color(0xFFD97706);
       icon = Icons.inventory_2_outlined;
-    } else if (s == 'unassigned') {
-      bgColor = const Color(0xFFFEE2E2);
-      textColor = const Color(0xFFDC2626);
+    } else if (s == 'unassigned' || s == 'pending') {
+      bgColor = const Color(0xFFEFF6FF);
+      textColor = const Color(0xFF2563EB);
       icon = Icons.schedule_outlined;
-    } else if (s == 'rejected' || s == 'cancelled' || s == 'failed') {
+    } else if (s == 'cancelled' || s == 'canceled' || s == 'failed' || s == 'fail') {
       bgColor = const Color(0xFFFEE2E2);
       textColor = const Color(0xFFDC2626);
       icon = Icons.error_outline;
     }
+
+    final displayText = (s == 'unassigned')
+        ? 'Unassigned'
+        : (taskStatus.isNotEmpty
+            ? (taskStatus[0].toUpperCase() + taskStatus.substring(1))
+            : 'Packaging');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -460,7 +499,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
           Icon(icon, size: 12, color: textColor),
           const SizedBox(width: 4),
           Text(
-            taskStatus,
+            displayText,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,

@@ -1,4 +1,5 @@
 const express = require("express");
+const axios = require("axios");
 const { FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const db = require("../config/firebase");
@@ -1337,6 +1338,352 @@ router.post("/order/update-status", requireShopUser, async (req, res) => {
 });
 
 /**
+ * POST /api/shop/order/cancel
+ * Customer cancels an order.
+ * Rule: Allowed ONLY when order/task is at Packaging status.
+ *       If over Packaging (e.g. Delivering, Shipping, Completed, Delivered), reject cancellation.
+ *       Refunds 50% of the price to Xendit order ID and restores corresponding products back to listed status.
+ */
+router.post("/order/cancel", requireShopUser, async (req, res) => {
+    try {
+        const { orderID } = req.body;
+        if (!orderID) {
+            return res.status(400).json({ success: false, error: "orderID is required" });
+        }
+
+        const cleanOrderID = String(orderID).replace(/^#/, "").trim();
+        let orderDoc = await db.collection("order").doc(cleanOrderID).get();
+        if (!orderDoc.exists) {
+            orderDoc = await db.collection("order").doc(orderID).get();
+        }
+        if (!orderDoc.exists) {
+            const snap = await db.collection("order").where("orderID", "==", cleanOrderID).limit(1).get();
+            if (!snap.empty) {
+                orderDoc = snap.docs[0];
+            } else {
+                const snap2 = await db.collection("order").where("orderID", "==", orderID).limit(1).get();
+                if (!snap2.empty) {
+                    orderDoc = snap2.docs[0];
+                }
+            }
+        }
+        if (!orderDoc || !orderDoc.exists) {
+            return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        const ordData = orderDoc.data();
+        const actualDocID = orderDoc.id;
+        const oStatus = String(ordData.orderStatus || "").trim().toLowerCase();
+
+        // Check linked task status
+        const taskID = `TSK-${actualDocID}`;
+        const taskDoc = await db.collection("task").doc(taskID).get();
+        let tStatus = "packaging";
+        if (taskDoc.exists) {
+            tStatus = String(taskDoc.data().taskStatus || "").trim().toLowerCase();
+        }
+
+        // Rule check: if over packaging (e.g. delivering, shipping, completed, delivered), NOT allowed to cancel
+        const overPackaging = ["delivering", "shipping", "in transit", "delivered", "completed"];
+        if (overPackaging.includes(tStatus) || oStatus === "delivered" || oStatus === "completed") {
+            return res.status(400).json({
+                success: false,
+                error: "Order is already in delivery or completed and cannot be cancelled."
+            });
+        }
+        if (oStatus === "cancelled" || oStatus === "canceled") {
+            return res.status(400).json({ success: false, error: "Order is already cancelled." });
+        }
+
+        // 1. Calculate 50% refund amount
+        const totalAmount = Number(ordData.totalAmount || 0);
+        const refundAmount = Number((totalAmount * 0.5).toFixed(2));
+
+        // 2. Find linked Xendit Invoice / Gateway ID
+        let invoiceID = ordData.gatewayTransactionID || ordData.invoiceID || "";
+        let paymentAccountID = ordData.paymentAccountID || "";
+
+        if (!invoiceID) {
+            try {
+                let tSnap = await db.collection("transaction").where("orderID", "==", actualDocID).get();
+                if (tSnap.empty) {
+                    tSnap = await db.collection("transaction").where("orderID", "==", cleanOrderID).get();
+                }
+                if (tSnap.empty && orderID.startsWith("#")) {
+                    tSnap = await db.collection("transaction").where("orderID", "==", orderID).get();
+                }
+                if (!tSnap.empty) {
+                    for (const doc of tSnap.docs) {
+                        const td = doc.data();
+                        if (td.gatewayTransactionID) {
+                            invoiceID = td.gatewayTransactionID;
+                            if (td.paymentAccountID) paymentAccountID = td.paymentAccountID;
+                            break;
+                        }
+                    }
+                }
+            } catch (tErr) {
+                console.error("Error looking up transaction for order cancel:", tErr);
+            }
+        }
+
+        // 3. Process Xendit 50% refund if Xendit order/invoice ID exists
+        let refundResponse = null;
+        if (invoiceID) {
+            try {
+                const xenditKey = process.env.XENDIT_SECRET_KEY || "";
+                const authHeader = `Basic ${Buffer.from(`${xenditKey}:`).toString("base64")}`;
+                const refundRes = await axios.post("https://api.xendit.co/refunds", {
+                    invoice_id: invoiceID,
+                    amount: refundAmount,
+                    reason: "CANCELLATION"
+                }, {
+                    headers: {
+                        Authorization: authHeader,
+                        "Content-Type": "application/json"
+                    }
+                });
+                refundResponse = refundRes.data;
+                console.log(`[Order Cancel] Xendit 50% refund successful for invoice ${invoiceID}, amount RM ${refundAmount}:`, refundResponse);
+            } catch (xErr) {
+                console.error(`[Order Cancel] Xendit refund call failed for invoice ${invoiceID}:`, xErr.response ? xErr.response.data : xErr.message);
+                try {
+                    const xenditKey = process.env.XENDIT_SECRET_KEY || "";
+                    await axios.post(`https://api.xendit.co/invoices/${invoiceID}/expire!`, {}, {
+                        headers: {
+                            Authorization: `Basic ${Buffer.from(`${xenditKey}:`).toString("base64")}`,
+                            "Content-Type": "application/json"
+                        }
+                    });
+                } catch (_) {}
+            }
+        }
+
+        // 4. Create refund transaction record in Firebase
+        const refundTxnID = await generateTransactionID();
+        await db.collection("transaction").doc(refundTxnID).set({
+            transactionID: refundTxnID,
+            transactionType: "Refund",
+            transactionStatus: "Success",
+            transactionAmount: refundAmount,
+            transactionDate: FieldValue.serverTimestamp(),
+            gatewayTransactionID: invoiceID || "",
+            paymentAccountID: paymentAccountID || "",
+            orderID: actualDocID,
+            refundReason: "Customer cancelled order (50% refund policy)"
+        });
+
+        // 5. Restore product(s) back to listing status ('listed')
+        const productIDs = Array.isArray(ordData.productIDs) ? ordData.productIDs : [];
+        for (const pid of productIDs) {
+            try {
+                await db.collection("product").doc(pid).set({
+                    listingStatus: "listed",
+                    soldToEmail: null,
+                    soldAt: null,
+                    updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+            } catch (pErr) {
+                console.error(`Failed to restore product ${pid} to listed status:`, pErr);
+            }
+        }
+        invalidateProductCaches();
+
+        // 6. Update Order
+        await db.collection("order").doc(actualDocID).set({
+            orderStatus: "Cancelled",
+            cancelledBy: "Customer",
+            refundAmount: refundAmount,
+            refundStatus: "Success",
+            refundTransactionID: refundTxnID,
+            cancelledAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // 7. Update Task
+        if (taskDoc.exists) {
+            await db.collection("task").doc(taskID).set({
+                taskStatus: "Cancelled",
+                rejectionReason: "Order cancelled by customer",
+                updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        // 8. Update Delivery record
+        const delID = `DEL-${actualDocID}`;
+        const delDoc = await db.collection("delivery").doc(delID).get();
+        if (delDoc.exists) {
+            await db.collection("delivery").doc(delID).set({
+                deliveryStatus: "cancelled",
+                updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        // 9. Update linked Schedule if any
+        const schedID = ordData.scheduleID || (taskDoc.exists ? taskDoc.data().scheduleID : null);
+        if (schedID) {
+            await db.collection("schedule").doc(schedID).set({
+                scheduleStatus: "cancelled",
+                updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        return res.json({
+            success: true,
+            message: `Order cancelled successfully. 50% refund (RM ${refundAmount.toFixed(2)}) has been initiated.`,
+            orderID: actualDocID,
+            refundAmount,
+            refundTransactionID: refundTxnID,
+            restoredProducts: productIDs
+        });
+    } catch (err) {
+        console.error("Error in /order/cancel:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/order/update-address
+ * Customer updates the delivery address for an order.
+ * Rule: Allowed ONLY when order/task is at Packaging status.
+ *       If over Packaging (e.g. Delivering, Shipping, Completed, Delivered), reject address change.
+ */
+router.post("/order/update-address", requireShopUser, async (req, res) => {
+    try {
+        const { orderID, addressID } = req.body;
+        if (!orderID || !addressID) {
+            return res.status(400).json({ success: false, error: "orderID and addressID are required" });
+        }
+
+        const cleanOrderID = String(orderID).replace(/^#/, "").trim();
+        let orderDoc = await db.collection("order").doc(cleanOrderID).get();
+        if (!orderDoc.exists) {
+            orderDoc = await db.collection("order").doc(orderID).get();
+        }
+        if (!orderDoc.exists) {
+            const snap = await db.collection("order").where("orderID", "==", cleanOrderID).limit(1).get();
+            if (!snap.empty) {
+                orderDoc = snap.docs[0];
+            } else {
+                const snap2 = await db.collection("order").where("orderID", "==", orderID).limit(1).get();
+                if (!snap2.empty) {
+                    orderDoc = snap2.docs[0];
+                }
+            }
+        }
+        if (!orderDoc || !orderDoc.exists) {
+            return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        const ordData = orderDoc.data();
+        const actualDocID = orderDoc.id;
+        const oStatus = String(ordData.orderStatus || "").trim().toLowerCase();
+
+        // Check linked task status
+        const taskID = `TSK-${actualDocID}`;
+        const taskDoc = await db.collection("task").doc(taskID).get();
+        let tStatus = "packaging";
+        if (taskDoc.exists) {
+            tStatus = String(taskDoc.data().taskStatus || "").trim().toLowerCase();
+        }
+
+        // Rule check: if over packaging, NOT allowed to edit address
+        const overPackaging = ["delivering", "shipping", "in transit", "delivered", "completed"];
+        if (overPackaging.includes(tStatus) || oStatus === "delivered" || oStatus === "completed" || oStatus === "cancelled") {
+            return res.status(400).json({
+                success: false,
+                error: "Order is already in delivery or completed and address cannot be changed."
+            });
+        }
+
+        // Fetch new address to get coordinate data
+        const addrDoc = await db.collection("address").doc(addressID).get();
+        if (!addrDoc.exists) {
+            return res.status(404).json({ success: false, error: "New address not found" });
+        }
+        const addrData = addrDoc.data();
+
+        // Update Order with new addressID
+        await db.collection("order").doc(actualDocID).set({
+            addressID: addressID,
+            updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Update Delivery destination coordinates if available
+        const destLat = addrData.lat || addrData.latitude;
+        const destLng = addrData.lng || addrData.longitude;
+        if (destLat && destLng) {
+            const delID = `DEL-${actualDocID}`;
+            await db.collection("delivery").doc(delID).set({
+                destinationLat: Number(destLat),
+                destinationLng: Number(destLng),
+                updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+
+        // Re-optimize route with OSRM, re-arranging schedule slot or marking Unassigned if outside safe zone
+        let taskStatusResult = "Packaging";
+        let responseMessage = "Delivery address is changed.";
+        try {
+            const assignResult = await assignDeliveryTask({
+                orderID: actualDocID,
+                addressID: addressID,
+                requestedDate: new Date()
+            });
+            if (assignResult && assignResult.taskStatus === "Unassigned") {
+                taskStatusResult = "Unassigned";
+                // Ensure schedule records are deleted
+                const schedSnap = await db.collection("schedule").get();
+                for (const sDoc of schedSnap.docs) {
+                    if (sDoc.id.startsWith(`SCH-${actualDocID}`)) {
+                        await sDoc.ref.delete().catch(() => {});
+                    }
+                }
+            } else if (assignResult && assignResult.taskStatus) {
+                taskStatusResult = assignResult.taskStatus;
+            }
+        } catch (assignErr) {
+            console.error(`Re-optimization for updated order ${actualDocID} failed:`, assignErr);
+        }
+
+        let updatedScheduleDate = null;
+        let updatedEstimatedEndTime = null;
+        let updatedEstimatedDuration = null;
+        const taskSnap = await db.collection("task").doc(`TSK-${actualDocID}`).get();
+        if (taskSnap.exists) {
+            const tData = taskSnap.data();
+            if (tData.scheduleID) {
+                const sDoc = await db.collection("schedule").doc(tData.scheduleID).get();
+                if (sDoc.exists) {
+                    updatedScheduleDate = sDoc.data().scheduleDate || null;
+                    updatedEstimatedEndTime = sDoc.data().scheduleEndTime || null;
+                }
+            }
+            updatedEstimatedDuration = tData.estimatedDuration || null;
+        }
+
+        const ordSnap = await db.collection("order").doc(actualDocID).get();
+        const latestOrderStatus = ordSnap.exists ? ordSnap.data().orderStatus : taskStatusResult;
+
+        return res.json({
+            success: true,
+            message: responseMessage,
+            orderID: actualDocID,
+            addressID,
+            taskStatus: taskStatusResult,
+            orderStatus: latestOrderStatus,
+            scheduleDate: updatedScheduleDate,
+            estimatedEndTime: updatedEstimatedEndTime,
+            estimatedDuration: updatedEstimatedDuration
+        });
+    } catch (err) {
+        console.error("Error in /order/update-address:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * POST /api/shop/transaction/create
  * Creates a transaction record in Firebase upon transaction completion
  */
@@ -1689,16 +2036,29 @@ router.get("/orders", requireShopUser, async (req, res) => {
                 paidAtDate = data.createdAt.toDate();
             }
 
-            let displayStatus = data.orderStatus || "Delivering";
+            let displayStatus = data.orderStatus || "Packaging";
             if (String(displayStatus).trim().toLowerCase() === "success") {
-                displayStatus = "Delivering";
+                displayStatus = "Packaging";
+            }
+
+            let finalTaskStatus = taskInfo.taskStatus || "Packaging";
+            const normOrder = String(displayStatus).trim().toLowerCase();
+            if (normOrder === "cancelled" || normOrder === "canceled") {
+                finalTaskStatus = "Cancelled";
+            } else if (normOrder === "fail" || normOrder === "failed") {
+                finalTaskStatus = "Fail";
+            } else if (normOrder === "delivered" || normOrder === "completed") {
+                finalTaskStatus = "Delivered";
+            } else if (String(finalTaskStatus).trim().toLowerCase() === "rejected" || normOrder === "rejected") {
+                finalTaskStatus = "Unassigned";
+                if (normOrder === "rejected") displayStatus = "Unassigned";
             }
 
             return {
                 orderID,
                 orderNumber: orderID.startsWith("#") ? orderID : `#${orderID}`,
                 orderStatus: displayStatus,
-                taskStatus: taskInfo.taskStatus,
+                taskStatus: finalTaskStatus,
                 estimatedEndTime: taskInfo.estimatedEndTime,
                 scheduleDate: taskInfo.scheduleDate,
                 estimatedDuration: taskInfo.estimatedDuration,

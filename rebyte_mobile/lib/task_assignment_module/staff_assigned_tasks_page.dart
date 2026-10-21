@@ -72,11 +72,39 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   }
 
   List<Map<String, dynamic>> get _completedTasks {
-    return _tasks.where((t) {
+    final list = _tasks.where((t) {
       final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
       final ts = (t['taskStatus']?.toString() ?? '').toLowerCase();
       return s == 'completed' || ts == 'delivered';
     }).toList();
+
+    // Sort completed tasks from latest completed to oldest
+    list.sort((a, b) {
+      DateTime? dateA;
+      DateTime? dateB;
+
+      if (a['completedAt'] != null) {
+        dateA = DateTime.tryParse(a['completedAt'].toString());
+      }
+      if (b['completedAt'] != null) {
+        dateB = DateTime.tryParse(b['completedAt'].toString());
+      }
+
+      // Fallbacks if completedAt was not recorded on legacy tasks
+      dateA ??= DateTime.tryParse(a['updatedAt']?.toString() ?? '') ??
+          DateTime.tryParse(a['scheduleEndTime']?.toString() ?? '') ??
+          DateTime.tryParse(a['scheduleStartTime']?.toString() ?? '');
+      dateB ??= DateTime.tryParse(b['updatedAt']?.toString() ?? '') ??
+          DateTime.tryParse(b['scheduleEndTime']?.toString() ?? '') ??
+          DateTime.tryParse(b['scheduleStartTime']?.toString() ?? '');
+
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1;
+      if (dateB == null) return -1;
+      return dateB.compareTo(dateA); // Descending: latest first
+    });
+
+    return list;
   }
 
   List<Map<String, dynamic>> get _currentTabTasks {
@@ -347,6 +375,16 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
       imageUrl = first['imageUrl']?.toString();
     }
 
+    final completedAtRaw = task['completedAt']?.toString() ?? '';
+    String completedAtLabel = '';
+    if (completedAtRaw.isNotEmpty) {
+      final dt = DateTime.tryParse(completedAtRaw);
+      if (dt != null) {
+        completedAtLabel = DateFormat('d MMM yyyy, h:mm a').format(dt.toLocal());
+      }
+    }
+    final proofOfDeliveryUrl = task['proofOfDeliveryUrl']?.toString() ?? '';
+
     final lowerStatus = taskStatus.toLowerCase();
     final lowerSched = scheduleStatus.toLowerCase();
     final isAssigned = lowerSched == 'assigned' || lowerStatus == 'packaging';
@@ -366,7 +404,11 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
       if (res != null) {
         _loadTasks();
         if (mounted) {
-          _showToast(res is String ? res : 'Delivery completed successfully!');
+          if (res is Map && res['rejected'] == true) {
+            _showToast(res['message']?.toString() ?? 'Delivery task is rejected', true);
+          } else {
+            _showToast(res is String ? res : 'Delivery completed successfully!');
+          }
         }
       }
     }
@@ -628,6 +670,55 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                   ),
                 ),
               ],
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      completedAtLabel.isNotEmpty
+                          ? 'Delivered: $completedAtLabel'
+                          : 'Delivered successfully',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF15803D),
+                      ),
+                    ),
+                  ),
+                  if (proofOfDeliveryUrl.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.camera_alt_rounded, size: 12, color: Color(0xFF16A34A)),
+                          SizedBox(width: 3),
+                          Text(
+                            'Proof',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ],

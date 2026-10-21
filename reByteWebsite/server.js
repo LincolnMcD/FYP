@@ -44,9 +44,19 @@ const server = http.createServer((req, res) => {
   }
 
   fs.stat(filePath, (err, stats) => {
-    if (err || stats.isDirectory()) {
+    if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       return res.end('404 Not Found');
+    }
+
+    if (stats.isDirectory()) {
+      const indexHtml = path.join(filePath, 'index.html');
+      if (fs.existsSync(indexHtml)) {
+        filePath = indexHtml;
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('404 Not Found');
+      }
     }
 
     const ext = path.extname(filePath).toLowerCase();
@@ -57,7 +67,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n======================================================`);
   console.log(`  ReByte Web Server running successfully!`);
   console.log(`  Local URL: http://localhost:${PORT}/accountManagementModule/home.html`);
