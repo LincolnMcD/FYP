@@ -294,6 +294,11 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
             };
         }
 
+        staffData.leave = {
+            annualRemaining: 12,
+            medicalRemaining: 14
+        };
+
         try {
             await usersRef.doc(userRecord.uid).set(staffData);
         } catch (writeError) {

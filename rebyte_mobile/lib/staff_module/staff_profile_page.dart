@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'staff_edit_profile_page.dart';
+import 'staff_schedule_page.dart';
+import '../task_assignment_module/staff_assigned_tasks_page.dart';
 
 class StaffProfilePage extends StatelessWidget {
   final String? name;
   final String? email;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
+  final VoidCallback? onNavigateToTasks;
+  final VoidCallback? onNavigateToSchedule;
 
   const StaffProfilePage({
     super.key,
@@ -13,6 +17,8 @@ class StaffProfilePage extends StatelessWidget {
     required this.email,
     required this.onLogout,
     this.onProfileUpdated,
+    this.onNavigateToTasks,
+    this.onNavigateToSchedule,
   });
 
   Widget _buildListTile(IconData icon, String title, {Color? color, VoidCallback? onTap}) {
@@ -130,9 +136,44 @@ class StaffProfilePage extends StatelessWidget {
             color: Colors.white,
             child: Column(
               children: [
-                _buildListTile(Icons.manage_accounts_outlined, 'Account Details'),
-                _buildListTile(Icons.calendar_month_outlined, 'My Schedule'),
-                _buildListTile(Icons.assignment_outlined, 'My Tasks'),
+                _buildListTile(
+                  Icons.calendar_month_outlined,
+                  'My Schedule',
+                  onTap: () {
+                    if (onNavigateToSchedule != null) {
+                      onNavigateToSchedule!();
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StaffSchedulePage(
+                            email: email,
+                            showBackButton: true,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _buildListTile(
+                  Icons.assignment_outlined,
+                  'My Tasks',
+                  onTap: () {
+                    if (onNavigateToTasks != null) {
+                      onNavigateToTasks!();
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StaffAssignedTasksPage(
+                            email: email,
+                            showBackButton: true,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
                 _buildListTile(Icons.history, 'Guidance Library'),
                 const SizedBox(height: 8),
                 _buildListTile(

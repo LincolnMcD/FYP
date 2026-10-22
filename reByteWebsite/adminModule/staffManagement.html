@@ -54,20 +54,19 @@
     .search { height: 44px; width: min(300px, 38vw); display: flex; align-items: center; gap: 12px; padding: 0 14px; border: 1px solid #c9cddd; border-radius: 14px; background: #fafaff; color: #7d8493; }
     .search svg { width: 18px; height: 18px; flex: 0 0 auto; }
     .search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 14px; }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1225px; }
-    th { height: 54px; padding: 0 20px; text-align: left; color: #555b68; font-size: 12px; letter-spacing: .3px; font-weight: 700; border-bottom: 1px solid #cfd4df; white-space: nowrap; }
-    th:nth-child(1), td:nth-child(1) { width: 125px; }
-    th:nth-child(2), td:nth-child(2) { width: 35ch; max-width: 35ch; overflow: hidden; text-overflow: ellipsis; }
-    th:nth-child(3), td:nth-child(3) { width: 220px; }
-    th:nth-child(4), td:nth-child(4) { width: 200px; }
-    th:nth-child(5), td:nth-child(5) { width: 130px; }
-    th:nth-child(6), td:nth-child(6) { width: 140px; }
-    th:nth-child(7), td:nth-child(7) { width: 130px; }
+    .table-wrap { overflow-x: auto; width: 100%; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { height: 54px; padding: 0 16px; text-align: left; color: #555b68; font-size: 12px; letter-spacing: .3px; font-weight: 700; border-bottom: 1px solid #cfd4df; white-space: nowrap; }
+    th:nth-child(1), td:nth-child(1) { width: 110px; }
+    th:nth-child(2), td:nth-child(2) { width: 22%; overflow: hidden; text-overflow: ellipsis; }
+    th:nth-child(3), td:nth-child(3) { width: 26%; overflow: hidden; text-overflow: ellipsis; }
+    th:nth-child(4), td:nth-child(4) { width: 180px; }
+    th:nth-child(5), td:nth-child(5) { width: 140px; }
+    th:nth-child(6), td:nth-child(6) { width: 110px; text-align: left; }
     .sort-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
     .sort-arrow { color: #8a93a3; font-size: 14px; line-height: 1; }
     .sort-arrow.active { color: #0646a5; }
-    td { height: 76px; padding: 0 20px; color: #6b7180; font-size: 14px; border-bottom: 1px solid #e9ebf0; white-space: nowrap; }
+    td { height: 76px; padding: 0 16px; color: #6b7180; font-size: 14px; border-bottom: 1px solid #e9ebf0; white-space: nowrap; }
     tbody tr:last-child td { border-bottom: 0; }
     td:first-child { color: #243a5e; font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
     td:nth-child(2) { color: #25344f; font-weight: 600; }
@@ -445,7 +444,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th data-sort-column="staffNo" aria-sort="ascending"><button class="sort-button" type="button" data-sort="staffNo">STAFF ID <span class="sort-arrow active" aria-hidden="true">↑</span></button></th><th data-sort-column="fullName" aria-sort="none"><button class="sort-button" type="button" data-sort="fullName">NAME <span class="sort-arrow" aria-hidden="true">↕</span></button></th><th>EMAIL</th><th>ROLE</th><th>STATUS</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
+            <thead><tr><th data-sort-column="staffNo" aria-sort="ascending"><button class="sort-button" type="button" data-sort="staffNo">STAFF ID <span class="sort-arrow active" aria-hidden="true">↑</span></button></th><th data-sort-column="fullName" aria-sort="none"><button class="sort-button" type="button" data-sort="fullName">NAME <span class="sort-arrow" aria-hidden="true">↕</span></button></th><th>EMAIL</th><th>ROLE</th><th>CREATED</th><th>ACTIONS</th></tr></thead>
             <tbody id="staffRows">
             </tbody>
           </table>
@@ -1269,7 +1268,6 @@
           <td>${staff.fullName || 'Unknown'}</td>
           <td>${staff.email}</td>
           <td class="role">${roleStr}</td>
-          <td><span class="status${staffStatus === 'archived' ? ' archived' : ''}"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="8"></circle><path d="m4.2 8 2.3 2.3 5-5" fill="none" stroke="#fff" stroke-width="1.5"></path></svg>${staffStatus.charAt(0).toUpperCase() + staffStatus.slice(1)}</span></td>
           <td>${dateStr}</td>
           <td><div class="action-buttons">${actionButtons}</div></td>
         `;

@@ -6,7 +6,139 @@ const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const { assignDeliveryTask } = require("./taskAssignmentService");
+const { getOsrmRoute, COMPANY_LOCATION } = require("./osrmService");
 const { getDeliveryRoomsStatus } = require("./deliverySocket");
+const {
+    registerScheduleTimer,
+    clearScheduleTimers,
+    handleStartTimeViolation,
+    handleEndTimeViolation,
+    checkAndResetMonthlyMistakes
+} = require("./taskDelayMonitorService");
+const nodemailer = require("nodemailer");
+
+// Nodemailer transporter for delivery termination & self-pickup notifications
+const terminationEmailTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: "lolincoln021@gmail.com",
+        pass: "uooc wvdf zoqy nujh"
+    }
+});
+
+// Helper to send Self Pickup Notification Email to Customer
+async function sendTerminationSelfPickupEmail({
+    toEmail,
+    customerName,
+    orderID,
+    reason,
+    items = []
+}) {
+    if (!toEmail) return { success: false, error: "No recipient email" };
+
+    const hubAddress = COMPANY_LOCATION.address || "ReByte Central Hub, Penang";
+    const hubLat = COMPANY_LOCATION.lat || 5.453240417145323;
+    const hubLng = COMPANY_LOCATION.lng || 100.2848625551094;
+    const mapsLink = `https://www.google.com/maps/dir/?api=1&destination=${hubLat},${hubLng}`;
+
+    let itemsHtml = "";
+    if (Array.isArray(items) && items.length > 0) {
+        itemsHtml = items.map((it, idx) => {
+            const title = [it.brand, it.model].filter(Boolean).join(" ") || it.productName || it.title || "Electronic Device";
+            const spec = [it.storage, it.condition].filter(Boolean).join(" • ");
+            return `
+              <div style="display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #E2E8F0;">
+                <div style="flex: 1;">
+                  <div style="font-weight: 700; color: #0F172A; font-size: 14px;">#${idx + 1}. ${title}</div>
+                  ${spec ? `<div style="font-size: 12px; color: #64748B; margin-top: 2px;">${spec}</div>` : ''}
+                </div>
+              </div>
+            `;
+        }).join("");
+    }
+
+    const mailOptions = {
+        from: "\"ReByte Customer Care\" <lolincoln021@gmail.com>",
+        to: toEmail,
+        subject: `Delivery Update: Order #${orderID} Changed to Self Pickup`,
+        html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px;">
+            <!-- Header -->
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #F1F5F9;">
+                <h1 style="color: #0C5AD2; font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -0.5px;">ReByte</h1>
+                <p style="color: #64748B; font-size: 13px; margin-top: 4px;">Premium Sustainable Tech</p>
+            </div>
+
+            <!-- Body Content -->
+            <div style="padding: 24px 0 16px 0;">
+                <h2 style="color: #0F172A; font-size: 18px; font-weight: 800; margin: 0 0 12px 0;">
+                    Hello ${customerName || "Customer"},
+                </h2>
+                <p style="color: #334155; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+                    Please be informed that home delivery for your Order <strong style="color: #0C5AD2;">#${orderID}</strong> has been cancelled and updated to <strong>Self Pickup</strong>.
+                </p>
+
+                <!-- Reason Card -->
+                <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #DC2626; text-transform: uppercase; letter-spacing: 0.5px;">Reason</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #991B1B; margin-top: 4px;">
+                        ${reason || "Delivery could not be completed"}
+                    </div>
+                </div>
+
+                <!-- Self Pickup Details Card -->
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #0C5AD2; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                        Self Pickup Instructions
+                    </div>
+                    <p style="color: #334155; font-size: 13.5px; line-height: 1.5; margin: 0 0 10px 0;">
+                        Please self pick up your package at our central facility:
+                    </p>
+                    <div style="font-size: 15px; font-weight: 800; color: #0F172A; margin-bottom: 4px;">
+                        📍 ${hubAddress}
+                    </div>
+                    <div style="font-size: 12.5px; color: #64748B; margin-bottom: 14px;">
+                        Operating Hours: Monday – Saturday, 9:00 AM – 6:00 PM
+                    </div>
+
+                    <!-- Google Maps Directions Button -->
+                    <div style="text-align: center; margin-top: 12px;">
+                        <a href="${mapsLink}" target="_blank" style="display: inline-block; background: #0C5AD2; color: #FFFFFF; font-weight: 700; font-size: 13.5px; padding: 12px 24px; border-radius: 10px; text-decoration: none; box-shadow: 0 2px 6px rgba(12, 90, 210, 0.25);">
+                            🗺️ Open Location in Google Maps
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Items to Pick Up -->
+                ${itemsHtml ? `
+                <div style="margin-top: 20px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                        Package Items to Pick Up
+                    </div>
+                    ${itemsHtml}
+                </div>` : ''}
+
+                <p style="color: #64748B; font-size: 12.5px; line-height: 1.5; margin-top: 24px;">
+                    Please present your Order Reference (<strong>#${orderID}</strong>) or this email confirmation upon arrival at the counter. If you have any inquiries, feel free to contact our customer support.
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="text-align: center; padding-top: 16px; border-top: 1px solid #F1F5F9; color: #94A3B8; font-size: 11.5px;">
+                © ${new Date().getFullYear()} ReByte Technologies. All rights reserved.
+            </div>
+        </div>
+        `
+    };
+
+    try {
+        await terminationEmailTransporter.sendMail(mailOptions);
+        return { success: true };
+    } catch (e) {
+        console.error("Error sending termination self-pickup email:", e);
+        return { success: false, error: e.message };
+    }
+}
 
 // Helper to stream upload buffer to Cloudinary
 function uploadBufferToCloudinary(fileBuffer, folder, filename) {
@@ -49,6 +181,10 @@ router.post("/assign", requireAuth, async (req, res) => {
             addressID,
             requestedDate: requestedDate ? new Date(requestedDate) : new Date()
         });
+
+        if (result && result.success && result.scheduleID) {
+            registerScheduleTimer(result.scheduleID);
+        }
 
         return res.json(result);
     } catch (err) {
@@ -94,18 +230,30 @@ router.get("/staff-tasks", async (req, res) => {
 
         for (const sDoc of schedSnap.docs) {
             const schedData = sDoc.data();
+            const schedStatus = (schedData.scheduleStatus || "").toLowerCase();
+            // Skip absent, rejected, or cancelled schedules from staff task list
+            if (schedStatus === "absent" || schedStatus === "rejected" || schedStatus === "cancelled") {
+                continue;
+            }
             const scheduleID = schedData.scheduleID || sDoc.id;
 
-            // 3. Lookup task by scheduleID
+            // 3. Lookup task by scheduleID, or fallback by orderID
             let taskData = {};
             let taskID = "";
-            let orderID = "";
+            let orderID = schedData.orderID || "";
 
             const tSnap = await db.collection("task").where("scheduleID", "==", scheduleID).limit(1).get();
             if (!tSnap.empty) {
                 taskData = tSnap.docs[0].data();
                 taskID = taskData.taskID || tSnap.docs[0].id;
-                orderID = taskData.orderID || "";
+                orderID = taskData.orderID || orderID;
+            } else if (orderID) {
+                // Fallback direct doc lookup
+                const directTask = await db.collection("task").doc(`TSK-${orderID}`).get();
+                if (directTask.exists) {
+                    taskData = directTask.data();
+                    taskID = directTask.id;
+                }
             }
 
             // Fallback: Check if schedule had orderID (legacy records)
@@ -180,6 +328,7 @@ router.get("/staff-tasks", async (req, res) => {
                                 storage,
                                 color,
                                 condition,
+                                price: p.sellingPrice || 0,
                                 imageUrl: p.imageUrl || "",
                                 description: p.description || ""
                             });
@@ -262,8 +411,23 @@ router.get("/staff-tasks", async (req, res) => {
             });
         }
 
-        // Sort: newest schedule date/time first
-        tasksList.sort((a, b) => new Date(b.scheduleStartTime).getTime() - new Date(a.scheduleStartTime).getTime());
+        // Helper to get comparable timestamp for a task
+        function getTaskTimestamp(t) {
+            const datePart = t.scheduleDate || "1970-01-01";
+            let timePart = t.scheduleStartTime || "00:00:00";
+            if (timePart.includes("T")) {
+                const parsed = new Date(timePart);
+                return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+            }
+            if (timePart.length === 5) {
+                timePart = `${timePart}:00`;
+            }
+            const parsed = new Date(`${datePart}T${timePart}`);
+            return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+        }
+
+        // Sort: earliest schedule date/time first (chronological order)
+        tasksList.sort((a, b) => getTaskTimestamp(a) - getTaskTimestamp(b));
 
         return res.json({
             success: true,
@@ -413,7 +577,15 @@ router.patch("/update-status", async (req, res) => {
 
         await batch.commit();
 
-        return res.json({ success: true, message: `Task status updated to ${normalized}` });
+        // Update active schedule timer on status transitions
+        if (scheduleID) {
+            if (isCompleted || isRejected || isTerminated) {
+                clearScheduleTimers(scheduleID);
+            } else {
+                // If started (Shipping / ongoing), re-register so the End Time check activates
+                registerScheduleTimer(scheduleID);
+            }
+        }
     } catch (err) {
         console.error("Error updating task status:", err);
         return res.status(500).json({ success: false, error: err.message });
@@ -530,6 +702,10 @@ router.post("/complete-delivery", (req, res, next) => {
 
         await batch.commit();
 
+        if (scheduleID) {
+            clearScheduleTimers(scheduleID);
+        }
+
         // Broadcast delivery completion to Socket.IO room if active
         try {
             const io = req.app.get("io");
@@ -591,12 +767,6 @@ router.post("/update-staff-location", async (req, res) => {
             updateData.estimatedDuration = Number(estimatedDurationMinutes);
         }
 
-        if (orderID) {
-            await db.collection("delivery").doc(`DEL-${orderID}`).set(updateData, { merge: true }).catch(() => {});
-        }
-        if (taskID) {
-            await db.collection("task").doc(taskID).set(updateData, { merge: true }).catch(() => {});
-        }
         if (staffID) {
             await db.collection("users").doc(staffID).set({
                 currentLat: numericLat,
@@ -852,9 +1022,10 @@ function computeDisplayStatus(orderStatus, taskStatus, fulfillmentType, cancelle
     const rr = String(rejectionReason || '').trim().toLowerCase();
     const isPickup = f.includes('pickup') || f.includes('self') || o.includes('pickup') || o.includes('self');
 
-    // Rule 3: If order is Delivered, task is Delivered -> Completed
-    if ((o === 'delivered' || o === 'completed') && (t === 'delivered' || t === 'completed')) return 'Completed';
-    if (o === 'delivered' || t === 'delivered' || t === 'completed') return 'Completed';
+    // Rule 3: If order or task is Completed/Delivered -> Completed (Highest priority for finished orders)
+    if (o === 'completed' || o === 'delivered' || t === 'completed' || t === 'delivered') {
+        return 'Completed';
+    }
 
     // Rule 1: If order is cancelled by customer -> Refunded
     if (cb === 'customer' || rr.includes('cancelled by customer') || rr.includes('canceled by customer') || (o === 'cancelled' && t === 'cancelled')) {
@@ -926,254 +1097,375 @@ function getOrderTimestamp(d) {
     return isNaN(dt.getTime()) ? 0 : dt.getTime();
 }
 
+// Short in-memory cache to prevent Firestore quota exhaustion on frequent reloads
+let taskCache = {
+    data: null,
+    counts: null,
+    timestamp: 0
+};
+const CACHE_TTL_MS = 30000; // 30 seconds cache
+
+function invalidateTaskCache() {
+    taskCache = { data: null, counts: null, timestamp: 0 };
+}
+
+/**
+ * Helper to fetch and build tasks dataset with caching
+ */
+async function getOrBuildTasksDataset() {
+    const now = Date.now();
+    if (taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS)) {
+        return { taskList: taskCache.data, counts: taskCache.counts };
+    }
+
+    // 1. Fetch orders
+    const ordersSnap = await db.collection("order").get();
+
+    // 2. Fetch tasks
+    const tasksSnap = await db.collection("task").get();
+    const tasksByOrderId = new Map();
+    const tasksById = new Map();
+    tasksSnap.forEach(doc => {
+        const data = doc.data();
+        const tid = data.taskID || doc.id;
+        tasksById.set(tid, data);
+        if (data.orderID) {
+            tasksByOrderId.set(data.orderID, data);
+        }
+    });
+
+    // 3. Fetch schedules
+    const schedSnap = await db.collection("schedule").get();
+    const schedMap = new Map();
+    schedSnap.forEach(doc => {
+        const data = doc.data();
+        const sid = data.scheduleID || doc.id;
+        schedMap.set(sid, data);
+        if (data.orderID) {
+            schedMap.set(`order_${data.orderID}`, data);
+        }
+    });
+
+    // 4. Fetch staff members
+    const staffSnap = await db.collection("users").where("role", "==", "Staff").get();
+    const staffMap = new Map();
+    staffSnap.forEach(doc => {
+        const data = doc.data();
+        const name = data.fullName || data.name || "Staff Member";
+        staffMap.set(doc.id, { staffID: doc.id, name, email: data.email || "", phone: data.phoneNumber || data.phone || "" });
+    });
+
+    // Caches for batch lookups
+    const productCache = new Map();
+    const addressCache = new Map();
+    const userCache = new Map();
+
+    const taskList = [];
+
+    for (const oDoc of ordersSnap.docs) {
+        const ordData = oDoc.data();
+        const orderID = ordData.orderID || oDoc.id;
+
+        // Resolve linked task
+        const taskData = tasksByOrderId.get(orderID) || {};
+        const taskID = taskData.taskID || `TSK-${orderID}`;
+        const taskStatus = taskData.taskStatus || "Unassigned";
+
+        // Resolve linked schedule
+        const scheduleID = taskData.scheduleID || ordData.scheduleID || "";
+        const schedData = (scheduleID ? schedMap.get(scheduleID) : null) || schedMap.get(`order_${orderID}`) || {};
+
+        // Resolve linked staff
+        const staffID = schedData.staffID || taskData.staffID || "";
+        const staffInfo = staffMap.get(staffID);
+        const staffName = staffInfo ? staffInfo.name : (schedData.staffName || taskData.staffName || "");
+
+        // Resolve customer address
+        let address = {};
+        const addressID = ordData.addressID;
+        if (addressID) {
+            if (addressCache.has(addressID)) {
+                address = addressCache.get(addressID);
+            } else {
+                const aDoc = await db.collection("address").doc(addressID).get();
+                if (aDoc.exists) {
+                    address = aDoc.data();
+                    addressCache.set(addressID, address);
+                }
+            }
+        }
+
+        // Resolve customer profile
+        let customerName = address.recipentName || address.recipientName || "";
+        let customerEmail = address.email || ordData.email || ordData.userEmail || "";
+        let customerPhone = address.phoneNumber || ordData.phoneNumber || "";
+        const customerID = ordData.customerID || ordData.userId || "";
+
+        // If email or name is missing, look up customer in 'users' collection
+        if ((!customerEmail || !customerName || customerName === "Customer") && (customerID || customerPhone)) {
+            let uData = null;
+
+            // 1. Check cache by customerID
+            if (customerID && userCache.has(customerID)) {
+                uData = userCache.get(customerID);
+            } else if (customerID) {
+                // Try doc(customerID)
+                const uDoc = await db.collection("users").doc(customerID).get();
+                if (uDoc.exists) {
+                    uData = uDoc.data();
+                } else {
+                    // Try where("userId", "==", customerID)
+                    const uSnap = await db.collection("users").where("userId", "==", customerID).limit(1).get();
+                    if (!uSnap.empty) {
+                        uData = uSnap.docs[0].data();
+                    }
+                }
+                if (uData) {
+                    const uName = uData.fullName || uData.name || "Customer";
+                    const cached = { name: uName, email: uData.email || "", phone: uData.phoneNumber || uData.phone || "" };
+                    userCache.set(customerID, cached);
+                }
+            }
+
+            // 2. Fallback: if still no email, try searching users by customerPhone
+            if ((!uData || !uData.email) && customerPhone) {
+                const cleanPhone = String(customerPhone).trim();
+                const phoneVariations = [
+                    cleanPhone,
+                    cleanPhone.replace(/^\+60/, '0'),
+                    cleanPhone.replace(/^0/, '+60'),
+                    cleanPhone.replace(/\D/g, '')
+                ].filter((v, i, a) => v && a.indexOf(v) === i);
+
+                for (const p of phoneVariations) {
+                    const pSnap = await db.collection("users").where("phoneNumber", "==", p).limit(1).get();
+                    if (!pSnap.empty) {
+                        const found = pSnap.docs[0].data();
+                        if (found) {
+                            uData = uData || found;
+                            if (found.email) {
+                                customerEmail = found.email;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (uData) {
+                const resolvedName = uData.fullName || uData.name || "";
+                if (!customerName || customerName === "Customer") {
+                    customerName = resolvedName || customerName;
+                }
+                if (!customerEmail && uData.email) {
+                    customerEmail = uData.email;
+                }
+                if (!customerPhone && (uData.phoneNumber || uData.phone)) {
+                    customerPhone = uData.phoneNumber || uData.phone;
+                }
+            }
+        }
+        if (!customerName) customerName = "Customer";
+
+        // Resolve products & device summary
+        const pIds = Array.isArray(ordData.productIDs) ? ordData.productIDs : [];
+        let deviceSummary = "";
+        const items = [];
+
+        for (const pid of pIds) {
+            let p = productCache.get(pid);
+            if (!p) {
+                const pDoc = await db.collection("product").doc(pid).get();
+                if (pDoc.exists) {
+                    p = pDoc.data();
+                    productCache.set(pid, p);
+                }
+            }
+            if (p) {
+                let brand = p.brand || "";
+                let model = p.model || "";
+                let storage = p.storage || "";
+                let color = p.color || "";
+
+                if (!model && p.description) {
+                    const parenIdx = p.description.indexOf("(");
+                    if (parenIdx > -1) {
+                        model = p.description.substring(0, parenIdx).trim();
+                        const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
+                        if (!storage) storage = inParen.trim();
+                    } else {
+                        model = p.description.split(" - ")[0].trim();
+                    }
+                }
+
+                const itemSummary = [brand, model].filter(Boolean).join(" ") + (storage ? ` • ${storage}` : "");
+                if (!deviceSummary && itemSummary) deviceSummary = itemSummary;
+
+                items.push({
+                    productID: pid,
+                    brand,
+                    model,
+                    storage,
+                    color,
+                    price: p.price || 0,
+                    imageUrl: p.imageUrl || ""
+                });
+            }
+        }
+
+        if (!deviceSummary) {
+            deviceSummary = "Electronics Device";
+        }
+
+        // Appointment Date & Time
+        const createdAtMs = getOrderTimestamp(ordData);
+        const orderDateRaw = ordData.createdAt || ordData.orderDate;
+        const appointmentDate = schedData.scheduleDate ? formatAppointmentDate(schedData.scheduleDate) : formatAppointmentDate(orderDateRaw);
+
+        let appointmentTime = "09:00 - 17:00";
+        if (schedData.scheduleStartTime && schedData.scheduleEndTime) {
+            appointmentTime = `${schedData.scheduleStartTime} - ${schedData.scheduleEndTime}`;
+        } else if (taskData.taskStartTime) {
+            appointmentTime = `${taskData.taskStartTime} - 17:00`;
+        }
+
+        let isUrgent = false;
+        if (createdAtMs > 0) {
+            const dateObj = new Date(createdAtMs);
+            if (dateObj.getHours() < 9) {
+                isUrgent = true;
+            }
+        }
+        if (ordData.isUrgent || taskData.isUrgent) isUrgent = true;
+
+        const orderStatus = ordData.orderStatus || "Unassigned";
+        const fulfillmentType = ordData.fulfillmentType || ordData.deliveryOption || "Delivery";
+        const rejectionReason = taskData.rejectionReason || schedData.rejectionReason || "";
+
+        const displayStatus = computeDisplayStatus(orderStatus, taskStatus, fulfillmentType, ordData.cancelledBy, rejectionReason, staffID);
+        const deliveryAddress = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
+
+        taskList.push({
+            taskID,
+            orderID,
+            scheduleID: scheduleID || null,
+            staffID: staffID || null,
+            staffName: staffName || "Unassigned",
+            customerID,
+            customerName,
+            customerEmail,
+            customerPhone,
+            deliveryAddress: deliveryAddress || "Penang, Malaysia",
+            deviceSummary,
+            items,
+            appointmentDate,
+            appointmentTime,
+            isUrgent,
+            orderStatus,
+            taskStatus,
+            fulfillmentType,
+            displayStatus,
+            totalAmount: ordData.totalAmount || ordData.subtotal || 0,
+            rejectionReason,
+            rejectionNotes: taskData.rejectionNotes || schedData.rejectionNotes || "",
+            proofOfDeliveryUrl: taskData.proofOfDeliveryUrl || "",
+            estimatedDistance: taskData.estimatedDistance || 0,
+            estimatedDuration: taskData.estimatedDuration || 0,
+            completedAt: taskData.completedAt || null,
+            pickedAt: ordData.pickedAt || null,
+            createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : new Date().toISOString(),
+            createdAtMs: createdAtMs
+        });
+    }
+
+    // Sort strictly based on order createdAt date time (newest first)
+    taskList.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+
+    // Count totals for all status categories
+    const counts = {
+        unassigned: 0,
+        assigned: 0,
+        cancelled: 0,
+        refunded: 0,
+        terminated: 0,
+        completed: 0,
+        total: taskList.length
+    };
+
+    taskList.forEach(t => {
+        const key = (t.displayStatus || '').toLowerCase();
+        if (counts[key] !== undefined) {
+            counts[key]++;
+        }
+    });
+
+    taskCache = {
+        data: taskList,
+        counts,
+        timestamp: Date.now()
+    };
+
+    return { taskList, counts };
+}
+
 /**
  * GET /api/task-assignment/admin/tasks
- * Fetch all tasks and orders for Admin Task Assignment page
+ * Supports Server-Side Pagination & Tab Filtering:
+ * Query params:
+ *   tab: 'unassigned' | 'assigned' | 'cancelled' | 'refunded' | 'terminated' | 'completed' | 'all'
+ *   page: 1-based page number (default 1)
+ *   limit: page size (default 10)
+ *   search: keyword filter
+ *   sort: 'asc' | 'desc' (default 'desc')
  */
 router.get("/admin/tasks", async (req, res) => {
     try {
-        // 1. Fetch all orders
-        const ordersSnap = await db.collection("order").get();
+        const { taskList, counts } = await getOrBuildTasksDataset();
 
-        // 2. Fetch all tasks
-        const tasksSnap = await db.collection("task").get();
-        const tasksByOrderId = new Map();
-        const tasksById = new Map();
-        tasksSnap.forEach(doc => {
-            const data = doc.data();
-            const tid = data.taskID || doc.id;
-            tasksById.set(tid, data);
-            if (data.orderID) {
-                tasksByOrderId.set(data.orderID, data);
-            }
-        });
+        const tab = String(req.query.tab || "").trim().toLowerCase();
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
+        const search = String(req.query.search || "").trim().toLowerCase();
+        const sortOrder = String(req.query.sort || "desc").trim().toLowerCase();
 
-        // 3. Fetch all schedules
-        const schedSnap = await db.collection("schedule").get();
-        const schedMap = new Map();
-        schedSnap.forEach(doc => {
-            const data = doc.data();
-            const sid = data.scheduleID || doc.id;
-            schedMap.set(sid, data);
-            if (data.orderID) {
-                schedMap.set(`order_${data.orderID}`, data);
-            }
-        });
+        // 1. Filter by Tab
+        let filtered = taskList;
+        if (tab && tab !== "all") {
+            filtered = filtered.filter(t => (t.displayStatus || "").toLowerCase() === tab);
+        }
 
-        // 4. Fetch all staff members from users collection
-        const staffSnap = await db.collection("users").where("role", "==", "Staff").get();
-        const staffMap = new Map();
-        staffSnap.forEach(doc => {
-            const data = doc.data();
-            const name = data.fullName || data.name || "Staff Member";
-            staffMap.set(doc.id, { staffID: doc.id, name, email: data.email || "", phone: data.phoneNumber || data.phone || "" });
-        });
-
-        // Caches for products, addresses, and customer users to minimize duplicate reads
-        const productCache = new Map();
-        const addressCache = new Map();
-        const userCache = new Map();
-
-        const taskList = [];
-
-        for (const oDoc of ordersSnap.docs) {
-            const ordData = oDoc.data();
-            const orderID = ordData.orderID || oDoc.id;
-
-            // Resolve linked task
-            const taskData = tasksByOrderId.get(orderID) || {};
-            const taskID = taskData.taskID || `TSK-${orderID}`;
-            const taskStatus = taskData.taskStatus || "Unassigned";
-
-            // Resolve linked schedule
-            const scheduleID = taskData.scheduleID || ordData.scheduleID || "";
-            const schedData = (scheduleID ? schedMap.get(scheduleID) : null) || schedMap.get(`order_${orderID}`) || {};
-
-            // Resolve linked staff
-            const staffID = schedData.staffID || taskData.staffID || "";
-            const staffInfo = staffMap.get(staffID);
-            const staffName = staffInfo ? staffInfo.name : (schedData.staffName || taskData.staffName || "");
-
-            // Resolve customer address
-            let address = {};
-            const addressID = ordData.addressID;
-            if (addressID) {
-                if (addressCache.has(addressID)) {
-                    address = addressCache.get(addressID);
-                } else {
-                    const aDoc = await db.collection("address").doc(addressID).get();
-                    if (aDoc.exists) {
-                        address = aDoc.data();
-                        addressCache.set(addressID, address);
-                    }
-                }
-            }
-
-            // Resolve customer profile
-            let customerName = address.recipentName || address.recipientName || "";
-            let customerEmail = address.email || ordData.email || ordData.userEmail || "";
-            let customerPhone = address.phoneNumber || ordData.phoneNumber || "";
-            const customerID = ordData.customerID || ordData.userId || "";
-
-            if ((!customerName || customerName === "Customer") && customerID) {
-                if (userCache.has(customerID)) {
-                    const u = userCache.get(customerID);
-                    customerName = customerName || u.name;
-                    customerEmail = customerEmail || u.email;
-                    customerPhone = customerPhone || u.phone;
-                } else {
-                    const uDoc = await db.collection("users").doc(customerID).get();
-                    if (uDoc.exists) {
-                        const uData = uDoc.data();
-                        const uName = uData.fullName || uData.name || "Customer";
-                        userCache.set(customerID, { name: uName, email: uData.email || "", phone: uData.phoneNumber || "" });
-                        customerName = customerName || uName;
-                        customerEmail = customerEmail || uData.email || "";
-                        customerPhone = customerPhone || uData.phoneNumber || "";
-                    }
-                }
-            }
-            if (!customerName) customerName = "Customer";
-
-            // Resolve products & device summary
-            const pIds = Array.isArray(ordData.productIDs) ? ordData.productIDs : [];
-            let deviceSummary = "";
-            const items = [];
-
-            for (const pid of pIds) {
-                let p = productCache.get(pid);
-                if (!p) {
-                    const pDoc = await db.collection("product").doc(pid).get();
-                    if (pDoc.exists) {
-                        p = pDoc.data();
-                        productCache.set(pid, p);
-                    }
-                }
-                if (p) {
-                    let brand = p.brand || "";
-                    let model = p.model || "";
-                    let storage = p.storage || "";
-                    let color = p.color || "";
-
-                    if (!model && p.description) {
-                        const parenIdx = p.description.indexOf("(");
-                        if (parenIdx > -1) {
-                            model = p.description.substring(0, parenIdx).trim();
-                            const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
-                            if (!storage) storage = inParen.trim();
-                        } else {
-                            model = p.description.split(" - ")[0].trim();
-                        }
-                    }
-
-                    const itemSummary = [brand, model].filter(Boolean).join(" ") + (storage ? ` • ${storage}` : "");
-                    if (!deviceSummary && itemSummary) deviceSummary = itemSummary;
-
-                    items.push({
-                        productID: pid,
-                        brand,
-                        model,
-                        storage,
-                        color,
-                        price: p.price || 0,
-                        imageUrl: p.imageUrl || ""
-                    });
-                }
-            }
-
-            if (!deviceSummary) {
-                deviceSummary = "Electronics Device";
-            }
-
-            // Appointment Date & Time
-            // Priority: ordData.createdAt first as requested by user
-            const createdAtMs = getOrderTimestamp(ordData);
-            const orderDateRaw = ordData.createdAt || ordData.orderDate;
-            const appointmentDate = schedData.scheduleDate ? formatAppointmentDate(schedData.scheduleDate) : formatAppointmentDate(orderDateRaw);
-
-            let appointmentTime = "09:00 - 17:00";
-            if (schedData.scheduleStartTime && schedData.scheduleEndTime) {
-                appointmentTime = `${schedData.scheduleStartTime} - ${schedData.scheduleEndTime}`;
-            } else if (taskData.taskStartTime) {
-                appointmentTime = `${taskData.taskStartTime} - 17:00`;
-            }
-
-            // Flag as Urgent if order created early morning before 9 AM or explicitly marked
-            let isUrgent = false;
-            if (createdAtMs > 0) {
-                const dateObj = new Date(createdAtMs);
-                if (dateObj.getHours() < 9) {
-                    isUrgent = true;
-                }
-            }
-            if (ordData.isUrgent || taskData.isUrgent) isUrgent = true;
-
-            const orderStatus = ordData.orderStatus || "Unassigned";
-            const fulfillmentType = ordData.fulfillmentType || ordData.deliveryOption || "Delivery";
-            const rejectionReason = taskData.rejectionReason || schedData.rejectionReason || "";
-
-            // Compute exact display status according to the user's business rules:
-            const displayStatus = computeDisplayStatus(orderStatus, taskStatus, fulfillmentType, ordData.cancelledBy, rejectionReason, staffID);
-
-            const deliveryAddress = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
-
-            taskList.push({
-                taskID,
-                orderID,
-                scheduleID: scheduleID || null,
-                staffID: staffID || null,
-                staffName: staffName || "Unassigned",
-                customerID,
-                customerName,
-                customerEmail,
-                customerPhone,
-                deliveryAddress: deliveryAddress || "Penang, Malaysia",
-                deviceSummary,
-                items,
-                appointmentDate,
-                appointmentTime,
-                isUrgent,
-                orderStatus,
-                taskStatus,
-                fulfillmentType,
-                displayStatus,
-                totalAmount: ordData.totalAmount || ordData.subtotal || 0,
-                rejectionReason,
-                rejectionNotes: taskData.rejectionNotes || schedData.rejectionNotes || "",
-                proofOfDeliveryUrl: taskData.proofOfDeliveryUrl || "",
-                estimatedDistance: taskData.estimatedDistance || 0,
-                estimatedDuration: taskData.estimatedDuration || 0,
-                completedAt: taskData.completedAt || null,
-                createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : new Date().toISOString(),
-                createdAtMs: createdAtMs
+        // 2. Filter by Search Query
+        if (search) {
+            filtered = filtered.filter(t => {
+                const matchStr = `${t.taskID || ''} ${t.orderID || ''} ${t.customerName || ''} ${t.deviceSummary || ''} ${t.deliveryAddress || ''} ${t.staffName || ''}`.toLowerCase();
+                return matchStr.includes(search);
             });
         }
 
-        // Sort strictly based on order createdAt date time (newest first)
-        taskList.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
-
-        // Count totals for all status categories
-        const counts = {
-            unassigned: 0,
-            assigned: 0,
-            cancelled: 0,
-            refunded: 0,
-            terminated: 0,
-            completed: 0,
-            total: taskList.length
-        };
-
-        taskList.forEach(t => {
-            const key = t.displayStatus.toLowerCase();
-            if (counts[key] !== undefined) {
-                counts[key]++;
-            }
+        // 3. Sort Order
+        filtered = [...filtered].sort((a, b) => {
+            const timeA = Number(a.createdAtMs) || 0;
+            const timeB = Number(b.createdAtMs) || 0;
+            return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
         });
+
+        // 4. Paginate
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const safePage = Math.min(page, totalPages);
+        const startIndex = (safePage - 1) * limit;
+        const paginatedTasks = filtered.slice(startIndex, startIndex + limit);
 
         return res.json({
             success: true,
             counts,
-            tasks: taskList
+            pagination: {
+                total,
+                page: safePage,
+                limit,
+                totalPages
+            },
+            tasks: paginatedTasks
         });
     } catch (err) {
         console.error("Error in GET /admin/tasks:", err);
@@ -1268,11 +1560,13 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         // 3. Fetch Linked Schedule & Previous Staff Name
         let previousStaffName = taskData.staffName || "";
         let currentStaffID = taskData.staffID || "";
+        let schedData = null;
         const scheduleID = taskData.scheduleID || orderData.scheduleID || "";
         if (scheduleID) {
             const schedDoc = await db.collection("schedule").doc(scheduleID).get();
             if (schedDoc.exists) {
                 const sData = schedDoc.data();
+                schedData = sData;
                 if (!currentStaffID && sData.staffID) {
                     currentStaffID = sData.staffID;
                 }
@@ -1308,10 +1602,18 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                     destLat = Number(address.latitude);
                     destLng = Number(address.longitude);
                 }
-                const parts = [address.addressLine, address.city, address.state].filter(Boolean);
+                const parts = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean);
                 if (parts.length > 0) {
                     locationDisplay = parts.join(", ");
                 }
+            }
+        }
+
+        // Fallback to delivery collection if addressID wasn't found or missing address
+        if (locationDisplay === "Hub C - Bay 4") {
+            const delSnap = await db.collection("delivery").doc(`DEL-${orderID}`).get();
+            if (delSnap.exists && delSnap.data().deliveryAddress) {
+                locationDisplay = delSnap.data().deliveryAddress;
             }
         }
 
@@ -1451,9 +1753,23 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         tmrDate.setDate(tmrDate.getDate() + 1);
         const tomorrowStr = formatLocalYMD(tmrDate);
 
+        // Target schedule date according to task assignment algorithm rules:
+        // If current local time is >= 9:00 AM, task is scheduled for tomorrow; otherwise today
+        let targetDateObj = new Date(myNow);
+        if (currentHour >= 9) {
+            targetDateObj.setDate(targetDateObj.getDate() + 1);
+        }
+        const targetDateStr = formatLocalYMD(targetDateObj);
+        const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const targetDateFormatted = `${targetDateObj.getDate()} ${monthNamesShort[targetDateObj.getMonth()]} ${targetDateObj.getFullYear()}`;
+
         const isWithinWorkingHours = (currentHour >= 9 && currentHour < 17 && currentHour !== 12);
         const isOver9am = currentHour >= 9;
-        const isEarlyMorning = currentHour < 9;
+
+        // Customer coordinate & ReByte Central Hub location
+        const customerLoc = { lat: destLat, lng: destLng };
+        const hubLoc = COMPANY_LOCATION;
+        const hubToCustomerRoute = await getOsrmRoute(hubLoc, customerLoc);
 
         const eligibleStaff = [];
 
@@ -1473,7 +1789,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
 
             const staffID = doc.id;
 
-            // Fetch this staff's schedules to evaluate active workload & last task location
+            // Fetch this staff's schedules to evaluate active workload on the target schedule date
             const staffSchedSnap = await db.collection("schedule")
                 .where("staffID", "==", staffID)
                 .get();
@@ -1483,14 +1799,14 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                 staffScheds.push({ id: sDoc.id, ...sDoc.data() });
             });
 
-            // Count active tasks for today (assigned or ongoing)
-            const todayActive = staffScheds.filter(s => 
-                s.scheduleDate === todayStr && 
+            // Count active tasks specifically for the target schedule date (assigned or ongoing)
+            const targetDateActive = staffScheds.filter(s => 
+                s.scheduleDate === targetDateStr && 
                 (s.scheduleStatus === "assigned" || s.scheduleStatus === "ongoing")
             );
-            const activeCount = todayActive.length;
+            const activeCount = targetDateActive.length;
 
-            // Rule: Task count must be strictly under 8
+            // Rule: Task count must be strictly under 8 for the schedule date
             if (activeCount >= 8) continue;
 
             // Rule: Must be in the same state
@@ -1522,19 +1838,37 @@ router.get("/admin/reassign-candidates", async (req, res) => {
             const maxTasks = 8;
             const workloadText = `${activeCount}/8 tasks`;
 
-            // Distance calculation: from LAST TASK ENDED LOCATION to this task's destination
-            const validTasks = staffScheds.filter(s => s.scheduleStatus !== "cancelled" && s.scheduleStatus !== "rejected");
-            validTasks.sort((a, b) => {
-                const timeA = parseScheduleDate(a.scheduleEndTime || a.scheduleStartTime, a.scheduleDate) || new Date(0);
-                const timeB = parseScheduleDate(b.scheduleEndTime || b.scheduleStartTime, b.scheduleDate) || new Date(0);
-                return timeB.getTime() - timeA.getTime();
-            });
+            // Staff saved workplace coordinate
+            let staffWorkLocation = hubLoc;
+            if (d.workLocation && d.workLocation.lat && d.workLocation.lng) {
+                staffWorkLocation = { lat: Number(d.workLocation.lat), lng: Number(d.workLocation.lng) };
+            } else if (d.currentLat && d.currentLng) {
+                staffWorkLocation = { lat: Number(d.currentLat), lng: Number(d.currentLng) };
+            }
 
-            let lastEndLat = null;
-            let lastEndLng = null;
+            // Route Distance Calculation via OSRM:
+            // For 0 task: staff saved work place -> Rebyte Hub -> task deliver location
+            // For >0 task: last task location on schedule date -> new task deliver location
+            let distKm = 0;
+            let travelDurationMins = 0;
 
-            if (validTasks.length > 0) {
-                const lastTask = validTasks[0];
+            if (activeCount === 0) {
+                // Leg 1: Staff Work Base -> ReByte Hub
+                const staffToHub = await getOsrmRoute(staffWorkLocation, hubLoc);
+                // Leg 2: ReByte Hub -> Customer Destination
+                distKm = Number((staffToHub.distanceKm + hubToCustomerRoute.distanceKm).toFixed(1));
+                travelDurationMins = Math.round(staffToHub.durationMinutes + hubToCustomerRoute.durationMinutes);
+            } else {
+                // Find last task ended location on targetDateStr
+                targetDateActive.sort((a, b) => {
+                    const timeA = parseScheduleDate(a.scheduleEndTime || a.scheduleStartTime, a.scheduleDate) || new Date(0);
+                    const timeB = parseScheduleDate(b.scheduleEndTime || b.scheduleStartTime, b.scheduleDate) || new Date(0);
+                    return timeB.getTime() - timeA.getTime();
+                });
+                const lastTask = targetDateActive[0];
+
+                let lastEndLat = null;
+                let lastEndLng = null;
                 if (lastTask.destinationLat && lastTask.destinationLng) {
                     lastEndLat = Number(lastTask.destinationLat);
                     lastEndLng = Number(lastTask.destinationLng);
@@ -1571,73 +1905,47 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                         }
                     }
                 }
+
+                if (lastEndLat && lastEndLng) {
+                    const lastToNewRoute = await getOsrmRoute({ lat: lastEndLat, lng: lastEndLng }, customerLoc);
+                    distKm = Number(lastToNewRoute.distanceKm.toFixed(1));
+                    travelDurationMins = Math.round(lastToNewRoute.durationMinutes);
+                } else {
+                    const fallbackRoute = await getOsrmRoute(staffWorkLocation, customerLoc);
+                    distKm = Number(fallbackRoute.distanceKm.toFixed(1));
+                    travelDurationMins = Math.round(fallbackRoute.durationMinutes);
+                }
             }
 
-            // Fallback to staff's registered work location if no prior task exists
-            if (!lastEndLat || !lastEndLng) {
-                if (d.workLocation && d.workLocation.lat && d.workLocation.lng) {
-                    lastEndLat = Number(d.workLocation.lat);
-                    lastEndLng = Number(d.workLocation.lng);
-                } else {
-                    lastEndLat = 5.3542;
-                    lastEndLng = 100.3015;
+            // Task duration calculation (travel duration + buffer: 10 mins if < 0.5km, else 15 mins)
+            const bufferMins = distKm < 0.5 ? 10 : 15;
+            const taskTotalDurationMins = Math.max(15, Math.round(travelDurationMins + bufferMins));
+
+            // Availability timing on target schedule date:
+            let availableTime = "09:00";
+            if (targetDateActive.length > 0) {
+                const latest = targetDateActive[0];
+                const rawTime = latest.scheduleEndTime || latest.scheduleStartTime;
+                availableTime = formatTimeHHmmMY(rawTime);
+                const [hh, mm] = availableTime.split(":").map(Number);
+                // If it ends during lunch break (12:00-13:00), staff is available at 13:00
+                if (hh === 12 || (hh === 11 && mm > 45)) {
+                    availableTime = "13:00";
                 }
-            }
-
-            const distKm = calculateHaversineKm(lastEndLat, lastEndLng, destLat, destLng);
-
-            // Availability timing:
-            // "Now", or if today over 9am show tomorrow's available time, or if 00:00-08:59 show today's available time
-            let availableText = "Now";
-            let isImmediate = false;
-
-            const isBusyNow = todayActive.some(s => {
-                const sStart = parseScheduleDate(s.scheduleStartTime, todayStr);
-                const sEnd = parseScheduleDate(s.scheduleEndTime, todayStr);
-                if (sStart && sEnd) {
-                    return myNow >= sStart && myNow <= sEnd;
-                }
-                const start = s.scheduleStartTime || "00:00";
-                const end = s.scheduleEndTime || "23:59";
-                return currentTimeStr >= start && currentTimeStr <= end;
-            });
-
-            if (isWithinWorkingHours && !isBusyNow && activeCount < 8) {
-                availableText = "Now";
-                isImmediate = true;
-            } else if (isOver9am) {
-                // If today is over 9am: show what time available tomorrow
-                const tmrTasks = staffScheds.filter(s => s.scheduleDate === tomorrowStr && s.scheduleStatus !== "cancelled" && s.scheduleStatus !== "rejected");
-                if (tmrTasks.length > 0) {
-                    tmrTasks.sort((a, b) => {
-                        const tA = parseScheduleDate(a.scheduleEndTime || a.scheduleStartTime, tomorrowStr) || new Date(0);
-                        const tB = parseScheduleDate(b.scheduleEndTime || b.scheduleStartTime, tomorrowStr) || new Date(0);
-                        return tB.getTime() - tA.getTime();
-                    });
-                    const lastTask = tmrTasks[0];
-                    const timeStr = formatTimeHHmmMY(lastTask.scheduleEndTime || lastTask.scheduleStartTime);
-                    availableText = `Tomorrow ${timeStr}`;
-                } else {
-                    availableText = "Tomorrow 09:00";
-                }
-                isImmediate = false;
             } else {
-                // If today is with 00:00 to 08:59: show what time available today
-                const todayScheduled = staffScheds.filter(s => s.scheduleDate === todayStr && s.scheduleStatus !== "cancelled" && s.scheduleStatus !== "rejected");
-                if (todayScheduled.length > 0) {
-                    todayScheduled.sort((a, b) => {
-                        const tA = parseScheduleDate(a.scheduleEndTime || a.scheduleStartTime, todayStr) || new Date(0);
-                        const tB = parseScheduleDate(b.scheduleEndTime || b.scheduleStartTime, todayStr) || new Date(0);
-                        return tB.getTime() - tA.getTime();
-                    });
-                    const lastTask = todayScheduled[0];
-                    const timeStr = formatTimeHHmmMY(lastTask.scheduleEndTime || lastTask.scheduleStartTime);
-                    availableText = `Today ${timeStr}`;
-                } else {
-                    availableText = "Today 09:00";
-                }
-                isImmediate = false;
+                availableTime = "09:00";
             }
+            const availableText = availableTime;
+
+            // Calculate estimated complete time from available time + task duration
+            const [avH, avM] = availableTime.split(":").map(Number);
+            let startDt = new Date(targetDateObj.getFullYear(), targetDateObj.getMonth(), targetDateObj.getDate(), avH, avM, 0);
+            if (avH === 12) {
+                startDt = new Date(targetDateObj.getFullYear(), targetDateObj.getMonth(), targetDateObj.getDate(), 13, 0, 0);
+                availableTime = "13:00";
+            }
+            const endDt = new Date(startDt.getTime() + (taskTotalDurationMins * 60 * 1000));
+            const estimatedCompleteTime = formatTimeHHmmMY(endDt);
 
             // Initials or photo
             const initials = fullName.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
@@ -1655,14 +1963,19 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                 activeTasks: activeCount,
                 maxTasks,
                 workloadText,
+                scheduleDate: targetDateStr,
+                scheduleDateFormatted: targetDateFormatted,
                 distanceKm: distKm,
+                availableTime,
                 availableText,
-                isImmediate,
+                estimatedCompleteTime,
+                estimatedDurationMinutes: taskTotalDurationMins,
+                isImmediate: false,
                 state: staffState
             });
         }
 
-        // Sort: Least active tasks first, then closest distance
+        // Sort: Least active tasks first, then closest route distance
         eligibleStaff.sort((a, b) => {
             if (a.activeTasks !== b.activeTasks) return a.activeTasks - b.activeTasks;
             return a.distanceKm - b.distanceKm;
@@ -1678,6 +1991,10 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                 displayStatus,
                 previousStaffName,
                 cancellationReason,
+                rejectionReason: taskData.rejectionReason || "Task needs immediate reassignment to clear queue.",
+                rejectionNotes: taskData.rejectionNotes || (schedData && schedData.rejectionNotes) || (orderData && orderData.notes) || "",
+                scheduleDate: targetDateStr,
+                scheduleDateFormatted: targetDateFormatted,
                 device: {
                     name: deviceName,
                     brand: deviceBrand,
@@ -1693,6 +2010,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                 orderDateFormatted: formatOrderDateTime(orderDateRaw),
                 createdAtMs: getOrderTimestamp(orderData),
                 totalAmount: orderData.totalAmount || 0,
+                addressID: orderData.addressID || "",
                 fulfillmentType
             },
             staff: eligibleStaff
@@ -1714,79 +2032,26 @@ router.post("/admin/reassign", async (req, res) => {
             return res.status(400).json({ success: false, error: "orderID is required" });
         }
 
-        // If staffID is provided, do manual assignment
-        if (staffID && staffID !== "auto") {
-            const staffDoc = await db.collection("users").doc(staffID).get();
-            if (!staffDoc.exists) {
-                return res.status(404).json({ success: false, error: "Staff not found" });
-            }
-            const staffData = staffDoc.data();
-            const staffName = staffData.fullName || staffData.name || "Assigned Staff";
-
-            const scheduleID = `SCH-${orderID}-${Date.now().toString().slice(-4)}`;
-            const taskID = `TSK-${orderID}`;
-            const schedDateStr = new Date().toISOString().split("T")[0];
-
-            const batch = db.batch();
-
-            // 1. Create or update schedule
-            batch.set(db.collection("schedule").doc(scheduleID), {
-                scheduleID,
-                orderID,
-                staffID,
-                staffName,
-                scheduleDate: schedDateStr,
-                scheduleStartTime: "09:00",
-                scheduleEndTime: "17:00",
-                scheduleStatus: "assigned",
-                updatedAt: new Date()
-            }, { merge: true });
-
-            // 2. Update task
-            batch.set(db.collection("task").doc(taskID), {
-                taskID,
-                orderID,
-                staffID,
-                staffName,
-                scheduleID,
-                taskType: "deliver",
-                taskStatus: "Packaging",
-                taskStartTime: "09:00",
-                rejectionReason: null,
-                rejectionNotes: null,
-                updatedAt: new Date()
-            }, { merge: true });
-
-            // 3. Update order
-            batch.set(db.collection("order").doc(orderID), {
-                orderStatus: "Delivering",
-                updatedAt: new Date()
-            }, { merge: true });
-
-            // 4. Update delivery
-            const delID = `DEL-${orderID}`;
-            batch.set(db.collection("delivery").doc(delID), {
-                deliveryStatus: "ongoing",
-                updatedAt: new Date()
-            }, { merge: true });
-
-            await batch.commit();
-
-            return res.json({
-                success: true,
-                message: `Order #${orderID} successfully reassigned to ${staffName}.`,
-                scheduleID,
-                staffID,
-                staffName
-            });
-        }
-
-        // Auto assignment via taskAssignmentService
+        // Reassign using the taskAssignment algorithm:
+        // - Calculates duration + buffer
+        // - Estimates start and end date/time
+        // - If more than 1 task on schedule, reroutes all permutations to select best path
+        // - Sets order: Delivering, task: Packaging, delivery: ongoing
+        // - Creates brand new schedule record, leaving older rejected schedule record intact
+        // - Sets task record to reference the new schedule ID
         const result = await assignDeliveryTask({
             orderID,
             addressID,
-            requestedDate: requestedDate ? new Date(requestedDate) : new Date()
+            requestedDate: requestedDate ? new Date(requestedDate) : new Date(),
+            specificStaffID: (staffID && staffID !== "auto") ? staffID : null
         });
+
+        if (result && result.success) {
+            if (result.scheduleID) {
+                registerScheduleTimer(result.scheduleID);
+            }
+            invalidateTaskCache();
+        }
 
         return res.json(result);
     } catch (err) {
@@ -1806,45 +2071,39 @@ router.post("/admin/terminate", async (req, res) => {
             return res.status(400).json({ success: false, error: "orderID or taskID is required" });
         }
 
-        const batch = db.batch();
-        const termReason = reason || "Terminated by administrator - changed to Self Pickup";
+        const targetOrderID = orderID || (taskID ? taskID.replace(/^TSK-/, '') : '');
+        const targetTaskID = taskID || `TSK-${targetOrderID}`;
 
-        const targetTaskID = taskID || `TSK-${orderID}`;
+        // Fetch task document to retrieve staff rejection reason if reason is empty
         const taskRef = db.collection("task").doc(targetTaskID);
         const taskSnap = await taskRef.get();
-        let schedID = null;
-        if (taskSnap.exists) {
-            schedID = taskSnap.data().scheduleID;
+        let taskData = taskSnap.exists ? taskSnap.data() : {};
+        let schedData = {};
+
+        if (taskData.scheduleID) {
+            const schedSnap = await db.collection("schedule").doc(taskData.scheduleID).get();
+            if (schedSnap.exists) schedData = schedSnap.data();
         }
 
-        // 1. Task: follow exact same as rejected by staff (taskStatus = "Rejected")
-        batch.set(taskRef, {
-            taskStatus: "Rejected",
-            rejectionReason: termReason,
-            terminatedAt: new Date(),
-            updatedAt: new Date()
-        }, { merge: true });
-
-        // 2. Schedule: follow exact same as rejected by staff (scheduleStatus = "rejected")
-        if (schedID) {
-            batch.set(db.collection("schedule").doc(schedID), {
-                scheduleStatus: "rejected",
-                rejectionReason: termReason,
-                updatedAt: new Date()
-            }, { merge: true });
+        // Determine final reason: if reason is empty, use staff rejected reason
+        const staffRejectionReason = String(taskData.rejectionReason || schedData.rejectionReason || taskData.rejectionNotes || schedData.rejectionNotes || "").trim();
+        let termReason = String(reason || "").trim();
+        if (!termReason) {
+            termReason = staffRejectionReason || "Delivery cancelled - please collect package via self pickup";
+        }
+        // Ensure max 50 characters
+        if (termReason.length > 50) {
+            termReason = termReason.substring(0, 50);
         }
 
-        // 3. Delivery & Order
-        if (orderID) {
-            // Delivery: follow exact same as rejected by staff (deliveryStatus = "cancelled")
-            const delID = `DEL-${orderID}`;
-            batch.set(db.collection("delivery").doc(delID), {
-                deliveryStatus: "cancelled",
-                updatedAt: new Date()
-            }, { merge: true });
+        // Batch update:
+        // Order changes to "Self pickup" status
+        // Task, Delivery, and Schedule status remain unchanged as requested
+        const batch = db.batch();
 
-            // Order: change to "Self pickup"
-            batch.set(db.collection("order").doc(orderID), {
+        if (targetOrderID) {
+            const ordRef = db.collection("order").doc(targetOrderID);
+            batch.set(ordRef, {
                 orderStatus: "Self pickup",
                 fulfillmentType: "Self Pickup",
                 terminationReason: termReason,
@@ -1854,13 +2113,108 @@ router.post("/admin/terminate", async (req, res) => {
         }
 
         await batch.commit();
+        invalidateTaskCache();
+
+        // Retrieve customer details to send email
+        let customerEmail = "";
+        let customerName = "Customer";
+        let orderItems = [];
+
+        if (targetOrderID) {
+            const ordSnap = await db.collection("order").doc(targetOrderID).get();
+            if (ordSnap.exists) {
+                const ordData = ordSnap.data();
+                customerEmail = ordData.email || ordData.userEmail || "";
+                customerName = ordData.customerName || "";
+                orderItems = ordData.items || [];
+
+                // Fallback to address collection
+                if (!customerEmail && ordData.addressID) {
+                    const addrSnap = await db.collection("address").doc(ordData.addressID).get();
+                    if (addrSnap.exists) {
+                        const addrData = addrSnap.data();
+                        customerEmail = addrData.email || "";
+                        customerName = customerName || addrData.recipentName || addrData.recipientName || "";
+                    }
+                }
+
+                // Fallback to users collection
+                const customerID = ordData.customerID || ordData.userId || "";
+                if ((!customerEmail || !customerName) && customerID) {
+                    const uSnap = await db.collection("users").doc(customerID).get();
+                    if (uSnap.exists) {
+                        const uData = uSnap.data();
+                        customerEmail = customerEmail || uData.email || "";
+                        customerName = customerName || uData.fullName || uData.name || "Customer";
+                    }
+                }
+            }
+        }
+
+        // Send email to customer asynchronously
+        let emailSent = false;
+        if (customerEmail) {
+            const emailResult = await sendTerminationSelfPickupEmail({
+                toEmail: customerEmail,
+                customerName,
+                orderID: targetOrderID,
+                reason: termReason,
+                items: orderItems
+            });
+            emailSent = emailResult.success === true;
+        }
 
         return res.json({
             success: true,
-            message: `Task for order #${orderID || targetTaskID} has been terminated and changed to Self Pickup.`
+            message: `Order #${targetOrderID} changed to Self pickup.${emailSent ? ' Notification email sent to customer.' : ''}`,
+            reason: termReason,
+            emailSent
         });
     } catch (err) {
         console.error("Error in POST /admin/terminate:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/task-assignment/admin/self-pickup-completed
+ * Mark self-pickup terminated order as Picked / Completed
+ */
+router.post("/admin/self-pickup-completed", async (req, res) => {
+    try {
+        const { orderID } = req.body;
+        if (!orderID) {
+            return res.status(400).json({ success: false, error: "orderID is required" });
+        }
+
+        const ordRef = db.collection("order").doc(orderID);
+        const ordSnap = await ordRef.get();
+        if (!ordSnap.exists) {
+            return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        await ordRef.set({
+            orderStatus: "Completed",
+            pickedAt: new Date(),
+            updatedAt: new Date()
+        }, { merge: true });
+
+        // Also update linked task to Completed
+        const taskID = `TSK-${orderID}`;
+        await db.collection("task").doc(taskID).set({
+            taskStatus: "Completed",
+            completedAt: new Date(),
+            updatedAt: new Date()
+        }, { merge: true });
+
+        invalidateTaskCache();
+
+        return res.json({
+            success: true,
+            message: `Order #${orderID} marked as Completed (Picked up).`
+        });
+    } catch (err) {
+        console.error("Error in POST /admin/self-pickup-completed:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -1885,4 +2239,498 @@ router.get("/admin/criteria", (req, res) => {
     });
 });
 
+/**
+ * POST /api/task-assignment/admin/simulate-delay-check
+ * Trigger manual violation checks for testing and demo purposes
+ */
+router.post("/admin/simulate-delay-check", async (req, res) => {
+    try {
+        const { scheduleID, type } = req.body;
+        if (!scheduleID) {
+            return res.status(400).json({ success: false, error: "scheduleID is required" });
+        }
+
+        if (type === "end") {
+            await handleEndTimeViolation(scheduleID);
+            return res.json({ success: true, message: `Simulated end-time violation check executed for ${scheduleID}` });
+        } else {
+            await handleStartTimeViolation(scheduleID);
+            return res.json({ success: true, message: `Simulated start-time violation check executed for ${scheduleID}` });
+        }
+    } catch (err) {
+        console.error("Error in simulate-delay-check:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post("/admin/simulate-monthly-reset", async (req, res) => {
+    try {
+        await checkAndResetMonthlyMistakes(true);
+        return res.json({ success: true, message: "Monthly staff mistake reset executed successfully (forced reset)." });
+    } catch (err) {
+        console.error("Error in simulate-monthly-reset:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * =========================================================================
+ * LEAVE APPLICATION MANAGEMENT
+ * Collection: leaveApplication
+ * Fields:
+ *   [PK] leaveID
+ *   leaveType: 'Annual Leave' | 'Medical Leave' | 'Unpaid Leave'
+ *   startDate: 'DD/MM/YYYY'
+ *   endDate: 'DD/MM/YYYY'
+ *   leaveStatus: 'Pending' | 'Approved' | 'Rejected'
+ *   reason: string
+ *   suportingDocUrl: string
+ *   [FK] applicantStaffID: string
+ * =========================================================================
+ */
+
+// Helper to resolve staff document from applicantStaffID or email
+async function resolveStaffAccount(staffID, email) {
+    let targetDoc = null;
+    if (staffID) {
+        const doc = await db.collection("users").doc(staffID).get();
+        if (doc.exists) return { id: doc.id, data: doc.data() };
+        // check staffNo
+        const snap = await db.collection("users").where("staffNo", "==", staffID).limit(1).get();
+        if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
+    }
+    if (email) {
+        const snap = await db.collection("users").where("email", "==", String(email).trim().toLowerCase()).limit(1).get();
+        if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
+    }
+    return null;
+}
+
+// Helper to get or initialize staff 'leave' field directly on users/{staffDocId}
+// Structure: db.collection("users").doc(staffDocId) -> field 'leave': { annualRemaining, medicalRemaining }
+async function getStaffLeaveBalance(staffDocId) {
+    const userDocRef = db.collection("users").doc(staffDocId);
+    const userDoc = await userDocRef.get();
+
+    let annualRemaining = 12;
+    let medicalRemaining = 14;
+
+    if (userDoc.exists) {
+        const userData = userDoc.data() || {};
+        if (userData.leave && typeof userData.leave === "object") {
+            annualRemaining = typeof userData.leave.annualRemaining === "number" ? userData.leave.annualRemaining : 12;
+            medicalRemaining = typeof userData.leave.medicalRemaining === "number" ? userData.leave.medicalRemaining : 14;
+        } else {
+            await userDocRef.set({ leave: { annualRemaining, medicalRemaining } }, { merge: true });
+        }
+    }
+
+    return {
+        ref: userDocRef,
+        data: { annualRemaining, medicalRemaining }
+    };
+}
+
+const getStaffLeaveSubcollection = getStaffLeaveBalance;
+
+/**
+ * GET /api/task-assignment/leave-balance?staffID=...&email=...
+ * Returns the staff remaining leave balances from subcollection users/{staffID}/leave/balance
+ */
+router.get("/leave-balance", async (req, res) => {
+    try {
+        const { staffID, email } = req.query;
+        const staff = await resolveStaffAccount(staffID, email);
+        if (!staff) {
+            return res.json({
+                success: true,
+                annualRemaining: 12,
+                medicalRemaining: 14
+            });
+        }
+        const { data } = await getStaffLeaveSubcollection(staff.id);
+        return res.json({
+            success: true,
+            staffID: staff.id,
+            annualRemaining: data.annualRemaining,
+            medicalRemaining: data.medicalRemaining
+        });
+    } catch (err) {
+        console.error("Error fetching leave balance:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/task-assignment/leave-applications?staffID=...&email=...
+ * Fetch all leave applications submitted by a staff member
+ */
+router.get("/leave-applications", async (req, res) => {
+    try {
+        const { staffID, email } = req.query;
+        const staff = await resolveStaffAccount(staffID, email);
+        if (!staff) {
+            return res.json({ success: true, applications: [] });
+        }
+
+        const snap = await db.collection("leaveApplication")
+            .where("applicantStaffID", "==", staff.id)
+            .get();
+
+        const applications = [];
+        snap.forEach(doc => {
+            applications.push({
+                ...doc.data(),
+                id: doc.id
+            });
+        });
+
+        // Sort desc by createdAt or leaveID
+        applications.sort((a, b) => {
+            const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return tB - tA;
+        });
+
+        return res.json({ success: true, applications });
+    } catch (err) {
+        console.error("Error fetching leave applications:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/task-assignment/apply-leave
+ * Multi-part / JSON endpoint to create a leave application record
+ */
+router.post("/apply-leave", (req, res, next) => {
+    upload.single("supportingDoc")(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const {
+            applicantStaffID,
+            email,
+            leaveType,
+            startDate, // Expected DD/MM/YYYY
+            endDate,   // Expected DD/MM/YYYY
+            reason = "",
+            days
+        } = req.body;
+
+        let suportingDocUrl = req.body.suportingDocUrl || "";
+
+        // 1. Resolve staff
+        const staff = await resolveStaffAccount(applicantStaffID, email);
+        if (!staff) {
+            return res.status(404).json({ success: false, error: "Staff account not found." });
+        }
+
+        // 2. Validate leaveType: Annual Leave, Medical Leave, Unpaid Leave
+        const validTypes = ["Annual Leave", "Medical Leave", "Unpaid Leave"];
+        if (!validTypes.includes(leaveType)) {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid leave type. Only Annual Leave, Medical Leave, and Unpaid Leave are accepted."
+            });
+        }
+
+        // 3. Validate dates format DD/MM/YYYY
+        if (!startDate || !endDate) {
+            return res.status(400).json({ success: false, error: "Start date and End date are required." });
+        }
+
+        // Parse DD/MM/YYYY
+        const parseDMY = (dStr) => {
+            if (!dStr) return null;
+            const parts = dStr.split("/");
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const year = parseInt(parts[2], 10);
+                return new Date(year, month, day, 0, 0, 0);
+            }
+            return new Date(dStr);
+        };
+
+        const startDt = parseDMY(startDate);
+        const endDt = parseDMY(endDate);
+
+        if (!startDt || isNaN(startDt.getTime()) || !endDt || isNaN(endDt.getTime())) {
+            return res.status(400).json({ success: false, error: "Dates must be valid and formatted as DD/MM/YYYY." });
+        }
+
+        // The start date should limit until tmr (meaning the leave needs to be applied at least 1 day before)
+        const now = new Date();
+        const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+        if (startDt < tomorrow) {
+            return res.status(400).json({
+                success: false,
+                error: "Start date must be tomorrow or later. Leave applications must be submitted at least 1 day in advance."
+            });
+        }
+
+        if (endDt < startDt) {
+            return res.status(400).json({ success: false, error: "End date cannot be earlier than start date." });
+        }
+
+        // Calculate duration in days
+        const durationDays = parseInt(days, 10) || Math.floor((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+        // 4. Check for overlapping dates and calculate total pending days for Annual and Medical Leave
+        const existingAppsSnap = await db.collection("leaveApplication")
+            .where("applicantStaffID", "==", staff.id)
+            .get();
+
+        const testStart = new Date(startDt.getFullYear(), startDt.getMonth(), startDt.getDate(), 0, 0, 0);
+        const testEnd = new Date(endDt.getFullYear(), endDt.getMonth(), endDt.getDate(), 23, 59, 59, 999);
+
+        let pendingAnnualDays = 0;
+        let pendingMedicalDays = 0;
+
+        for (const doc of existingAppsSnap.docs) {
+            const app = doc.data();
+            const status = (app.leaveStatus || "").toLowerCase();
+            const appDays = parseInt(app.daysCount || app.duration || 1, 10) || 1;
+
+            // Track total requested (pending) days per leave type
+            if (["pending", "in request", "requested"].includes(status)) {
+                if (app.leaveType === "Annual Leave") {
+                    pendingAnnualDays += appDays;
+                } else if (app.leaveType === "Medical Leave") {
+                    pendingMedicalDays += appDays;
+                }
+            }
+
+            // Check only active/pending/approved requests for date collisions
+            if (["pending", "approved", "in request", "requested"].includes(status)) {
+                const exStart = parseDMY(app.startDate);
+                const exEnd = parseDMY(app.endDate);
+                if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+                    const normExStart = new Date(exStart.getFullYear(), exStart.getMonth(), exStart.getDate(), 0, 0, 0);
+                    const normExEnd = new Date(exEnd.getFullYear(), exEnd.getMonth(), exEnd.getDate(), 23, 59, 59, 999);
+
+                    // Overlap check: testStart <= normExEnd && testEnd >= normExStart
+                    if (testStart <= normExEnd && testEnd >= normExStart) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `You already have a ${app.leaveStatus || "Pending"} leave application (${app.leaveID}: ${app.startDate} - ${app.endDate}) covering the selected date(s). Applications with overlapping dates are not permitted.`
+                        });
+                    }
+                }
+            }
+        }
+
+        // 5. Validate supporting document & reason according to leaveType rules
+        // If Medical: reason AND attachment are necessary
+        if (leaveType === "Medical Leave") {
+            if (!reason || !reason.trim()) {
+                return res.status(400).json({ success: false, error: "Reason is required for Medical Leave." });
+            }
+            if (!req.file && !suportingDocUrl) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Supporting document / Medical Certificate is mandatory for Medical Leave."
+                });
+            }
+        }
+
+        // If Unpaid: reason is necessary, attachment is optional
+        if (leaveType === "Unpaid Leave") {
+            if (!reason || !reason.trim()) {
+                return res.status(400).json({ success: false, error: "Reason is required for Unpaid Leave." });
+            }
+        }
+
+        // 6. Handle file upload to Cloudinary if provided
+        if (req.file && req.file.buffer) {
+            try {
+                const folder = `rebyte/leave_documents/${staff.id}`;
+                const publicName = `doc_${Date.now()}`;
+                const uploadResult = await uploadBufferToCloudinary(req.file.buffer, folder, publicName);
+                suportingDocUrl = uploadResult.secure_url || uploadResult.url;
+            } catch (upErr) {
+                console.error("Cloudinary upload failed for leave attachment:", upErr);
+                return res.status(500).json({ success: false, error: "Failed to upload supporting document." });
+            }
+        }
+
+        // 7. Check leave balances in staff user record users/{staffID}.leave
+        // NOTE: Balance is NOT deducted until approved!
+        // The total request of annual/medical leave (pending + current) cannot exceed the remaining balance
+        const leaveBal = await getStaffLeaveBalance(staff.id);
+        const currentBalance = leaveBal.data;
+
+        if (leaveType === "Annual Leave") {
+            const totalRequested = pendingAnnualDays + durationDays;
+            if (totalRequested > currentBalance.annualRemaining) {
+                const available = Math.max(0, currentBalance.annualRemaining - pendingAnnualDays);
+                return res.status(400).json({
+                    success: false,
+                    error: `The total requested Annual Leave (${totalRequested} days: ${pendingAnnualDays} pending + ${durationDays} current) cannot exceed your remaining balance (${currentBalance.annualRemaining} days). You can only request up to ${available} more day(s).`
+                });
+            }
+        } else if (leaveType === "Medical Leave") {
+            const totalRequested = pendingMedicalDays + durationDays;
+            if (totalRequested > currentBalance.medicalRemaining) {
+                const available = Math.max(0, currentBalance.medicalRemaining - pendingMedicalDays);
+                return res.status(400).json({
+                    success: false,
+                    error: `The total requested Medical Leave (${totalRequested} days: ${pendingMedicalDays} pending + ${durationDays} current) cannot exceed your remaining balance (${currentBalance.medicalRemaining} days). You can only request up to ${available} more day(s).`
+                });
+            }
+        }
+
+        // 8. Generate leaveID: LV-XXXXXX
+        const leaveID = `LV-${Date.now().toString().slice(-6)}`;
+
+        // 9. Create leaveApplication record in Firestore with leaveStatus: "Pending"
+        const leaveRecord = {
+            leaveID,
+            leaveType,
+            startDate, // Display format DD/MM/YYYY
+            endDate,   // Display format DD/MM/YYYY
+            leaveStatus: "Pending",
+            reason: reason ? reason.trim() : "",
+            suportingDocUrl: suportingDocUrl || "",
+            applicantStaffID: staff.id,
+            applicantStaffNo: staff.data.staffNo || "",
+            applicantStaffName: staff.data.fullName || staff.data.name || "",
+            duration: durationDays,
+            daysCount: durationDays,
+            createdAt: new Date().toISOString()
+        };
+
+        // Unapproved application: do NOT deduct remaining balance yet
+        await db.collection("leaveApplication").doc(leaveID).set(leaveRecord);
+
+        return res.status(201).json({
+            success: true,
+            message: "Leave application submitted successfully. Awaiting approval and review.",
+            leaveRecord,
+            annualRemaining: currentBalance.annualRemaining,
+            medicalRemaining: currentBalance.medicalRemaining
+        });
+    } catch (err) {
+        console.error("Error creating leave application:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/task-assignment/cancel-leave/:leaveID
+ * Cancel a pending leave application
+ */
+router.delete("/cancel-leave/:leaveID", async (req, res) => {
+    try {
+        const { leaveID } = req.params;
+        const docRef = db.collection("leaveApplication").doc(leaveID);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ success: false, error: "Leave application not found." });
+        }
+        const data = doc.data();
+        if (data.leaveStatus === "Cancelled") {
+            return res.status(400).json({ success: false, error: "This leave application is already cancelled." });
+        }
+        if (data.leaveStatus !== "Pending") {
+            return res.status(400).json({ success: false, error: "Only Pending applications can be cancelled." });
+        }
+
+        const batch = db.batch();
+        // If cancel request, just change status to Cancelled
+        batch.update(docRef, {
+            leaveStatus: "Cancelled",
+            cancelledAt: new Date().toISOString()
+        });
+
+        // If it was already Approved, restore balance. If Pending, it was not deducted yet so no restoration needed.
+        const staffDocId = data.applicantStaffID;
+        const durationDays = parseInt(data.daysCount || data.duration || 1, 10);
+        const leaveType = data.leaveType;
+
+        if (data.leaveStatus === "Approved" && staffDocId && (leaveType === "Annual Leave" || leaveType === "Medical Leave")) {
+            const leaveBal = await getStaffLeaveBalance(staffDocId);
+            if (leaveType === "Annual Leave") {
+                const restored = Math.min(12, leaveBal.data.annualRemaining + durationDays);
+                batch.update(leaveBal.ref, {
+                    "leave.annualRemaining": restored
+                });
+            } else if (leaveType === "Medical Leave") {
+                const restored = Math.min(14, leaveBal.data.medicalRemaining + durationDays);
+                batch.update(leaveBal.ref, {
+                    "leave.medicalRemaining": restored
+                });
+            }
+        }
+
+        await batch.commit();
+        return res.json({ success: true, message: "Leave application cancelled successfully." });
+    } catch (err) {
+        console.error("Error cancelling leave application:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/task-assignment/review-leave/:leaveID
+ * Review/Approve/Reject a leave application (deducts remaining leave only when Approved)
+ */
+router.put("/review-leave/:leaveID", async (req, res) => {
+    try {
+        const { leaveID } = req.params;
+        const { status, reviewRemarks, reviewerID } = req.body;
+        if (!status || !["Approved", "Rejected"].includes(status)) {
+            return res.status(400).json({ success: false, error: "Status must be 'Approved' or 'Rejected'." });
+        }
+
+        const docRef = db.collection("leaveApplication").doc(leaveID);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ success: false, error: "Leave application not found." });
+        }
+        const currentData = doc.data();
+        if (currentData.leaveStatus !== "Pending") {
+            return res.status(400).json({ success: false, error: `Leave application is already ${currentData.leaveStatus}.` });
+        }
+
+        const batch = db.batch();
+        batch.update(docRef, {
+            leaveStatus: status,
+            reviewedAt: new Date().toISOString(),
+            reviewerID: reviewerID || "",
+            reviewRemarks: reviewRemarks || ""
+        });
+
+        // Deduct balance ONLY when Approved!
+        if (status === "Approved") {
+            const staffDocId = currentData.applicantStaffID;
+            const durationDays = parseInt(currentData.daysCount || currentData.duration || 1, 10);
+            const leaveType = currentData.leaveType;
+
+            if (staffDocId && (leaveType === "Annual Leave" || leaveType === "Medical Leave")) {
+                const leaveBal = await getStaffLeaveBalance(staffDocId);
+                if (leaveType === "Annual Leave") {
+                    const newBal = Math.max(0, leaveBal.data.annualRemaining - durationDays);
+                    batch.update(leaveBal.ref, { "leave.annualRemaining": newBal });
+                } else if (leaveType === "Medical Leave") {
+                    const newBal = Math.max(0, leaveBal.data.medicalRemaining - durationDays);
+                    batch.update(leaveBal.ref, { "leave.medicalRemaining": newBal });
+                }
+            }
+        }
+
+        await batch.commit();
+        return res.json({ success: true, message: `Leave application ${status.toLowerCase()} successfully.` });
+    } catch (err) {
+        console.error("Error reviewing leave application:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
+

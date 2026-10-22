@@ -7,11 +7,13 @@ import 'staff_task_details_page.dart';
 class StaffAssignedTasksPage extends StatefulWidget {
   final String? email;
   final String? staffID;
+  final bool showBackButton;
 
   const StaffAssignedTasksPage({
     super.key,
     this.email,
     this.staffID,
+    this.showBackButton = false,
   });
 
   @override
@@ -22,6 +24,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   int _selectedTabIndex = 0; // 0: Assigned, 1: In Progress, 2: Completed
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
+  final Set<String> _startingTaskIDs = {};
   String? _toast;
   bool _toastError = false;
 
@@ -55,20 +58,51 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     }
   }
 
+  DateTime _getTaskScheduleDateTime(Map<String, dynamic> task) {
+    final startTimeStr = task['scheduleStartTime']?.toString();
+    final scheduleDateStr = task['scheduleDate']?.toString();
+    DateTime? dt;
+    if (startTimeStr != null && startTimeStr.isNotEmpty) {
+      if (startTimeStr.contains('-') || startTimeStr.contains('T')) {
+        dt = DateTime.tryParse(startTimeStr);
+      } else if (scheduleDateStr != null && scheduleDateStr.isNotEmpty) {
+        final cleanTime = startTimeStr.length == 5 ? '$startTimeStr:00' : startTimeStr;
+        dt = DateTime.tryParse('${scheduleDateStr}T$cleanTime');
+      }
+    }
+    dt ??= (scheduleDateStr != null ? DateTime.tryParse(scheduleDateStr) : null);
+    dt ??= DateTime.tryParse(task['createdAt']?.toString() ?? '');
+    return dt ?? DateTime(2099);
+  }
+
   List<Map<String, dynamic>> get _assignedTasks {
-    return _tasks.where((t) {
+    final list = _tasks.where((t) {
       final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
       final ts = (t['taskStatus']?.toString() ?? '').toLowerCase();
+      if (s == 'absent' || s == 'rejected' || s == 'cancelled' || ts == 'rejected' || ts == 'cancelled' || ts == 'unassigned') {
+        return false;
+      }
       return s == 'assigned' || ts == 'packaging';
     }).toList();
+
+    // Sort from earliest to latest task
+    list.sort((a, b) => _getTaskScheduleDateTime(a).compareTo(_getTaskScheduleDateTime(b)));
+    return list;
   }
 
   List<Map<String, dynamic>> get _inProgressTasks {
-    return _tasks.where((t) {
+    final list = _tasks.where((t) {
       final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
       final ts = (t['taskStatus']?.toString() ?? '').toLowerCase();
+      if (s == 'absent' || s == 'rejected' || s == 'cancelled' || ts == 'rejected' || ts == 'cancelled' || ts == 'unassigned') {
+        return false;
+      }
       return s == 'ongoing' || ts == 'shipping' || ts == 'in progress';
     }).toList();
+
+    // Sort from earliest to latest task
+    list.sort((a, b) => _getTaskScheduleDateTime(a).compareTo(_getTaskScheduleDateTime(b)));
+    return list;
   }
 
   List<Map<String, dynamic>> get _completedTasks {
@@ -78,31 +112,8 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
       return s == 'completed' || ts == 'delivered';
     }).toList();
 
-    // Sort completed tasks from latest completed to oldest
-    list.sort((a, b) {
-      DateTime? dateA;
-      DateTime? dateB;
-
-      if (a['completedAt'] != null) {
-        dateA = DateTime.tryParse(a['completedAt'].toString());
-      }
-      if (b['completedAt'] != null) {
-        dateB = DateTime.tryParse(b['completedAt'].toString());
-      }
-
-      // Fallbacks if completedAt was not recorded on legacy tasks
-      dateA ??= DateTime.tryParse(a['updatedAt']?.toString() ?? '') ??
-          DateTime.tryParse(a['scheduleEndTime']?.toString() ?? '') ??
-          DateTime.tryParse(a['scheduleStartTime']?.toString() ?? '');
-      dateB ??= DateTime.tryParse(b['updatedAt']?.toString() ?? '') ??
-          DateTime.tryParse(b['scheduleEndTime']?.toString() ?? '') ??
-          DateTime.tryParse(b['scheduleStartTime']?.toString() ?? '');
-
-      if (dateA == null && dateB == null) return 0;
-      if (dateA == null) return 1;
-      if (dateB == null) return -1;
-      return dateB.compareTo(dateA); // Descending: latest first
-    });
+    // Sort completed tasks from earliest to latest task
+    list.sort((a, b) => _getTaskScheduleDateTime(a).compareTo(_getTaskScheduleDateTime(b)));
 
     return list;
   }
@@ -135,8 +146,23 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: Row(
-                    children: const [
-                      Text(
+                    children: [
+                      if (widget.showBackButton) ...[
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Icon(Icons.arrow_back, size: 20, color: Color(0xFF0F172A)),
+                          ),
+                        ),
+                      ],
+                      const Text(
                         'Assigned Tasks',
                         style: TextStyle(
                           fontSize: 22,
@@ -405,7 +431,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
         _loadTasks();
         if (mounted) {
           if (res is Map && res['rejected'] == true) {
-            _showToast(res['message']?.toString() ?? 'Delivery task is rejected', true);
+            _showToast(res['message']?.toString() ?? 'Delivery task is rejected', false);
           } else {
             _showToast(res is String ? res : 'Delivery completed successfully!');
           }
@@ -497,41 +523,92 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
           // Product & Client Row
           Row(
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(
-                        imageUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.devices, color: Color(0xFF94A3B8)),
-                      )
-                    : const Icon(Icons.devices, color: Color(0xFF94A3B8)),
+              Stack(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.devices, color: Color(0xFF94A3B8)),
+                          )
+                        : const Icon(Icons.devices, color: Color(0xFF94A3B8)),
+                  ),
+                  if (items.length > 1)
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${items.length}x',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      itemTitle,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            itemTitle,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (items.length > 1) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: Text(
+                              '${items.length} Products',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '👤 $customerName • $itemSpecs',
+                      items.length > 1
+                          ? '👤 $customerName • ${items.length} items to deliver'
+                          : '👤 $customerName • $itemSpecs',
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF64748B),
@@ -579,72 +656,122 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (isAssigned) {
-                        // Move to Shipping (In Progress) and transition to Navigation Page
-                        await TaskAssignmentService.updateTaskStatus(
-                          taskID: taskID,
-                          orderID: orderID,
-                          scheduleID: scheduleID,
-                          status: 'Shipping',
-                        );
-                        _loadTasks();
+                  child: Builder(
+                    builder: (context) {
+                      final isStarting = _startingTaskIDs.contains(taskID);
 
-                        final ongoingTask = Map<String, dynamic>.from(task);
-                        ongoingTask['taskStatus'] = 'Shipping';
-                        ongoingTask['scheduleStatus'] = 'ongoing';
+                      return ElevatedButton(
+                        onPressed: isStarting
+                            ? null
+                            : () async {
+                                if (isAssigned) {
+                                  setState(() {
+                                    _startingTaskIDs.add(taskID);
+                                  });
 
-                        if (!mounted) return;
-                        final res = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StaffNavigationPage(
-                              task: ongoingTask,
-                              onTaskUpdated: _loadTasks,
-                            ),
+                                  try {
+                                    // Move to Shipping (In Progress) and transition to Navigation Page
+                                    await TaskAssignmentService.updateTaskStatus(
+                                      taskID: taskID,
+                                      orderID: orderID,
+                                      scheduleID: scheduleID,
+                                      status: 'Shipping',
+                                    );
+                                    _loadTasks();
+
+                                    final ongoingTask = Map<String, dynamic>.from(task);
+                                    ongoingTask['taskStatus'] = 'Shipping';
+                                    ongoingTask['scheduleStatus'] = 'ongoing';
+
+                                    if (!mounted || !context.mounted) return;
+                                    final res = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => StaffNavigationPage(
+                                          task: ongoingTask,
+                                          onTaskUpdated: _loadTasks,
+                                        ),
+                                      ),
+                                    );
+                                    _loadTasks();
+                                    if (res != null && mounted) {
+                                      _showToast(res is String ? res : 'Delivery completed successfully!');
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      _showToast('Failed to start delivery: $e', true);
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() {
+                                        _startingTaskIDs.remove(taskID);
+                                      });
+                                    }
+                                  }
+                                } else if (isShipping) {
+                                  // Already in shipping -> open Navigation Page directly
+                                  if (!mounted) return;
+                                  final res = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => StaffNavigationPage(
+                                        task: task,
+                                        onTaskUpdated: _loadTasks,
+                                      ),
+                                    ),
+                                  );
+                                  _loadTasks();
+                                  if (res != null && mounted) {
+                                    _showToast(res is String ? res : 'Delivery completed successfully!');
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isStarting
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF0C5AD2),
+                          disabledBackgroundColor: const Color(0xFF94A3B8),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        );
-                        _loadTasks();
-                        if (res != null && mounted) {
-                          _showToast(res is String ? res : 'Delivery completed successfully!');
-                        }
-                      } else if (isShipping) {
-                        // Already in shipping -> open Navigation Page directly
-                        if (!mounted) return;
-                        final res = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StaffNavigationPage(
-                              task: task,
-                              onTaskUpdated: _loadTasks,
-                            ),
-                          ),
-                        );
-                        _loadTasks();
-                        if (res != null && mounted) {
-                          _showToast(res is String ? res : 'Delivery completed successfully!');
-                        }
-                      }
+                        ),
+                        child: isStarting
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Starting...',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                isAssigned
+                                    ? 'Start Delivery'
+                                    : 'Continue Navigation',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      );
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0C5AD2),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(
-                      isAssigned
-                          ? 'Start Delivery'
-                          : 'Continue Navigation',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

@@ -52,6 +52,10 @@ setupDeliverySocket(io);
 // Expose io instance to express app if needed
 app.set("io", io);
 
+// Event-driven Task Schedule Delay & Auto-Reassign Monitoring
+const { initializeScheduleMonitoring } = require("./taskAssignmentModule/taskDelayMonitorService");
+initializeScheduleMonitoring().catch(err => console.error("Error starting schedule monitoring:", err));
+
 const PORT = 3000;
 server.listen(PORT, "0.0.0.0", () => {
     console.log(`Global ReByte Server (with Socket.IO) running on port ${PORT}`);

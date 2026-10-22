@@ -480,7 +480,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                             final ts = _taskStatus.trim().toLowerCase();
                             if (os == 'cancelled' || os == 'canceled') return 'Cancelled';
                             if (os == 'fail' || os == 'failed') return 'Failed';
-                            if (os == 'delivered' || os == 'completed') return 'Delivered';
+                            if (os == 'delivered' || os == 'completed') return 'Completed';
                             if (ts == 'rejected' || os == 'rejected') return 'Unassigned';
                             return _taskStatus.isNotEmpty ? _taskStatus : _orderStatus;
                           }(),

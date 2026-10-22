@@ -378,19 +378,71 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
-    /* Rejection Reason Bubble */
+    /* Rejection Reason & Note Message Bubbles */
     .reason-box {
-      margin-bottom: 28px;
+      margin-bottom: 20px;
     }
 
     .reason-bubble {
       background: #f0f5fc;
       border-radius: 16px;
-      padding: 18px 20px;
+      padding: 16px 18px;
       color: #1e3a8a;
       font-size: 13.5px;
       line-height: 1.55;
       position: relative;
+    }
+
+    .notes-box {
+      margin-bottom: 24px;
+    }
+
+    .notes-bubble {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 3.5px solid #0646a5;
+      border-radius: 14px;
+      padding: 16px 18px;
+      color: #334155;
+      font-size: 13.5px;
+      line-height: 1.55;
+      position: relative;
+      font-style: italic;
+    }
+
+    /* Modal Popup Dialog */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+    }
+    .modal-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-dialog {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+      width: min(100%, 460px);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: scale(0.96);
+      transition: transform 0.2s ease;
+    }
+    .modal-overlay.show .modal-dialog {
+      transform: scale(1);
     }
 
     /* Location & Priority Row */
@@ -611,11 +663,11 @@
       color: #b45309;
     }
 
-    /* 3 Metrics Row */
+    /* 4 Metrics Row */
     .metrics-row {
       display: flex;
       align-items: center;
-      gap: 32px;
+      gap: 24px;
       flex-wrap: wrap;
     }
 
@@ -898,15 +950,21 @@
             </div>
           </div>
 
-          <div class="meta-row">
-            <div class="meta-col">
-              <div class="task-divider-label">Location</div>
-              <div class="val" id="taskLocation">Hub C - Bay 4</div>
+          <div class="notes-box" id="notesBox">
+            <div class="task-divider-label">Note Message / Staff Remarks</div>
+            <div class="notes-bubble" id="rejectionNotesText">
+              No note message provided.
             </div>
-            <div class="meta-col" style="text-align: right;">
-              <div class="task-divider-label">Priority</div>
-              <div>
-                <span class="priority-pill" id="priorityBadge">! High</span>
+          </div>
+
+          <div class="address-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #f1f5f9;">
+            <div class="task-divider-label" style="margin-bottom: 8px;">Delivery Address</div>
+            <div class="address-box" style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px;">
+              <div style="color: #0646a5; margin-top: 2px; flex-shrink: 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              </div>
+              <div style="flex: 1; font-size: 13.5px; font-weight: 600; color: #1e293b; line-height: 1.6; text-align: justify;" id="taskLocation">
+                Loading address...
               </div>
             </div>
           </div>
@@ -941,6 +999,29 @@
       </div>
     </div>
   </main>
+
+  <!-- MODAL: Success Reassignment Popup Dialog (NOT system toast) -->
+  <div class="modal-overlay" id="successModal">
+    <div class="modal-dialog">
+      <div style="padding: 28px 24px 10px; text-align: center;">
+        <div style="width: 58px; height: 58px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(22, 163, 74, 0.2);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #10264b;">Task Reassigned Successfully</h3>
+        <p style="margin: 0; font-size: 14px; color: #64748b;" id="successModalDesc">The task has been successfully reassigned to the selected staff member.</p>
+      </div>
+      <div style="padding: 16px 24px 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13.5px;" id="successModalDetails">
+          <!-- Dynamically populated details -->
+        </div>
+      </div>
+      <div style="padding: 0 24px 24px; text-align: center;">
+        <button type="button" class="btn-confirm" style="width: 100%; justify-content: center;" onclick="window.location.href='taskAssignment.html'">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const API_BASE = (function() {
@@ -1050,22 +1131,20 @@
 
       const reasonEl = document.getElementById('rejectionReasonText');
       if (reasonEl) {
-        reasonEl.textContent = '"' + (task.cancellationReason || 'Client arrived late and I have a conflicting with next task. Needs immediate reassignment to clear queue.') + '"';
+        reasonEl.textContent = '"' + (task.rejectionReason || task.cancellationReason || 'Task needs immediate reassignment to clear queue.') + '"';
+      }
+
+      const notesEl = document.getElementById('rejectionNotesText');
+      if (notesEl) {
+        if (task.rejectionNotes && task.rejectionNotes.trim()) {
+          notesEl.textContent = '"' + task.rejectionNotes.trim() + '"';
+        } else {
+          notesEl.textContent = 'No note message provided by staff.';
+        }
       }
 
       const locEl = document.getElementById('taskLocation');
-      if (locEl) locEl.textContent = task.location || "Hub C - Bay 4";
-
-      const prioEl = document.getElementById('priorityBadge');
-      if (prioEl) {
-        if (task.priority === 'High') {
-          prioEl.className = 'priority-pill';
-          prioEl.textContent = '! High';
-        } else {
-          prioEl.className = 'priority-pill normal';
-          prioEl.textContent = 'Normal';
-        }
-      }
+      if (locEl) locEl.textContent = task.location || task.deliveryAddress || "Address not provided";
 
       // Populate Order Date & Time
       const orderDateEl = document.getElementById('orderDateTimeText');
@@ -1108,8 +1187,9 @@
 
       const isDeliver = currentTaskData && (currentTaskData.taskType === 'deliver' || (currentTaskData.fulfillmentType && currentTaskData.fulfillmentType.toLowerCase().includes('deliver')));
       const noun = isDeliver ? "Available Deliverers" : "Available Technicians";
+      const schedDateLabel = (currentTaskData && (currentTaskData.scheduleDateFormatted || currentTaskData.scheduleDate)) || 'Scheduled Date';
       if (countEl) {
-        countEl.textContent = filtered.length + ' ' + noun;
+        countEl.textContent = 'Schedule: ' + schedDateLabel + ' • ' + filtered.length + ' ' + noun;
       }
 
       if (filtered.length === 0) {
@@ -1148,9 +1228,25 @@
         if (staff.specializationTag === 'Deliverer') specClass = 'spec-pill courier';
         if (staff.specializationTag === 'Both') specClass = 'spec-pill both';
 
-        const isNow = String(staff.availableText || '').trim().toLowerCase() === 'now' || staff.isImmediate;
-        const availClass = isNow ? 'metric-value immediate' : 'metric-value';
-        const availText = staff.availableText || (isNow ? 'Now' : 'Tomorrow 09:00');
+        let rawAvail = String(staff.availableTime || staff.availableText || '09:00')
+          .replace(/^(today|tomorrow|tmr)\s+/i, '')
+          .trim();
+        if (!rawAvail || rawAvail.toLowerCase() === 'immediate' || rawAvail.toLowerCase() === 'now') {
+          rawAvail = '09:00';
+        }
+        const availText = rawAvail;
+
+        let compTime = staff.estimatedCompleteTime || '';
+        if (!compTime) {
+          const parts = availText.split(':').map(Number);
+          const h = isNaN(parts[0]) ? 9 : parts[0];
+          const m = isNaN(parts[1]) ? 0 : parts[1];
+          const dur = Number(staff.estimatedDurationMinutes || 45);
+          const totalM = h * 60 + m + dur;
+          const endH = String(Math.floor(totalM / 60)).padStart(2, '0');
+          const endM = String(totalM % 60).padStart(2, '0');
+          compTime = `${endH}:${endM}`;
+        }
 
         card.innerHTML = 
           '<div class="staff-card-left">' +
@@ -1162,7 +1258,7 @@
               '</div>' +
               '<div class="metrics-row">' +
                 '<div class="metric-item">' +
-                  '<span class="metric-label">Workload</span>' +
+                  '<span class="metric-label">Workload (' + escapeHtml(staff.scheduleDateFormatted || schedDateLabel) + ')</span>' +
                   '<div class="metric-val-wrap">' +
                     '<span class="metric-value">' + escapeHtml(activeTasks + '/' + maxTasks + ' tasks') + '</span>' +
                     '<div class="workload-bar-wrap">' +
@@ -1171,15 +1267,21 @@
                   '</div>' +
                 '</div>' +
                 '<div class="metric-item">' +
-                  '<span class="metric-label">Distance</span>' +
+                  '<span class="metric-label">Route Distance</span>' +
                   '<div class="metric-val-wrap">' +
                     '<span class="metric-value">📍 ' + Number(staff.distanceKm || 0).toFixed(1) + ' km</span>' +
                   '</div>' +
                 '</div>' +
                 '<div class="metric-item">' +
-                  '<span class="metric-label">Available</span>' +
+                  '<span class="metric-label">Available Time</span>' +
                   '<div class="metric-val-wrap">' +
-                    '<span class="' + availClass + '">⏱ ' + escapeHtml(availText) + '</span>' +
+                    '<span class="metric-value">⏱ ' + escapeHtml(availText) + '</span>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="metric-item">' +
+                  '<span class="metric-label">Est. Complete</span>' +
+                  '<div class="metric-val-wrap">' +
+                    '<span class="metric-value">🏁 ' + escapeHtml(compTime) + '</span>' +
                   '</div>' +
                 '</div>' +
               '</div>' +
@@ -1220,14 +1322,15 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderID: orderID,
-            staffID: selectedStaffID
+            staffID: selectedStaffID,
+            addressID: (currentTaskData && currentTaskData.addressID) ? currentTaskData.addressID : undefined
           })
         });
 
         const result = await res.json();
         if (result.success) {
-          alert(result.message || 'Task reassigned successfully!');
-          window.location.href = 'taskAssignment.html';
+          const selectedStaff = allEligibleStaff.find(s => s.staffID === selectedStaffID);
+          showSuccessPopup(result, selectedStaff);
         } else {
           alert('Reassignment failed: ' + (result.reason || result.error || 'Server error'));
         }
@@ -1237,6 +1340,32 @@
         btn.disabled = false;
         btn.innerHTML = originalText;
       }
+    }
+
+    function showSuccessPopup(result, staff) {
+      const desc = document.getElementById('successModalDesc');
+      const details = document.getElementById('successModalDetails');
+      const staffName = result.staffName || (staff ? staff.name : 'Assigned Staff');
+      const dateLabel = result.scheduleDate || (currentTaskData && (currentTaskData.scheduleDateFormatted || currentTaskData.scheduleDate)) || 'Scheduled Date';
+      const timeWindow = (result.scheduleStartTime && result.scheduleEndTime) ? (result.scheduleStartTime + ' - ' + result.scheduleEndTime) : '09:00 - 17:00';
+      const estDistance = result.estimatedDistance || (staff ? (staff.distanceKm + ' km') : '');
+      const estDuration = result.estimatedDuration || '';
+
+      if (desc) desc.textContent = 'Order #' + orderID + ' has been successfully reassigned to ' + staffName + '.';
+
+      if (details) {
+        details.innerHTML = 
+          '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Order Ref:</span><strong>#' + escapeHtml(orderID) + '</strong></div>' +
+          '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Assigned Staff:</span><strong>' + escapeHtml(staffName) + '</strong></div>' +
+          '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Scheduled Date:</span><strong>' + escapeHtml(dateLabel) + '</strong></div>' +
+          '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Estimated Window:</span><strong>' + escapeHtml(timeWindow) + '</strong></div>' +
+          (estDistance ? '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Route Distance:</span><strong>' + escapeHtml(estDistance) + '</strong></div>' : '') +
+          (estDuration ? '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Route Duration:</span><strong>' + escapeHtml(estDuration) + '</strong></div>' : '') +
+          '<div style="display: flex; justify-content: space-between;"><span style="color: #64748b;">Updated Status:</span><span style="color: #15803d; font-weight: 700;">Delivering &bull; Packaging</span></div>';
+      }
+
+      const modal = document.getElementById('successModal');
+      if (modal) modal.classList.add('show');
     }
 
     function renderMockFallback() {

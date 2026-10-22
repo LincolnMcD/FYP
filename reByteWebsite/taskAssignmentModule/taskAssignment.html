@@ -415,9 +415,10 @@
       color: var(--text);
     }
     .toolbar-right {
-      color: #64748b;
-      font-size: 13px;
-      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      margin-left: auto;
     }
 
     /* Table Styles - Matched to Customer Management Layout */
@@ -533,16 +534,6 @@
       color: #6b7180;
       line-height: 1.3;
     }
-    .urgent-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: #dc2626;
-      font-size: 11px;
-      font-weight: 700;
-      margin-top: 2px;
-    }
-
     /* Status Pills - Left aligned like Customer Management */
     .status-pill {
       display: inline-flex;
@@ -566,6 +557,19 @@
     .status-refunded { background: #fdf2f8; color: #be185d; }
     .status-terminated { background: #ffdfc9; color: #9a4d0b; }
     .status-completed { background: #dcfce7; color: #15803d; }
+    .status-self-pickup { background: #fef3c7; color: #b45309; }
+    .sublabel-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #b45309;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      padding: 1px 7px;
+      border-radius: 12px;
+      margin-top: 3px;
+      display: inline-block;
+      letter-spacing: 0.3px;
+    }
 
     /* Action Buttons - Left aligned directly under ACTIONS header */
     .action-group {
@@ -625,6 +629,17 @@
     .btn-pod:hover {
       background: #bbf7d0;
       color: #14532d;
+    }
+    .btn-picked {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+      font-weight: 700;
+    }
+    .btn-picked:hover {
+      background: #d1fae5;
+      color: #065f46;
+      border-color: #34d399;
     }
 
     /* Table Footer & Pagination - Consistent with Customer Management */
@@ -1106,21 +1121,16 @@
         <!-- Filter & Search Toolbar -->
         <div class="table-toolbar">
           <div class="toolbar-left">
-            <button type="button" class="tool-btn" id="btnToggleUrgentOnly" title="Filter urgent tasks">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-              <span>Filter: All</span>
-            </button>
             <button type="button" class="tool-btn" id="btnSortToggle" title="Sort by Order Created date">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
               <span>Sort: Newest</span>
             </button>
+          </div>
+          <div class="toolbar-right">
             <div class="search-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               <input type="search" id="searchInput" placeholder="Search Task ID, Customer, Device..." aria-label="Search tasks">
             </div>
-          </div>
-          <div class="toolbar-right">
-            <span id="showingCountText">Showing 0 of 0</span>
           </div>
         </div>
 
@@ -1214,21 +1224,113 @@
   <div class="modal-overlay" id="terminateModal">
     <div class="modal-dialog">
       <div class="modal-head">
-        <h3 style="color: #dc2626;">Terminate Order &amp; Task</h3>
+        <h3 style="color: #dc2626;">Terminate Order &amp; Change to Self Pickup</h3>
         <button type="button" class="modal-close" onclick="closeModal('terminateModal')" aria-label="Close modal">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin-top: 0; color: #475569;">
-          Are you sure you want to terminate this order? This action will set the order status to <strong>Terminated</strong> and remove it from active delivery dispatch.
+        <p style="margin-top: 0; color: #475569; font-size: 13.5px; line-height: 1.5;">
+          Terminating this delivery will update the order status to <strong>Self pickup</strong> and send a notification email to the customer with pickup directions to <strong>ReByte Central Hub</strong>.
         </p>
-        <div class="form-group">
-          <label for="terminateReasonInput">Termination Reason *</label>
-          <textarea id="terminateReasonInput" class="form-control" rows="3" placeholder="Provide a reason (e.g. Self-pickup rejected by customer, delivery address out of coverage)..."></textarea>
+        <div class="form-group" style="margin-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label for="terminateReasonInput" style="font-weight: 700; color: #1e293b; font-size: 13px; margin: 0;">Reason (Max 50 characters)</label>
+            <span id="terminateCharCount" style="font-size: 12px; color: #64748b; font-weight: 600;">0 / 50</span>
+          </div>
+          <textarea id="terminateReasonInput" class="form-control" rows="2" maxlength="50" placeholder="Type reason or leave blank to use staff rejection reason..."></textarea>
+          <div id="staffRejectionHint" style="display: none; margin-top: 8px; font-size: 12px; color: #b91c1c; background: #fef2f2; padding: 6px 10px; border-radius: 6px; border: 1px solid #fecaca;">
+            <strong>Staff Rejection Reason:</strong> <span id="staffRejectionText">—</span>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn-secondary" onclick="closeModal('terminateModal')">Cancel</button>
-        <button type="button" class="btn-danger" id="btnConfirmTerminate">Terminate Task</button>
+        <button type="button" class="btn-danger" id="btnConfirmTerminate">Confirm Terminated</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Success Terminated Popup Dialog -->
+  <div class="modal-overlay" id="successTerminatedModal">
+    <div class="modal-dialog" style="max-width: 460px;">
+      <div style="padding: 28px 24px 10px; text-align: center;">
+        <div style="width: 58px; height: 58px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(22, 163, 74, 0.2);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #10264b;">Order Terminated &amp; Set to Self Pickup</h3>
+        <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.5;" id="successTerminatedDesc">
+          The delivery has been terminated and customer notified.
+        </p>
+      </div>
+      <div style="padding: 16px 24px 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13px;" id="successTerminatedDetails">
+          <!-- Dynamically populated details -->
+        </div>
+      </div>
+      <div style="padding: 0 24px 24px; text-align: center;">
+        <button type="button" class="btn-primary" style="width: 100%; justify-content: center; min-height: 44px; font-size: 14px; font-weight: 700;" onclick="closeModal('successTerminatedModal')">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Confirm Picked / Completed Popup Dialog -->
+  <div class="modal-overlay" id="confirmPickedModal">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-head">
+        <h3 style="color: #047857; display: flex; align-items: center; gap: 8px;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Confirm Package Picked Up
+        </h3>
+        <button type="button" class="modal-close" onclick="closeModal('confirmPickedModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px 24px;">
+        <p style="font-size: 14px; color: #334155; margin: 0 0 14px; line-height: 1.5;">
+          Has the customer collected this order at the self-pickup counter?
+        </p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 13px; display: grid; gap: 8px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #64748b;">Order Reference</span>
+            <span style="font-weight: 700; color: #0f172a;" id="pickedModalOrderID">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #64748b;">Customer</span>
+            <span style="font-weight: 600; color: #0f172a;" id="pickedModalCustomer">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #64748b;">New Order Status</span>
+            <span style="font-weight: 700; color: #15803d; background: #dcfce7; padding: 2px 8px; border-radius: 6px;">Completed</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secondary" onclick="closeModal('confirmPickedModal')">Cancel</button>
+        <button type="button" class="btn-primary" id="btnConfirmPicked" style="background: #059669; border-color: #059669;">Yes, Mark Completed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Success Picked Popup Dialog -->
+  <div class="modal-overlay" id="successPickedModal">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div style="padding: 28px 24px 10px; text-align: center;">
+        <div style="width: 58px; height: 58px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(22, 163, 74, 0.2);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #10264b;">Self Pickup Completed</h3>
+        <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.5;" id="successPickedDesc">
+          The package has been handed over and order status updated to Completed.
+        </p>
+      </div>
+      <div style="padding: 16px 24px 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13px;" id="successPickedDetails">
+          <!-- Dynamically populated details -->
+        </div>
+      </div>
+      <div style="padding: 0 24px 24px; text-align: center;">
+        <button type="button" class="btn-primary" style="width: 100%; justify-content: center; min-height: 44px; font-size: 14px; font-weight: 700; background: #059669; border-color: #059669;" onclick="closeModal('successPickedModal')">
+          Done
+        </button>
       </div>
     </div>
   </div>
@@ -1327,7 +1429,6 @@
     let allTasks = [];
     let activeTab = 'unassigned';
     let searchQuery = '';
-    let urgentOnly = false;
     let sortAsc = false;
     let selectedTaskForAction = null;
     let staffList = [];
@@ -1361,7 +1462,7 @@
           btn.classList.add('active');
           activeTab = btn.dataset.tab;
           currentPage = 1;
-          renderTable();
+          loadTasks();
         });
       });
 
@@ -1377,26 +1478,17 @@
         });
       });
 
-      // Search input
+      // Search input with debounce
       const searchInput = document.getElementById('searchInput');
+      let searchTimeout = null;
       if (searchInput) {
         searchInput.addEventListener('input', (e) => {
           searchQuery = e.target.value.trim().toLowerCase();
           currentPage = 1;
-          renderTable();
-        });
-      }
-
-      // Urgent toggle
-      const btnUrgent = document.getElementById('btnToggleUrgentOnly');
-      if (btnUrgent) {
-        btnUrgent.addEventListener('click', () => {
-          urgentOnly = !urgentOnly;
-          btnUrgent.classList.toggle('active', urgentOnly);
-          const sp = btnUrgent.querySelector('span');
-          if (sp) sp.textContent = urgentOnly ? 'Filter: Urgent Only' : 'Filter: All';
-          currentPage = 1;
-          renderTable();
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            loadTasks();
+          }, 350);
         });
       }
 
@@ -1408,7 +1500,7 @@
           const sp = btnSort.querySelector('span');
           if (sp) sp.textContent = sortAsc ? 'Sort: Oldest' : 'Sort: Newest';
           currentPage = 1;
-          renderTable();
+          loadTasks();
         });
       }
 
@@ -1419,7 +1511,7 @@
           const btn = e.target.closest('button[data-page]');
           if (!btn || btn.disabled) return;
           currentPage = Number(btn.dataset.page);
-          renderTable();
+          loadTasks();
         });
       }
 
@@ -1454,9 +1546,22 @@
       if (btnConfirmTerminate) {
         btnConfirmTerminate.addEventListener('click', handleExecuteTerminate);
       }
+
+      // Confirm Picked
+      const btnConfirmPicked = document.getElementById('btnConfirmPicked');
+      if (btnConfirmPicked) {
+        btnConfirmPicked.addEventListener('click', handleExecutePicked);
+      }
     }
 
-    // Load Tasks from Backend API (with robust candidate URL fallbacks)
+    let serverPagination = {
+      total: 0,
+      page: 1,
+      limit: PAGE_SIZE,
+      totalPages: 1
+    };
+
+    // Load Tasks from Backend API (with server-side pagination & filtering)
     async function loadTasks() {
       let data = null;
       const candidates = [
@@ -1465,9 +1570,17 @@
         'http://127.0.0.1:3000'
       ].filter((v, i, arr) => arr.indexOf(v) === i);
 
+      const queryParams = new URLSearchParams({
+        tab: activeTab,
+        page: currentPage,
+        limit: PAGE_SIZE,
+        search: searchQuery,
+        sort: sortAsc ? 'asc' : 'desc'
+      });
+
       for (const base of candidates) {
         try {
-          const res = await fetch(`${base}/api/task-assignment/admin/tasks`);
+          const res = await fetch(`${base}/api/task-assignment/admin/tasks?${queryParams.toString()}`);
           if (res.ok) {
             data = await res.json();
             if (data.success && Array.isArray(data.tasks)) {
@@ -1481,6 +1594,10 @@
 
       if (data && data.success && Array.isArray(data.tasks)) {
         allTasks = data.tasks;
+        if (data.pagination) {
+          serverPagination = data.pagination;
+          currentPage = data.pagination.page;
+        }
         updateCounts(data.counts || {});
         renderTable();
       } else {
@@ -1559,60 +1676,25 @@
       if (!tbody) return;
       tbody.innerHTML = '';
 
-      // 1. Filter by active tab (displayStatus)
-      let filtered = allTasks.filter(t => {
-        const status = String(t.displayStatus || '').trim().toLowerCase();
-        return status === activeTab.trim().toLowerCase();
-      });
-
-      // 2. Filter by search query
-      if (searchQuery) {
-        filtered = filtered.filter(t => {
-          const matchStr = `${t.taskID || ''} ${t.orderID || ''} ${t.customerName || ''} ${t.deviceSummary || ''} ${t.deliveryAddress || ''} ${t.staffName || ''}`.toLowerCase();
-          return matchStr.includes(searchQuery);
-        });
-      }
-
-      // 3. Filter by urgent
-      if (urgentOnly) {
-        filtered = filtered.filter(t => !!t.isUrgent);
-      }
-
-      // 4. Sort strictly based on order createdAt date time
-      filtered.sort((a, b) => {
-        const timeA = Number(a.createdAtMs) || (a.createdAt ? new Date(a.createdAt).getTime() : 0) || 0;
-        const timeB = Number(b.createdAtMs) || (b.createdAt ? new Date(b.createdAt).getTime() : 0) || 0;
-        return sortAsc ? timeA - timeB : timeB - timeA;
-      });
-
-      const totalFiltered = filtered.length;
-      const pageCount = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
-      currentPage = Math.min(Math.max(1, currentPage), pageCount);
+      const totalFiltered = serverPagination.total || 0;
+      const totalPages = serverPagination.totalPages || 1;
       const start = totalFiltered ? (currentPage - 1) * PAGE_SIZE : 0;
-      const end = Math.min(start + PAGE_SIZE, totalFiltered);
-
-      // Update showing count
-      const countEl = document.getElementById('showingCountText');
-      if (countEl) {
-        countEl.textContent = totalFiltered ? `Showing ${start + 1}-${end} of ${totalFiltered}` : 'Showing 0 of 0';
-      }
+      const end = Math.min(start + allTasks.length, totalFiltered);
 
       const resultCount = document.getElementById('resultCount');
       if (resultCount) {
         resultCount.textContent = totalFiltered ? `Showing ${start + 1} to ${end} of ${totalFiltered} entries` : 'Showing 0 entries';
       }
 
-      renderPagination(totalFiltered);
+      renderPagination(totalFiltered, totalPages);
 
-      if (totalFiltered === 0) {
+      if (!allTasks || allTasks.length === 0) {
         if (emptyState) emptyState.style.display = 'block';
         return;
       }
       if (emptyState) emptyState.style.display = 'none';
 
-      const paged = filtered.slice(start, end);
-
-      paged.forEach(task => {
+      allTasks.forEach(task => {
         const tr = document.createElement('tr');
 
         // Column 1: Task ID
@@ -1630,19 +1712,24 @@
 
         // Column 3: Appointment
         const tdApp = document.createElement('td');
-        const urgentBadge = task.isUrgent ? `<span class="urgent-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Urgent</span>` : '';
         tdApp.innerHTML = `
           <div class="appointment-cell">
             <span class="app-date">${task.appointmentDate}</span>
             <span class="app-time">${task.appointmentTime}</span>
-            ${urgentBadge}
           </div>
         `;
 
         // Column 4: Status (Single dot provided by .status-pill::before)
         const tdStatus = document.createElement('td');
         const pillClass = `status-${(task.displayStatus || 'unassigned').toLowerCase()}`;
-        tdStatus.innerHTML = `<span class="status-pill ${pillClass}">${escapeHtml(task.displayStatus)}</span>`;
+        const isSelfPickupCompleted = (task.displayStatus || '').toLowerCase() === 'completed' &&
+          (Boolean(task.pickedAt) || String(task.fulfillmentType || '').toLowerCase().includes('pickup') || String(task.fulfillmentType || '').toLowerCase().includes('self'));
+
+        let statusHtml = `<span class="status-pill ${pillClass}">${escapeHtml(task.displayStatus)}</span>`;
+        if (isSelfPickupCompleted) {
+          statusHtml += `<div class="sublabel-badge">Self Pickup</div>`;
+        }
+        tdStatus.innerHTML = statusHtml;
 
         // Column 5: Actions
         const tdActions = document.createElement('td');
@@ -1665,10 +1752,10 @@
       });
     }
 
-    function renderPagination(totalFiltered) {
+    function renderPagination(totalFiltered, pageCountParam) {
       const paginationEl = document.getElementById('taskPagination');
       if (!paginationEl) return;
-      const pageCount = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+      const pageCount = pageCountParam || Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
       if (pageCount <= 1) {
         paginationEl.innerHTML = '';
         return;
@@ -1702,7 +1789,6 @@
       if (status === 'unassigned') {
         btns += `
           <button type="button" class="btn-act btn-reassign" onclick="promptReassign('${task.orderID}')">Reassign</button>
-          <button type="button" class="btn-act btn-terminate" onclick="promptTerminate('${task.orderID}', '${task.taskID}')">Terminate</button>
         `;
       } else if (status === 'assigned') {
         // Assigned tab: Details only, no reassign button
@@ -1712,7 +1798,7 @@
       } else if (status === 'cancelled') {
         btns += `
           <button type="button" class="btn-act btn-reassign" onclick="promptReassign('${task.orderID}')">Reassign</button>
-          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Reason</button>
+          <button type="button" class="btn-act btn-terminate" onclick="promptTerminate('${task.orderID}', '${task.taskID}')">Terminate</button>
         `;
       } else if (status === 'refunded') {
         // Refunded tab: Details button to inspect customer cancellation
@@ -1725,8 +1811,11 @@
         }
         btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
       } else {
-        // Terminated
-        btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+        // Terminated: Show 'Picked' button to confirm customer collected item, plus Details
+        btns += `
+          <button type="button" class="btn-act btn-picked" onclick="promptMarkPicked('${task.orderID}')">Picked</button>
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+        `;
       }
 
       btns += '</div>';
@@ -1802,15 +1891,26 @@
               <span><strong>Ordered:</strong> ${orderDateTimeFormatted}</span>
             </div>
           </div>
-          <span class="status-pill ${statusPillClass}">${escapeHtml(task.displayStatus)}</span>
+          <div style="text-align: right;">
+            <span class="status-pill ${statusPillClass}">${escapeHtml(task.displayStatus)}</span>
+            ${((task.displayStatus || '').toLowerCase() === 'completed' && (Boolean(task.pickedAt) || String(task.fulfillmentType || '').toLowerCase().includes('pickup') || String(task.fulfillmentType || '').toLowerCase().includes('self')))
+              ? `<div style="margin-top: 5px;"><span class="sublabel-badge">Self Pickup</span></div>`
+              : ''}
+          </div>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; padding: 18px 20px; border-radius: 14px; border: 1px solid #e2e8f0;">
           <div>
             <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Customer</div>
-            <div style="font-size: 14.5px; font-weight: 700; color: #1e293b;">${escapeHtml(task.customerName)}</div>
-            <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">${task.customerPhone || 'No phone'}</div>
-            <div style="font-size: 12.5px; color: #64748b; margin-top: 2px;">${task.customerEmail || ''}</div>
+            <div style="font-size: 14.5px; font-weight: 700; color: #1e293b;">${escapeHtml(task.customerName || 'Customer')}</div>
+            <div style="font-size: 12.5px; color: #475569; margin-top: 5px; display: flex; align-items: center; gap: 6px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+              <span>${escapeHtml(task.customerPhone || 'No phone')}</span>
+            </div>
+            <div style="font-size: 12.5px; color: #475569; margin-top: 3px; display: flex; align-items: center; gap: 6px; word-break: break-all;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              <span>${escapeHtml(task.customerEmail || 'No email')}</span>
+            </div>
           </div>
           <div>
             <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Assigned Staff</div>
@@ -1896,8 +1996,37 @@
     // Prompt Terminate Modal
     function promptTerminate(orderID, taskID) {
       selectedTaskForAction = { orderID, taskID };
-      document.getElementById('terminateReasonInput').value = '';
+      const reasonInput = document.getElementById('terminateReasonInput');
+      const charCount = document.getElementById('terminateCharCount');
+      const hintBox = document.getElementById('staffRejectionHint');
+      const staffRejectionText = document.getElementById('staffRejectionText');
+
+      reasonInput.value = '';
+      if (charCount) charCount.textContent = '0 / 50';
+
+      // Find if this task has a staff rejection reason
+      const task = allTasks.find(t => t.orderID === orderID || t.taskID === taskID);
+      const staffReason = (task && (task.rejectionReason || task.rejectionNotes)) ? (task.rejectionReason || task.rejectionNotes) : '';
+      if (staffReason && hintBox && staffRejectionText) {
+        staffRejectionText.textContent = staffReason;
+        hintBox.style.display = 'block';
+      } else if (hintBox) {
+        hintBox.style.display = 'none';
+      }
+
       openModal('terminateModal');
+    }
+
+    // Update char counter on input
+    const terminateInputEl = document.getElementById('terminateReasonInput');
+    if (terminateInputEl) {
+      terminateInputEl.addEventListener('input', function() {
+        if (this.value.length > 50) {
+          this.value = this.value.substring(0, 50);
+        }
+        const charCount = document.getElementById('terminateCharCount');
+        if (charCount) charCount.textContent = `${this.value.length} / 50`;
+      });
     }
 
     // Execute Termination
@@ -1916,15 +2045,46 @@
           body: JSON.stringify({
             orderID: selectedTaskForAction.orderID,
             taskID: selectedTaskForAction.taskID,
-            reason: reason || 'Terminated by administrator'
+            reason: reason // If empty, backend will automatically use staff rejection reason
           })
         });
 
         const data = await res.json();
         if (data.success) {
           closeModal('terminateModal');
-          await loadTasks();
-          alert('Task and order terminated.');
+          const currentTask = allTasks.find(t => t.orderID === selectedTaskForAction.orderID || t.taskID === selectedTaskForAction.taskID);
+          const finalReason = data.reason || reason || (currentTask ? (currentTask.rejectionReason || currentTask.rejectionNotes) : '') || 'Delivery cancelled - self pickup';
+          const emailStatusText = data.emailSent ? '✓ Sent to Customer' : 'Email Sent';
+          const emailColor = '#16a34a';
+
+          // Show Success Terminated Popup Dialog
+          const descEl = document.getElementById('successTerminatedDesc');
+          const detailsEl = document.getElementById('successTerminatedDetails');
+          if (descEl) {
+            descEl.textContent = `Order #${selectedTaskForAction.orderID} has been successfully terminated and updated to Self Pickup.`;
+          }
+          if (detailsEl) {
+            detailsEl.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Order Reference</span>
+                <span style="font-weight: 700; color: #10264b;">#${escapeHtml(selectedTaskForAction.orderID)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">New Status</span>
+                <span style="font-weight: 700; color: #d97706; background: #fef3c7; padding: 2px 8px; border-radius: 6px;">Self pickup</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b; flex-shrink: 0;">Reason</span>
+                <span style="font-weight: 600; color: #b91c1c; text-align: right; max-width: 260px;">${escapeHtml(finalReason)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #64748b;">Customer Email</span>
+                <span style="font-weight: 700; color: ${emailColor};">${emailStatusText}</span>
+              </div>
+            `;
+          }
+          openModal('successTerminatedModal');
+          loadTasks();
         } else {
           alert('Error: ' + (data.error || 'Could not terminate task'));
         }
@@ -1932,7 +2092,81 @@
         alert('Network error: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Terminate Task';
+        btn.textContent = 'Confirm Terminated';
+      }
+    }
+
+    // Prompt Confirm Picked Modal
+    let selectedOrderForPicked = null;
+    function promptMarkPicked(orderID) {
+      selectedOrderForPicked = orderID;
+      const orderSpan = document.getElementById('pickedModalOrderID');
+      const custSpan = document.getElementById('pickedModalCustomer');
+      const task = allTasks.find(t => t.orderID === orderID);
+
+      if (orderSpan) orderSpan.textContent = `#${orderID}`;
+      if (custSpan) custSpan.textContent = task ? (task.customerName || 'Customer') : 'Customer';
+
+      openModal('confirmPickedModal');
+    }
+
+    // Execute Mark Picked / Completed
+    async function handleExecutePicked() {
+      if (!selectedOrderForPicked) return;
+
+      const btn = document.getElementById('btnConfirmPicked');
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/task-assignment/admin/self-pickup-completed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderID: selectedOrderForPicked })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          const finishedOrderID = selectedOrderForPicked;
+          const currentTask = allTasks.find(t => t.orderID === finishedOrderID);
+          closeModal('confirmPickedModal');
+
+          // Show Success Picked Popup Dialog
+          const descEl = document.getElementById('successPickedDesc');
+          const detailsEl = document.getElementById('successPickedDetails');
+          if (descEl) {
+            descEl.textContent = `Order #${finishedOrderID} has been collected by the customer and updated to Completed.`;
+          }
+          if (detailsEl) {
+            detailsEl.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Order Reference</span>
+                <span style="font-weight: 700; color: #10264b;">#${escapeHtml(finishedOrderID)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Customer</span>
+                <span style="font-weight: 600; color: #0f172a;">${escapeHtml(currentTask ? (currentTask.customerName || 'Customer') : 'Customer')}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Previous Status</span>
+                <span style="font-weight: 700; color: #d97706; background: #fef3c7; padding: 2px 8px; border-radius: 6px;">Self pickup</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #64748b;">New Status</span>
+                <span style="font-weight: 700; color: #16a34a; background: #dcfce7; padding: 2px 8px; border-radius: 6px;">✓ Completed</span>
+              </div>
+            `;
+          }
+          openModal('successPickedModal');
+          loadTasks();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to update order to Completed'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Yes, Mark Completed';
       }
     }
 

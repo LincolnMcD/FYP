@@ -1,4 +1,5 @@
 const db = require("../config/firebase");
+const { FieldValue } = require("firebase-admin/firestore");
 const { COMPANY_LOCATION, getOsrmRoute } = require("./osrmService");
 
 // Configurable working hours & constraints
@@ -190,28 +191,35 @@ async function getEligibleDeliveryStaff() {
  *         e.g., Task 1 completes at 09:34. Task 1 -> Task 2 takes 1 hour (arrives 10:34) -> valid because <= 11:00 AM slot.
  *         If travel takes 2 hours (arrives 11:34) -> invalid because > 11:00 AM slot.
  */
-async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
+async function assignDeliveryTask({ orderID, addressID, requestedDate, specificStaffID, excludeStaffIDs = [] }) {
     const taskID = `TSK-${orderID}`;
     const deliveryID = `DEL-${orderID}`;
 
-    const customerDetails = await resolveCustomerDetails(addressID);
+    const excludeSet = new Set((Array.isArray(excludeStaffIDs) ? excludeStaffIDs : [excludeStaffIDs]).filter(Boolean));
+
+    let effectiveAddressID = addressID;
+    if (!effectiveAddressID && orderID) {
+        const ordDoc = await db.collection("order").doc(orderID).get();
+        if (ordDoc.exists && ordDoc.data().addressID) {
+            effectiveAddressID = ordDoc.data().addressID;
+        }
+    }
+
+    const customerDetails = await resolveCustomerDetails(effectiveAddressID);
     const customerLocation = customerDetails.location;
     const customerState = (customerDetails.state || "Penang").trim();
     const companyLocation = COMPANY_LOCATION;
 
     const deliveryDocRef = db.collection("delivery").doc(deliveryID);
-    const delSnap = await deliveryDocRef.get();
-    if (!delSnap.exists) {
-        await deliveryDocRef.set({
-            deliveryID,
-            orderID,
-            taskID,
-            destinationLat: customerLocation.lat,
-            destinationLng: customerLocation.lng,
-            deliveryStatus: "ongoing",
-            proofOfDeliveryUrl: null
-        });
-    }
+    await deliveryDocRef.set({
+        deliveryID,
+        orderID,
+        taskID,
+        destinationLat: customerLocation.lat,
+        destinationLng: customerLocation.lng,
+        deliveryStatus: "ongoing",
+        proofOfDeliveryUrl: null
+    }, { merge: true });
 
     // Check if task already exists and has an existing schedule (for address update / re-optimization)
     const taskDocRef = db.collection("task").doc(taskID);
@@ -281,11 +289,20 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
 
         const allStaffRaw = await getEligibleDeliveryStaff();
         // Requirement: Limit staff cannot work outside the state
-        const allStaff = allStaffRaw.filter(staff => {
+        let allStaff = allStaffRaw.filter(staff => {
+            if (excludeSet.has(staff.staffID)) return false;
             const sState = (staff.staffState || "Penang").toLowerCase().trim();
             const cState = customerState.toLowerCase().trim();
             return sState.includes(cState) || cState.includes(sState);
         });
+
+        // If a specific staff was chosen by admin, target this staff
+        if (specificStaffID && specificStaffID !== "auto") {
+            const matchingStaff = allStaffRaw.filter(s => s.staffID === specificStaffID && !excludeSet.has(s.staffID));
+            if (matchingStaff.length > 0) {
+                allStaff = matchingStaff;
+            }
+        }
 
         if (allStaff.length === 0) {
             logStep(`[STATE MISMATCH] No delivery staff operate in customer state: '${customerState}'. Staff cannot work outside their state.`);
@@ -312,11 +329,25 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
                 let dest = COMPANY_LOCATION;
                 const taskSnap = await db.collection("task").where("scheduleID", "==", sDoc.id).limit(1).get();
                 let taskDocID = null;
+                let orderIdForTask = sData.orderID || null;
                 if (!taskSnap.empty) {
                     const tData = taskSnap.docs[0].data();
                     taskDocID = taskSnap.docs[0].id;
                     if (tData.orderID) {
-                        const dSnap = await db.collection("delivery").doc(`DEL-${tData.orderID}`).get();
+                        orderIdForTask = tData.orderID;
+                    }
+                }
+
+                if (orderIdForTask) {
+                    const ordDoc = await db.collection("order").doc(orderIdForTask).get();
+                    if (ordDoc.exists && ordDoc.data().addressID) {
+                        const addrRes = await resolveCustomerDetails(ordDoc.data().addressID);
+                        if (addrRes && addrRes.location) {
+                            dest = addrRes.location;
+                        }
+                    }
+                    if (dest === COMPANY_LOCATION) {
+                        const dSnap = await db.collection("delivery").doc(`DEL-${orderIdForTask}`).get();
                         if (dSnap.exists && dSnap.data().destinationLat) {
                             dest = { lat: Number(dSnap.data().destinationLat), lng: Number(dSnap.data().destinationLng) };
                         }
@@ -633,8 +664,13 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
         logStep(`\n[ASSIGNMENT FAILED] No staff available within the 3-day search window (or staff cannot work outside state).`);
         logStep(`[STATUS UPDATE] Task [${taskID}] marked as 'Unassigned'.`);
 
-        // If old schedule(s) existed, delete completely from database so they do not remain on staff calendar
+        // If old schedule(s) existed, delete non-rejected schedules so they do not remain on staff calendar.
+        // Old rejected schedules must remain intact with status 'rejected'.
         for (const sId of matchedScheduleIDs) {
+            const sDoc = await db.collection("schedule").doc(sId).get();
+            if (sDoc.exists && (sDoc.data().scheduleStatus === "rejected" || sDoc.data().scheduleStatus === "absent")) {
+                continue; // Preserve rejected and absent schedules
+            }
             logStep(`[SCHEDULE DELETED] Deleting schedule document [${sId}] because order is Unassigned (out of state or no staff).`);
             await db.collection("schedule").doc(sId).delete().catch((err) => {
                 console.error(`Failed to delete schedule ${sId}:`, err);
@@ -676,26 +712,49 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
 
     const selectedStaff = selectedAssignment.staff;
     const finalDateStr = formatDateKey(selectedAssignment.slotStart);
-    // Reuse existing scheduleID if already assigned, or create clean new ID
-    const scheduleID = existingScheduleID || `SCH-${orderID}-${Date.now().toString().slice(-4)}`;
+    // Create brand new schedule record so any older schedule remains rejected
+    const newScheduleID = `SCH-${orderID}-${Date.now().toString().slice(-4)}`;
     const scheduleStartTime = selectedAssignment.taskStartTime;
     const scheduleEndTime = selectedAssignment.taskEndTime;
 
     const startTimeStr = formatTimeOnly(scheduleStartTime);
     const endTimeStr = formatTimeOnly(scheduleEndTime);
 
-    // Save Schedule (reuses existingScheduleID without creating duplicates)
-    await db.collection("schedule").doc(scheduleID).set({
-        scheduleID,
+    // Delete any previous active/assigned schedule for this order so the previous staff does not keep a duplicate assignment!
+    // (Preserve only schedules that have scheduleStatus === "rejected")
+    for (const sId of matchedScheduleIDs) {
+        if (sId === newScheduleID) continue;
+        const sDoc = await db.collection("schedule").doc(sId).get();
+        if (sDoc.exists && sDoc.data().scheduleStatus !== "rejected" && sDoc.data().scheduleStatus !== "absent") {
+            logStep(`[OLD SCHEDULE REMOVED] Deleting superseded schedule [${sId}] for previous staff [${sDoc.data().staffID}] to avoid duplicate assignment.`);
+            await db.collection("schedule").doc(sId).delete().catch((err) => {
+                console.error(`Failed to delete superseded schedule ${sId}:`, err);
+            });
+        }
+    }
+
+    const prevOrderScheds = await db.collection("schedule").where("orderID", "==", orderID).get();
+    for (const sDoc of prevOrderScheds.docs) {
+        if (sDoc.id === newScheduleID) continue;
+        if (sDoc.data().scheduleStatus !== "rejected" && sDoc.data().scheduleStatus !== "absent") {
+            logStep(`[OLD SCHEDULE REMOVED] Deleting superseded schedule [${sDoc.id}] for previous staff [${sDoc.data().staffID}] to avoid duplicate assignment.`);
+            await sDoc.ref.delete().catch(() => {});
+        }
+    }
+
+    // Save Schedule (new schedule record with status 'assigned')
+    await db.collection("schedule").doc(newScheduleID).set({
+        scheduleID: newScheduleID,
+        orderID,
+        staffID: selectedStaff.staffID,
         scheduleDate: finalDateStr,
         scheduleStartTime: startTimeStr,
         scheduleEndTime: endTimeStr,
         scheduleStatus: "assigned",
-        staffID: selectedStaff.staffID,
         updatedAt: new Date()
     }, { merge: true });
 
-    // Save Task
+    // Save Task (references newScheduleID, status 'Packaging')
     await db.collection("task").doc(taskID).set({
         taskID,
         taskType: "deliver",
@@ -703,12 +762,20 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
         taskStartTime: startTimeStr,
         estimatedDistance: selectedAssignment.totalDistance,
         estimatedDuration: selectedAssignment.totalDuration,
-        scheduleID,
+        scheduleID: newScheduleID,
+        staffID: selectedStaff.staffID,
+        staffName: selectedStaff.fullName,
         orderID,
+        rejectionReason: null,
+        rejectionNotes: null,
+        staffLat: FieldValue.delete(),
+        staffLng: FieldValue.delete(),
+        staffHeading: FieldValue.delete(),
+        lastGpsUpdate: FieldValue.delete(),
         updatedAt: new Date()
     }, { merge: true });
 
-    // Save Delivery
+    // Save Delivery (status 'ongoing', no GPS fields)
     await db.collection("delivery").doc(deliveryID).set({
         deliveryID,
         orderID,
@@ -717,23 +784,28 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate }) {
         destinationLng: customerLocation.lng,
         deliveryStatus: "ongoing",
         proofOfDeliveryUrl: null,
+        staffLat: FieldValue.delete(),
+        staffLng: FieldValue.delete(),
+        staffHeading: FieldValue.delete(),
+        lastGpsUpdate: FieldValue.delete(),
         updatedAt: new Date()
     }, { merge: true });
 
-    // Ensure order is at Packaging
+    // Ensure order is at Delivering
     if (orderID) {
         await db.collection("order").doc(orderID).set({
-            orderStatus: "Packaging",
+            orderStatus: "Delivering",
             updatedAt: new Date()
         }, { merge: true });
     }
 
     return {
         success: true,
+        message: `Order #${orderID} successfully reassigned to ${selectedStaff.fullName}.`,
         orderID,
         taskID,
         deliveryID,
-        scheduleID,
+        scheduleID: newScheduleID,
         staffID: selectedStaff.staffID,
         staffName: selectedStaff.fullName,
         scheduleDate: finalDateStr,

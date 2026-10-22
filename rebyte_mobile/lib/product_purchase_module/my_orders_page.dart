@@ -26,17 +26,24 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
   late TabController _tabController;
   bool _isLoading = true;
   List<Map<String, dynamic>> _orders = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedActiveFilter = 'All'; // 'All', 'Self Pickup', 'Shipping', 'Packaging', 'Unassigned'
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadOrders();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -51,9 +58,51 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     }
   }
 
-  bool _isActiveOrder(String orderStatus, [String? taskStatus]) {
-    final os = orderStatus.trim().toLowerCase();
-    final ts = (taskStatus ?? '').trim().toLowerCase();
+  String _getEffectiveStatus(Map<String, dynamic> order) {
+    final status = order['orderStatus']?.toString().trim() ?? '';
+    final taskStatus = order['taskStatus']?.toString().trim() ?? '';
+    final os = status.toLowerCase();
+    final ts = taskStatus.toLowerCase();
+
+    // Past terminal statuses
+    if (os == 'cancelled' || os == 'canceled') return 'Cancelled';
+    if (os == 'fail' || os == 'failed') return 'Failed';
+    if (os == 'delivered' || os == 'completed') return 'Completed';
+
+    // 1. Self Pickup = order.status is self pickup (or terminated which means self pickup)
+    if (os == 'self pickup' || os == 'self-pickup' || os == 'terminated') {
+      return 'Self Pickup';
+    }
+
+    // 2. Shipping = order.status delivering and task.status is shipping
+    if ((os == 'delivering' || os == 'shipping') && (ts == 'shipping' || ts == 'delivering' || ts == 'ongoing')) {
+      return 'Shipping';
+    }
+
+    // 3. Packaging = order.status delivering and task.status is packaging
+    if ((os == 'delivering' || os == 'packaging' || os == 'processing') &&
+        (ts == 'packaging' || ts == 'packaged' || ts == 'packing' || ts == 'processing')) {
+      return 'Packaging';
+    }
+
+    // 4. Unassigned = order.status = unassigned
+    if (os == 'unassigned' || ts == 'unassigned' || os == 'rejected' || ts == 'rejected') {
+      return 'Unassigned';
+    }
+
+    // Fallback: if order.status is delivering but taskStatus is shipping/delivering
+    if (ts == 'shipping' || ts == 'delivering') return 'Shipping';
+    if (ts == 'packaging') return 'Packaging';
+    if (os == 'delivering') return 'Packaging';
+
+    return status.isNotEmpty ? status : 'Packaging';
+  }
+
+  bool _isActiveOrder(Map<String, dynamic> order) {
+    final status = order['orderStatus']?.toString().trim() ?? '';
+    final taskStatus = order['taskStatus']?.toString().trim() ?? '';
+    final os = status.toLowerCase();
+    final ts = taskStatus.toLowerCase();
 
     // Terminal / Completed / Inactive statuses
     const pastStatuses = {
@@ -63,7 +112,6 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       'canceled',
       'fail',
       'failed',
-      'terminated',
       'refunded',
       'returned',
     };
@@ -75,10 +123,80 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     return true;
   }
 
+  DateTime _getOrderDate(Map<String, dynamic> order) {
+    final paidAtStr = order['paidAt']?.toString() ?? order['orderDate']?.toString() ?? order['createdAt']?.toString();
+    if (paidAtStr != null) {
+      final parsed = DateTime.tryParse(paidAtStr);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  int _getStatusRank(String effectiveStatus) {
+    // Required priority: Self pickup -> shipping -> packaging -> unassigned
+    final s = effectiveStatus.toLowerCase().trim();
+    if (s == 'self pickup' || s == 'self-pickup') return 1;
+    if (s == 'shipping' || s == 'delivering' || s == 'ongoing') return 2;
+    if (s == 'packaging' || s == 'packaged' || s == 'processing') return 3;
+    if (s == 'unassigned' || s == 'pending' || s == 'rejected') return 4;
+    return 5;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final activeOrders = _orders.where((o) => _isActiveOrder(o['orderStatus']?.toString() ?? '', o['taskStatus']?.toString())).toList();
-    final pastOrders = _orders.where((o) => !_isActiveOrder(o['orderStatus']?.toString() ?? '', o['taskStatus']?.toString())).toList();
+    // 1. Separate Active & Past Orders
+    final rawActive = _orders.where((o) => _isActiveOrder(o)).toList();
+    final rawPast = _orders.where((o) => !_isActiveOrder(o)).toList();
+
+    // 2. Filter Active Orders by selected chip
+    List<Map<String, dynamic>> filteredActive = rawActive;
+    if (_selectedActiveFilter != 'All') {
+      filteredActive = filteredActive.where((o) {
+        final eff = _getEffectiveStatus(o).toLowerCase();
+        final target = _selectedActiveFilter.toLowerCase();
+        return eff == target;
+      }).toList();
+    }
+
+    // 3. Search filter by ID only for both tabs
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase().replaceAll('#', '').trim();
+      filteredActive = filteredActive.where((o) {
+        final idStr = (o['orderNumber']?.toString() ?? o['orderID']?.toString() ?? '').toLowerCase().replaceAll('#', '').trim();
+        return idStr.contains(q);
+      }).toList();
+    }
+
+    List<Map<String, dynamic>> filteredPast = rawPast;
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase().replaceAll('#', '').trim();
+      filteredPast = filteredPast.where((o) {
+        final idStr = (o['orderNumber']?.toString() ?? o['orderID']?.toString() ?? '').toLowerCase().replaceAll('#', '').trim();
+        return idStr.contains(q);
+      }).toList();
+    }
+
+    // 4. Sort Active orders:
+    // First by status priority: Self pickup -> shipping -> packaging -> unassigned
+    // In each status: sort by date (newest first)
+    filteredActive.sort((a, b) {
+      final rankA = _getStatusRank(_getEffectiveStatus(a));
+      final rankB = _getStatusRank(_getEffectiveStatus(b));
+      if (rankA != rankB) {
+        return rankA.compareTo(rankB);
+      }
+      final dateA = _getOrderDate(a);
+      final dateB = _getOrderDate(b);
+      return dateB.compareTo(dateA); // newest date first within same status
+    });
+
+    // 5. Sort Past orders:
+    // Just sort by date (newest first)
+    filteredPast.sort((a, b) {
+      final dateA = _getOrderDate(a);
+      final dateB = _getOrderDate(b);
+      return dateB.compareTo(dateA);
+    });
 
     return Scaffold(
       key: _scaffoldKey,
@@ -161,6 +279,49 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
               ),
             ),
 
+            // Search by ID only Box
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Search by Order ID only (e.g. 261022ORD00010)...',
+                    hintStyle: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
+                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF64748B)),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 42),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18, color: Color(0xFF64748B)),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 42),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                  ),
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val.trim();
+                    });
+                  },
+                ),
+              ),
+            ),
+
             // Tabs: Active & Past Orders
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -177,12 +338,36 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                 indicatorWeight: 3,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                tabs: const [
-                  Tab(text: 'Active'),
-                  Tab(text: 'Past Orders'),
+                tabs: [
+                  Tab(text: 'Active (${filteredActive.length})'),
+                  Tab(text: 'Past Orders (${filteredPast.length})'),
                 ],
               ),
             ),
+
+            // Filter Chips for Active Tab
+            if (_tabController.index == 0) ...[
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _buildFilterChip('All'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Self Pickup'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Shipping'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Packaging'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Unassigned'),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 8),
 
             // Tab Views
             Expanded(
@@ -191,8 +376,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
                   : TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildOrdersList(activeOrders, isActive: true),
-                        _buildOrdersList(pastOrders, isActive: false),
+                        _buildOrdersList(filteredActive, isActive: true),
+                        _buildOrdersList(filteredPast, isActive: false),
                       ],
                     ),
             ),
@@ -202,28 +387,92 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     );
   }
 
+  Widget _buildFilterChip(String label) {
+    final isSelected = _selectedActiveFilter == label;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedActiveFilter = label;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0C5AD2) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFFCBD5E1),
+            width: 1.2,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0C5AD2).withValues(alpha: 0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildOrdersList(List<Map<String, dynamic>> orderList, {required bool isActive}) {
     if (orderList.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              isActive ? 'No active orders' : 'No past orders',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-            ),
-            const SizedBox(
-              width: 280,
-              child: Text(
-                'Orders currently being processed or\nshipped will appear here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.inventory_2_outlined, size: 52, color: Colors.grey.shade400),
+                      const SizedBox(height: 12),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'No matching orders found'
+                            : (isActive ? 'No active orders' : 'No past orders'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: 280,
+                        child: Text(
+                          _searchQuery.isNotEmpty
+                              ? 'No orders match ID "$_searchQuery"'
+                              : (isActive
+                                  ? 'Orders currently being processed, packaged,\nor self-pickup will appear here.'
+                                  : 'Past and completed orders will appear here.'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       );
     }
 
@@ -273,18 +522,9 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     }
 
     final failReason = order['failReason']?.toString() ?? '';
-    final isPast = !_isActiveOrder(status, taskStatus);
+    final isPast = !_isActiveOrder(order);
     final isShipping = taskStatus.trim().toLowerCase() == 'shipping' || status.trim().toLowerCase() == 'shipping';
-
-    final effectiveStatus = () {
-      final os = status.trim().toLowerCase();
-      final ts = taskStatus.trim().toLowerCase();
-      if (os == 'cancelled' || os == 'canceled') return 'Cancelled';
-      if (os == 'fail' || os == 'failed') return 'Failed';
-      if (os == 'delivered' || os == 'completed') return 'Delivered';
-      if (ts == 'rejected' || os == 'rejected') return 'Unassigned';
-      return taskStatus.isNotEmpty ? taskStatus : status;
-    }();
+    final effectiveStatus = _getEffectiveStatus(order);
 
     // Format estimated arrival display
     String? estimatedArrivalText;
@@ -462,6 +702,10 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       bgColor = const Color(0xFFDCFCE7);
       textColor = const Color(0xFF16A34A);
       icon = Icons.check_circle_outline;
+    } else if (s == 'self pickup' || s == 'self-pickup' || s == 'terminated') {
+      bgColor = const Color(0xFFFEF3C7);
+      textColor = const Color(0xFFB45309);
+      icon = Icons.storefront_outlined;
     } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing') {
       bgColor = const Color(0xFFE0E7FF);
       textColor = const Color(0xFF4338CA);

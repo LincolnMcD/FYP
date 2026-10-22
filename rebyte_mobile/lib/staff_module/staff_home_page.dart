@@ -7,6 +7,8 @@ import '../account_management_module/services/account_session_watch_service.dart
 import '../account_management_module/services/app_route_observer.dart';
 import '../account_management_module/home_page.dart';
 import 'staff_commission_page.dart';
+import 'staff_schedule_page.dart';
+import 'staff_leave_application_page.dart';
 import '../task_assignment_module/staff_assigned_tasks_page.dart';
 
 class StaffHomePage extends StatefulWidget {
@@ -238,12 +240,22 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   email: _email,
                   onLogout: _showLogoutDialog,
                   onProfileUpdated: () async { await _loadFreshStaffProfile(); },
+                  onNavigateToTasks: () {
+                    setState(() => _selectedIndex = 2);
+                  },
+                  onNavigateToSchedule: () {
+                    setState(() => _selectedIndex = 1);
+                  },
                 )
               : _selectedIndex == 2
                   ? StaffAssignedTasksPage(
                       email: _email,
                     )
-                  : SafeArea(
+                  : _selectedIndex == 1
+                      ? StaffSchedulePage(
+                          email: _email,
+                        )
+                      : SafeArea(
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -393,7 +405,10 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("Today's Schedule", style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15)),
-                    Text('View All', style: TextStyle(color: const Color(0xFF0C5AD2).withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.bold)),
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedIndex = 1),
+                      child: Text('View All', style: TextStyle(color: const Color(0xFF0C5AD2).withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
               ),
@@ -431,8 +446,25 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _buildQuickActionBtn(Icons.add_circle_outline_rounded, 'New\nInspect', true),
-                          _buildQuickActionBtn(Icons.calendar_month_outlined, 'View\nSchedule', false),
-                          _buildQuickActionBtn(Icons.event_busy_outlined, 'Request\nLeave', false),
+                          _buildQuickActionBtn(
+                            Icons.calendar_month_outlined,
+                            'View\nSchedule',
+                            false,
+                            onTap: () => setState(() => _selectedIndex = 1),
+                          ),
+                          _buildQuickActionBtn(
+                            Icons.event_busy_outlined,
+                            'Request\nLeave',
+                            false,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StaffLeaveApplicationPage(email: _email),
+                                ),
+                              );
+                            },
+                          ),
                           _buildQuickActionBtn(Icons.support_agent_rounded, 'Inspection\nHelp', false),
                         ],
                       ),
@@ -655,25 +687,28 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildQuickActionBtn(IconData icon, String label, bool isActive) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF0C5AD2) : const Color(0xFFEEF2FF),
-            shape: BoxShape.circle,
-            boxShadow: isActive ? [BoxShadow(color: const Color(0xFF0C5AD2).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))] : [],
+  Widget _buildQuickActionBtn(IconData icon, String label, bool isActive, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFF0C5AD2) : const Color(0xFFEEF2FF),
+              shape: BoxShape.circle,
+              boxShadow: isActive ? [BoxShadow(color: const Color(0xFF0C5AD2).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))] : [],
+            ),
+            child: Icon(icon, color: isActive ? Colors.white : const Color(0xFF0C5AD2), size: 24),
           ),
-          child: Icon(icon, color: isActive ? Colors.white : const Color(0xFF0C5AD2), size: 24),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold, height: 1.2),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold, height: 1.2),
+          ),
+        ],
+      ),
     );
   }
   Widget _buildDrawer() {

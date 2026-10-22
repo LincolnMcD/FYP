@@ -280,7 +280,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
             ),
             const SizedBox(height: 14),
 
-            // Device Details Card
+            // Device Details Card (Renders all products in the order)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -292,132 +292,61 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    children: const [
-                      Icon(Icons.phone_android, size: 18, color: Color(0xFF0C5AD2)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Device Details',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: const [
+                            Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF0C5AD2)),
+                            SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                'Package Items',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Text(
+                          '${items.isEmpty ? 1 : items.length} ${(items.isEmpty || items.length == 1) ? "Product" : "Products"}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1D4ED8),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        padding: const EdgeInsets.all(6),
-                        child: imageUrl != null && imageUrl.isNotEmpty
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.devices, color: Color(0xFF94A3B8)),
-                              )
-                            : const Icon(Icons.devices, size: 30, color: Color(0xFF94A3B8)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'MODEL',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF94A3B8),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              modelName,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'STORAGE',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF94A3B8),
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      storage,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF334155),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(width: 24),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'CONDITION',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF94A3B8),
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF16A34A),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          condition,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF334155),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                  if (items.isEmpty)
+                    _buildSingleProductRow(
+                      name: modelName,
+                      storage: storage,
+                      condition: condition,
+                      imageUrl: imageUrl,
+                      index: 1,
+                      showBadge: false,
+                    )
+                  else
+                    for (int i = 0; i < items.length; i++) ...[
+                      if (i > 0) const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
+                      _buildItemFromMap(items[i], i + 1, items.length > 1),
                     ],
-                  ),
                 ],
               ),
             ),
@@ -849,6 +778,239 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
 </html>
 ''';
   }
+
+  Widget _buildItemFromMap(dynamic rawItem, int index, bool showIndex) {
+    if (rawItem is! Map) return const SizedBox.shrink();
+    final item = rawItem;
+    final brand = item['brand']?.toString() ?? '';
+    final model = item['model']?.toString() ?? '';
+    var name = '$brand $model'.trim();
+    if (name.isEmpty) name = 'Electronic Device';
+    final storage = item['storage']?.toString() ?? 'Standard';
+    final condition = item['condition']?.toString() ?? 'Good';
+    final color = item['color']?.toString() ?? '';
+    final imageUrl = item['imageUrl']?.toString();
+    final productId = item['productID']?.toString();
+
+    return _buildSingleProductRow(
+      name: name,
+      storage: storage,
+      condition: condition,
+      color: color,
+      imageUrl: imageUrl,
+      productId: productId,
+      index: index,
+      showBadge: showIndex,
+    );
+  }
+
+  Widget _buildSingleProductRow({
+    required String name,
+    required String storage,
+    required String condition,
+    String? color,
+    String? imageUrl,
+    String? productId,
+    required int index,
+    required bool showBadge,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              padding: const EdgeInsets.all(6),
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.devices, color: Color(0xFF94A3B8)),
+                    )
+                  : const Icon(Icons.devices, size: 30, color: Color(0xFF94A3B8)),
+            ),
+            if (showBadge)
+              Positioned(
+                top: 2,
+                left: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '#$index',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'MODEL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF94A3B8),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (productId != null && productId.isNotEmpty)
+                    Flexible(
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          productId,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF475569),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 14,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'STORAGE',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF94A3B8),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        storage,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (color != null && color.isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'COLOR',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF94A3B8),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          color,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ],
+                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'CONDITION',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF94A3B8),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF16A34A),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            condition,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class RejectTaskDialog extends StatefulWidget {
@@ -1156,4 +1318,5 @@ class _RejectTaskDialogState extends State<RejectTaskDialog> {
     );
   }
 }
+
 
