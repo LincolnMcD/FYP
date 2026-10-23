@@ -2368,22 +2368,63 @@ router.get("/leave-balance", async (req, res) => {
 router.get("/leave-applications", async (req, res) => {
     try {
         const { staffID, email } = req.query;
-        const staff = await resolveStaffAccount(staffID, email);
-        if (!staff) {
-            return res.json({ success: true, applications: [] });
+        let snap;
+        if (staffID || email) {
+            const staff = await resolveStaffAccount(staffID, email);
+            if (!staff) {
+                return res.json({ success: true, applications: [] });
+            }
+            snap = await db.collection("leaveApplication")
+                .where("applicantStaffID", "==", staff.id)
+                .get();
+        } else {
+            // Admin view: return all leave applications
+            snap = await db.collection("leaveApplication").get();
         }
 
-        const snap = await db.collection("leaveApplication")
-            .where("applicantStaffID", "==", staff.id)
-            .get();
-
         const applications = [];
-        snap.forEach(doc => {
+        const staffMap = {};
+
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const staffId = data.applicantStaffID;
+            let staffInfo = null;
+
+            if (staffId) {
+                if (!staffMap[staffId]) {
+                    const uDoc = await db.collection("users").doc(staffId).get();
+                    if (uDoc.exists) {
+                        const uData = uDoc.data();
+                        staffMap[staffId] = {
+                            staffName: uData.fullName || uData.name || data.applicantStaffName || "Staff",
+                            staffNo: uData.staffNo || data.applicantStaffNo || "",
+                            email: uData.email || "",
+                            annualRemaining: uData.leave?.annualRemaining ?? 12,
+                            medicalRemaining: uData.leave?.medicalRemaining ?? 14
+                        };
+                    } else {
+                        staffMap[staffId] = {
+                            staffName: data.applicantStaffName || "Staff",
+                            staffNo: data.applicantStaffNo || "",
+                            annualRemaining: 12,
+                            medicalRemaining: 14
+                        };
+                    }
+                }
+                staffInfo = staffMap[staffId];
+            }
+
             applications.push({
-                ...doc.data(),
-                id: doc.id
+                ...data,
+                id: doc.id,
+                leaveID: data.leaveID || doc.id,
+                applicantStaffName: staffInfo?.staffName || data.applicantStaffName || "Staff",
+                applicantStaffNo: staffInfo?.staffNo || data.applicantStaffNo || "",
+                staffEmail: staffInfo?.email || "",
+                annualRemaining: staffInfo?.annualRemaining ?? 12,
+                medicalRemaining: staffInfo?.medicalRemaining ?? 14
             });
-        });
+        }
 
         // Sort desc by createdAt or leaveID
         applications.sort((a, b) => {
@@ -2728,6 +2769,96 @@ router.put("/review-leave/:leaveID", async (req, res) => {
         return res.json({ success: true, message: `Leave application ${status.toLowerCase()} successfully.` });
     } catch (err) {
         console.error("Error reviewing leave application:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/task-assignment/batch-review-leave
+ * Batch review (Approve/Reject) multiple leave applications
+ * Deducts annual/medical days only on Approved; skips deduction for Unpaid leave
+ */
+router.put("/batch-review-leave", async (req, res) => {
+    try {
+        const { leaveIDs, status, reviewRemarks, reviewerID } = req.body;
+        if (!Array.isArray(leaveIDs) || leaveIDs.length === 0) {
+            return res.status(400).json({ success: false, error: "leaveIDs must be a non-empty array." });
+        }
+        if (!status || !["Approved", "Rejected"].includes(status)) {
+            return res.status(400).json({ success: false, error: "Status must be 'Approved' or 'Rejected'." });
+        }
+
+        const batch = db.batch();
+        let updatedCount = 0;
+        const nowIso = new Date().toISOString();
+
+        // Keep running cache of updated balances per staff so multiple leaves for the same staff in one batch deduct properly
+        const staffBalanceCache = {};
+
+        for (const id of leaveIDs) {
+            const docRef = db.collection("leaveApplication").doc(id);
+            const doc = await docRef.get();
+            if (!doc.exists) continue;
+            const currentData = doc.data();
+            if (currentData.leaveStatus !== "Pending") continue;
+
+            batch.update(docRef, {
+                leaveStatus: status,
+                reviewedAt: nowIso,
+                reviewerID: reviewerID || "",
+                reviewRemarks: reviewRemarks || ""
+            });
+
+            if (status === "Approved") {
+                const staffDocId = currentData.applicantStaffID;
+                const durationDays = parseInt(currentData.daysCount || currentData.duration || 1, 10);
+                const leaveType = currentData.leaveType;
+
+                if (staffDocId && (leaveType === "Annual Leave" || leaveType === "Medical Leave")) {
+                    if (!staffBalanceCache[staffDocId]) {
+                        const leaveBal = await getStaffLeaveBalance(staffDocId);
+                        staffBalanceCache[staffDocId] = {
+                            ref: leaveBal.ref,
+                            annualRemaining: leaveBal.data.annualRemaining,
+                            medicalRemaining: leaveBal.data.medicalRemaining
+                        };
+                    }
+
+                    if (leaveType === "Annual Leave") {
+                        staffBalanceCache[staffDocId].annualRemaining = Math.max(
+                            0,
+                            staffBalanceCache[staffDocId].annualRemaining - durationDays
+                        );
+                    } else if (leaveType === "Medical Leave") {
+                        staffBalanceCache[staffDocId].medicalRemaining = Math.max(
+                            0,
+                            staffBalanceCache[staffDocId].medicalRemaining - durationDays
+                        );
+                    }
+                }
+            }
+            updatedCount++;
+        }
+
+        // Apply cached staff balance updates to batch
+        for (const [staffDocId, bal] of Object.entries(staffBalanceCache)) {
+            batch.update(bal.ref, {
+                "leave.annualRemaining": bal.annualRemaining,
+                "leave.medicalRemaining": bal.medicalRemaining
+            });
+        }
+
+        if (updatedCount > 0) {
+            await batch.commit();
+        }
+
+        return res.json({
+            success: true,
+            updatedCount,
+            message: `Successfully ${status.toLowerCase()} ${updatedCount} leave application(s).`
+        });
+    } catch (err) {
+        console.error("Error batch reviewing leave applications:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });

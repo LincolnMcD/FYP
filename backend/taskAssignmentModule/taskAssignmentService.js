@@ -191,7 +191,7 @@ async function getEligibleDeliveryStaff() {
  *         e.g., Task 1 completes at 09:34. Task 1 -> Task 2 takes 1 hour (arrives 10:34) -> valid because <= 11:00 AM slot.
  *         If travel takes 2 hours (arrives 11:34) -> invalid because > 11:00 AM slot.
  */
-async function assignDeliveryTask({ orderID, addressID, requestedDate, specificStaffID, excludeStaffIDs = [] }) {
+async function assignDeliveryTask({ orderID, addressID, requestedDate, specificStaffID, excludeStaffIDs = [], forceNextDay = false }) {
     const taskID = `TSK-${orderID}`;
     const deliveryID = `DEL-${orderID}`;
 
@@ -257,7 +257,7 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate, specificS
     let candidateDate = new Date(now);
 
     const todayCutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), WORKING_HOUR_CONFIG.startHour, 0, 0);
-    if (now >= todayCutoff) {
+    if (forceNextDay || now >= todayCutoff) {
         candidateDate.setDate(candidateDate.getDate() + 1);
     }
 

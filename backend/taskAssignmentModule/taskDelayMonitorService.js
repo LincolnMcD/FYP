@@ -235,7 +235,7 @@ async function delayFollowingTasks(staffID, scheduleDate, cutoffStartTimeStr, mi
  * - delay current task by 10 min
  * - delay following tasks by 10 min
  * - staff mistake +1
- * - if 3rd time: scheduleStatus = 'absent', reassign to another staff
+ * - if 3rd time: scheduleStatus = 'absent', reassign to another staff 1 by 1
  */
 // Track schedules currently being processed to avoid duplicate concurrent triggers
 const processingSchedules = new Set();
@@ -280,9 +280,9 @@ async function handleStartTimeViolation(scheduleID) {
         const staffID = sData.staffID;
         const orderID = sData.orderID;
 
-        // If it already completed 3 delays, this 4th check means staff still didn't start delivery after 3 delays -> absent & reassign
+        // If it already completed 3 delays, this 4th check means staff still didn't start delivery after 3 delays -> absent & reassign 1 by 1
         if (currentStartDelays > 3) {
-            console.log(`[START TIME VIOLATION] Schedule [${scheduleID}] staff [${staffID}] still not started after 3 delays. Marking absent and reassigning Order #${orderID}...`);
+            console.log(`[START TIME VIOLATION] Schedule [${scheduleID}] staff [${staffID}] still not started after 3 delays. Marking absent and reassigning Order #${orderID} 1 by 1 to next day...`);
 
             // Mark schedule record as absent
             await schedRef.set({
@@ -296,14 +296,15 @@ async function handleStartTimeViolation(scheduleID) {
             // Clear timers for this schedule
             clearScheduleTimers(scheduleID);
 
-            // Reassign task to another eligible delivery staff, excluding the absent staff
+            // Reassign ONLY this task 1 by 1 to another eligible delivery staff on the NEXT day
             const reassignResult = await assignDeliveryTask({
                 orderID,
                 requestedDate: sData.scheduleDate ? new Date(sData.scheduleDate) : new Date(),
+                forceNextDay: true,
                 excludeStaffIDs: [staffID]
             });
 
-            console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message);
+            console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message || reassignResult.reason || "Done");
             if (reassignResult.scheduleID) {
                 registerScheduleTimer(reassignResult.scheduleID);
             }
@@ -397,9 +398,9 @@ async function handleEndTimeViolation(scheduleID) {
         const staffID = sData.staffID;
         const orderID = sData.orderID;
 
-        // If it already completed 3 delays, this 4th check means staff still hasn't completed delivery after 3 delays -> absent & reassign
+        // If it already completed 3 delays, this 4th check means staff still hasn't completed delivery after 3 delays -> absent & reassign 1 by 1
         if (currentEndDelays > 3) {
-            console.log(`[END TIME VIOLATION] Schedule [${scheduleID}] delivery still not completed after 3 delays. Marking absent and reassigning Order #${orderID}...`);
+            console.log(`[END TIME VIOLATION] Schedule [${scheduleID}] delivery still not completed after 3 delays. Marking absent and reassigning Order #${orderID} 1 by 1 to next day...`);
 
             // Mark schedule record as absent
             await schedRef.set({
@@ -412,14 +413,15 @@ async function handleEndTimeViolation(scheduleID) {
 
             clearScheduleTimers(scheduleID);
 
-            // Reassign task to another eligible delivery staff, excluding the absent staff
+            // Reassign ONLY this task 1 by 1 to another eligible delivery staff on the NEXT day
             const reassignResult = await assignDeliveryTask({
                 orderID,
                 requestedDate: sData.scheduleDate ? new Date(sData.scheduleDate) : new Date(),
+                forceNextDay: true,
                 excludeStaffIDs: [staffID]
             });
 
-            console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message);
+            console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message || reassignResult.reason || "Done");
             if (reassignResult.scheduleID) {
                 registerScheduleTimer(reassignResult.scheduleID);
             }
