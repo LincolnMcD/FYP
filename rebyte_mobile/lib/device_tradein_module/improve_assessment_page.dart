@@ -6,6 +6,7 @@ import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../account_management_module/home_page.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
+import 'my_trade_in_requests_page.dart';
 
 class ImproveAssessmentPage extends StatefulWidget {
   final DeviceModel device;
@@ -13,6 +14,7 @@ class ImproveAssessmentPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromMyTradeInRequests;
 
   const ImproveAssessmentPage({
     super.key,
@@ -21,6 +23,7 @@ class ImproveAssessmentPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromMyTradeInRequests = false,
   });
 
   @override
@@ -41,6 +44,25 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
   }
 
   void _onBackToHome() {
+    if (widget.fromMyTradeInRequests) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+        return;
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MyTradeInRequestsPage(
+              email: widget.email ?? 'customer@rebyte.com',
+              name: widget.name,
+              isLoggedIn: widget.isLoggedIn,
+            ),
+          ),
+          (route) => false,
+        );
+        return;
+      }
+    }
     // Navigate back to HomePage at Active Activity section
     // Keep TradeInFlowSession intact so the active block is visible under Active Activity
     Navigator.pushAndRemoveUntil(
@@ -90,8 +112,14 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _onBackToHome();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: ReByteAppBar(scaffoldKey: _scaffoldKey),
       drawer: ReByteDrawer(
@@ -251,6 +279,7 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
       bottomNavigationBar: const ReByteBottomNavBar(
         selectedIndex: 2,
       ),
-    );
+    ),
+  );
   }
 }

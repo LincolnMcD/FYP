@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../account_management_module/services/session_service.dart';
 import '../task_assignment_module/services/task_assignment_service.dart';
 
@@ -105,6 +106,14 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
       final results = await Future.wait([balanceFuture, appsFuture]);
       final balanceData = results[0] as Map<String, dynamic>;
       final appsData = results[1] as List<Map<String, dynamic>>;
+
+      // Sort descending so the latest applications are first
+      appsData.sort((a, b) {
+        final tA = DateTime.tryParse(a['createdAt']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0;
+        final tB = DateTime.tryParse(b['createdAt']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0;
+        if (tA != tB) return tB.compareTo(tA);
+        return (b['leaveID']?.toString() ?? '').compareTo(a['leaveID']?.toString() ?? '');
+      });
 
       if (mounted) {
         setState(() {
@@ -244,16 +253,25 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
   }
 
   List<Map<String, dynamic>> get _filteredApplications {
+    final sorted = List<Map<String, dynamic>>.from(_applications);
+    sorted.sort((a, b) {
+      final tA = DateTime.tryParse(a['createdAt']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0;
+      final tB = DateTime.tryParse(b['createdAt']?.toString() ?? '')?.millisecondsSinceEpoch ?? 0;
+      if (tA != tB) return tB.compareTo(tA);
+      return (b['leaveID']?.toString() ?? '').compareTo(a['leaveID']?.toString() ?? '');
+    });
+
     if (_activeFilterIndex == 1) {
-      return _applications.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'PENDING').toList();
+      return sorted.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'PENDING').toList();
     } else if (_activeFilterIndex == 2) {
-      return _applications.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'APPROVED').toList();
+      return sorted.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'APPROVED').toList();
     } else if (_activeFilterIndex == 3) {
-      return _applications.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'REJECTED').toList();
+      return sorted.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'REJECTED').toList();
     } else if (_activeFilterIndex == 4) {
-      return _applications.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'CANCELLED').toList();
+      return sorted.where((a) => (a['leaveStatus'] ?? '').toString().toUpperCase() == 'CANCELLED').toList();
     }
-    return _applications;
+    // "All" filter: show the latest 10 records from staff side
+    return sorted.take(10).toList();
   }
 
   Future<void> _pickAttachment() async {
@@ -559,6 +577,290 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
                   child: const Text(
                     'Got It',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewSupportingDocument(String url) {
+    if (url.trim().isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.description_outlined, color: Color(0xFF0C5AD2), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Supporting Document',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+              // Content / Image Viewer
+              Flexible(
+                child: Container(
+                  color: const Color(0xFF0B132B),
+                  alignment: Alignment.center,
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: progress.expectedTotalBytes != null
+                                ? progress.cumulativeBytesLoaded / (progress.expectedTotalBytes ?? 1)
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.broken_image_outlined, size: 48, color: Colors.white54),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Unable to display image preview',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                url,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white60, fontSize: 11),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 14),
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final uri = Uri.tryParse(url);
+                                  if (uri != null && await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  }
+                                },
+                                icon: const Icon(Icons.open_in_browser, size: 16),
+                                label: const Text('Open in Browser', style: TextStyle(fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0C5AD2),
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+
+              // Bottom action bar
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () async {
+                        final uri = Uri.tryParse(url);
+                        if (uri != null && await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16, color: Color(0xFF0C5AD2)),
+                      label: const Text(
+                        'Open in Browser',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0C5AD2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Done', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRejectionReasonDialog(String leaveId, String reviewRemarks) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Container(
+          padding: const EdgeInsets.all(22),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFEE2E2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Leave Application Rejected',
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        if (leaveId.isNotEmpty)
+                          Text(
+                            'Application ID: $leaveId',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Reason for Rejection:',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF334155),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Text(
+                  reviewRemarks.trim().isNotEmpty
+                      ? reviewRemarks.trim()
+                      : 'No specific rejection reason provided by administrator.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: reviewRemarks.trim().isNotEmpty
+                        ? const Color(0xFF991B1B)
+                        : const Color(0xFF94A3B8),
+                    fontStyle: reviewRemarks.trim().isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -900,36 +1202,39 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
   Widget _buildFilterChips() {
     final filters = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
 
-    return Row(
-      children: List.generate(filters.length, (index) {
-        final isSelected = _activeFilterIndex == index;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() => _activeFilterIndex = index),
-            child: Container(
-              margin: EdgeInsets.only(right: index < filters.length - 1 ? 6 : 0),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF0C5AD2) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFFE2E8F0),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: List.generate(filters.length, (index) {
+          final isSelected = _activeFilterIndex == index;
+          return Padding(
+            padding: EdgeInsets.only(right: index < filters.length - 1 ? 8 : 0),
+            child: InkWell(
+              onTap: () => setState(() => _activeFilterIndex = index),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF0C5AD2) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? const Color(0xFF0C5AD2) : const Color(0xFFE2E8F0),
+                  ),
                 ),
-              ),
-              child: Center(
                 child: Text(
                   filters[index],
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: isSelected ? Colors.white : const Color(0xFF475569),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
@@ -962,7 +1267,28 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
     }
 
     return Column(
-      children: list.map((item) {
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_activeFilterIndex == 0 && _applications.length > 10) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.history_rounded, size: 14, color: Color(0xFF64748B)),
+                const SizedBox(width: 5),
+                Text(
+                  'Showing latest 10 records (of ${_applications.length} total)',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        ...list.map((item) {
         final leaveId = (item['leaveID'] ?? item['id'] ?? '').toString();
         final status = (item['leaveStatus'] ?? item['status'] ?? 'Pending').toString().toUpperCase();
         final leaveType = (item['leaveType'] ?? item['title'] ?? 'Leave').toString();
@@ -971,6 +1297,7 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
         final days = item['duration'] ?? item['daysCount'] ?? item['days'] ?? 1;
         final reason = (item['reason'] ?? '').toString();
         final docUrl = (item['suportingDocUrl'] ?? item['supportingDocUrl'] ?? '').toString();
+        final reviewRemarks = (item['reviewRemarks'] ?? item['rejectionReason'] ?? item['remarks'] ?? '').toString();
 
         Color badgeBg = const Color(0xFFEFF6FF);
         Color badgeColor = const Color(0xFF2563EB);
@@ -1008,53 +1335,71 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header Row with Title, ID and Status Badge (Overflow-proof)
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        leaveType,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      if (leaveId.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '($leaveId)',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: badgeBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                  Expanded(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(badgeIcon, size: 12, color: badgeColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          status,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: badgeColor,
-                            letterSpacing: 0.5,
+                        Flexible(
+                          child: Text(
+                            leaveType,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
                           ),
                         ),
+                        if (leaveId.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '($leaveId)',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: status == 'REJECTED'
+                        ? () => _showRejectionReasonDialog(leaveId, reviewRemarks)
+                        : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(badgeIcon, size: 12, color: badgeColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            status,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: badgeColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          if (status == 'REJECTED') ...[
+                            const SizedBox(width: 3),
+                            Icon(Icons.info_outline_rounded, size: 11, color: badgeColor),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1064,14 +1409,17 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
                 children: [
                   const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF64748B)),
                   const SizedBox(width: 6),
-                  Text(
-                    startDisplay == endDisplay
-                        ? '$startDisplay ($days ${days == 1 ? "day" : "days"})'
-                        : '$startDisplay - $endDisplay ($days days)',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF475569),
+                  Expanded(
+                    child: Text(
+                      startDisplay == endDisplay
+                          ? '$startDisplay ($days ${days == 1 ? "day" : "days"})'
+                          : '$startDisplay - $endDisplay ($days days)',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1086,20 +1434,67 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
                 ),
               ],
               if (docUrl.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.attachment_rounded, size: 14, color: Color(0xFF0C5AD2)),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Supporting document attached',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0C5AD2),
-                      ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () => _viewSupportingDocument(docUrl),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.attach_file_rounded, size: 15, color: Color(0xFF0C5AD2)),
+                        SizedBox(width: 5),
+                        Text(
+                          'View Supporting Document',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0C5AD2),
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.open_in_new_rounded, size: 12, color: Color(0xFF0C5AD2)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (status == 'REJECTED') ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () => _showRejectionReasonDialog(leaveId, reviewRemarks),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFECACA)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFDC2626)),
+                        SizedBox(width: 5),
+                        Text(
+                          'View Rejection Reason',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded, size: 15, color: Color(0xFFDC2626)),
+                      ],
+                    ),
+                  ),
                 ),
               ],
               if (status == 'PENDING') ...[
@@ -1127,9 +1522,10 @@ class _StaffLeaveApplicationPageState extends State<StaffLeaveApplicationPage> {
             ],
           ),
         );
-      }).toList(),
-    );
-  }
+      }),
+    ],
+  );
+}
 
   Widget _buildBalanceCards() {
     return Row(

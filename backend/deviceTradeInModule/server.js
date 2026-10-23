@@ -1198,6 +1198,50 @@ router.post("/update-status", async (req, res) => {
     }
 });
 
+router.post("/book-appointment", async (req, res) => {
+    try {
+        const { tradeInRequestID, method, appointmentDate, appointmentTime, address } = req.body;
+        if (!tradeInRequestID || !appointmentDate || !appointmentTime) {
+            return res.status(400).json({ success: false, message: "Missing required booking fields." });
+        }
+
+        if (db) {
+            const requestRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+            const doc = await requestRef.get();
+            if (!doc.exists) {
+                return res.status(404).json({ success: false, message: "Trade-in request not found." });
+            }
+
+            const updateData = {
+                inspectionMethod: method || "On-Site Inspection",
+                appointmentDate,
+                appointmentTime,
+                appointmentSlot: appointmentTime,
+                requestStatus: "Scheduled",
+                bookingStatus: "Confirmed",
+                updatedAt: new Date()
+            };
+
+            if (address && typeof address === "object") {
+                updateData.inspectionAddress = address;
+            }
+
+            await requestRef.update(updateData);
+
+            return res.status(200).json({
+                success: true,
+                tradeInRequestID,
+                message: "Appointment successfully booked."
+            });
+        }
+
+        return res.status(200).json({ success: true, message: "Appointment booked." });
+    } catch (err) {
+        console.error("book-appointment error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // GET /active-submitted - Search for trade in request with 'Submitted' or 'Evaluated' status for active activity
 router.get("/active-submitted", async (req, res) => {
     try {
@@ -1259,7 +1303,78 @@ router.get("/active-submitted", async (req, res) => {
     }
 });
 
-// POST /cancel-requests - Cancel existing Pending/Submitted/Evaluated/Quoted trade-in requests for a user when starting a new flow
+// GET /user-requests - Fetch all trade-in requests for a user
+router.get("/user-requests", async (req, res) => {
+    try {
+        const { userEmail } = req.query;
+        if (!userEmail || !db) {
+            return res.status(200).json({ success: true, requests: [] });
+        }
+
+        const snapshot = await db.collection("tradeInRequests")
+            .where("userEmail", "==", userEmail)
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(200).json({ success: true, requests: [] });
+        }
+
+        const toMs = (ts) => {
+            if (!ts) return 0;
+            if (ts.toDate && typeof ts.toDate === "function") return ts.toDate().getTime();
+            if (ts._seconds) return ts._seconds * 1000 + (ts._nanoseconds || 0) / 1e6;
+            if (typeof ts === "string" || typeof ts === "number") return new Date(ts).getTime() || 0;
+            if (ts instanceof Date) return ts.getTime();
+            return 0;
+        };
+
+        const requests = [];
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            let deviceData = null;
+            if (data.deviceID) {
+                const devDoc = await db.collection("devices").doc(data.deviceID).get();
+                if (devDoc.exists) {
+                    deviceData = devDoc.data();
+                }
+            }
+
+            let firstImageUrl = null;
+            try {
+                const imgSnap = await doc.ref.collection("images").limit(1).get();
+                if (!imgSnap.empty) {
+                    firstImageUrl = imgSnap.docs[0].data().imageUrl;
+                }
+            } catch (_) {}
+
+            requests.push({
+                tradeInRequestID: data.tradeInRequestID || doc.id,
+                requestStatus: data.requestStatus || 'Submitted',
+                submittedAt: data.submittedAt || data.createdAt || null,
+                deviceID: data.deviceID,
+                device: deviceData,
+                deviceImage: firstImageUrl,
+                estimatedValue: data.estimatedValue || 'RM1,050 - RM1,520',
+            });
+        }
+
+        requests.sort((a, b) => {
+            const timeA = toMs(a.submittedAt);
+            const timeB = toMs(b.submittedAt);
+            return timeB - timeA;
+        });
+
+        return res.status(200).json({
+            success: true,
+            requests
+        });
+    } catch (err) {
+        console.error("user-requests error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /cancel-requests - Cancel existing Pending trade-in requests for a user when starting a new flow
 router.post("/cancel-requests", async (req, res) => {
     try {
         const { userEmail } = req.body;
@@ -1269,14 +1384,14 @@ router.post("/cancel-requests", async (req, res) => {
 
         const snapshot = await db.collection("tradeInRequests")
             .where("userEmail", "==", userEmail)
-            .where("requestStatus", "in", ["Pending", "Submitted", "Evaluated", "Quoted"])
+            .where("requestStatus", "in", ["Pending", "pending"])
             .get();
 
         let count = 0;
         for (const doc of snapshot.docs) {
             const data = doc.data();
             const status = (data.requestStatus || '').toLowerCase();
-            if (status === 'pending' || status === 'submitted' || status === 'evaluated' || status === 'quoted') {
+            if (status === 'pending') {
                 await doc.ref.update({
                     requestStatus: 'Cancelled',
                     cancelledAt: new Date()

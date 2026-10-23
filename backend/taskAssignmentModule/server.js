@@ -5,7 +5,7 @@ const { FieldValue } = require("firebase-admin/firestore");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-const { assignDeliveryTask } = require("./taskAssignmentService");
+const { assignDeliveryTask, getStaffIDsOnApprovedLeave, parseLeaveDate } = require("./taskAssignmentService");
 const { getOsrmRoute, COMPANY_LOCATION } = require("./osrmService");
 const { getDeliveryRoomsStatus } = require("./deliverySocket");
 const {
@@ -1771,6 +1771,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         const hubLoc = COMPANY_LOCATION;
         const hubToCustomerRoute = await getOsrmRoute(hubLoc, customerLoc);
 
+        const staffOnLeave = await getStaffIDsOnApprovedLeave(targetDateObj);
         const eligibleStaff = [];
 
         for (const doc of staffSnap.docs) {
@@ -1780,7 +1781,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
 
             const pos = String(d.position || "").toLowerCase().trim();
 
-            // Filter by Position based on Task Type
+            // Filter by Position based on Task Type: must be delivery or both for delivery task
             if (isDelivery) {
                 if (pos !== "deliverer" && pos !== "both") continue;
             } else {
@@ -1788,6 +1789,11 @@ router.get("/admin/reassign-candidates", async (req, res) => {
             }
 
             const staffID = doc.id;
+
+            // Constraint: Exclude staff who have an approved leave on the target schedule date
+            if (staffOnLeave.has(staffID)) {
+                continue;
+            }
 
             // Fetch this staff's schedules to evaluate active workload on the target schedule date
             const staffSchedSnap = await db.collection("schedule")
@@ -2718,8 +2724,103 @@ router.delete("/cancel-leave/:leaveID", async (req, res) => {
 });
 
 /**
+ * Helper: Reassign any active tasks scheduled for a staff member on approved leave dates 1-by-1
+ * When approved, task on that day of the staff need reassign to suitable staff
+ */
+async function reassignStaffTasksOnApprovedLeave(staffID, startDateStr, endDateStr, leaveID) {
+    try {
+        const start = parseLeaveDate(startDateStr);
+        const end = parseLeaveDate(endDateStr);
+        if (!start || !end) {
+            console.warn(`[REASSIGN ON LEAVE] Invalid date range for staff ${staffID}: ${startDateStr} - ${endDateStr}`);
+            return { reassignedCount: 0 };
+        }
+
+        // Collect all YYYY-MM-DD date strings in the leave duration
+        const dateKeys = [];
+        const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0);
+        const endMidnight = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 0, 0, 0);
+
+        while (cur <= endMidnight) {
+            const y = cur.getFullYear();
+            const m = String(cur.getMonth() + 1).padStart(2, "0");
+            const d = String(cur.getDate()).padStart(2, "0");
+            dateKeys.push(`${y}-${m}-${d}`);
+            cur.setDate(cur.getDate() + 1);
+        }
+
+        console.log(`[REASSIGN ON LEAVE] Checking tasks for staff ${staffID} across approved leave dates:`, dateKeys);
+
+        let totalReassigned = 0;
+
+        for (const dateStr of dateKeys) {
+            const schedSnap = await db.collection("schedule")
+                .where("staffID", "==", staffID)
+                .where("scheduleDate", "==", dateStr)
+                .get();
+
+            if (schedSnap.empty) continue;
+
+            for (const sDoc of schedSnap.docs) {
+                const sData = sDoc.data();
+                const status = (sData.scheduleStatus || "").toLowerCase();
+
+                // Only reassign active / uncompleted tasks
+                if (["completed", "cancelled", "absent", "reassigned"].includes(status)) {
+                    continue;
+                }
+
+                const orderID = sData.orderID;
+                const scheduleID = sDoc.id;
+
+                console.log(`[REASSIGN ON LEAVE] Reassigning Order #${orderID} (Schedule ${scheduleID}) on ${dateStr} due to approved leave [${leaveID}] 1 by 1...`);
+
+                // Mark current schedule as reassigned due to leave
+                await sDoc.ref.set({
+                    scheduleStatus: "reassigned",
+                    reassignReason: `Staff on approved leave (${leaveID})`,
+                    reassignedAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+
+                // Clear existing timers for this schedule
+                clearScheduleTimers(scheduleID);
+
+                // Reassign task 1-by-1 to a suitable delivery staff
+                const reassignResult = await assignDeliveryTask({
+                    orderID,
+                    addressID: sData.addressID,
+                    requestedDate: dateStr,
+                    forceNextDay: false, // Try same day first with other eligible staff; cascades if all full
+                    excludeStaffIDs: [staffID]
+                });
+
+                if (reassignResult && reassignResult.success) {
+                    if (reassignResult.scheduleID) {
+                        registerScheduleTimer(reassignResult.scheduleID);
+                    }
+                    totalReassigned++;
+                    console.log(`[REASSIGN ON LEAVE SUCCESS] Order #${orderID} reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+                } else {
+                    console.warn(`[REASSIGN ON LEAVE WARNING] Could not automatically reassign Order #${orderID}:`, reassignResult?.reason || reassignResult?.message);
+                }
+            }
+        }
+
+        if (totalReassigned > 0) {
+            invalidateTaskCache();
+        }
+
+        return { reassignedCount: totalReassigned };
+    } catch (err) {
+        console.error(`[REASSIGN ON LEAVE ERROR] Failed reassigning tasks for staff ${staffID}:`, err);
+        return { reassignedCount: 0, error: err.message };
+    }
+}
+
+/**
  * PUT /api/task-assignment/review-leave/:leaveID
- * Review/Approve/Reject a leave application (deducts remaining leave only when Approved)
+ * Review/Approve/Reject a leave application (deducts remaining leave and reassigns tasks on approved leave dates)
  */
 router.put("/review-leave/:leaveID", async (req, res) => {
     try {
@@ -2766,7 +2867,27 @@ router.put("/review-leave/:leaveID", async (req, res) => {
         }
 
         await batch.commit();
-        return res.json({ success: true, message: `Leave application ${status.toLowerCase()} successfully.` });
+
+        // When approved the leave, the task on that day of the staff need reassign to suitable staff
+        let reassignedInfo = null;
+        if (status === "Approved") {
+            const staffDocId = currentData.applicantStaffID;
+            reassignedInfo = await reassignStaffTasksOnApprovedLeave(
+                staffDocId,
+                currentData.startDate,
+                currentData.endDate,
+                leaveID
+            );
+        }
+
+        return res.json({
+            success: true,
+            message: `Leave application ${status.toLowerCase()} successfully.` +
+                (reassignedInfo && reassignedInfo.reassignedCount > 0
+                    ? ` ${reassignedInfo.reassignedCount} task(s) on the leave date(s) were reassigned to available staff.`
+                    : ""),
+            reassignedTasksCount: reassignedInfo ? reassignedInfo.reassignedCount : 0
+        });
     } catch (err) {
         console.error("Error reviewing leave application:", err);
         return res.status(500).json({ success: false, error: err.message });
@@ -2777,6 +2898,7 @@ router.put("/review-leave/:leaveID", async (req, res) => {
  * PUT /api/task-assignment/batch-review-leave
  * Batch review (Approve/Reject) multiple leave applications
  * Deducts annual/medical days only on Approved; skips deduction for Unpaid leave
+ * Reassigns staff tasks 1-by-1 on approved leave dates
  */
 router.put("/batch-review-leave", async (req, res) => {
     try {
@@ -2794,6 +2916,7 @@ router.put("/batch-review-leave", async (req, res) => {
 
         // Keep running cache of updated balances per staff so multiple leaves for the same staff in one batch deduct properly
         const staffBalanceCache = {};
+        const approvedDocsToReassign = [];
 
         for (const id of leaveIDs) {
             const docRef = db.collection("leaveApplication").doc(id);
@@ -2811,6 +2934,13 @@ router.put("/batch-review-leave", async (req, res) => {
 
             if (status === "Approved") {
                 const staffDocId = currentData.applicantStaffID;
+                approvedDocsToReassign.push({
+                    staffDocId,
+                    startDate: currentData.startDate,
+                    endDate: currentData.endDate,
+                    leaveID: id
+                });
+
                 const durationDays = parseInt(currentData.daysCount || currentData.duration || 1, 10);
                 const leaveType = currentData.leaveType;
 
@@ -2852,10 +2982,28 @@ router.put("/batch-review-leave", async (req, res) => {
             await batch.commit();
         }
 
+        // Reassign tasks 1-by-1 for all approved leaves
+        let totalReassigned = 0;
+        if (status === "Approved") {
+            for (const docInfo of approvedDocsToReassign) {
+                const reassignRes = await reassignStaffTasksOnApprovedLeave(
+                    docInfo.staffDocId,
+                    docInfo.startDate,
+                    docInfo.endDate,
+                    docInfo.leaveID
+                );
+                if (reassignRes && reassignRes.reassignedCount) {
+                    totalReassigned += reassignRes.reassignedCount;
+                }
+            }
+        }
+
         return res.json({
             success: true,
             updatedCount,
-            message: `Successfully ${status.toLowerCase()} ${updatedCount} leave application(s).`
+            reassignedTasksCount: totalReassigned,
+            message: `Successfully ${status.toLowerCase()} ${updatedCount} leave application(s).` +
+                (totalReassigned > 0 ? ` ${totalReassigned} task(s) on approved leave date(s) were reassigned to available staff.` : "")
         });
     } catch (err) {
         console.error("Error batch reviewing leave applications:", err);

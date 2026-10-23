@@ -4,8 +4,8 @@ import 'models/cart_item_model.dart';
 import 'order_details_page.dart';
 import 'services/shop_service.dart';
 import '../account_management_module/models/address_model.dart';
-import '../account_management_module/home_page.dart';
 import '../../widgets/rebyte_app_bar.dart';
+import '../widgets/rebyte_bottom_nav_bar.dart';
 
 class MyOrdersPage extends StatefulWidget {
   final String email;
@@ -210,46 +210,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
         name: widget.name,
         isMyOrdersSelected: true,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: 0, // Home Tab selected
-          onTap: (index) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(
-                  isLoggedIn: true,
-                  email: widget.email,
-                  name: widget.name,
-                  initialIndex: index,
-                ),
-              ),
-              (route) => false,
-            );
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF0C5AD2),
-          unselectedItemColor: Colors.grey.shade500,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-          unselectedLabelStyle: const TextStyle(fontSize: 10),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined), label: 'Shop'),
-            BottomNavigationBarItem(icon: Icon(Icons.autorenew), label: 'Trade-In'),
-            BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), label: 'Rentals'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Account'),
-          ],
-        ),
+      bottomNavigationBar: const ReByteBottomNavBar(
+        selectedIndex: -1,
       ),
       body: SafeArea(
         child: Column(

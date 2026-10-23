@@ -6,6 +6,7 @@ import '../task_assignment_module/staff_assigned_tasks_page.dart';
 class StaffProfilePage extends StatelessWidget {
   final String? name;
   final String? email;
+  final String? position;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
   final VoidCallback? onNavigateToTasks;
@@ -15,6 +16,7 @@ class StaffProfilePage extends StatelessWidget {
     super.key,
     required this.name,
     required this.email,
+    this.position,
     required this.onLogout,
     this.onProfileUpdated,
     this.onNavigateToTasks,
@@ -101,7 +103,27 @@ class StaffProfilePage extends StatelessWidget {
             email ?? '',
             style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
           ),
-          const SizedBox(height: 20),
+          if (position != null && position!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFC7D2FE)),
+              ),
+              child: Text(
+                position == 'Both' ? 'Inspector & Collector' : position!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0C5AD2),
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
 
           const SizedBox(height: 24),
 

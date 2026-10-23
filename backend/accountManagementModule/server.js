@@ -240,7 +240,7 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
     if (!/^1\d+$/.test(normalizedPhone) || normalizedPhone.length !== expectedPhoneLength) {
         return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
     }
-    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+    if (!["Inspector", "Deliverer", "Both", "Inspector & Collector"].includes(position)) {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
     const selectedBrands = normalizeStaffSpecializations(specialization);
@@ -249,7 +249,7 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
         new Set(selectedBrands).size !== selectedBrands.length ||
         (position !== "Deliverer" && (selectedBrands.length < 1 || selectedBrands.length > 3)) ||
         (position === "Deliverer" && selectedBrands.length > 0)) {
-        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Inspector & Collector roles. Deliverers do not have device specialization." });
     }
 
     try {
@@ -267,7 +267,7 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
             loginMethod: "Email",
             staffNo: staffNo || "S0001",
             specialization: position === "Deliverer" ? [] : selectedBrands,
-            position: position
+            position: position === "Both" ? "Inspector & Collector" : position
         });
         
         newStaff.userId = userRecord.uid;
@@ -362,7 +362,7 @@ router.get("/staff-session", async (req, res) => {
                 fullName: userData.fullName || authUser.displayName || "Staff Member",
                 email: userData.email || decoded.email || "",
                 phoneNumber: userData.phoneNumber || "",
-                position: userData.position || "",
+                position: userData.position === "Both" ? "Inspector & Collector" : (userData.position || ""),
                 specialization: Array.isArray(userData.specialization) ? userData.specialization : []
             }
         });
@@ -572,7 +572,8 @@ router.get("/staff-profile", async (req, res) => {
         if (role !== "staff" || String(staff.status || "active").trim().toLowerCase() === "archived") {
             return res.status(403).json({ error: "This staff account is not active." });
         }
-        return res.status(200).json({ profile: { ...staff, id: staffDoc.id, email: staff.email || decoded.email || "" } });
+        const pos = staff.position === "Both" ? "Inspector & Collector" : (staff.position || "");
+        return res.status(200).json({ profile: { ...staff, position: pos, id: staffDoc.id, email: staff.email || decoded.email || "" } });
     } catch (err) {
         const statusCode = ["auth/id-token-revoked", "auth/user-disabled", "auth/id-token-expired", "auth/argument-error"].includes(err.code) ? 401 : 500;
         if (statusCode === 500) console.error("Staff profile fetch failed:", err);
@@ -596,7 +597,7 @@ router.patch("/staff-profile", async (req, res) => {
     if (!/^1\d+$/.test(phoneDigits) || phoneDigits.length !== expectedPhoneLength) {
         return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
     }
-    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+    if (!["Inspector", "Deliverer", "Both", "Inspector & Collector"].includes(position)) {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
 
@@ -607,7 +608,7 @@ router.patch("/staff-profile", async (req, res) => {
         selectedSpecializations.some(value => !STAFF_SPECIALIZATIONS.includes(value)) ||
         (position === "Deliverer" && selectedSpecializations.length !== 0) ||
         (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
-        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Inspector & Collector roles. Deliverers do not have device specialization." });
     }
 
     try {
@@ -631,11 +632,16 @@ router.patch("/staff-profile", async (req, res) => {
             return res.status(403).json({ error: "This staff account is not active." });
         }
 
+        const oldPos = String(staff.position || "").trim();
+        const isOldDeliverer = oldPos.toLowerCase() === "deliverer" || (oldPos.toLowerCase().includes("deliver") && !oldPos.toLowerCase().includes("inspector"));
+        const isNewDeliverer = position.toLowerCase() === "deliverer";
+
+        const normalizedPos = position === "Both" ? "Inspector & Collector" : position;
         const profile = {
             fullName: normalizedName,
             phoneNumber: `+60${phoneDigits}`,
-            position,
-            specialization: position === "Deliverer" ? [] : selectedSpecializations
+            position: normalizedPos,
+            specialization: normalizedPos === "Deliverer" ? [] : selectedSpecializations
         };
 
         if (workLocation && typeof workLocation === "object") {
@@ -655,6 +661,17 @@ router.patch("/staff-profile", async (req, res) => {
             await getAuth().updateUser(authUid, { displayName: normalizedName });
         } catch (authError) {
             console.warn("Staff profile saved, but Firebase Auth display name could not be synchronized:", authError.message);
+        }
+
+        if (isOldDeliverer && !isNewDeliverer) {
+            try {
+                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+                reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos).catch(reassignErr => {
+                    console.error("Auto reassign on role change error:", reassignErr);
+                });
+            } catch (reassignImportErr) {
+                console.error("Could not trigger reassignDelivererTasksOnRoleChange:", reassignImportErr);
+            }
         }
 
         return res.status(200).json({
@@ -1193,7 +1210,11 @@ router.post("/get-profile", async (req, res) => {
         const snapshot = await db.collection("users").where("email", "==", email).get();
         if (snapshot.empty) return res.status(404).json({ error: "User not found" });
 
-        return res.status(200).json({ success: true, data: snapshot.docs[0].data() });
+        const userData = snapshot.docs[0].data();
+        if (userData && userData.position === "Both") {
+            userData.position = "Inspector & Collector";
+        }
+        return res.status(200).json({ success: true, data: userData });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "Failed to fetch profile" });
@@ -1333,6 +1354,19 @@ router.post("/staff/:staffId/archive", requireAdmin, async (req, res) => {
             throw archiveError;
         }
 
+        const oldPos = String(staffData.position || "").trim();
+        const isOldDeliverer = oldPos.toLowerCase() === "deliverer" || (oldPos.toLowerCase().includes("deliver") && !oldPos.toLowerCase().includes("inspector"));
+        if (isOldDeliverer) {
+            try {
+                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+                reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, "Archived").catch(err => {
+                    console.error("Auto reassign on archive error:", err);
+                });
+            } catch (reassignErr) {
+                console.error("Could not trigger reassign on archive:", reassignErr);
+            }
+        }
+
         return res.status(200).json({ success: true, message: "Staff member archived and signed out." });
     } catch (err) {
         if (err.code === "auth/user-not-found") return res.status(404).json({ error: "Staff sign-in account was not found." });
@@ -1439,7 +1473,7 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
         return res.status(400).json({ error: "Please enter a valid Malaysian mobile number." });
     }
 
-    if (!["Inspector", "Deliverer", "Both"].includes(position)) {
+    if (!["Inspector", "Deliverer", "Both", "Inspector & Collector"].includes(position)) {
         return res.status(400).json({ error: "Please select a valid staff position." });
     }
     const selectedSpecializations = normalizeStaffSpecializations(specialization);
@@ -1449,7 +1483,7 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
         selectedSpecializations.some(value => !STAFF_SPECIALIZATIONS.includes(value)) ||
         (position === "Deliverer" && selectedSpecializations.length !== 0) ||
         (position !== "Deliverer" && (selectedSpecializations.length < 1 || selectedSpecializations.length > 3))) {
-        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Both roles. Deliverers do not have device specialization." });
+        return res.status(400).json({ error: "Choose between 1 and 3 device specializations for Inspector or Inspector & Collector roles. Deliverers do not have device specialization." });
     }
 
     try {
@@ -1462,11 +1496,16 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
             return res.status(404).json({ error: "Staff account not found." });
         }
 
+        const oldPos = String(currentStaff.position || "").trim();
+        const isOldDeliverer = oldPos.toLowerCase() === "deliverer" || (oldPos.toLowerCase().includes("deliver") && !oldPos.toLowerCase().includes("inspector"));
+        const isNewDeliverer = position.toLowerCase() === "deliverer";
+
+        const normalizedPos = position === "Both" ? "Inspector & Collector" : position;
         const updatedFields = {
             fullName: normalizedName,
             phoneNumber: `+60${phoneDigits}`,
-            position,
-            specialization: position === "Deliverer" ? [] : selectedSpecializations,
+            position: normalizedPos,
+            specialization: normalizedPos === "Deliverer" ? [] : selectedSpecializations,
             updatedAt: FieldValue.serverTimestamp()
         };
 
@@ -1491,7 +1530,21 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
             console.warn("Staff record updated, but Firebase Auth display name could not be synchronized:", authError.message);
         }
 
-        return res.status(200).json({ success: true, message: "Staff information updated successfully." });
+        let reassignedInfo = null;
+        if (isOldDeliverer && !isNewDeliverer) {
+            try {
+                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+                reassignedInfo = await reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos);
+            } catch (reassignErr) {
+                console.error("Auto reassign on role change error:", reassignErr);
+            }
+        }
+
+        const extraMsg = reassignedInfo && reassignedInfo.reassignedCount > 0
+            ? ` ${reassignedInfo.reassignedCount} pending delivery task(s) reassigned to available delivery staff.`
+            : "";
+
+        return res.status(200).json({ success: true, message: `Staff information updated successfully.${extraMsg}` });
     } catch (err) {
         console.error("Staff update failed:", err);
         return res.status(500).json({ error: "Failed to update staff information." });

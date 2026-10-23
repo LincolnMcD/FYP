@@ -7,6 +7,7 @@ import '../decision_assistance_module/diagnostic_suite_page.dart';
 import '../product_purchase_module/cart_page.dart';
 import '../product_purchase_module/notification_page.dart';
 import '../product_purchase_module/my_orders_page.dart';
+import '../device_tradein_module/my_trade_in_requests_page.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -147,6 +148,7 @@ class ReByteDrawer extends StatelessWidget {
   final String? email;
   final int selectedIndex;
   final bool isMyOrdersSelected;
+  final bool isTradeInRequestsSelected;
   final void Function(int index)? onSelectTab;
 
   const ReByteDrawer({
@@ -156,6 +158,7 @@ class ReByteDrawer extends StatelessWidget {
     this.email,
     this.selectedIndex = -1,
     this.isMyOrdersSelected = false,
+    this.isTradeInRequestsSelected = false,
     this.onSelectTab,
   });
 
@@ -186,7 +189,7 @@ class ReByteDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveSelectedIndex = isMyOrdersSelected ? -1 : selectedIndex;
+    final effectiveSelectedIndex = (isMyOrdersSelected || isTradeInRequestsSelected) ? -1 : selectedIndex;
     return Drawer(
       backgroundColor: const Color(0xFFF8F9FB),
       child: SafeArea(
@@ -221,7 +224,10 @@ class ReByteDrawer extends StatelessWidget {
                       Icons.autorenew,
                       'Trade-In',
                       isSelected: effectiveSelectedIndex == 2,
-                      onTap: () => _navigateToTab(context, 2),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _navigateToTab(context, 2);
+                      },
                     ),
                     _buildDrawerItem(
                       Icons.calendar_month_outlined,
@@ -285,6 +291,25 @@ class ReByteDrawer extends StatelessWidget {
                               builder: (context) => MyOrdersPage(
                                 email: email ?? 'customer@rebyte.com',
                                 name: name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildDrawerItem(
+                        Icons.autorenew_outlined,
+                        'My Trade-In Requests',
+                        isSelected: isTradeInRequestsSelected,
+                        onTap: () {
+                          Navigator.pop(context);
+                          if (isTradeInRequestsSelected) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MyTradeInRequestsPage(
+                                email: email ?? 'customer@rebyte.com',
+                                name: name,
+                                isLoggedIn: isLoggedIn,
                               ),
                             ),
                           );

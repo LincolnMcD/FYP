@@ -422,9 +422,9 @@
       <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
       <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
       <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
       <a href="customerManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
       <a href="staffManagement.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
-      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
       <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
     </nav>
   </aside>
@@ -478,9 +478,9 @@
             <label for="editPosition">Position</label>
             <div class="edit-select-wrap">
               <select id="editPosition" required>
-                <option value="Inspector">Inspector</option>
                 <option value="Deliverer">Deliverer</option>
-                <option value="Both">Both (Inspector &amp; Deliverer)</option>
+                <option value="Inspector">Inspector</option>
+                <option value="Inspector & Collector">Inspector &amp; Collector</option>
               </select>
               <svg class="edit-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
@@ -796,7 +796,7 @@
     function validateEditForm(showErrors = false) {
       const nameValid = /^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(editNameInput.value.trim());
       const phoneResult = ReByteAuth.validatePhoneNumber(editPhoneInput.value);
-      const needsSpecialization = editPositionInput.value === 'Inspector' || editPositionInput.value === 'Both';
+      const needsSpecialization = editPositionInput.value === 'Inspector' || editPositionInput.value === 'Inspector & Collector' || editPositionInput.value === 'Both';
       const specializationCount = selectedEditSpecializations().length;
       const specializationValid = !needsSpecialization || (specializationCount >= 1 && specializationCount <= 3);
       const nameError = document.getElementById('editNameError');
@@ -938,7 +938,9 @@
       let phoneDigits = String(staff.phoneNumber || '').replace(/\D/g, '');
       phoneDigits = phoneDigits.replace(/^60/, '').replace(/^0/, '');
       editPhoneInput.value = phoneDigits;
-      editPositionInput.value = ['Inspector', 'Deliverer', 'Both'].includes(staff.position) ? staff.position : 'Deliverer';
+      editPositionInput.value = ['Inspector', 'Deliverer', 'Both', 'Inspector & Collector'].includes(staff.position)
+        ? (staff.position === 'Both' ? 'Inspector & Collector' : staff.position)
+        : 'Deliverer';
       const selected = (Array.isArray(staff.specialization) ? staff.specialization : (staff.specialization ? [staff.specialization] : [])).map(canonicalSpecialization);
       editBrandCheckboxes.forEach(box => {
         box.checked = selected.includes(box.value);
@@ -994,7 +996,7 @@
       const name = staff.fullName || 'Unknown staff member';
       document.getElementById('archiveStaffName').textContent = name;
       document.getElementById('archiveStaffNameInline').textContent = name;
-      document.getElementById('archiveStaffMeta').textContent = `ID: ${staff.staffNo || 'N/A'} · ${staff.position === 'Both' ? 'Inspector & Deliverer' : (staff.position || 'Staff')}`;
+      document.getElementById('archiveStaffMeta').textContent = `ID: ${staff.staffNo || 'N/A'} · ${staff.position === 'Both' ? 'Inspector & Collector' : (staff.position || 'Staff')}`;
       document.getElementById('archiveStaffAvatar').textContent = name.split(/\s+/).map(part => part[0] || '').join('').slice(0, 2).toUpperCase();
       confirmArchiveButton.disabled = false;
       confirmArchiveButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M5 7l1 14h12l1-14M9 7V4h6v3"></path></svg>Archive Staff';
@@ -1019,7 +1021,7 @@
         ? 'Are you sure you want to permanently delete this staff member?'
         : 'Are you sure you want to restore this staff member?';
       document.getElementById('staffActionName').textContent = name;
-      document.getElementById('staffActionMeta').textContent = `ID: ${staff.staffNo || 'N/A'} · ${staff.position === 'Both' ? 'Inspector & Deliverer' : (staff.position || 'Staff')}`;
+      document.getElementById('staffActionMeta').textContent = `ID: ${staff.staffNo || 'N/A'} · ${staff.position === 'Both' ? 'Inspector & Collector' : (staff.position || 'Staff')}`;
       document.getElementById('staffActionAvatar').textContent = name.split(/\s+/).map(part => part[0] || '').join('').slice(0, 2).toUpperCase();
       document.getElementById('staffActionWarning').innerHTML = isDelete
         ? `Permanently deleting <strong></strong> will remove this staff record and their sign-in account. This action cannot be undone.`
@@ -1259,7 +1261,7 @@
         const tr = document.createElement('tr');
         tr.dataset.status = staffStatus;
         const dateStr = staff.createdAt ? formatDate(staff.createdAt._seconds) : 'N/A';
-        const roleStr = staff.position === 'Both' ? 'Inspector & Deliverer' : (staff.position || staff.role || 'Staff');
+        const roleStr = staff.position === 'Both' ? 'Inspector & Collector' : (staff.position || staff.role || 'Staff');
         const staffKey = staff.id || staff.userId || '';
         const actionButtons = staffStatus === 'archived'
           ? `<button class="action restore-action" type="button" aria-label="Restore staff" title="Restore staff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l3 2"></path></svg></button><button class="action delete-action" type="button" aria-label="Permanently delete staff" title="Permanently delete staff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6"></path></svg></button>`

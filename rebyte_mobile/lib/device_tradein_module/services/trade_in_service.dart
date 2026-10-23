@@ -234,6 +234,29 @@ class TradeInService {
     }
   }
 
+  /// Fetch all trade-in requests for a user
+  static Future<List<Map<String, dynamic>>> fetchUserTradeInRequests(String userEmail) async {
+    try {
+      final uri = Uri.parse('$baseUrl/user-requests').replace(
+        queryParameters: {'userEmail': userEmail},
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['requests'] is List) {
+          return List<Map<String, dynamic>>.from(data['requests']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   /// Cancel existing active trade-in requests for a user when starting a new flow
   static Future<Map<String, dynamic>> cancelTradeInRequests(String userEmail) async {
     try {
@@ -385,6 +408,34 @@ class TradeInService {
       'success': false,
       'message': 'Failed to validate IMEI. Please try again.',
     };
+  }
+
+  /// Book an inspection or collection appointment slot
+  static Future<Map<String, dynamic>> bookAppointment({
+    required String tradeInRequestID,
+    required String method,
+    required String appointmentDate,
+    required String appointmentTime,
+    Map<String, dynamic>? address,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/book-appointment'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'tradeInRequestID': tradeInRequestID,
+          'method': method,
+          'appointmentDate': appointmentDate,
+          'appointmentTime': appointmentTime,
+          'address': address,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'success': true};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error. Please try again.'};
+    }
   }
 }
 

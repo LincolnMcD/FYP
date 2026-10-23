@@ -565,7 +565,7 @@ class _ManagePaymentMethodPageState extends State<ManagePaymentMethodPage> {
         isLoggedIn: true,
         email: widget.email,
         name: _userName,
-        selectedIndex: 4,
+        selectedIndex: -1,
       ),
       body: SafeArea(
         child: Stack(
@@ -680,7 +680,7 @@ class _ManagePaymentMethodPageState extends State<ManagePaymentMethodPage> {
         ),
       ),
       bottomNavigationBar: const ReByteBottomNavBar(
-        selectedIndex: 4,
+        selectedIndex: -1,
       ),
     );
   }

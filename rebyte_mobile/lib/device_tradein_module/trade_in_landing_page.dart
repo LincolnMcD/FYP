@@ -7,6 +7,7 @@ import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../account_management_module/home_page.dart';
 import '../account_management_module/welcome_page.dart';
+import 'my_trade_in_requests_page.dart';
 
 class TradeInLandingPage extends StatelessWidget {
   final bool isLoggedIn;
@@ -430,7 +431,25 @@ class TradeInLandingPage extends StatelessWidget {
             width: double.infinity,
             height: 46,
             child: OutlinedButton(
-              onPressed: () => _showTradeInRequestsModal(context),
+              onPressed: () {
+                if (!isLoggedIn) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const WelcomePage()),
+                  );
+                  return;
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MyTradeInRequestsPage(
+                      email: email ?? '',
+                      name: name,
+                      isLoggedIn: isLoggedIn,
+                    ),
+                  ),
+                );
+              },
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF0F172A),

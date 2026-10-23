@@ -175,6 +175,7 @@
       <div class="header-title">Staff Dashboard</div>
       <div class="header-right">
         <div class="header-date">October 24th, 2023</div>
+        <div id="staffRoleBadge" style="display: none; padding: 4px 12px; border-radius: 999px; background: #e0e7ff; color: #1e3a8a; font-size: 12px; font-weight: 600; border: 1px solid #c7d2fe;"></div>
         <div style="position: relative;">
           <button class="profile-btn" id="profileDropdownBtn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -370,7 +371,18 @@
           return;
         }
       }
-      // The shared account header owns the single staff session poll across web pages.
+      // Fetch profile and display latest role badge
+      try {
+        const res = await ReByteAuth.getOwnStaffProfile();
+        if (res && res.success && res.profile) {
+          const pos = res.profile.position === 'Both' ? 'Inspector & Collector' : (res.profile.position || 'Staff');
+          const badge = document.getElementById('staffRoleBadge');
+          if (badge) {
+            badge.textContent = pos;
+            badge.style.display = 'inline-block';
+          }
+        }
+      } catch (_) {}
     });
   </script>
 </body>

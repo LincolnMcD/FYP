@@ -24,6 +24,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   late int _selectedIndex;
   String? _name;
   String? _email;
+  String? _position;
   String? _toastMessage;
   final bool _isToastError = false;
   bool _staffSessionCheckInProgress = false;
@@ -160,12 +161,15 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   Future<void> _applyStaffProfile(Map<String, dynamic> profile) async {
     final name = (profile['fullName'] as String?)?.trim();
     final email = (profile['email'] as String?)?.trim();
+    final rawPos = (profile['position'] as String?)?.trim();
+    final pos = rawPos == 'Both' ? 'Inspector & Collector' : rawPos;
     if (!mounted) return;
     final shouldPersistIdentity =
         email?.isNotEmpty == true && name?.isNotEmpty == true && (_email != email || _name != name);
     setState(() {
       if (name?.isNotEmpty == true) _name = name;
       if (email?.isNotEmpty == true) _email = email;
+      if (pos?.isNotEmpty == true) _position = pos;
     });
     if (shouldPersistIdentity) {
       await SessionService.saveSession(email: email!, name: name!, role: 'Staff');
@@ -173,12 +177,17 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   }
 
   Future<void> _loadFreshStaffProfile() async {
+    final result = await AuthService.getStaffProfile();
+    if (result['success'] == true && result['data'] is Map) {
+      await _applyStaffProfile(Map<String, dynamic>.from(result['data'] as Map));
+      return;
+    }
     final session = await SessionService.getSession();
     final email = session['email'];
     if (email == null || email.isEmpty) return;
-    final result = await AuthService.getProfile(email);
-    if (result['success'] == true && result['data'] is Map) {
-      await _applyStaffProfile(Map<String, dynamic>.from(result['data'] as Map));
+    final fallback = await AuthService.getProfile(email);
+    if (fallback['success'] == true && fallback['data'] is Map) {
+      await _applyStaffProfile(Map<String, dynamic>.from(fallback['data'] as Map));
     }
   }
 
@@ -238,6 +247,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
               ? StaffProfilePage(
                   name: _name,
                   email: _email,
+                  position: _position,
                   onLogout: _showLogoutDialog,
                   onProfileUpdated: () async { await _loadFreshStaffProfile(); },
                   onNavigateToTasks: () {
@@ -804,6 +814,13 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   _email ?? 'staff@rebyte.com',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
+                if (_position != null && _position!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    _position == 'Both' ? 'Inspector & Collector' : _position!,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0C5AD2)),
+                  ),
+                ],
               ],
             ),
           ),

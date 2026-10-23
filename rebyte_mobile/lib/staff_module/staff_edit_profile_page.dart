@@ -61,7 +61,9 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
       return;
     }
     final data = Map<String, dynamic>.from(response['data'] as Map);
-    final position = ['Inspector', 'Deliverer', 'Both'].contains(data['position']) ? data['position'] as String : 'Inspector';
+    final rawPos = (data['position'] ?? '').toString().trim();
+    final normalizedPos = rawPos == 'Both' ? 'Inspector & Collector' : rawPos;
+    final position = ['Inspector', 'Deliverer', 'Inspector & Collector'].contains(normalizedPos) ? normalizedPos : 'Inspector';
     final phone = (data['phoneNumber'] ?? '').toString().replaceFirst(RegExp(r'^\+60'), '').replaceAll(RegExp(r'\D'), '');
     Map<String, dynamic>? parsedWorkLoc;
     if (data['workLocation'] is Map) {
@@ -121,7 +123,9 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
     else if (phone.startsWith('11') && phone.length != 10) phoneError = 'Must be exactly 10 digits';
     else if (!phone.startsWith('11') && phone.length != 9) phoneError = 'Must be exactly 9 digits';
     if (_position != 'Deliverer' && (_specializations.length < 1 || _specializations.length > 3)) {
-      specializationError = 'Select 1 to 3 specializations for Inspector.';
+      specializationError = _position == 'Inspector & Collector'
+          ? 'Select 1 to 3 specializations for Inspector & Collector.'
+          : 'Select 1 to 3 specializations for Inspector.';
     }
     if (reveal) setState(() { _nameError = nameError; _phoneError = phoneError; _specializationError = specializationError; });
     return nameError == null && phoneError == null && specializationError == null;
@@ -241,7 +245,7 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
         const SizedBox(height: 20), _label('Phone Number'),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(height: 52, padding: const EdgeInsets.symmetric(horizontal: 16), alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), border: Border.all(color: Colors.grey.shade300), borderRadius: const BorderRadius.horizontal(left: Radius.circular(8))), child: const Text('+60', style: TextStyle(color: Color(0xFF475569)))), Expanded(child: TextField(controller: _phoneController, keyboardType: TextInputType.phone, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) { _validate(); setState(() {}); }, decoration: _inputDecoration(error: _phoneError, joined: true)))]),
         const SizedBox(height: 20), _label('Position'),
-        DropdownButtonFormField<String>(value: _position, decoration: _inputDecoration(), items: const [DropdownMenuItem(value: 'Inspector', child: Text('Inspector')), DropdownMenuItem(value: 'Deliverer', child: Text('Deliverer')), DropdownMenuItem(value: 'Both', child: Text('Inspector & Deliverer'))], onChanged: (value) { if (value == null) return; setState(() { _position = value; if (value == 'Deliverer') { _specializations = []; _specializationError = null; } }); _validate(); }),
+        DropdownButtonFormField<String>(value: _position, decoration: _inputDecoration(), items: const [DropdownMenuItem(value: 'Deliverer', child: Text('Deliverer')), DropdownMenuItem(value: 'Inspector', child: Text('Inspector')), DropdownMenuItem(value: 'Inspector & Collector', child: Text('Inspector & Collector'))], onChanged: (value) { if (value == null) return; setState(() { _position = value; if (value == 'Deliverer') { _specializations = []; _specializationError = null; } }); _validate(); }),
         const SizedBox(height: 20), _label('Work Base Location', helper: 'Starting base for route planning'),
         InkWell(
           onTap: _pickWorkLocation,

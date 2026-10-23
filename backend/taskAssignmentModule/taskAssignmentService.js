@@ -27,6 +27,15 @@ function getBufferMinutes(distanceKm) {
 }
 
 /**
+ * Get current time in Malaysia timezone (UTC+8)
+ */
+function getMalaysiaNow() {
+    const nowUtc = new Date();
+    const utcMs = nowUtc.getTime() + (nowUtc.getTimezoneOffset() * 60000);
+    return new Date(utcMs + (8 * 3600000));
+}
+
+/**
  * Format a Date object to YYYY-MM-DD
  */
 function formatDateKey(d) {
@@ -128,12 +137,82 @@ async function resolveCustomerDetails(addressID) {
 }
 
 /**
- * Fetch all active delivery staff
+ * Helper: parse date from string (DD/MM/YYYY, YYYY-MM-DD, ISO string, or Date object)
  */
-async function getEligibleDeliveryStaff() {
+function parseLeaveDate(dStr) {
+    if (!dStr) return null;
+    if (dStr instanceof Date) return isNaN(dStr.getTime()) ? null : dStr;
+    if (dStr.toDate) return dStr.toDate();
+    const str = String(dStr).trim();
+    if (str.includes("/")) {
+        const parts = str.split("/");
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            return new Date(year, month, day, 0, 0, 0);
+        }
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const parts = str.substring(0, 10).split("-");
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day, 0, 0, 0);
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+}
+
+/**
+ * Fetch Set of staff IDs who have an approved leave covering the given targetDate
+ */
+async function getStaffIDsOnApprovedLeave(targetDate) {
+    const checkDt = parseLeaveDate(targetDate);
+    if (!checkDt) return new Set();
+
+    try {
+        const leaveSnap = await db.collection("leaveApplication")
+            .where("leaveStatus", "in", ["Approved", "approved"])
+            .get();
+
+        const staffOnLeave = new Set();
+        for (const doc of leaveSnap.docs) {
+            const data = doc.data();
+            const staffId = data.applicantStaffID;
+            if (!staffId) continue;
+
+            const sDate = parseLeaveDate(data.startDate);
+            const eDate = parseLeaveDate(data.endDate);
+
+            if (sDate && eDate) {
+                const startMidnight = new Date(sDate.getFullYear(), sDate.getMonth(), sDate.getDate(), 0, 0, 0);
+                const endMidnight = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate(), 23, 59, 59, 999);
+                if (checkDt >= startMidnight && checkDt <= endMidnight) {
+                    staffOnLeave.add(staffId);
+                }
+            }
+        }
+        return staffOnLeave;
+    } catch (err) {
+        console.error("Error fetching approved leaves in getStaffIDsOnApprovedLeave:", err);
+        return new Set();
+    }
+}
+
+/**
+ * Fetch all active delivery staff who do NOT have an approved leave on targetDate
+ * Staff must be: Deliverer only + no approved leave request
+ */
+async function getEligibleDeliveryStaff(targetDate = null) {
     const usersSnap = await db.collection("users")
         .where("role", "in", ["Staff", "staff"])
         .get();
+
+    let staffOnLeave = new Set();
+    if (targetDate) {
+        staffOnLeave = await getStaffIDsOnApprovedLeave(targetDate);
+    }
 
     const staffList = [];
 
@@ -143,10 +222,18 @@ async function getEligibleDeliveryStaff() {
         if (status === "archived") continue;
 
         const pos = String(data.position || data.roleType || "").toLowerCase().trim();
-        const isDeliveryRole = pos.includes("deliver") || pos.includes("both");
+        // Delivery tasks only assigned to Deliverer staff (no longer Both / Inspector & Collector)
+        const isDeliveryRole = pos === "deliverer" || (pos.includes("deliver") && !pos.includes("inspector") && !pos.includes("both"));
         if (!isDeliveryRole) continue;
 
         const staffID = doc.id;
+
+        // Constraint: Staff with approved leave covering target date cannot be selected
+        if (staffOnLeave.has(staffID)) {
+            console.log(`[STAFF ON APPROVED LEAVE] Staff ${staffID} (${data.fullName || "Staff"}) is on approved leave on ${formatDateKey(parseLeaveDate(targetDate))} -> Excluded from task assignment.`);
+            continue;
+        }
+
         const staffNo = data.staffNo || doc.id;
         const maxTask = Number(data.maxTask || WORKING_HOUR_CONFIG.defaultMaxTasks);
 
@@ -253,12 +340,41 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate, specificS
     logStep(`Working Hours Config: ${WORKING_HOUR_CONFIG.startHour}:00 - ${WORKING_HOUR_CONFIG.endHour}:00 (Step: +${WORKING_HOUR_CONFIG.slotIntervalHours} hr, Buffer: ${WORKING_HOUR_CONFIG.bufferMinutes} min)`);
     logStep(`================================================================================\n`);
 
-    const now = requestedDate ? new Date(requestedDate) : new Date();
-    let candidateDate = new Date(now);
+    const realNow = getMalaysiaNow();
+    let candidateDate;
 
-    const todayCutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), WORKING_HOUR_CONFIG.startHour, 0, 0);
-    if (forceNextDay || now >= todayCutoff) {
-        candidateDate.setDate(candidateDate.getDate() + 1);
+    if (requestedDate) {
+        const parsedReq = parseLeaveDate(requestedDate) || new Date(requestedDate);
+        candidateDate = new Date(parsedReq.getFullYear(), parsedReq.getMonth(), parsedReq.getDate(), 0, 0, 0);
+
+        const realTodayMidnight = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate(), 0, 0, 0);
+
+        if (forceNextDay) {
+            candidateDate.setDate(candidateDate.getDate() + 1);
+        } else if (candidateDate.getTime() === realTodayMidnight.getTime()) {
+            // Task is requested for TODAY: check if today's 9:00 AM cutoff has already passed
+            const today9am = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate(), WORKING_HOUR_CONFIG.startHour, 0, 0);
+            if (realNow >= today9am) {
+                // Today 9:00 AM already passed -> schedule for tomorrow
+                candidateDate.setDate(candidateDate.getDate() + 1);
+            }
+        } else if (candidateDate.getTime() < realTodayMidnight.getTime()) {
+            // Requested date is in the past -> move to today or tomorrow
+            candidateDate = new Date(realTodayMidnight);
+            const today9am = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate(), WORKING_HOUR_CONFIG.startHour, 0, 0);
+            if (realNow >= today9am) {
+                candidateDate.setDate(candidateDate.getDate() + 1);
+            }
+        }
+        // Future date (e.g. 24 on leave, reassigned before 24 9am):
+        // 9:00 AM on that future day hasn't arrived -> candidateDate stays on that future date!
+    } else {
+        // Default (new task without explicit requestedDate): today if before 9am, else tomorrow
+        candidateDate = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate(), 0, 0, 0);
+        const today9am = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate(), WORKING_HOUR_CONFIG.startHour, 0, 0);
+        if (forceNextDay || realNow >= today9am) {
+            candidateDate.setDate(candidateDate.getDate() + 1);
+        }
     }
 
     let candidateHour = WORKING_HOUR_CONFIG.startHour; // 9:00 AM
@@ -287,7 +403,7 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate, specificS
         logStep(`\n------------------------------------------------------------`);
         logStep(`[EVALUATING SLOT] ${slotTimeStr} to ${String(candidateHour + WORKING_HOUR_CONFIG.slotIntervalHours).padStart(2, "0")}:00`);
 
-        const allStaffRaw = await getEligibleDeliveryStaff();
+        const allStaffRaw = await getEligibleDeliveryStaff(candidateDate);
         // Requirement: Limit staff cannot work outside the state
         let allStaff = allStaffRaw.filter(staff => {
             if (excludeSet.has(staff.staffID)) return false;
@@ -817,8 +933,104 @@ async function assignDeliveryTask({ orderID, addressID, requestedDate, specificS
     };
 }
 
+/**
+ * When a staff member's position changes from Deliverer to another role,
+ * reassign all their active/uncompleted delivery tasks to other available delivery staff.
+ */
+async function reassignDelivererTasksOnRoleChange(staffID, oldPosition, newPosition) {
+    try {
+        console.log(`[ROLE CHANGE REASSIGN] Checking tasks for staff ${staffID} whose role changed from '${oldPosition}' to '${newPosition}'...`);
+
+        // Get staffDoc to check staffNo as well
+        let staffNo = null;
+        try {
+            const uDoc = await db.collection("users").doc(staffID).get();
+            if (uDoc.exists) {
+                staffNo = uDoc.data().staffNo;
+            }
+        } catch (_) {}
+
+        const queryIds = [staffID];
+        if (staffNo && staffNo !== staffID) queryIds.push(staffNo);
+
+        const activeSchedules = new Map();
+        for (const sid of queryIds) {
+            const snap = await db.collection("schedule")
+                .where("staffID", "==", sid)
+                .where("scheduleStatus", "in", ["assigned", "ongoing"])
+                .get();
+
+            for (const doc of snap.docs) {
+                activeSchedules.set(doc.id, doc);
+            }
+        }
+
+        if (activeSchedules.size === 0) {
+            console.log(`[ROLE CHANGE REASSIGN] No active delivery tasks found for staff ${staffID}.`);
+            return { reassignedCount: 0 };
+        }
+
+        console.log(`[ROLE CHANGE REASSIGN] Found ${activeSchedules.size} active delivery task(s) for staff ${staffID}. Reassigning 1 by 1...`);
+
+        let totalReassigned = 0;
+        let delayService = null;
+        try {
+            delayService = require("./taskDelayMonitorService");
+        } catch (_) {}
+
+        for (const [scheduleID, sDoc] of activeSchedules.entries()) {
+            const sData = sDoc.data();
+            const orderID = sData.orderID;
+            const schedDate = sData.scheduleDate;
+
+            // Mark old schedule as reassigned due to role change
+            await sDoc.ref.set({
+                scheduleStatus: "reassigned",
+                reassignReason: `Staff role changed from ${oldPosition || "Deliverer"} to ${newPosition}`,
+                reassignedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            if (delayService && typeof delayService.clearScheduleTimers === "function") {
+                try {
+                    delayService.clearScheduleTimers(scheduleID);
+                } catch (_) {}
+            }
+
+            // Reassign task to available delivery staff
+            const reassignResult = await assignDeliveryTask({
+                orderID,
+                addressID: sData.addressID,
+                requestedDate: schedDate,
+                forceNextDay: false, // Try same day first with other eligible deliverers
+                excludeStaffIDs: queryIds
+            });
+
+            if (reassignResult && reassignResult.success) {
+                if (reassignResult.scheduleID && delayService && typeof delayService.registerScheduleTimer === "function") {
+                    try {
+                        delayService.registerScheduleTimer(reassignResult.scheduleID);
+                    } catch (_) {}
+                }
+                totalReassigned++;
+                console.log(`[ROLE CHANGE REASSIGN SUCCESS] Order #${orderID} reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+            } else {
+                console.warn(`[ROLE CHANGE REASSIGN WARNING] Could not automatically reassign Order #${orderID}:`, reassignResult?.reason || reassignResult?.message);
+            }
+        }
+
+        return { reassignedCount: totalReassigned };
+    } catch (err) {
+        console.error(`[ROLE CHANGE REASSIGN ERROR] Failed reassigning tasks for staff ${staffID}:`, err);
+        return { reassignedCount: 0, error: err.message };
+    }
+}
+
 module.exports = {
     assignDeliveryTask,
+    reassignDelivererTasksOnRoleChange,
     getEligibleDeliveryStaff,
+    getStaffIDsOnApprovedLeave,
+    parseLeaveDate,
     WORKING_HOUR_CONFIG
 };

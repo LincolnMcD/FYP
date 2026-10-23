@@ -5,6 +5,8 @@ import 'services/trade_in_service.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../account_management_module/home_page.dart';
+import 'my_trade_in_requests_page.dart';
+import 'trade_in_request_created_page.dart';
 
 class PreliminaryQuotationPage extends StatefulWidget {
   final DeviceModel device;
@@ -12,6 +14,8 @@ class PreliminaryQuotationPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final String? estimatedValue;
+  final bool fromMyTradeInRequests;
 
   const PreliminaryQuotationPage({
     super.key,
@@ -20,6 +24,8 @@ class PreliminaryQuotationPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.estimatedValue,
+    this.fromMyTradeInRequests = false,
   });
 
   @override
@@ -50,6 +56,25 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
   }
 
   void _onBack() {
+    if (widget.fromMyTradeInRequests) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+        return;
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MyTradeInRequestsPage(
+              email: widget.email ?? 'customer@rebyte.com',
+              name: widget.name,
+              isLoggedIn: widget.isLoggedIn,
+            ),
+          ),
+          (route) => false,
+        );
+        return;
+      }
+    }
     // Navigate back to HomePage at Active Activity section
     // Keep TradeInFlowSession intact so the active block is visible
     Navigator.pushAndRemoveUntil(
@@ -67,7 +92,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     );
   }
 
-  // Blue Button: Accept Offer -> Success State -> Trade-in completed -> Clear active activity
+  // Blue Button: Accept Offer -> Status Accepted -> Navigate to TradeInRequestCreatedPage (Accepted state)
   Future<void> _onAcceptOffer() async {
     if (_isProcessingAction) return;
     setState(() => _isProcessingAction = true);
@@ -76,7 +101,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
       if (widget.tradeInRequestID.isNotEmpty) {
         await TradeInService.updateTradeInStatus(
           tradeInRequestID: widget.tradeInRequestID,
-          status: 'Completed',
+          status: 'Accepted',
         );
       }
     } catch (_) {}
@@ -87,54 +112,27 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     if (!mounted) return;
     setState(() => _isProcessingAction = false);
 
-    // Show completion dialog or route back to HomePage with success toast
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
-            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 28),
-            SizedBox(width: 10),
-            Text('Trade-In Accepted', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
+    final cleanId = widget.tradeInRequestID.replaceAll('#', '').trim();
+    final priceStr = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TradeInRequestCreatedPage(
+          tradeInRequestID: cleanId.isNotEmpty ? cleanId : 'TRD-8992-BX',
+          device: widget.device,
+          estimatedValue: priceStr,
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
+          isRejected: false,
+          fromMyTradeInRequests: widget.fromMyTradeInRequests,
         ),
-        content: const Text(
-          'Congratulations! Your trade-in quotation has been accepted. Our team will contact you for pickup/drop-off arrangements.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.4),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => HomePage(
-                    isLoggedIn: widget.isLoggedIn,
-                    email: widget.email,
-                    name: widget.name,
-                    initialIndex: 0,
-                    toastMessage: 'Trade-in request successfully completed!',
-                  ),
-                ),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0C5AD2),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Return to Home'),
-          ),
-        ],
       ),
     );
   }
 
-  // Red Button: Decline Offer -> Change to Rejected status -> Trade-in completed/removed -> Clear active activity
+  // Red Button: Decline Offer -> Status Rejected -> Navigate to TradeInRequestCreatedPage (Rejected state)
   Future<void> _onDeclineOffer() async {
     if (_isProcessingAction) return;
 
@@ -184,19 +182,23 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     if (!mounted) return;
     setState(() => _isProcessingAction = false);
 
-    Navigator.pushAndRemoveUntil(
+    final cleanId = widget.tradeInRequestID.replaceAll('#', '').trim();
+    final priceStr = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
+
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(
+        builder: (context) => TradeInRequestCreatedPage(
+          tradeInRequestID: cleanId.isNotEmpty ? cleanId : 'TRD-8992-BX',
+          device: widget.device,
+          estimatedValue: priceStr,
           isLoggedIn: widget.isLoggedIn,
           email: widget.email,
           name: widget.name,
-          initialIndex: 0,
-          toastMessage: 'Trade-in offer declined and request closed.',
-          toastIsError: true,
+          isRejected: true,
+          fromMyTradeInRequests: widget.fromMyTradeInRequests,
         ),
       ),
-      (route) => false,
     );
   }
 
@@ -394,7 +396,24 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     );
   }
 
+  String _formatDisplayValue(String raw) {
+    if (raw.contains(' - ')) {
+      final parts = raw.split(' - ');
+      final minPart = parts[0].trim().replaceAll('RM ', 'RM\u00A0');
+      final maxPart = parts[1].trim().replaceAll('RM ', 'RM\u00A0');
+      return '$minPart -\n$maxPart';
+    } else if (raw.contains('-')) {
+      final parts = raw.split('-');
+      final minPart = parts[0].trim().replaceAll('RM ', 'RM\u00A0');
+      final maxPart = parts[1].trim().replaceAll('RM ', 'RM\u00A0');
+      return '$minPart -\n$maxPart';
+    }
+    return raw.replaceAll('RM ', 'RM\u00A0');
+  }
+
   Widget _buildValueCard() {
+    final rawValue = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
+    final displayValue = _formatDisplayValue(rawValue);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -410,8 +429,8 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
         ],
       ),
       child: Column(
-        children: const [
-          Text(
+        children: [
+          const Text(
             'Estimated Trade-In Value',
             style: TextStyle(
               fontSize: 13,
@@ -419,20 +438,20 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
               color: Color(0xFF64748B),
             ),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Text(
-            'RM1,050 -\nRM1,520',
+            displayValue,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 32,
+            style: const TextStyle(
+              fontSize: 30,
               fontWeight: FontWeight.w900,
               color: Color(0xFF0C5AD2),
-              height: 1.15,
+              height: 1.2,
               letterSpacing: -0.5,
             ),
           ),
-          SizedBox(height: 12),
-          Text(
+          const SizedBox(height: 12),
+          const Text(
             'Based on your device description. Final value\nsubject to physical inspection.',
             textAlign: TextAlign.center,
             style: TextStyle(

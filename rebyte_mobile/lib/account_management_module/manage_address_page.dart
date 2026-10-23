@@ -1139,7 +1139,7 @@ class _ManageAddressPageState extends State<ManageAddressPage> {
         ),
       ),
       bottomNavigationBar: const ReByteBottomNavBar(
-        selectedIndex: 4,
+        selectedIndex: -1,
       ),
     );
   }

@@ -122,7 +122,7 @@
       <div class="form-group"><label for="editEmail">Email Address</label><div class="input-wrapper"><input class="input-field" id="editEmail" disabled readonly value="Loading..."><svg class="lock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div><span class="help-text">Email address cannot be changed.</span></div>
       <div class="form-group"><label for="editName">Full Name</label><input class="input-field" id="editName" autocomplete="name"><span class="error-msg" id="nameError">Full name must contain letters and spaces only.</span></div>
       <div class="form-group"><label for="editPhone">Phone Number</label><div class="phone-group" id="phoneGroup"><span class="phone-prefix">+60</span><input id="editPhone" inputmode="numeric" autocomplete="tel-national" placeholder="123456789"></div><span class="error-msg" id="phoneError">Phone number must start with 1, and be 9 digits (or 10 digits for 11).</span></div>
-      <div class="form-group"><label for="editPosition">Position</label><select class="input-field select-field" id="editPosition"><option value="Inspector">Inspector</option><option value="Deliverer">Deliverer</option><option value="Both">Inspector &amp; Deliverer</option></select></div>
+      <div class="form-group"><label for="editPosition">Position</label><select class="input-field select-field" id="editPosition"><option value="Deliverer">Deliverer</option><option value="Inspector">Inspector</option><option value="Inspector & Collector">Inspector &amp; Collector</option></select></div>
       <div class="form-group">
         <label>Work Base Location</label>
         <button type="button" class="location-trigger" id="openStaffMapBtn">
@@ -471,7 +471,9 @@
       const disabled = editPosition.value === 'Deliverer';
       specializationBox.classList.toggle('disabled', disabled);
       specializationOptions.querySelectorAll('input').forEach(input => input.disabled = disabled);
-      document.getElementById('specializationHelp').textContent = disabled ? 'Device specialization is not available for Deliverers.' : 'Select 1 to 3 specializations for Inspector.';
+      document.getElementById('specializationHelp').textContent = disabled
+        ? 'Device specialization is not available for Deliverers.'
+        : 'Select 1 to 3 specializations for ' + (editPosition.value === 'Inspector & Collector' ? 'Inspector & Collector.' : 'Inspector.');
       document.getElementById('specializationCount').textContent = disabled ? 'Not required' : `${selectedBrands.length} selected`;
       if (disabled) document.getElementById('specializationError').style.display = 'none';
     }
@@ -519,7 +521,8 @@
         document.getElementById('editEmail').value = profile.email || sessionUser.email || '';
         editName.value = profile.fullName || sessionUser.name || '';
         editPhone.value = String(profile.phoneNumber || '').replace(/^\+60/, '').replace(/\D/g, '');
-        editPosition.value = ['Inspector','Deliverer','Both'].includes(profile.position) ? profile.position : 'Inspector';
+        const currentPos = profile.position === 'Both' ? 'Inspector & Collector' : profile.position;
+        editPosition.value = ['Inspector', 'Deliverer', 'Inspector & Collector'].includes(currentPos) ? currentPos : 'Inspector';
         const savedBrands = (Array.isArray(profile.specialization) ? profile.specialization : profile.specialization ? [profile.specialization] : []).map(canonicalSpecialization);
         selectedBrands = savedBrands.filter(brand => brands.includes(brand)).slice(0,3);
 

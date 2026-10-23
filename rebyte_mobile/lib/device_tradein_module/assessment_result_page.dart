@@ -7,6 +7,7 @@ import 'preliminary_quotation_page.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../account_management_module/home_page.dart';
+import 'my_trade_in_requests_page.dart';
 
 class AssessmentResultPage extends StatefulWidget {
   final DeviceModel device;
@@ -14,6 +15,7 @@ class AssessmentResultPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromMyTradeInRequests;
 
   const AssessmentResultPage({
     super.key,
@@ -22,6 +24,7 @@ class AssessmentResultPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromMyTradeInRequests = false,
   });
 
   @override
@@ -50,6 +53,25 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
   }
 
   void _onBack() {
+    if (widget.fromMyTradeInRequests) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+        return;
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MyTradeInRequestsPage(
+              email: widget.email ?? 'customer@rebyte.com',
+              name: widget.name,
+              isLoggedIn: widget.isLoggedIn,
+            ),
+          ),
+          (route) => false,
+        );
+        return;
+      }
+    }
     // Navigate back to HomePage at Active Activity section
     // Keep TradeInFlowSession intact so the active block is visible with Quotation Pending
     Navigator.pushAndRemoveUntil(
@@ -77,6 +99,7 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
           isLoggedIn: widget.isLoggedIn,
           email: widget.email,
           name: widget.name,
+          fromMyTradeInRequests: widget.fromMyTradeInRequests,
         ),
       ),
     );

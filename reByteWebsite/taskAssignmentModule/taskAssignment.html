@@ -180,6 +180,11 @@
     }
     .btn-manage-cancelled svg { width: 16px; height: 16px; }
 
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     /* Top KPI Summary Cards Grid */
     .kpi-grid {
       display: grid;
@@ -958,6 +963,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>
         Task Assignment
       </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>
+        Leave Management
+      </a>
       <a href="../adminModule/customerManagement.html" class="nav-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         Customer Management
@@ -965,10 +974,6 @@
       <a href="../adminModule/staffManagement.html" class="nav-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>
         Staff Management
-      </a>
-      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>
-        Leave Management
       </a>
       <a href="#" class="nav-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -994,6 +999,10 @@
           <p class="subtitle">Overview and management of active recommerce tasks.</p>
         </div>
         <div class="task-top-actions">
+          <button type="button" class="btn-criteria" id="btnRefreshTasks" onclick="handleRefreshTasks()" title="Refresh Tasks">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Refresh
+          </button>
           <button type="button" class="btn-criteria" id="btnOpenCriteria">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
             Assignment Criteria
@@ -1409,6 +1418,12 @@
     </div>
   </div>
 
+  <!-- Toast Notification Banner -->
+  <div class="toast-banner" id="toastBanner" role="status" aria-live="polite">
+    <div class="toast-banner-icon" id="toastIcon"></div>
+    <div class="toast-banner-text" id="toastText"></div>
+  </div>
+
   <!-- Firebase & ReByte Auth Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -1515,6 +1530,14 @@
         });
       }
 
+      // Refresh Tasks button
+      const btnRefreshTasks = document.getElementById('btnRefreshTasks');
+      if (btnRefreshTasks) {
+        btnRefreshTasks.addEventListener('click', () => {
+          handleRefreshTasks();
+        });
+      }
+
       // Assignment Criteria button
       const btnOpenCriteria = document.getElementById('btnOpenCriteria');
       if (btnOpenCriteria) {
@@ -1542,6 +1565,43 @@
       }
     }
 
+    let toastTimer = null;
+    function showToastBanner(msg, type = 'success') {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastText');
+      const icon = document.getElementById('toastIcon');
+      if (!banner || !text) return;
+      clearTimeout(toastTimer);
+      banner.className = `toast-banner ${type} show`;
+      text.textContent = msg;
+      if (icon) {
+        icon.innerHTML = type === 'success'
+          ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+          : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+      }
+      toastTimer = setTimeout(() => { banner.classList.remove('show'); }, 3000);
+    }
+
+    window.handleRefreshTasks = async function() {
+      const btn = document.getElementById('btnRefreshTasks');
+      const svg = btn ? btn.querySelector('svg') : null;
+      if (btn) btn.disabled = true;
+      if (svg) svg.style.animation = 'spin 0.8s linear infinite';
+
+      try {
+        await loadTasks();
+        await loadStaff();
+      } catch (err) {
+        console.error('Refresh error:', err);
+        showToastBanner('Failed to refresh tasks', 'error');
+      } finally {
+        setTimeout(() => {
+          if (svg) svg.style.animation = '';
+          if (btn) btn.disabled = false;
+        }, 400);
+      }
+    };
+
     let serverPagination = {
       total: 0,
       page: 1,
@@ -1563,7 +1623,8 @@
         page: currentPage,
         limit: PAGE_SIZE,
         search: searchQuery,
-        sort: sortAsc ? 'asc' : 'desc'
+        sort: sortAsc ? 'asc' : 'desc',
+        _t: Date.now()
       });
 
       for (const base of candidates) {

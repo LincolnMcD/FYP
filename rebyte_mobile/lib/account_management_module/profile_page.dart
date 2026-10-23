@@ -6,6 +6,7 @@ import 'manage_payment_method_page.dart';
 import 'services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../product_purchase_module/my_orders_page.dart';
+import '../device_tradein_module/my_trade_in_requests_page.dart';
 
 class ProfilePage extends StatelessWidget {
   final String? name;
@@ -113,8 +114,6 @@ class ProfilePage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildMenuItem(Icons.person_outline, 'Account Details'),
-          _buildDivider(),
           _buildMenuItem(
             Icons.location_on_outlined,
             'Delivery Address',
@@ -157,7 +156,22 @@ class ProfilePage extends StatelessWidget {
             },
           ),
           _buildDivider(),
-          _buildMenuItem(Icons.autorenew_outlined, 'My Trade-In Request'),
+          _buildMenuItem(
+            Icons.autorenew_outlined,
+            'My Trade-In Request',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyTradeInRequestsPage(
+                    email: email ?? 'customer@rebyte.com',
+                    name: name,
+                    isLoggedIn: true,
+                  ),
+                ),
+              );
+            },
+          ),
           _buildDivider(),
           _buildMenuItem(Icons.calendar_today_outlined, 'My Rental'),
           _buildDivider(),
