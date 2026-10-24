@@ -105,6 +105,7 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
           isLoggedIn: widget.isLoggedIn,
           email: widget.email,
           name: widget.name,
+          fromMyTradeInRequests: widget.fromMyTradeInRequests,
         ),
       ),
     );

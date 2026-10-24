@@ -1,0 +1,497 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../widgets/rebyte_app_bar.dart';
+import '../device_tradein_module/models/device_model.dart';
+import '../decision_assistance_module/diagnostic_suite_page.dart';
+
+class PerformDeviceInspectionPage extends StatelessWidget {
+  final Map<String, dynamic> task;
+  final VoidCallback? onTaskUpdated;
+
+  const PerformDeviceInspectionPage({
+    super.key,
+    required this.task,
+    this.onTaskUpdated,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rawDeviceModel = task['deviceModel']?.toString() ??
+        task['model']?.toString() ??
+        'iPhone 13 Pro';
+    final storage = task['storage']?.toString() ?? '256GB';
+    final color = task['color']?.toString() ?? task['colour']?.toString() ?? 'Graphite';
+    final reportedCondition = task['reportedCondition']?.toString() ?? 'Good (Minor Scratches)';
+
+    // Strip storage capacity from model name if already present (e.g. "(128GB)" or "(256GB)")
+    // because specsLabel already renders a dedicated small label for storage & color.
+    String deviceModel = rawDeviceModel;
+    if (storage.isNotEmpty && deviceModel.toLowerCase().contains('(${storage.toLowerCase()})')) {
+      deviceModel = deviceModel.replaceAll(RegExp('\\(${RegExp.escape(storage)}\\)', caseSensitive: false), '').trim();
+    } else {
+      deviceModel = deviceModel.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
+    }
+
+    final rawEstimate = task['tradeInEstimate'] ??
+        task['totalAmount'] ??
+        task['price'] ??
+        task['estimatedValue'] ??
+        task['offeredPrice'] ??
+        (task['items'] is List && (task['items'] as List).isNotEmpty
+            ? (task['items'][0]['tradeInEstimate'] ?? task['items'][0]['price'])
+            : null);
+    final tradeInEstimate = NumberFormatUtils.formatSingleCurrency(rawEstimate);
+    final imei = task['imei']?.toString() ??
+        task['imeiNum']?.toString() ??
+        '3548 9201 8847 112';
+    final customerName = task['customerName']?.toString() ?? 'Alex Mercer';
+    final customerEmail = task['customerEmail']?.toString() ?? 'alex.mercer@email.com';
+    final customerPhone = task['customerPhone']?.toString() ?? '(555) 019-2834';
+    final imageUrl = task['imageUrl']?.toString() ?? '';
+    final tradeInRequestID = task['tradeInID']?.toString() ??
+        task['tradeInRequestID']?.toString() ??
+        task['orderID']?.toString() ??
+        task['taskID']?.toString() ??
+        '';
+
+    final specsLabel = [storage, color].where((s) => s.isNotEmpty).join(' • ');
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: const ReByteAppBar(isShopPage: false),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Back Button & Page Title
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Perform Device Inspection',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Device Inspection Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Device Photo Preview
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      child: Container(
+                        height: 200,
+                        width: double.infinity,
+                        color: const Color(0xFFF1F5F9),
+                        child: imageUrl.isNotEmpty
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildPlaceholderPhoto(),
+                              )
+                            : _buildPlaceholderPhoto(),
+                      ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title & Status Badge
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  deviceModel,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFFDE68A)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.assignment_outlined, size: 14, color: Color(0xFFD97706)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Pending Inspection',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFFD97706),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            specsLabel,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Two Highlight Boxes (Reported Condition & Trade-in Estimate)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Reported Condition',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        reportedCondition,
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Trade-in Estimate',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'RM  $tradeInEstimate',
+                                        style: const TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF0C5AD2),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+
+                          const Divider(color: Color(0xFFE2E8F0), thickness: 1, height: 1),
+                          const SizedBox(height: 14),
+
+                          // IMEI Row
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.qr_code_scanner_rounded,
+                                size: 18,
+                                color: Color(0xFF0F172A),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'IMEI: $imei',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Customer Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.person_outline_rounded, color: Color(0xFF0C5AD2), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Customer',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0C5AD2),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      customerName,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF64748B)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            customerEmail,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              color: Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 16, color: Color(0xFF64748B)),
+                        const SizedBox(width: 8),
+                        Text(
+                          customerPhone,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Start Inspection Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final brandGuess = deviceModel.split(' ').first;
+                      final devModel = DeviceModel(
+                        deviceID: task['deviceID']?.toString() ?? '',
+                        brand: brandGuess.isNotEmpty ? brandGuess : 'Apple',
+                        model: deviceModel,
+                        storageCapacity: storage,
+                        colour: color,
+                        imeiNum: imei,
+                      );
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DiagnosticSuitePage(
+                            tradeInRequestID: tradeInRequestID,
+                            device: devModel,
+                            isLoggedIn: true,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0043CE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Text(
+                          'Start inspection',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 2, // Tasks tab
+        onTap: (index) {
+          if (index != 2) {
+            Navigator.pop(context);
+          }
+        },
+        selectedItemColor: const Color(0xFF0C5AD2),
+        unselectedItemColor: const Color(0xFF64748B),
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded, size: 24), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded, size: 24), label: 'Schedule'),
+          BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined, size: 24), label: 'Tasks'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline, size: 24), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderPhoto() {
+    return Container(
+      color: const Color(0xFF0F172A),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.phone_iphone_rounded, size: 56, color: Colors.white70),
+            SizedBox(height: 8),
+            Text(
+              'Inspection Device Preview',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class NumberFormatUtils {
+  static String formatSingleCurrency(dynamic value) {
+    if (value == null) return '1,425.00';
+    double numVal = 0.0;
+    if (value is num) {
+      numVal = value.toDouble();
+    } else if (value is Map) {
+      final maxVal = value['max'] ?? value['maxEstimatedValue'];
+      final minVal = value['min'] ?? value['minEstimatedValue'];
+      final picked = maxVal ?? minVal ?? 0;
+      numVal = double.tryParse(picked.toString()) ?? 0.0;
+    } else {
+      final str = value.toString().replaceAll('RM', '').replaceAll(',', '').trim();
+      final parts = str.split(RegExp(r'\s*-\s*'));
+      if (parts.length >= 2) {
+        numVal = double.tryParse(parts[1].trim()) ?? double.tryParse(parts[0].trim()) ?? 0.0;
+      } else {
+        numVal = double.tryParse(str) ?? 0.0;
+      }
+    }
+    if (numVal <= 0) {
+      return '1,425.00';
+    }
+    return NumberFormat('#,##0.00').format(numVal);
+  }
+
+  static String formatCurrency(dynamic value) => formatSingleCurrency(value);
+}

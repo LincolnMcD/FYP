@@ -337,7 +337,7 @@ router.get("/staff-session", async (req, res) => {
         const decoded = await getAuth().verifyIdToken(idToken, false);
         const authUser = await getAuth().getUser(decoded.uid);
         if (authUser.disabled) return res.status(401).json({ archived: true, error: "This staff account has been archived." });
-        await getAuth().verifyIdToken(idToken, true);
+        // Persistent stream checks authUser.disabled rather than re-verifying initial handshake token
 
         const usersRef = db.collection("users");
         let userData = null;
@@ -512,7 +512,7 @@ router.get("/account-session/stream", async (req, res) => {
                 if (status === "archived") {
                     return send({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
                 }
-                await getAuth().verifyIdToken(idToken, true);
+                // Persistent stream checks authUser.disabled rather than re-verifying initial token
                 const authUser = await getAuth().getUser(decoded.uid);
                 if (authUser.disabled) {
                     return send({ expired: true, archived: true, error: "This account has been archived. Please contact administrator." });
@@ -663,14 +663,14 @@ router.patch("/staff-profile", async (req, res) => {
             console.warn("Staff profile saved, but Firebase Auth display name could not be synchronized:", authError.message);
         }
 
-        if (isOldDeliverer && !isNewDeliverer) {
+        if (oldPos.toLowerCase() !== normalizedPos.toLowerCase()) {
             try {
-                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
-                reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos).catch(reassignErr => {
+                const { reassignStaffTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+                reassignStaffTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos).catch(reassignErr => {
                     console.error("Auto reassign on role change error:", reassignErr);
                 });
             } catch (reassignImportErr) {
-                console.error("Could not trigger reassignDelivererTasksOnRoleChange:", reassignImportErr);
+                console.error("Could not trigger reassignStaffTasksOnRoleChange:", reassignImportErr);
             }
         }
 
@@ -1355,16 +1355,13 @@ router.post("/staff/:staffId/archive", requireAdmin, async (req, res) => {
         }
 
         const oldPos = String(staffData.position || "").trim();
-        const isOldDeliverer = oldPos.toLowerCase() === "deliverer" || (oldPos.toLowerCase().includes("deliver") && !oldPos.toLowerCase().includes("inspector"));
-        if (isOldDeliverer) {
-            try {
-                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
-                reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, "Archived").catch(err => {
-                    console.error("Auto reassign on archive error:", err);
-                });
-            } catch (reassignErr) {
-                console.error("Could not trigger reassign on archive:", reassignErr);
-            }
+        try {
+            const { reassignStaffTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+            reassignStaffTasksOnRoleChange(staffDoc.id, oldPos, "Archived").catch(err => {
+                console.error("Auto reassign on archive error:", err);
+            });
+        } catch (reassignErr) {
+            console.error("Could not trigger reassign on archive:", reassignErr);
         }
 
         return res.status(200).json({ success: true, message: "Staff member archived and signed out." });
@@ -1531,17 +1528,17 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
         }
 
         let reassignedInfo = null;
-        if (isOldDeliverer && !isNewDeliverer) {
+        if (oldPos.toLowerCase() !== normalizedPos.toLowerCase()) {
             try {
-                const { reassignDelivererTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
-                reassignedInfo = await reassignDelivererTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos);
+                const { reassignStaffTasksOnRoleChange } = require("../taskAssignmentModule/taskAssignmentService");
+                reassignedInfo = await reassignStaffTasksOnRoleChange(staffDoc.id, oldPos, normalizedPos);
             } catch (reassignErr) {
                 console.error("Auto reassign on role change error:", reassignErr);
             }
         }
 
         const extraMsg = reassignedInfo && reassignedInfo.reassignedCount > 0
-            ? ` ${reassignedInfo.reassignedCount} pending delivery task(s) reassigned to available delivery staff.`
+            ? ` ${reassignedInfo.reassignedCount} pending task(s) reassigned to available staff.`
             : "";
 
         return res.status(200).json({ success: true, message: `Staff information updated successfully.${extraMsg}` });

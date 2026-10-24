@@ -5,7 +5,7 @@ const { FieldValue } = require("firebase-admin/firestore");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-const { assignDeliveryTask, getStaffIDsOnApprovedLeave, parseLeaveDate } = require("./taskAssignmentService");
+const { assignDeliveryTask, assignTradeInTask, getStaffIDsOnApprovedLeave, parseLeaveDate, handleFailedTradeInReassignment } = require("./taskAssignmentService");
 const { getOsrmRoute, COMPANY_LOCATION } = require("./osrmService");
 const { getDeliveryRoomsStatus } = require("./deliverySocket");
 const {
@@ -231,8 +231,8 @@ router.get("/staff-tasks", async (req, res) => {
         for (const sDoc of schedSnap.docs) {
             const schedData = sDoc.data();
             const schedStatus = (schedData.scheduleStatus || "").toLowerCase();
-            // Skip absent, rejected, or cancelled schedules from staff task list
-            if (schedStatus === "absent" || schedStatus === "rejected" || schedStatus === "cancelled") {
+            // Skip absent, rejected, cancelled, or reassigned schedules from staff task list
+            if (schedStatus === "absent" || schedStatus === "rejected" || schedStatus === "cancelled" || schedStatus === "reassigned") {
                 continue;
             }
             const scheduleID = schedData.scheduleID || sDoc.id;
@@ -324,7 +324,7 @@ router.get("/staff-tasks", async (req, res) => {
                             items.push({
                                 productID: pid,
                                 brand,
-                                model,
+                                model: model.trim(),
                                 storage,
                                 color,
                                 condition,
@@ -335,9 +335,122 @@ router.get("/staff-tasks", async (req, res) => {
                         }
                     }
                 }
+            } else if (schedData.appointmentID || taskData.appointmentID || taskData.taskType === "inspect" || taskData.taskType === "collect" || scheduleID.includes("APP")) {
+                const appID = schedData.appointmentID || taskData.appointmentID || scheduleID.replace(/^SCH-/, '').split('-')[0];
+                let aData = {};
+                if (appID) {
+                    const aSnap = await db.collection("tradeInAppointment").doc(appID).get();
+                    if (aSnap.exists) aData = aSnap.data();
+                }
+
+                let addressID = aData.addressID || taskData.addressID || schedData.addressID;
+                if (addressID) {
+                    const aDoc = await db.collection("address").doc(addressID).get();
+                    if (aDoc.exists) address = aDoc.data();
+                } else if (aData.address && typeof aData.address === "object") {
+                    address = aData.address;
+                }
+
+                const trID = aData.tradeInRequestID || taskData.tradeInRequestID || null;
+                let trData = {};
+                if (trID) {
+                    const trDoc = await db.collection("tradeInRequests").doc(trID).get();
+                    if (trDoc.exists) trData = trDoc.data() || {};
+                }
+
+                // Query device details from devices collection via tradeInRequests -> deviceID
+                let devData = {};
+                const deviceID = trData.deviceID || taskData.deviceID || aData.deviceID || null;
+                if (deviceID) {
+                    try {
+                        let devDoc = await db.collection("devices").doc(deviceID).get();
+                        if (!devDoc.exists) {
+                            devDoc = await db.collection("device").doc(deviceID).get();
+                        }
+                        if (devDoc.exists) {
+                            devData = devDoc.data() || {};
+                        }
+                    } catch (dErr) {
+                        console.error("Error fetching device for trade-in:", dErr);
+                    }
+                }
+
+                // Fetch device image from subcollection if not on record
+                let devImageUrl = trData.deviceImageUrl || trData.imageUrl || devData.imageUrl || "";
+                if (!devImageUrl && trID) {
+                    try {
+                        const imgSnap = await db.collection("tradeInRequests").doc(trID).collection("images").limit(1).get();
+                        if (!imgSnap.empty) {
+                            devImageUrl = imgSnap.docs[0].data().imageUrl || "";
+                        }
+                    } catch (_) {}
+                }
+
+                if (!address.addressLine && trData.inspectionAddress && typeof trData.inspectionAddress === "object") {
+                    address = trData.inspectionAddress;
+                }
+
+                const deviceBrand = devData.brand || trData.deviceBrand || trData.brand || "Apple";
+                const deviceModel = devData.model || devData.name || trData.deviceModel || trData.model || "Device";
+                const storage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
+                const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
+                const condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+                let tradeInEstimate = trData.tradeInEstimate || trData.offeredPrice || 0;
+                if (!tradeInEstimate && trData.estimatedValue) {
+                    if (typeof trData.estimatedValue === "number") {
+                        tradeInEstimate = trData.estimatedValue;
+                    } else if (typeof trData.estimatedValue === "object") {
+                        tradeInEstimate = trData.estimatedValue.max || trData.estimatedValue.min || 0;
+                    } else {
+                        const cleanStr = String(trData.estimatedValue).replace(/[^0-9.]/g, " ").trim();
+                        const numParts = cleanStr.split(/\s+/).map(Number).filter(n => !isNaN(n) && n > 0);
+                        tradeInEstimate = numParts.length > 0 ? numParts[numParts.length - 1] : 0;
+                    }
+                }
+                const imei = devData.imeiNum || devData.imei || trData.imei || trData.imeiNum || trData.serialNumber || "";
+                const imageUrl = devImageUrl;
+
+                const rawAppType = String(aData.appointmentType || taskData.taskType || (trData.inspectionMethod && trData.inspectionMethod.includes("Shipment") ? "Collect" : "Inspect")).toLowerCase();
+                const resolvedTaskType = rawAppType.includes("collect") ? "collect" : "inspect";
+
+                items.push({
+                    productID: trID || appID,
+                    brand: deviceBrand,
+                    model: deviceModel.trim(),
+                    storage,
+                    color,
+                    condition,
+                    price: tradeInEstimate,
+                    tradeInEstimate,
+                    imei,
+                    imageUrl,
+                    tradeInRequestID: trID,
+                    appointmentID: appID,
+                    appointmentType: aData.appointmentType || (resolvedTaskType === "collect" ? "Collect" : "Inspect"),
+                    description: [storage, color].filter(Boolean).join(" • ")
+                });
+
+                // Attach trade-in specific overrides
+                taskData.taskType = resolvedTaskType;
+                taskData.customerName = trData.customerName || trData.name || address.recipientName || address.recipentName || "Customer";
+                taskData.customerPhone = trData.customerPhone || trData.phone || trData.contactNumber || address.phoneNumber || "";
+                taskData.customerEmail = trData.customerEmail || trData.email || trData.userEmail || address.email || "";
+                taskData.appointmentID = appID;
+                taskData.tradeInRequestID = trID;
+                taskData.deviceID = deviceID;
+                taskData.deviceModel = `${deviceBrand} ${deviceModel}`.trim();
+                taskData.storage = storage;
+                taskData.color = color;
+                taskData.reportedCondition = condition;
+                taskData.tradeInEstimate = tradeInEstimate;
+                taskData.imei = imei;
+                taskData.imageUrl = imageUrl;
+                if (typeof trData.inspectionAddress === "string" && trData.inspectionAddress.trim()) {
+                    taskData.deliveryAddress = trData.inspectionAddress.trim();
+                }
             }
 
-            // 5. Fetch Delivery record
+            // 5. Fetch Delivery record (Delivery tasks only)
             let deliveryData = {};
             if (orderID) {
                 const delID = `DEL-${orderID}`;
@@ -356,11 +469,11 @@ router.get("/staff-tasks", async (req, res) => {
             if (!finalLng && address.longitude) finalLng = Number(address.longitude);
 
             // If coordinates are default (5.3542, 100.3015) or null, geocode from address text
-            if ((!finalLat || finalLat === 5.3542) && address.addressLine) {
+            const fullAddressText = taskData.deliveryAddress || [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
+            if ((!finalLat || finalLat === 5.3542) && fullAddressText) {
                 try {
-                    const fullAddr = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
                     const geoRes = await fetch(
-                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddr)}&countrycodes=my&limit=1`,
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddressText)}&countrycodes=my&limit=1`,
                         { headers: { "User-Agent": "ReByte-App/1.0" } }
                     );
                     if (geoRes.ok) {
@@ -382,6 +495,12 @@ router.get("/staff-tasks", async (req, res) => {
             const distNum = taskData.estimatedDistanceinKM !== undefined ? taskData.estimatedDistanceinKM : (parseFloat(taskData.estimatedDistance) || 0);
             const durNum = taskData.estimatedDurationinMinutes !== undefined ? taskData.estimatedDurationinMinutes : (parseInt(taskData.estimatedDuration) || 0);
 
+            const isInspectOrCollect = taskData.taskType === "inspect" || taskData.taskType === "collect";
+            const customerName = taskData.customerName || address.recipentName || address.recipientName || (orderData && orderData.customerName) || "Customer";
+            const customerPhone = taskData.customerPhone || address.phoneNumber || (orderData && orderData.customerPhone) || "";
+            const customerEmail = taskData.customerEmail || (orderData && orderData.customerEmail) || address.email || (orderData && orderData.email) || "";
+            const deliveryAddress = taskData.deliveryAddress || [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ") || "Penang, Malaysia";
+
             tasksList.push({
                 scheduleID,
                 scheduleDate: schedData.scheduleDate || "",
@@ -390,19 +509,28 @@ router.get("/staff-tasks", async (req, res) => {
                 scheduleStatus: schedData.scheduleStatus || "assigned",
                 taskID,
                 taskType: taskData.taskType || "deliver",
-                taskStatus: taskData.taskStatus || "Packaging",
+                taskStatus: taskData.taskStatus === "In Progress" ? "In Progress" : ((taskData.taskStatus === "Shipping" || String(schedData.scheduleStatus || "").toLowerCase() === "ongoing") ? "Ongoing" : (taskData.taskStatus || (schedData.scheduleStatus === "completed" ? "Delivered" : "Packaging"))),
                 estimatedDistanceinKM: distNum,
                 estimatedDurationinMinutes: durNum,
                 estimatedDuration: `${durNum} mins`,
                 estimatedDistance: `${distNum} km`,
                 staffID: targetStaffID,
                 staffName: staffName || schedData.staffName || "",
-                orderID,
-                customerName: address.recipentName || address.recipientName || "Customer",
-                customerPhone: address.phoneNumber || "",
-                customerEmail: (orderData && orderData.customerEmail) || address.email || (orderData && orderData.email) || "",
-                deliveryAddress: [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", "),
-                deliveryStatus: deliveryData.deliveryStatus || "ongoing",
+                orderID: orderID || taskData.tradeInRequestID || taskData.appointmentID || taskID,
+                appointmentID: taskData.appointmentID || null,
+                tradeInRequestID: taskData.tradeInRequestID || null,
+                deviceModel: taskData.deviceModel || (items[0] && `${items[0].brand || ''} ${items[0].model || ''}`.trim()) || "Device",
+                storage: taskData.storage || (items[0] && items[0].storage) || "",
+                color: taskData.color || (items[0] && items[0].color) || "",
+                reportedCondition: taskData.reportedCondition || (items[0] && items[0].condition) || "Good",
+                tradeInEstimate: taskData.tradeInEstimate || (items[0] && items[0].price) || 0,
+                imei: taskData.imei || (items[0] && items[0].imei) || "",
+                imageUrl: taskData.imageUrl || (items[0] && items[0].imageUrl) || "",
+                customerName,
+                customerPhone,
+                customerEmail,
+                deliveryAddress,
+                deliveryStatus: isInspectOrCollect ? (schedData.scheduleStatus === "completed" ? "completed" : "ongoing") : (deliveryData.deliveryStatus || "ongoing"),
                 completedAt: taskData.completedAt ? (taskData.completedAt.toDate ? taskData.completedAt.toDate().toISOString() : taskData.completedAt) : (deliveryData.completedAt ? (deliveryData.completedAt.toDate ? deliveryData.completedAt.toDate().toISOString() : deliveryData.completedAt) : null),
                 proofOfDeliveryUrl: deliveryData.proofOfDeliveryUrl || taskData.proofOfDeliveryUrl || "",
                 destinationLat: finalLat || null,
@@ -410,6 +538,7 @@ router.get("/staff-tasks", async (req, res) => {
                 items
             });
         }
+
 
         // Helper to get comparable timestamp for a task
         function getTaskTimestamp(t) {
@@ -452,9 +581,84 @@ router.patch("/update-status", async (req, res) => {
         const isTerminated = normalized === "Terminated" || normalized === "terminated";
         const isRejected = normalized === "Rejected" || normalized === "rejected";
 
+        // Pre-fetch task & schedule records to accurately resolve IDs and roles
+        let effectiveTaskID = taskID || null;
+        let taskData = null;
+        if (effectiveTaskID) {
+            try {
+                const tDoc = await db.collection("task").doc(effectiveTaskID).get();
+                if (tDoc.exists) taskData = tDoc.data();
+            } catch (_) {}
+        }
+        if (!taskData && orderID) {
+            try {
+                const tDoc = await db.collection("task").doc(orderID).get();
+                if (tDoc.exists) {
+                    taskData = tDoc.data();
+                    effectiveTaskID = tDoc.id;
+                } else {
+                    const tSnap1 = await db.collection("task").where("appointmentID", "==", orderID).limit(1).get();
+                    if (!tSnap1.empty) {
+                        taskData = tSnap1.docs[0].data();
+                        effectiveTaskID = tSnap1.docs[0].id;
+                    } else {
+                        const tSnap2 = await db.collection("task").where("tradeInRequestID", "==", orderID).limit(1).get();
+                        if (!tSnap2.empty) {
+                            taskData = tSnap2.docs[0].data();
+                            effectiveTaskID = tSnap2.docs[0].id;
+                        } else {
+                            const tSnap3 = await db.collection("task").where("orderID", "==", orderID).limit(1).get();
+                            if (!tSnap3.empty) {
+                                taskData = tSnap3.docs[0].data();
+                                effectiveTaskID = tSnap3.docs[0].id;
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        const effectiveSchedID = scheduleID || (taskData && taskData.scheduleID) || null;
+        let schedData = null;
+        if (effectiveSchedID) {
+            try {
+                const sDoc = await db.collection("schedule").doc(effectiveSchedID).get();
+                if (sDoc.exists) schedData = sDoc.data();
+            } catch (_) {}
+        }
+
+        let apptID = (taskData && taskData.appointmentID) ||
+            (schedData && schedData.appointmentID) ||
+            (orderID && (orderID.startsWith("APPT-") || orderID.startsWith("APT-") || orderID.includes("APP")) ? orderID : null);
+        if (!apptID && effectiveTaskID && effectiveTaskID.includes("APP")) {
+            apptID = effectiveTaskID.replace(/^TSK-/, "");
+        }
+
+        let tradeInReqID = (taskData && (taskData.tradeInRequestID || taskData.tradeInID)) ||
+            (schedData && schedData.tradeInRequestID) ||
+            (orderID && orderID.startsWith("TR") ? orderID : null);
+
+        if (!apptID && tradeInReqID) {
+            try {
+                const aSnap = await db.collection("tradeInAppointment").where("tradeInRequestID", "==", tradeInReqID).limit(1).get();
+                if (!aSnap.empty) {
+                    apptID = aSnap.docs[0].id;
+                }
+            } catch (_) {}
+        }
+
+        const isTradeInTask = !!(
+            apptID ||
+            (taskData && (taskData.taskType === "inspect" || taskData.taskType === "collect")) ||
+            (taskData && (taskData.appointmentID || taskData.tradeInRequestID)) ||
+            tradeInReqID
+        );
+
+        const rejectingStaffID = (schedData && schedData.staffID) || (taskData && taskData.staffID) || null;
+
         const batch = db.batch();
 
-        if (taskID) {
+        if (effectiveTaskID) {
             const taskUpdate = {
                 taskStatus: isTerminated ? "Rejected" : normalized,
                 updatedAt: new Date()
@@ -466,12 +670,12 @@ router.patch("/update-status", async (req, res) => {
             if (rejectionReason) taskUpdate.rejectionReason = rejectionReason;
             if (rejectionNotes) taskUpdate.rejectionNotes = rejectionNotes;
 
-            batch.set(db.collection("task").doc(taskID), taskUpdate, { merge: true });
+            batch.set(db.collection("task").doc(effectiveTaskID), taskUpdate, { merge: true });
         }
 
-        if (scheduleID) {
+        if (effectiveSchedID) {
             let schedStatus = "assigned";
-            if (normalized === "Shipping" || normalized === "In Progress" || normalized === "ongoing") schedStatus = "ongoing";
+            if (normalized === "Shipping" || normalized === "In Progress" || normalized === "ongoing" || normalized === "Ongoing") schedStatus = "ongoing";
             if (isCompleted) schedStatus = "completed";
             if (isRejected || isTerminated) schedStatus = "rejected";
 
@@ -487,7 +691,7 @@ router.patch("/update-status", async (req, res) => {
                 if (rejectionNotes) schedUpdate.rejectionNotes = rejectionNotes;
             }
 
-            batch.set(db.collection("schedule").doc(scheduleID), schedUpdate, { merge: true });
+            batch.set(db.collection("schedule").doc(effectiveSchedID), schedUpdate, { merge: true });
         }
 
         // Delivery status: ongoing, completed, or cancelled
@@ -520,7 +724,7 @@ router.patch("/update-status", async (req, res) => {
                 terminatedAt: new Date(),
                 updatedAt: new Date()
             }, { merge: true });
-        } else if (orderID && isRejected) {
+        } else if (orderID && isRejected && !isTradeInTask) {
             batch.set(db.collection("order").doc(orderID), {
                 orderStatus: "Unassigned",
                 updatedAt: new Date()
@@ -541,7 +745,6 @@ router.patch("/update-status", async (req, res) => {
                     let custEmail = ordData.email || ordData.userEmail || "";
                     let custId = ordData.customerID || ordData.userId || "";
 
-                    // If email missing, lookup from address or users
                     if (!custEmail && ordData.addressID) {
                         const addrSnap = await db.collection("address").doc(ordData.addressID).get();
                         if (addrSnap.exists) {
@@ -575,17 +778,142 @@ router.patch("/update-status", async (req, res) => {
             }
         }
 
+        const isInProgressStatus = normalized === "In Progress" || normalized === "Ongoing" || normalized === "Shipping";
+
+        if (isInProgressStatus) {
+            if (apptID) {
+                batch.set(db.collection("tradeInAppointment").doc(apptID), {
+                    appointmentStatus: "In Progress",
+                    status: "In Progress",
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+            if (tradeInReqID) {
+                batch.set(db.collection("tradeInRequests").doc(tradeInReqID), {
+                    requestStatus: "In Progress",
+                    bookingStatus: "In Progress",
+                    status: "In Progress",
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+        } else if (isCompleted) {
+            if (apptID) {
+                batch.set(db.collection("tradeInAppointment").doc(apptID), {
+                    appointmentStatus: "Completed",
+                    status: "Completed",
+                    completedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+            if (tradeInReqID) {
+                const resolvedStatus = (taskData && taskData.taskType === "collect") ? "Collected" : "Inspected";
+                batch.set(db.collection("tradeInRequests").doc(tradeInReqID), {
+                    requestStatus: resolvedStatus,
+                    status: resolvedStatus,
+                    bookingStatus: "Completed",
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+        }
+
         await batch.commit();
 
         // Update active schedule timer on status transitions
-        if (scheduleID) {
+        if (effectiveSchedID) {
             if (isCompleted || isRejected || isTerminated) {
-                clearScheduleTimers(scheduleID);
+                clearScheduleTimers(effectiveSchedID);
             } else {
-                // If started (Shipping / ongoing), re-register so the End Time check activates
-                registerScheduleTimer(scheduleID);
+                registerScheduleTimer(effectiveSchedID);
             }
         }
+
+        // When staff rejects an inspection or collection task, reassign to another suitable staff
+        // If no replacement staff is available, place On Hold and email customer to rebook or cancel
+        if (isRejected && isTradeInTask) {
+            console.log(`[TRADE-IN TASK REJECTED] Task: ${effectiveTaskID || "N/A"}, Appointment: ${apptID || "N/A"}, Staff: ${rejectingStaffID || "N/A"}. Attempting reassignment to another suitable staff...`);
+
+            let appData = {};
+            if (apptID) {
+                try {
+                    const aDoc = await db.collection("tradeInAppointment").doc(apptID).get();
+                    if (aDoc.exists) appData = aDoc.data();
+                } catch (_) {}
+            }
+
+            const effectiveTradeInReqID = tradeInReqID || appData.tradeInRequestID || (taskData && taskData.tradeInRequestID) || null;
+            const rawType = (appData.appointmentType || (taskData && taskData.taskType) || "Inspect").toLowerCase();
+            const method = rawType.includes("collect") ? "Doorstep Collection" : "On-Site Inspection";
+
+            let schedDate = (schedData && schedData.scheduleDate) || appData.appointmentDate;
+            if (!schedDate && appData.scheduledAt && typeof appData.scheduledAt.toDate === "function") {
+                const d = appData.scheduledAt.toDate();
+                schedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            }
+
+            let appointmentTime = (schedData && schedData.scheduleStartTime) || (taskData && taskData.taskStartTime) || appData.appointmentTime;
+            if (!appointmentTime && appData.scheduledAt && typeof appData.scheduledAt.toDate === "function") {
+                const d = appData.scheduledAt.toDate();
+                appointmentTime = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+            }
+            if (!appointmentTime) appointmentTime = "09:00 AM";
+
+            const addressID = appData.addressID || (taskData && taskData.addressID) || null;
+            const address = appData.appointmentLocation || null;
+
+            const excludeStaffIDs = rejectingStaffID ? [rejectingStaffID] : [];
+
+            const reassignResult = await assignTradeInTask({
+                tradeInRequestID: effectiveTradeInReqID,
+                method,
+                appointmentDate: schedDate,
+                appointmentTime,
+                addressID,
+                address,
+                excludeStaffIDs,
+                existingAppointmentID: apptID,
+                existingTaskID: effectiveTaskID,
+                forceNewRecords: false
+            });
+
+            if (reassignResult && reassignResult.success) {
+                console.log(`[TRADE-IN REASSIGN SUCCESS] Trade-In ${method} Task reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+                return res.status(200).json({
+                    success: true,
+                    reassigned: true,
+                    message: `Task rejected and successfully reassigned to ${reassignResult.staffName || reassignResult.staffID}.`,
+                    staffID: reassignResult.staffID,
+                    scheduleID: reassignResult.scheduleID
+                });
+            } else {
+                console.warn(`[TRADE-IN REASSIGN WARNING] Could not automatically reassign rejected Trade-In task ${apptID}:`, reassignResult?.message);
+                const rejectDesc = rejectionReason 
+                    ? `${rejectionReason}${rejectionNotes ? ` (${rejectionNotes})` : ""}`
+                    : "Technician was unable to fulfill this appointment slot";
+
+                await handleFailedTradeInReassignment({
+                    appointmentID: apptID,
+                    tradeInRequestID: effectiveTradeInReqID,
+                    scheduleID: effectiveSchedID,
+                    taskID: effectiveTaskID,
+                    appointmentDate: schedDate,
+                    appointmentTime,
+                    method,
+                    reason: `Staff rejection: ${rejectDesc}. No replacement staff is currently available for this scheduled time slot.`
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    reassigned: false,
+                    onHold: true,
+                    message: "Task rejected. No replacement staff available; appointment placed On Hold and notification email sent to customer."
+                });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Task status updated successfully."
+        });
     } catch (err) {
         console.error("Error updating task status:", err);
         return res.status(500).json({ success: false, error: err.message });
@@ -624,9 +952,11 @@ router.post("/complete-delivery", (req, res, next) => {
 
         const batch = db.batch();
 
+        const isTradeIn = String(orderID || "").startsWith("TR") || String(taskID || "").includes("APP") || String(orderID || "").includes("APP");
+
         if (taskID) {
             const taskUpdate = {
-                taskStatus: "Delivered",
+                taskStatus: isTradeIn ? "Completed" : "Delivered",
                 completedAt: FieldValue.serverTimestamp(),
                 updatedAt: new Date()
             };
@@ -643,7 +973,17 @@ router.post("/complete-delivery", (req, res, next) => {
             batch.set(db.collection("schedule").doc(scheduleID), schedUpdate, { merge: true });
         }
 
-        if (orderID) {
+        if (orderID && orderID.startsWith("TR")) {
+            const trDoc = await db.collection("tradeInRequests").doc(orderID).get();
+            if (trDoc.exists) {
+                batch.set(trDoc.ref, {
+                    requestStatus: "Collected",
+                    collectedAt: new Date(),
+                    proofOfCollectionUrl: proofOfDeliveryUrl || null,
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+        } else if (orderID) {
             const delID = `DEL-${orderID}`;
             const delRef = db.collection("delivery").doc(delID);
             const delUpdate = {
@@ -775,6 +1115,49 @@ router.post("/update-staff-location", async (req, res) => {
             }, { merge: true }).catch(() => {});
         }
 
+        if (taskID) {
+            const cleanTID = String(taskID).trim();
+            await db.collection("task").doc(cleanTID).set(updateData, { merge: true }).catch(() => {});
+            if (!cleanTID.startsWith("TSK-")) {
+                await db.collection("task").doc(`TSK-${cleanTID}`).set(updateData, { merge: true }).catch(() => {});
+            }
+        }
+
+        if (orderID) {
+            const clean = String(orderID).replace(/^#/, "").trim();
+            await db.collection("delivery").doc(`DEL-${clean}`).set(updateData, { merge: true }).catch(() => {});
+            if (clean.startsWith("TR-")) {
+                await db.collection("tradeInRequests").doc(clean).set(updateData, { merge: true }).catch(() => {});
+            }
+            const tSnap1 = await db.collection("task").where("tradeInRequestID", "==", clean).get().catch(() => null);
+            if (tSnap1 && !tSnap1.empty) {
+                for (const d of tSnap1.docs) {
+                    await d.ref.set(updateData, { merge: true }).catch(() => {});
+                }
+            }
+        }
+
+        // Keep in-memory socket cache synchronized
+        const { activeDeliveryLocations } = require("./deliverySocket");
+        if (activeDeliveryLocations) {
+            const locObj = {
+                orderID: String(orderID || "").replace(/^#/, "").trim(),
+                lat: numericLat,
+                lng: numericLng,
+                heading: numericHeading,
+                speed: 0,
+                estimatedDistanceKm: updateData.estimatedDistance || null,
+                estimatedDurationMinutes: updateData.estimatedDuration || null,
+                timestamp: Date.now()
+            };
+            if (locObj.orderID) activeDeliveryLocations.set(locObj.orderID, locObj);
+            if (taskID) {
+                const tClean = String(taskID).replace(/^#/, "").trim();
+                activeDeliveryLocations.set(tClean, locObj);
+                activeDeliveryLocations.set(tClean.replace(/^TSK-/, ""), locObj);
+            }
+        }
+
         return res.json({ success: true, message: "Staff location updated" });
     } catch (err) {
         console.error("Error in update-staff-location:", err);
@@ -888,10 +1271,34 @@ router.get("/track-delivery/:orderID", async (req, res) => {
         }
 
         let taskData = {};
-        const taskID = `TSK-${orderID}`;
-        const taskSnap = await db.collection("task").doc(taskID).get();
+        let resolvedTaskID = `TSK-${orderID}`;
+        let taskSnap = await db.collection("task").doc(resolvedTaskID).get();
         if (taskSnap.exists) {
             taskData = taskSnap.data();
+        } else {
+            const directSnap = await db.collection("task").doc(orderID).get();
+            if (directSnap.exists) {
+                taskData = directSnap.data();
+                resolvedTaskID = orderID;
+            } else {
+                const trQuery = await db.collection("task")
+                    .where("tradeInRequestID", "==", orderID)
+                    .limit(1)
+                    .get();
+                if (!trQuery.empty) {
+                    taskData = trQuery.docs[0].data();
+                    resolvedTaskID = trQuery.docs[0].id;
+                } else {
+                    const appQuery = await db.collection("task")
+                        .where("appointmentID", "==", orderID)
+                        .limit(1)
+                        .get();
+                    if (!appQuery.empty) {
+                        taskData = appQuery.docs[0].data();
+                        resolvedTaskID = appQuery.docs[0].id;
+                    }
+                }
+            }
         }
 
         let schedData = {};
@@ -909,22 +1316,66 @@ router.get("/track-delivery/:orderID", async (req, res) => {
             delData = delSnap.data();
         }
 
-        // Resolve customer address & destination coordinates
-        let address = {};
-        const addressID = orderData.addressID;
-        if (addressID) {
-            const aDoc = await db.collection("address").doc(addressID).get();
-            if (aDoc.exists) {
-                address = aDoc.data();
+        // Check if this is a trade-in request / appointment
+        let tradeInReq = {};
+        let tradeInAppt = {};
+        if (!ordSnap.exists || taskData.tradeInRequestID || taskData.appointmentID) {
+            const trDoc = await db.collection("tradeInRequests").doc(orderID).get();
+            if (trDoc.exists) {
+                tradeInReq = trDoc.data() || {};
+            } else if (taskData.tradeInRequestID) {
+                const trDoc2 = await db.collection("tradeInRequests").doc(taskData.tradeInRequestID).get();
+                if (trDoc2.exists) tradeInReq = trDoc2.data() || {};
+            }
+
+            const apptID = taskData.appointmentID || (orderID.startsWith("APPT-") || orderID.startsWith("APT-") ? orderID : null);
+            if (apptID) {
+                const aDoc = await db.collection("tradeInAppointment").doc(apptID).get();
+                if (aDoc.exists) tradeInAppt = aDoc.data() || {};
+            } else if (orderID) {
+                const aSnap = await db.collection("tradeInAppointment").where("tradeInRequestID", "==", orderID).limit(1).get();
+                if (!aSnap.empty) tradeInAppt = aSnap.docs[0].data() || {};
             }
         }
 
-        let destLat = Number(delData.destinationLat || address.lat || address.latitude || 5.3911);
-        let destLng = Number(delData.destinationLng || address.lng || address.longitude || 100.3237);
+        // Resolve customer address & destination coordinates
+        let address = {};
+        const addressID = orderData.addressID || tradeInAppt.addressID || tradeInReq.addressID || taskData.addressID;
+        if (addressID) {
+            const aDoc = await db.collection("address").doc(addressID).get();
+            if (aDoc.exists) {
+                address = aDoc.data() || {};
+            }
+        } else if (tradeInReq.inspectionAddress && typeof tradeInReq.inspectionAddress === "object") {
+            address = tradeInReq.inspectionAddress;
+        } else if (tradeInAppt.address && typeof tradeInAppt.address === "object") {
+            address = tradeInAppt.address;
+        }
+
+        let destLat = Number(delData.destinationLat || address.lat || address.latitude || 0);
+        let destLng = Number(delData.destinationLng || address.lng || address.longitude || 0);
+
+        if ((!destLat || !destLng) && tradeInReq.inspectionAddress && typeof tradeInReq.inspectionAddress === "object") {
+            destLat = Number(tradeInReq.inspectionAddress.lat || tradeInReq.inspectionAddress.latitude || 0);
+            destLng = Number(tradeInReq.inspectionAddress.lng || tradeInReq.inspectionAddress.longitude || 0);
+        }
+        if (!destLat || !destLng) {
+            destLat = 5.3911;
+            destLng = 100.3237;
+        }
+
+        // Resolve task type and staff role
+        const taskTypeStr = String(taskData.taskType || (tradeInAppt.appointmentType ? tradeInAppt.appointmentType.toLowerCase() : "") || (tradeInReq.inspectionMethod || "")).toLowerCase();
+        const isInspect = taskTypeStr.includes("inspect");
+        const isCollect = taskTypeStr.includes("collect");
+        const defaultStaffTitle = isInspect ? "Inspector" : (isCollect ? "Collector" : "Delivery Specialist");
 
         // Resolve staff member
         const staffID = schedData.staffID || taskData.staffID || delData.staffID || "";
-        let staffName = schedData.staffName || taskData.staffName || "Delivery Specialist";
+        let staffName = schedData.staffName || taskData.staffName || defaultStaffTitle;
+        if (staffName === "Delivery Specialist" && (isInspect || isCollect)) {
+            staffName = defaultStaffTitle;
+        }
         let staffPhone = "";
         let staffLat = null;
         let staffLng = null;
@@ -934,28 +1385,38 @@ router.get("/track-delivery/:orderID", async (req, res) => {
             const uDoc = await db.collection("users").doc(staffID).get();
             if (uDoc.exists) {
                 const uData = uDoc.data();
-                if (!staffName || staffName === "Delivery Specialist") {
+                if (!staffName || staffName === "Delivery Specialist" || staffName === "Inspector" || staffName === "Collector") {
                     staffName = uData.fullName || uData.name || staffName;
                 }
                 staffPhone = uData.phoneNumber || uData.phone || "";
 
-                // Check staff live location, registered workLocation, or direct lat/lng
                 if (uData.currentLat && uData.currentLng) {
                     staffLat = Number(uData.currentLat);
                     staffLng = Number(uData.currentLng);
-                } else if (uData.workLocation && uData.workLocation.lat && uData.workLocation.lng) {
-                    staffLat = Number(uData.workLocation.lat);
-                    staffLng = Number(uData.workLocation.lng);
-                } else if (uData.lat && uData.lng) {
-                    staffLat = Number(uData.lat);
-                    staffLng = Number(uData.lng);
                 }
             }
         }
 
-        // Top Priority: Live GPS location actively broadcast by the staff member during navigation
+        // Top Priority: Live GPS location actively broadcast by staff via Socket.IO memory cache
         let isLiveGps = false;
-        if (delData.staffLat && delData.staffLng) {
+        const { activeDeliveryLocations } = require("./deliverySocket");
+        const cleanID = String(orderID).replace(/^#/, "").trim();
+        const socketLoc = (activeDeliveryLocations && (
+            activeDeliveryLocations.get(cleanID) ||
+            (resolvedTaskID && activeDeliveryLocations.get(resolvedTaskID.replace(/^TSK-/, ''))) ||
+            (resolvedTaskID && activeDeliveryLocations.get(resolvedTaskID)) ||
+            (taskData.tradeInRequestID && activeDeliveryLocations.get(String(taskData.tradeInRequestID).replace(/^#/, ''))) ||
+            (taskData.appointmentID && activeDeliveryLocations.get(String(taskData.appointmentID).replace(/^#/, ''))) ||
+            activeDeliveryLocations.get(cleanID.replace(/^TR-/, '')) ||
+            activeDeliveryLocations.get(`TR-${cleanID}`)
+        )) || null;
+
+        if (socketLoc && socketLoc.lat && socketLoc.lng) {
+            staffLat = Number(socketLoc.lat);
+            staffLng = Number(socketLoc.lng);
+            staffHeading = Number(socketLoc.heading || 0);
+            isLiveGps = true;
+        } else if (delData.staffLat && delData.staffLng) {
             staffLat = Number(delData.staffLat);
             staffLng = Number(delData.staffLng);
             staffHeading = Number(delData.staffHeading || 0);
@@ -964,6 +1425,11 @@ router.get("/track-delivery/:orderID", async (req, res) => {
             staffLat = Number(taskData.staffLat);
             staffLng = Number(taskData.staffLng);
             staffHeading = Number(taskData.staffHeading || 0);
+            isLiveGps = true;
+        } else if (tradeInReq.staffLat && tradeInReq.staffLng) {
+            staffLat = Number(tradeInReq.staffLat);
+            staffLng = Number(tradeInReq.staffLng);
+            staffHeading = Number(tradeInReq.staffHeading || 0);
             isLiveGps = true;
         }
 
@@ -978,7 +1444,9 @@ router.get("/track-delivery/:orderID", async (req, res) => {
         return res.json({
             success: true,
             orderID,
-            taskID,
+            taskID: resolvedTaskID || null,
+            taskType: isInspect ? "inspect" : (isCollect ? "collect" : (taskData.taskType || "deliver")),
+            staffRole: defaultStaffTitle,
             scheduleID: scheduleID || null,
             orderStatus: orderData.orderStatus || taskData.taskStatus || "Shipping",
             taskStatus: taskData.taskStatus || orderData.orderStatus || "Shipping",
@@ -991,7 +1459,7 @@ router.get("/track-delivery/:orderID", async (req, res) => {
             deliveryAddress: deliveryAddressText || address.addressLine || "Delivery Destination",
             recipientName: address.recipentName || address.recipientName || "",
             staffID,
-            staffName,
+            staffName: staffName || defaultStaffTitle,
             staffPhone,
             staffLat,
             staffLng,
@@ -1365,6 +1833,7 @@ async function getOrBuildTasksDataset() {
             taskStatus,
             fulfillmentType,
             displayStatus,
+            taskType: "Deliver",
             totalAmount: ordData.totalAmount || ordData.subtotal || 0,
             rejectionReason,
             rejectionNotes: taskData.rejectionNotes || schedData.rejectionNotes || "",
@@ -1378,7 +1847,268 @@ async function getOrBuildTasksDataset() {
         });
     }
 
-    // Sort strictly based on order createdAt date time (newest first)
+    // 5. Fetch and include Trade-In Inspection and Collection tasks for Admin View
+    const processedTaskIds = new Set(taskList.map(t => t.taskID));
+    for (const tDoc of tasksSnap.docs) {
+        const tData = tDoc.data();
+        const tid = tData.taskID || tDoc.id;
+        if (processedTaskIds.has(tid)) continue;
+
+        const isTradeInTask = Boolean(tData.appointmentID || tData.taskType === "inspect" || tData.taskType === "collect");
+        if (!isTradeInTask) continue;
+        processedTaskIds.add(tid);
+
+        const appointmentID = tData.appointmentID || (tData.tradeInRequestID ? null : tid.replace(/^TSK-/, ''));
+        let aData = {};
+        if (appointmentID) {
+            const aDoc = await db.collection("tradeInAppointment").doc(appointmentID).get();
+            if (aDoc.exists) aData = aDoc.data();
+        }
+
+        const tradeInRequestID = tData.tradeInRequestID || aData.tradeInRequestID || null;
+        let trData = {};
+        if (tradeInRequestID) {
+            const trDoc = await db.collection("tradeInRequests").doc(tradeInRequestID).get();
+            if (trDoc.exists) trData = trDoc.data();
+        }
+
+        // Query device details from devices collection via tradeInRequests -> deviceID
+        let devData = {};
+        const deviceID = trData.deviceID || tData.deviceID || aData.deviceID || null;
+        if (deviceID) {
+            try {
+                let devDoc = await db.collection("devices").doc(deviceID).get();
+                if (!devDoc.exists) {
+                    devDoc = await db.collection("device").doc(deviceID).get();
+                }
+                if (!devDoc.exists) {
+                    const devQuery = await db.collection("devices").where("deviceID", "==", deviceID).limit(1).get();
+                    if (!devQuery.empty) devDoc = devQuery.docs[0];
+                }
+                if (devDoc && devDoc.exists) {
+                    devData = devDoc.data() || {};
+                }
+            } catch (dErr) {
+                console.error("Error fetching device for trade-in in admin tasks:", dErr);
+            }
+        }
+        if (!devData.model && tradeInRequestID) {
+            try {
+                const devQuery = await db.collection("devices").where("tradeInRequestID", "==", tradeInRequestID).limit(1).get();
+                if (!devQuery.empty) {
+                    devData = devQuery.docs[0].data() || {};
+                }
+            } catch (_) {}
+        }
+
+        // Fetch device image from subcollection if not available
+        let devImageUrl = trData.deviceImageUrl || trData.imageUrl || devData.imageUrl || "";
+        if (!devImageUrl && tradeInRequestID) {
+            try {
+                const imgSnap = await db.collection("tradeInRequests").doc(tradeInRequestID).collection("images").limit(1).get();
+                if (!imgSnap.empty) {
+                    devImageUrl = imgSnap.docs[0].data().imageUrl || "";
+                }
+            } catch (_) {}
+        }
+
+        // Schedule
+        const scheduleID = tData.scheduleID || aData.scheduleID || "";
+        const schedData = (scheduleID ? schedMap.get(scheduleID) : null) || {};
+
+        // Staff
+        const staffID = schedData.staffID || tData.staffID || "";
+        const staffInfo = staffMap.get(staffID);
+        const staffName = staffInfo ? staffInfo.name : (schedData.staffName || tData.staffName || "Unassigned");
+
+        // Customer & Address
+        let address = {};
+        const addressID = aData.addressID || trData.addressID || (trData.inspectionAddress && trData.inspectionAddress.addressID);
+        if (addressID) {
+            if (addressCache.has(addressID)) {
+                address = addressCache.get(addressID);
+            } else {
+                const aDoc = await db.collection("address").doc(addressID).get();
+                if (aDoc.exists) {
+                    address = aDoc.data();
+                    addressCache.set(addressID, address);
+                }
+            }
+        }
+        if (!address.addressLine && trData.inspectionAddress && typeof trData.inspectionAddress === "object") {
+            address = trData.inspectionAddress;
+        } else if (!address.addressLine && aData.address && typeof aData.address === "object") {
+            address = aData.address;
+        }
+
+        let customerName = trData.customerName || trData.name || address.recipientName || address.recipentName || "";
+        const customerEmail = trData.customerEmail || trData.email || trData.userEmail || devData.userEmail || address.email || "";
+        let customerPhone = trData.customerPhone || trData.phone || trData.contactNumber || address.phoneNumber || "";
+
+        // Fallback customer name & phone from users collection
+        if ((!customerName || customerName === "Customer") && customerEmail) {
+            try {
+                const uSnap = await db.collection("users").where("email", "==", customerEmail).limit(1).get();
+                if (!uSnap.empty) {
+                    const uData = uSnap.docs[0].data();
+                    customerName = uData.fullName || uData.name || customerName || "Customer";
+                    if (!customerPhone) customerPhone = uData.phoneNumber || uData.phone || "";
+                }
+            } catch (_) {}
+        }
+        if (!customerName) customerName = "Customer";
+
+        const customerAddress = typeof trData.inspectionAddress === "string"
+            ? trData.inspectionAddress
+            : [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
+
+        // Determine Task Type: Inspect or Collect
+        const rawType = String(tData.taskType || aData.appointmentType || trData.inspectionMethod || "Inspect").toLowerCase();
+        const taskType = rawType.includes("collect") ? "Collect" : "Inspect";
+
+        // Determine Admin displayStatus based on requirement:
+        // Cancelled - show in cancel tab
+        // Ongoing - show in assigned tab
+        // Completed - show in completed tab
+        const rawStatus = String(tData.taskStatus || schedData.scheduleStatus || aData.appointmentStatus || "Ongoing").toLowerCase();
+        let displayStatus = "Assigned";
+        if (rawStatus.includes("cancel")) {
+            displayStatus = "Cancelled";
+        } else if (rawStatus.includes("complete") || rawStatus.includes("done") || rawStatus === "inspected" || rawStatus === "collected") {
+            displayStatus = "Completed";
+        } else {
+            // Ongoing -> show in assigned tab
+            displayStatus = "Assigned";
+        }
+
+        // Resolve device details from devices record
+        const deviceBrand = devData.brand || trData.deviceBrand || trData.brand || "Apple";
+        let deviceModel = devData.model || devData.name || trData.deviceModel || trData.model || "Device";
+        if (deviceModel.toLowerCase().startsWith(deviceBrand.toLowerCase()) && deviceModel.length > deviceBrand.length) {
+            deviceModel = deviceModel.substring(deviceBrand.length).trim();
+        }
+        const storage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
+        const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
+        const condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+        const imei = devData.imeiNum || devData.imei || trData.imei || trData.imeiNum || trData.serialNumber || "";
+
+        let tradeInEstimate = trData.tradeInEstimate || trData.offeredPrice || 0;
+        if (!tradeInEstimate && trData.estimatedValue) {
+            if (typeof trData.estimatedValue === "number") {
+                tradeInEstimate = trData.estimatedValue;
+            } else if (typeof trData.estimatedValue === "object") {
+                tradeInEstimate = trData.estimatedValue.max || trData.estimatedValue.min || 0;
+            } else {
+                const cleanStr = String(trData.estimatedValue).replace(/[^0-9.]/g, " ").trim();
+                const numParts = cleanStr.split(/\s+/).map(Number).filter(n => !isNaN(n) && n > 0);
+                tradeInEstimate = numParts.length > 0 ? numParts[numParts.length - 1] : 0;
+            }
+        }
+
+        const specs = storage ? ` (${storage})` : "";
+        const deviceSummary = `${deviceBrand} ${deviceModel}${specs}`.trim();
+
+        let estimatedValueRange = "";
+        if (trData.estimatedValue) {
+            if (typeof trData.estimatedValue === "object") {
+                const min = Number(trData.estimatedValue.min != null ? trData.estimatedValue.min : 2340.50);
+                const max = Number(trData.estimatedValue.max != null ? trData.estimatedValue.max : 2355.30);
+                estimatedValueRange = `RM ${min.toFixed(2)} - RM ${max.toFixed(2)}`;
+            } else if (typeof trData.estimatedValue === "string") {
+                estimatedValueRange = trData.estimatedValue.startsWith("RM") ? trData.estimatedValue : `RM ${trData.estimatedValue}`;
+            }
+        } else {
+            estimatedValueRange = "RM 2,340.50 - RM 2,355.30";
+        }
+
+        // Appointment Date & Time
+        let appointmentDate = "Upcoming";
+        if (schedData.scheduleDate) {
+            appointmentDate = formatAppointmentDate(schedData.scheduleDate);
+        } else if (aData.scheduledAt) {
+            appointmentDate = formatAppointmentDate(aData.scheduledAt);
+        } else if (trData.appointmentDate) {
+            appointmentDate = formatAppointmentDate(trData.appointmentDate);
+        }
+
+        let appointmentTime = "09:30 AM";
+        if (schedData.scheduleStartTime && schedData.scheduleEndTime) {
+            appointmentTime = `${schedData.scheduleStartTime} - ${schedData.scheduleEndTime}`;
+        } else if (schedData.scheduleStartTime) {
+            appointmentTime = schedData.scheduleStartTime;
+        } else if (tData.taskStartTime) {
+            appointmentTime = tData.taskStartTime;
+        } else if (trData.appointmentTime) {
+            appointmentTime = trData.appointmentTime;
+        }
+
+        let createdAtMs = Date.now();
+        if (tData.createdAt) {
+            const cd = tData.createdAt.toDate ? tData.createdAt.toDate() : new Date(tData.createdAt);
+            if (!isNaN(cd.getTime())) createdAtMs = cd.getTime();
+        } else if (aData.createdAt) {
+            const cd = aData.createdAt.toDate ? aData.createdAt.toDate() : new Date(aData.createdAt);
+            if (!isNaN(cd.getTime())) createdAtMs = cd.getTime();
+        }
+
+        taskList.push({
+            taskID: tid,
+            orderID: tradeInRequestID || appointmentID || tid,
+            scheduleID: scheduleID || null,
+            staffID: staffID || null,
+            staffName: staffName || "Unassigned",
+            customerID: trData.userID || devData.userEmail || "",
+            customerName,
+            customerEmail,
+            customerPhone,
+            deliveryAddress: customerAddress || "Customer Address",
+            deviceSummary,
+            taskType, // "Inspect" or "Collect"
+            device: {
+                name: `${deviceBrand} ${deviceModel}`.trim(),
+                brand: deviceBrand,
+                model: deviceModel,
+                storage,
+                color,
+                condition,
+                imei,
+                imageUrl: devImageUrl,
+                tradeInEstimate
+            },
+            items: [{
+                productID: tradeInRequestID || appointmentID || tid,
+                brand: deviceBrand,
+                model: deviceModel,
+                storage,
+                color,
+                condition,
+                price: tradeInEstimate,
+                tradeInEstimate,
+                imei,
+                imageUrl: devImageUrl
+            }],
+            appointmentDate,
+            appointmentTime,
+            isUrgent: false,
+            orderStatus: displayStatus,
+            taskStatus: tData.taskStatus || "Ongoing",
+            fulfillmentType: taskType,
+            displayStatus,
+            totalAmount: tradeInEstimate,
+            estimatedValue: trData.estimatedValue || { min: 2340.50, max: 2355.30 },
+            estimatedValueRange,
+            rejectionReason: "",
+            rejectionNotes: "",
+            proofOfDeliveryUrl: "",
+            estimatedDistance: tData.estimatedDistance || 0,
+            estimatedDuration: tData.estimatedDuration || 0,
+            completedAt: tData.completedAt || null,
+            createdAt: new Date(createdAtMs).toISOString(),
+            createdAtMs
+        });
+    }
+
+    // Sort strictly based on order/task createdAt date time (newest first)
     taskList.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
 
     // Count totals for all status categories
@@ -1413,6 +2143,7 @@ async function getOrBuildTasksDataset() {
  * Supports Server-Side Pagination & Tab Filtering:
  * Query params:
  *   tab: 'unassigned' | 'assigned' | 'cancelled' | 'refunded' | 'terminated' | 'completed' | 'all'
+ *   type: 'deliver' | 'inspect' | 'collect' | 'all'
  *   page: 1-based page number (default 1)
  *   limit: page size (default 10)
  *   search: keyword filter
@@ -1423,6 +2154,7 @@ router.get("/admin/tasks", async (req, res) => {
         const { taskList, counts } = await getOrBuildTasksDataset();
 
         const tab = String(req.query.tab || "").trim().toLowerCase();
+        const typeFilter = String(req.query.type || "").trim().toLowerCase();
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
         const search = String(req.query.search || "").trim().toLowerCase();
@@ -1434,13 +2166,19 @@ router.get("/admin/tasks", async (req, res) => {
             filtered = filtered.filter(t => (t.displayStatus || "").toLowerCase() === tab);
         }
 
+        // 1b. Filter by Task Type (Deliver, Inspect, Collect)
+        if (typeFilter && typeFilter !== "all") {
+            filtered = filtered.filter(t => (t.taskType || "Deliver").toLowerCase() === typeFilter);
+        }
+
         // 2. Filter by Search Query
         if (search) {
             filtered = filtered.filter(t => {
-                const matchStr = `${t.taskID || ''} ${t.orderID || ''} ${t.customerName || ''} ${t.deviceSummary || ''} ${t.deliveryAddress || ''} ${t.staffName || ''}`.toLowerCase();
+                const matchStr = `${t.taskID || ''} ${t.orderID || ''} ${t.customerName || ''} ${t.deviceSummary || ''} ${t.deliveryAddress || ''} ${t.staffName || ''} ${t.taskType || ''}`.toLowerCase();
                 return matchStr.includes(search);
             });
         }
+
 
         // 3. Sort Order
         filtered = [...filtered].sort((a, b) => {
@@ -1536,12 +2274,58 @@ router.get("/admin/reassign-candidates", async (req, res) => {
             return res.status(400).json({ success: false, error: "orderID is required" });
         }
 
-        // 1. Fetch Order
+        // 1. Fetch Order or Trade-In Task
+        let isTradeIn = false;
+        let trData = {};
+        let aData = {};
+        let devData = {};
+        let orderData = {};
+
         const orderDoc = await db.collection("order").doc(orderID).get();
-        if (!orderDoc.exists) {
-            return res.status(404).json({ success: false, error: `Order #${orderID} not found` });
+        if (orderDoc.exists) {
+            orderData = orderDoc.data();
+        } else {
+            // Check if orderID belongs to tradeInRequests, tradeInAppointment, or task
+            const trDoc = await db.collection("tradeInRequests").doc(orderID).get();
+            if (trDoc.exists) {
+                isTradeIn = true;
+                trData = trDoc.data() || {};
+            } else {
+                const aDoc = await db.collection("tradeInAppointment").doc(orderID).get();
+                if (aDoc.exists) {
+                    isTradeIn = true;
+                    aData = aDoc.data() || {};
+                    if (aData.tradeInRequestID) {
+                        const rDoc = await db.collection("tradeInRequests").doc(aData.tradeInRequestID).get();
+                        if (rDoc.exists) trData = rDoc.data() || {};
+                    }
+                } else {
+                    let tDoc = await db.collection("task").doc(orderID).get();
+                    if (!tDoc.exists) {
+                        const tSnap = await db.collection("task").where("orderID", "==", orderID).limit(1).get();
+                        if (!tSnap.empty) tDoc = tSnap.docs[0];
+                    }
+                    if (tDoc && tDoc.exists) {
+                        const tD = tDoc.data();
+                        if (tD.tradeInRequestID || tD.appointmentID || tD.taskType === "inspect" || tD.taskType === "collect") {
+                            isTradeIn = true;
+                            if (tD.tradeInRequestID) {
+                                const rDoc = await db.collection("tradeInRequests").doc(tD.tradeInRequestID).get();
+                                if (rDoc.exists) trData = rDoc.data() || {};
+                            }
+                            if (tD.appointmentID) {
+                                const aDoc = await db.collection("tradeInAppointment").doc(tD.appointmentID).get();
+                                if (aDoc.exists) aData = aDoc.data() || {};
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!isTradeIn) {
+                return res.status(404).json({ success: false, error: `Order #${orderID} not found` });
+            }
         }
-        const orderData = orderDoc.data();
 
         // 2. Fetch Task
         let taskData = {};
@@ -1554,6 +2338,12 @@ router.get("/admin/reassign-candidates", async (req, res) => {
             const directTaskDoc = await db.collection("task").doc(taskID).get();
             if (directTaskDoc.exists) {
                 taskData = directTaskDoc.data();
+            } else if (isTradeIn && aData.appointmentID) {
+                const appTaskSnap = await db.collection("task").where("appointmentID", "==", aData.appointmentID).limit(1).get();
+                if (!appTaskSnap.empty) {
+                    taskData = appTaskSnap.docs[0].data();
+                    taskID = taskData.taskID || appTaskSnap.docs[0].id;
+                }
             }
         }
 
@@ -1561,7 +2351,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         let previousStaffName = taskData.staffName || "";
         let currentStaffID = taskData.staffID || "";
         let schedData = null;
-        const scheduleID = taskData.scheduleID || orderData.scheduleID || "";
+        const scheduleID = taskData.scheduleID || orderData.scheduleID || aData.scheduleID || "";
         if (scheduleID) {
             const schedDoc = await db.collection("schedule").doc(scheduleID).get();
             if (schedDoc.exists) {
@@ -1607,10 +2397,36 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                     locationDisplay = parts.join(", ");
                 }
             }
+        } else if (isTradeIn) {
+            const addressID = aData.addressID || trData.addressID || (trData.inspectionAddress && trData.inspectionAddress.addressID);
+            if (addressID) {
+                const addrDoc = await db.collection("address").doc(addressID).get();
+                if (addrDoc.exists) {
+                    address = addrDoc.data();
+                    if (address.lat && address.lng) {
+                        destLat = Number(address.lat);
+                        destLng = Number(address.lng);
+                    } else if (address.latitude && address.longitude) {
+                        destLat = Number(address.latitude);
+                        destLng = Number(address.longitude);
+                    }
+                    const parts = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean);
+                    if (parts.length > 0) locationDisplay = parts.join(", ");
+                }
+            }
+            if (locationDisplay === "Hub C - Bay 4" && trData.inspectionAddress) {
+                if (typeof trData.inspectionAddress === "string") {
+                    locationDisplay = trData.inspectionAddress;
+                } else if (typeof trData.inspectionAddress === "object") {
+                    address = trData.inspectionAddress;
+                    const parts = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean);
+                    if (parts.length > 0) locationDisplay = parts.join(", ");
+                }
+            }
         }
 
         // Fallback to delivery collection if addressID wasn't found or missing address
-        if (locationDisplay === "Hub C - Bay 4") {
+        if (locationDisplay === "Hub C - Bay 4" && !isTradeIn) {
             const delSnap = await db.collection("delivery").doc(`DEL-${orderID}`).get();
             if (delSnap.exists && delSnap.data().deliveryAddress) {
                 locationDisplay = delSnap.data().deliveryAddress;
@@ -1625,32 +2441,63 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         let deviceImei = "354678091234567";
         let deviceColor = "Sierra Blue";
 
-        const pIds = Array.isArray(orderData.productIDs) ? orderData.productIDs : [];
-        if (pIds.length > 0) {
-            const prodDoc = await db.collection("product").doc(pIds[0]).get();
-            if (prodDoc.exists) {
-                const p = prodDoc.data();
-                if (p.brand) deviceBrand = p.brand;
-                if (p.model) deviceModel = p.model;
-                if (p.storage) deviceStorage = p.storage;
-                if (p.color) deviceColor = p.color;
-                if (p.imei) deviceImei = p.imei;
-                if (p.serialNumber) deviceImei = p.serialNumber;
-
-                if (!p.model && p.description) {
-                    const parenIdx = p.description.indexOf("(");
-                    if (parenIdx > -1) {
-                        deviceModel = p.description.substring(0, parenIdx).trim();
-                        const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
-                        if (!p.storage) deviceStorage = inParen.trim();
-                    } else {
-                        deviceModel = p.description.split(" - ")[0].trim();
+        if (isTradeIn) {
+            // Query device details from devices collection via tradeInRequests -> deviceID
+            const devID = trData.deviceID || aData.deviceID || taskData.deviceID;
+            if (devID) {
+                try {
+                    let devDoc = await db.collection("devices").doc(devID).get();
+                    if (!devDoc.exists) devDoc = await db.collection("device").doc(devID).get();
+                    if (!devDoc.exists) {
+                        const devQuery = await db.collection("devices").where("deviceID", "==", devID).limit(1).get();
+                        if (!devQuery.empty) devDoc = devQuery.docs[0];
                     }
-                }
-                if (deviceModel.toLowerCase().startsWith(deviceBrand.toLowerCase())) {
-                    deviceName = deviceModel;
-                } else {
-                    deviceName = [deviceBrand, deviceModel].filter(Boolean).join(" ");
+                    if (devDoc && devDoc.exists) devData = devDoc.data() || {};
+                } catch (_) {}
+            }
+            if (!devData.model && (trData.tradeInRequestID || orderID)) {
+                try {
+                    const devQuery = await db.collection("devices").where("tradeInRequestID", "==", trData.tradeInRequestID || orderID).limit(1).get();
+                    if (!devQuery.empty) devData = devQuery.docs[0].data() || {};
+                } catch (_) {}
+            }
+            deviceBrand = devData.brand || trData.deviceBrand || trData.brand || "Apple";
+            deviceModel = devData.model || devData.name || trData.deviceModel || trData.model || "Device";
+            if (deviceModel.toLowerCase().startsWith(deviceBrand.toLowerCase()) && deviceModel.length > deviceBrand.length) {
+                deviceModel = deviceModel.substring(deviceBrand.length).trim();
+            }
+            deviceStorage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
+            deviceColor = devData.colour || devData.color || trData.colour || trData.color || "";
+            deviceImei = devData.imeiNum || devData.imei || trData.imei || trData.imeiNum || "";
+            deviceName = [deviceBrand, deviceModel, deviceStorage].filter(Boolean).join(" ");
+        } else {
+            const pIds = Array.isArray(orderData.productIDs) ? orderData.productIDs : [];
+            if (pIds.length > 0) {
+                const prodDoc = await db.collection("product").doc(pIds[0]).get();
+                if (prodDoc.exists) {
+                    const p = prodDoc.data();
+                    if (p.brand) deviceBrand = p.brand;
+                    if (p.model) deviceModel = p.model;
+                    if (p.storage) deviceStorage = p.storage;
+                    if (p.color) deviceColor = p.color;
+                    if (p.imei) deviceImei = p.imei;
+                    if (p.serialNumber) deviceImei = p.serialNumber;
+
+                    if (!p.model && p.description) {
+                        const parenIdx = p.description.indexOf("(");
+                        if (parenIdx > -1) {
+                            deviceModel = p.description.substring(0, parenIdx).trim();
+                            const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
+                            if (!p.storage) deviceStorage = inParen.trim();
+                        } else {
+                            deviceModel = p.description.split(" - ")[0].trim();
+                        }
+                    }
+                    if (deviceModel.toLowerCase().startsWith(deviceBrand.toLowerCase())) {
+                        deviceName = deviceModel;
+                    } else {
+                        deviceName = [deviceBrand, deviceModel].filter(Boolean).join(" ");
+                    }
                 }
             }
         }
@@ -1660,7 +2507,7 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                                    taskData.rejectionNotes || 
                                    "Client arrived late and I have a conflicting with next task. Needs immediate reassignment to clear queue.";
 
-        const orderDateRaw = orderData.orderDate || orderData.createdAt;
+        const orderDateRaw = orderData.orderDate || orderData.createdAt || aData.scheduledAt || trData.submittedAt;
         let isUrgent = !!(orderData.isUrgent || taskData.isUrgent);
         if (orderDateRaw) {
             const dateObj = orderDateRaw.toDate ? orderDateRaw.toDate() : new Date(orderDateRaw);
@@ -1670,14 +2517,16 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         }
 
         // 7. Task Type Determination
-        const fulfillmentType = String(orderData.fulfillmentType || orderData.deliveryOption || "Delivery").trim();
-        const taskTypeRaw = String(taskData.taskType || "").trim().toLowerCase();
-        const isDelivery = fulfillmentType.toLowerCase().includes("delivery") || 
+        const fulfillmentType = String(orderData.fulfillmentType || orderData.deliveryOption || (isTradeIn ? (taskData.taskType || aData.appointmentType || "Inspection") : "Delivery")).trim();
+        const taskTypeRaw = String(taskData.taskType || (isTradeIn ? (aData.appointmentType || trData.inspectionMethod || "inspect") : "")).trim().toLowerCase();
+        const isDelivery = !isTradeIn && (fulfillmentType.toLowerCase().includes("delivery") || 
                            taskTypeRaw.includes("deliver") || 
-                           fulfillmentType.toLowerCase().includes("shipping");
+                           fulfillmentType.toLowerCase().includes("shipping"));
+        const isCollect = isTradeIn && taskTypeRaw.includes("collect");
+        const isInspect = isTradeIn && !isCollect;
 
-        const taskTypeLabel = isDelivery ? "Delivery Task" : "Inspection Task";
-        const displayStatus = computeDisplayStatus(orderData.orderStatus, taskData.taskStatus, fulfillmentType, orderData.cancelledBy, taskData.rejectionReason, currentStaffID);
+        const taskTypeLabel = isInspect ? "Inspection Task" : (isCollect ? "Collection Task" : "Delivery Task");
+        const displayStatus = isTradeIn ? (taskData.taskStatus || "Ongoing") : computeDisplayStatus(orderData.orderStatus, taskData.taskStatus, fulfillmentType, orderData.cancelledBy, taskData.rejectionReason, currentStaffID);
 
         // Resolve customer destination state
         let customerState = "Penang";
@@ -1701,17 +2550,37 @@ router.get("/admin/reassign-candidates", async (req, res) => {
         function parseScheduleDate(timeVal, dateStr) {
             if (!timeVal) return null;
             if (timeVal.toDate) return timeVal.toDate();
+            if (timeVal instanceof Date) return isNaN(timeVal.getTime()) ? null : timeVal;
             const str = String(timeVal).trim();
             if (str.includes("T") || (str.includes("-") && str.length > 8)) {
                 const dt = new Date(str);
                 return isNaN(dt.getTime()) ? null : dt;
             }
+
+            const baseDate = dateStr || "2026-10-21";
+
+            const isAmPm = /am|pm/i.test(str);
+            if (isAmPm) {
+                const isPm = /pm/i.test(str);
+                const cleanStr = str.replace(/am|pm/i, "").trim();
+                const parts = cleanStr.split(":");
+                if (parts.length >= 2) {
+                    let hours = parseInt(parts[0], 10);
+                    const minutes = parseInt(parts[1], 10);
+                    if (isPm && hours < 12) hours += 12;
+                    if (!isPm && hours === 12) hours = 0;
+                    const hh = String(hours).padStart(2, "0");
+                    const mm = String(minutes).padStart(2, "0");
+                    const d = new Date(`${baseDate}T${hh}:${mm}:00`);
+                    return isNaN(d.getTime()) ? null : d;
+                }
+            }
+
             const parts = str.split(":");
             if (parts.length >= 2) {
                 const hh = parts[0].padStart(2, "0");
                 const mm = parts[1].padStart(2, "0");
                 const ss = parts[2] ? parts[2].padStart(2, "0") : "00";
-                const baseDate = dateStr || "2026-10-21";
                 const d = new Date(`${baseDate}T${hh}:${mm}:${ss}`);
                 return isNaN(d.getTime()) ? null : d;
             }
@@ -1781,11 +2650,13 @@ router.get("/admin/reassign-candidates", async (req, res) => {
 
             const pos = String(d.position || "").toLowerCase().trim();
 
-            // Filter by Position based on Task Type: must be delivery or both for delivery task
+            // Filter by Position based on Task Type:
             if (isDelivery) {
                 if (pos !== "deliverer" && pos !== "both") continue;
+            } else if (isCollect) {
+                if (!pos.includes("collect") && pos !== "both") continue;
             } else {
-                if (pos !== "inspector" && pos !== "both") continue;
+                if (!pos.includes("inspect") && pos !== "both") continue;
             }
 
             const staffID = doc.id;
@@ -2036,6 +2907,56 @@ router.post("/admin/reassign", async (req, res) => {
         const { orderID, staffID, addressID, requestedDate } = req.body;
         if (!orderID) {
             return res.status(400).json({ success: false, error: "orderID is required" });
+        }
+
+        // Check if orderID is a delivery order or a trade-in task
+        const checkOrder = await db.collection("order").doc(orderID).get();
+        if (!checkOrder.exists) {
+            let reqID = orderID;
+            let appID = null;
+            const appDoc = await db.collection("tradeInAppointment").doc(orderID).get();
+            if (appDoc.exists) {
+                appID = orderID;
+                reqID = appDoc.data().tradeInRequestID || orderID;
+            } else {
+                const trDoc = await db.collection("tradeInRequests").doc(orderID).get();
+                if (trDoc.exists) {
+                    reqID = orderID;
+                    appID = trDoc.data().appointmentID || appID;
+                } else {
+                    const tDoc = await db.collection("task").doc(orderID).get();
+                    if (tDoc.exists) {
+                        const td = tDoc.data();
+                        reqID = td.tradeInRequestID || reqID;
+                        appID = td.appointmentID || appID;
+                    }
+                }
+            }
+
+            let tID = null;
+            if (appID) {
+                const tSnap = await db.collection("task").where("appointmentID", "==", appID).limit(1).get();
+                if (!tSnap.empty) tID = tSnap.docs[0].id;
+            }
+            if (!tID && reqID) {
+                const tSnap = await db.collection("task").where("tradeInRequestID", "==", reqID).limit(1).get();
+                if (!tSnap.empty) tID = tSnap.docs[0].id;
+            }
+
+            const result = await assignTradeInTask({
+                tradeInRequestID: reqID,
+                existingAppointmentID: appID,
+                existingTaskID: tID,
+                specificStaffID: (staffID && staffID !== "auto") ? staffID : null
+            });
+
+            if (result && result.success) {
+                if (result.scheduleID) {
+                    registerScheduleTimer(result.scheduleID);
+                }
+                invalidateTaskCache();
+            }
+            return res.json(result);
         }
 
         // Reassign using the taskAssignment algorithm:
@@ -2770,10 +3691,27 @@ async function reassignStaffTasksOnApprovedLeave(staffID, startDateStr, endDateS
                     continue;
                 }
 
-                const orderID = sData.orderID;
                 const scheduleID = sDoc.id;
 
-                console.log(`[REASSIGN ON LEAVE] Reassigning Order #${orderID} (Schedule ${scheduleID}) on ${dateStr} due to approved leave [${leaveID}] 1 by 1...`);
+                // 1. Fetch corresponding task to accurately determine task type
+                let taskData = null;
+                let taskID = null;
+                const tSnap = await db.collection("task").where("scheduleID", "==", scheduleID).limit(1).get();
+                if (!tSnap.empty) {
+                    taskData = tSnap.docs[0].data();
+                    taskID = taskData.taskID || tSnap.docs[0].id;
+                } else if (sData.orderID) {
+                    const directTask = await db.collection("task").doc(`TSK-${sData.orderID}`).get();
+                    if (directTask.exists) {
+                        taskData = directTask.data();
+                        taskID = directTask.id;
+                    }
+                }
+
+                const orderID = sData.orderID || (taskData && taskData.orderID);
+                const taskType = (taskData && taskData.taskType) ? String(taskData.taskType).toLowerCase() : "";
+                const isDelivery = Boolean(orderID) || taskType === "deliver";
+                const isTradeIn = Boolean(taskData && taskData.appointmentID) || taskType === "inspect" || taskType === "collect";
 
                 // Mark current schedule as reassigned due to leave
                 await sDoc.ref.set({
@@ -2786,23 +3724,72 @@ async function reassignStaffTasksOnApprovedLeave(staffID, startDateStr, endDateS
                 // Clear existing timers for this schedule
                 clearScheduleTimers(scheduleID);
 
-                // Reassign task 1-by-1 to a suitable delivery staff
-                const reassignResult = await assignDeliveryTask({
-                    orderID,
-                    addressID: sData.addressID,
-                    requestedDate: dateStr,
-                    forceNextDay: false, // Try same day first with other eligible staff; cascades if all full
-                    excludeStaffIDs: [staffID]
-                });
+                if (isDelivery && orderID) {
+                    console.log(`[REASSIGN ON LEAVE] Reassigning Delivery Task Order #${orderID} (Schedule ${scheduleID}) on ${dateStr} due to approved leave [${leaveID}] 1 by 1...`);
 
-                if (reassignResult && reassignResult.success) {
-                    if (reassignResult.scheduleID) {
-                        registerScheduleTimer(reassignResult.scheduleID);
+                    // Reassign task 1-by-1 to a suitable delivery staff
+                    const reassignResult = await assignDeliveryTask({
+                        orderID,
+                        addressID: sData.addressID,
+                        requestedDate: dateStr,
+                        forceNextDay: false, // Try same day first with other eligible deliverers; cascades if all full
+                        excludeStaffIDs: [staffID]
+                    });
+
+                    if (reassignResult && reassignResult.success) {
+                        if (reassignResult.scheduleID) {
+                            registerScheduleTimer(reassignResult.scheduleID);
+                        }
+                        totalReassigned++;
+                        console.log(`[REASSIGN ON LEAVE SUCCESS] Delivery Order #${orderID} reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+                    } else {
+                        console.warn(`[REASSIGN ON LEAVE WARNING] Could not automatically reassign Delivery Order #${orderID}:`, reassignResult?.reason || reassignResult?.message);
                     }
-                    totalReassigned++;
-                    console.log(`[REASSIGN ON LEAVE SUCCESS] Order #${orderID} reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+                } else if (isTradeIn) {
+                    const appointmentID = (taskData && taskData.appointmentID) || sData.appointmentID;
+                    let appData = {};
+                    if (appointmentID) {
+                        const aDoc = await db.collection("tradeInAppointment").doc(appointmentID).get();
+                        if (aDoc.exists) appData = aDoc.data();
+                    }
+
+                    const rawType = (appData.appointmentType || (taskData && taskData.taskType) || "Inspect").toLowerCase();
+                    const method = rawType.includes("collect") ? "Doorstep Collection" : "On-Site Inspection";
+                    const tradeInRequestID = appData.tradeInRequestID || (taskData && taskData.tradeInRequestID) || null;
+                    const addressID = appData.addressID || sData.addressID || null;
+                    const appointmentTime = sData.scheduleStartTime || (taskData && taskData.taskStartTime) || "09:00 AM";
+
+                    console.log(`[REASSIGN ON LEAVE] Reassigning Trade-In ${method} Task (Appointment ${appointmentID || scheduleID}) on ${dateStr} ${appointmentTime} due to approved leave [${leaveID}] 1 by 1...`);
+
+                    const reassignResult = await assignTradeInTask({
+                        tradeInRequestID,
+                        method,
+                        appointmentDate: dateStr,
+                        appointmentTime,
+                        addressID,
+                        excludeStaffIDs: [staffID],
+                        existingAppointmentID: appointmentID,
+                        existingTaskID: taskID
+                    });
+
+                    if (reassignResult && reassignResult.success) {
+                        totalReassigned++;
+                        console.log(`[REASSIGN ON LEAVE SUCCESS] Trade-In ${method} Task reassigned to ${reassignResult.staffName || reassignResult.staffID} on ${reassignResult.scheduleDate} (${reassignResult.scheduleStartTime})`);
+                    } else {
+                        console.warn(`[REASSIGN ON LEAVE WARNING] Could not automatically reassign Trade-In task ${appointmentID}:`, reassignResult?.message);
+                        await handleFailedTradeInReassignment({
+                            appointmentID,
+                            tradeInRequestID,
+                            scheduleID,
+                            taskID,
+                            appointmentDate: dateStr,
+                            appointmentTime,
+                            method,
+                            reason: `Assigned technician is on approved leave (${leaveID}) and no replacement staff is currently available for this time slot.`
+                        });
+                    }
                 } else {
-                    console.warn(`[REASSIGN ON LEAVE WARNING] Could not automatically reassign Order #${orderID}:`, reassignResult?.reason || reassignResult?.message);
+                    console.log(`[REASSIGN ON LEAVE] Schedule ${scheduleID} on ${dateStr} is neither delivery nor trade-in. Skipping reassignment.`);
                 }
             }
         }

@@ -191,6 +191,9 @@ async function delayFollowingTasks(staffID, scheduleDate, cutoffStartTimeStr, mi
         for (const sDoc of schedSnap.docs) {
             if (sDoc.id === currentScheduleID) continue; // Skip current task (already delayed)
             const sData = sDoc.data();
+            // Delivery Delay Monitor ONLY affects delivery tasks (never alter inspection/collection appointments)
+            if (!sData.orderID) continue;
+
             const status = String(sData.scheduleStatus || "").toLowerCase();
             if (status === "completed" || status === "rejected" || status === "absent" || status === "cancelled") {
                 continue;
@@ -250,6 +253,9 @@ async function handleStartTimeViolation(scheduleID) {
         if (!schedSnap.exists) return;
 
         const sData = schedSnap.data();
+        // Delivery Delay Monitor ONLY applies to delivery tasks with orderID
+        if (!sData.orderID) return;
+
         const schedStatus = String(sData.scheduleStatus || "").toLowerCase();
         // If already started, completed, rejected, or absent, do nothing
         if (schedStatus === "ongoing" || schedStatus === "completed" || schedStatus === "rejected" || schedStatus === "absent" || schedStatus === "cancelled") {
@@ -368,6 +374,9 @@ async function handleEndTimeViolation(scheduleID) {
         if (!schedSnap.exists) return;
 
         const sData = schedSnap.data();
+        // Delivery Delay Monitor ONLY applies to delivery tasks with orderID
+        if (!sData.orderID) return;
+
         const schedStatus = String(sData.scheduleStatus || "").toLowerCase();
         // If already completed, rejected, or absent, do nothing
         if (schedStatus === "completed" || schedStatus === "rejected" || schedStatus === "absent" || schedStatus === "cancelled") {
@@ -482,6 +491,9 @@ async function registerScheduleTimer(scheduleID) {
         const sDoc = await db.collection("schedule").doc(scheduleID).get();
         if (!sDoc.exists) return;
         const sData = sDoc.data();
+        // Delivery Delay Monitor ONLY applies to delivery schedules with an orderID!
+        if (!sData.orderID) return;
+
         const schedStatus = String(sData.scheduleStatus || "").toLowerCase();
 
         // Only monitor active schedules
@@ -568,7 +580,11 @@ async function initializeScheduleMonitoring() {
         console.log(`[SCHEDULE MONITOR] Found ${schedSnap.size} active delivery schedules to monitor.`);
 
         for (const sDoc of schedSnap.docs) {
-            registerScheduleTimer(sDoc.id);
+            const sData = sDoc.data();
+            // Only delivery schedules have orderID and participate in delivery delay monitoring
+            if (sData.orderID) {
+                registerScheduleTimer(sDoc.id);
+            }
         }
 
         // Check if 1st of month reset is due on startup
@@ -588,6 +604,9 @@ async function initializeScheduleMonitoring() {
                 const now = Date.now();
                 for (const doc of activeSnap.docs) {
                     const data = doc.data();
+                    // Skip non-delivery tasks (trade-in inspection/collection)
+                    if (!data.orderID) continue;
+
                     const sDate = data.scheduleDate;
                     const sStart = data.scheduleStartTime;
                     const sEnd = data.scheduleEndTime;

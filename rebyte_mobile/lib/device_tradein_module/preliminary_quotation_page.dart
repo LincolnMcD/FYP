@@ -46,34 +46,47 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     TradeInFlowSession.setTradeInRequestId(widget.tradeInRequestID);
     TradeInFlowSession.setCurrentDevice(widget.device);
 
-    // Update tradeInRequest status in database to 'Quoted'
+    // Update tradeInRequest status in database to 'Quoted' with estimatedValue (min & max double)
     if (widget.tradeInRequestID.isNotEmpty) {
+      double minD = 2340.50;
+      double maxD = 2355.30;
+      if (widget.estimatedValue != null && widget.estimatedValue!.isNotEmpty) {
+        final clean = widget.estimatedValue!.replaceAll('RM', '').replaceAll(',', '');
+        final parts = clean.split(RegExp(r'\s*-\s*'));
+        if (parts.length >= 2) {
+          minD = double.tryParse(parts[0].trim()) ?? 2340.50;
+          maxD = double.tryParse(parts[1].trim()) ?? 2355.30;
+        } else if (parts.isNotEmpty) {
+          final val = double.tryParse(parts[0].trim()) ?? 2340.50;
+          minD = val;
+          maxD = val;
+        }
+      }
       TradeInService.updateTradeInStatus(
         tradeInRequestID: widget.tradeInRequestID,
         status: 'Quoted',
+        estimatedValue: {
+          'min': minD,
+          'max': maxD,
+        },
       );
     }
   }
 
   void _onBack() {
     if (widget.fromMyTradeInRequests) {
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-        return;
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MyTradeInRequestsPage(
-              email: widget.email ?? 'customer@rebyte.com',
-              name: widget.name,
-              isLoggedIn: widget.isLoggedIn,
-            ),
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MyTradeInRequestsPage(
+            email: widget.email ?? 'customer@rebyte.com',
+            name: widget.name,
+            isLoggedIn: widget.isLoggedIn,
           ),
-          (route) => false,
-        );
-        return;
-      }
+        ),
+        (route) => false,
+      );
+      return;
     }
     // Navigate back to HomePage at Active Activity section
     // Keep TradeInFlowSession intact so the active block is visible

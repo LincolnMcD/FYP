@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../account_management_module/models/address_model.dart';
 import '../../account_management_module/services/address_service.dart';
+import '../../account_management_module/services/session_service.dart';
 import '../../account_management_module/home_page.dart';
+import '../../product_purchase_module/select_address_page.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import 'models/device_model.dart';
 import 'my_trade_in_requests_page.dart';
 import 'services/trade_in_service.dart';
+import 'services/trade_in_flow_session.dart';
 
 class ScheduleInspectionPage extends StatefulWidget {
   final String tradeInRequestID;
@@ -18,6 +22,10 @@ class ScheduleInspectionPage extends StatefulWidget {
   final String? name;
   final bool isLoggedIn;
   final bool fromMyTradeInRequests;
+  final String? initialAddressID;
+  final String? initialAddressLine;
+  final String? initialDate;
+  final String? initialSlot;
 
   const ScheduleInspectionPage({
     super.key,
@@ -29,6 +37,10 @@ class ScheduleInspectionPage extends StatefulWidget {
     this.name,
     this.isLoggedIn = true,
     this.fromMyTradeInRequests = false,
+    this.initialAddressID,
+    this.initialAddressLine,
+    this.initialDate,
+    this.initialSlot,
   });
 
   @override
@@ -41,11 +53,62 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
   String? _selectedSlot;
   bool _isBooking = false;
 
+  // Toast state
+  String? _toastMessage;
+  bool _isToastError = false;
+
+  void _showToast(String message, [bool isError = false]) {
+    if (!mounted) return;
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _toastMessage == message) {
+        setState(() => _toastMessage = null);
+      }
+    });
+  }
+
   // Address details
+  AddressModel? _selectedAddress;
+  String? _selectedAddressID;
   String _recipientName = 'Peter';
   String _addressLine = '12, Jalan SS 15/4, SS 15, 47500 Subang Jaya, Selangor, Malaysia';
   String _phoneNumber = '+60123456789';
-  List<AddressModel> _savedAddresses = [];
+
+  Future<String> _resolveEffectiveEmail() async {
+    String email = widget.email?.trim() ?? '';
+    if (email.isEmpty || email == 'customer@rebyte.com') {
+      try {
+        final session = await SessionService.getSession();
+        final sEmail = session['email']?.trim();
+        if (sEmail != null && sEmail.isNotEmpty) {
+          email = sEmail;
+        } else if (TradeInFlowSession.currentUserEmail != null &&
+            TradeInFlowSession.currentUserEmail!.trim().isNotEmpty) {
+          email = TradeInFlowSession.currentUserEmail!.trim();
+        } else {
+          final fbEmail = FirebaseAuth.instance.currentUser?.email?.trim();
+          if (fbEmail != null && fbEmail.isNotEmpty) {
+            email = fbEmail;
+          }
+        }
+      } catch (_) {}
+    }
+    if (email.isEmpty || email == 'customer@rebyte.com') {
+      email = 'lolincoln021@gmail.com';
+    }
+    return email;
+  }
+
+  // Real-time slot availability (slashed/disabled if all eligible staff have tasks)
+  Set<String> _disabledSlots = {};
+  bool _isLoadingSlots = false;
+
+  // Fully booked dates for the current calendar month
+  Set<String> _fullyBookedDates = {};
+  bool _isLoadingMonth = false;
 
   bool get _isOnSiteInspection => widget.method == 'On-Site Inspection';
 
@@ -53,51 +116,229 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    // Default to minimum 24 hours advance (e.g. tomorrow or +2 days)
-    _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 2));
+    // Default to first available date (tomorrow / 24 hours advance)
+    _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+
+    if (widget.initialDate != null && widget.initialDate!.isNotEmpty) {
+      final parsed = DateTime.tryParse(widget.initialDate!);
+      if (parsed != null) {
+        _selectedDate = DateTime(parsed.year, parsed.month, parsed.day);
+      }
+    }
     _currentMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
 
     if (widget.name != null && widget.name!.trim().isNotEmpty) {
       _recipientName = widget.name!.trim();
     }
+
+    if (widget.initialAddressID != null && widget.initialAddressID!.isNotEmpty) {
+      _selectedAddressID = widget.initialAddressID;
+    }
+    if (widget.initialAddressLine != null && widget.initialAddressLine!.isNotEmpty) {
+      _addressLine = widget.initialAddressLine!;
+    }
+
     _loadUserAddress();
 
-    // Default pre-selected slot
-    final slots = _getAvailableSlots();
-    if (slots.isNotEmpty) {
-      _selectedSlot = slots.length > 1 ? slots[1] : slots.first;
+    // Focus on initial or first available slot option
+    if (widget.initialSlot != null && widget.initialSlot!.isNotEmpty) {
+      _selectedSlot = widget.initialSlot;
+    } else {
+      final slots = _getAvailableSlots();
+      if (slots.isNotEmpty) {
+        _selectedSlot = slots.first;
+      }
     }
+
+    _fetchMonthAvailability();
   }
 
-  Future<void> _loadUserAddress() async {
-    if (widget.email != null && widget.email!.isNotEmpty) {
-      final list = await AddressService.getAddresses(widget.email!);
-      if (mounted && list.isNotEmpty) {
+  Future<void> _fetchMonthAvailability() async {
+    setState(() => _isLoadingMonth = true);
+    final monthStr = DateFormat('yyyy-MM').format(_currentMonth);
+    try {
+      final res = await TradeInService.getMonthAvailability(
+        method: widget.method,
+        month: monthStr,
+      );
+      if (mounted) {
         setState(() {
-          _savedAddresses = list;
-          final defaultAddr = list.firstWhere((a) => a.isDefault, orElse: () => list.first);
-          _recipientName = defaultAddr.recipientName.isNotEmpty ? defaultAddr.recipientName : _recipientName;
-          _phoneNumber = defaultAddr.phoneNumber.isNotEmpty ? defaultAddr.phoneNumber : _phoneNumber;
-          _addressLine = '${defaultAddr.addressLine}, ${defaultAddr.postcode} ${defaultAddr.city}, ${defaultAddr.state}, Malaysia';
+          final disabled = List<String>.from(res['disabledDates'] ?? []);
+          _fullyBookedDates = disabled.toSet();
+          _isLoadingMonth = false;
+
+          // If current selected date is fully booked, auto-select first available date (unless editing existing date)
+          final curDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+          final firstAvail = res['firstAvailableDate'] as String?;
+          final isEditingSameDate = widget.fromMyTradeInRequests && widget.initialDate == curDateStr;
+          if (!isEditingSameDate && _fullyBookedDates.contains(curDateStr) && firstAvail != null && firstAvail.isNotEmpty) {
+            final parsed = DateTime.tryParse(firstAvail);
+            if (parsed != null) {
+              _selectedDate = parsed;
+              _selectedSlot = null;
+            }
+          }
         });
+        _fetchSlotAvailability();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingMonth = false);
+        _fetchSlotAvailability();
       }
     }
   }
 
-  /// Rules specified by User:
-  /// - collection(delivery) half hour a slot
-  /// - inspection 1 hour 30 min (1.5 hours) a slot
-  /// - working hour is 9am start time, first slot start time need half hour later -> 9:30 AM
-  /// - working hour is 5pm end time, end slot end time need half hour earlier -> 4:30 PM (16:30)
+  Future<void> _fetchSlotAvailability() async {
+    setState(() => _isLoadingSlots = true);
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    try {
+      final res = await TradeInService.getAvailableSlots(
+        method: widget.method,
+        date: dateStr,
+      );
+      if (mounted) {
+        setState(() {
+          final disabled = List<String>.from(res['disabledSlots'] ?? []);
+          _disabledSlots = disabled.toSet();
+          _isLoadingSlots = false;
+
+          final allSlots = _getAvailableSlots();
+          final available = allSlots.where((s) => !_disabledSlots.contains(s)).toList();
+
+          // Focus on initial or first available slot option
+          final isEditingSameDateAndSlot = widget.fromMyTradeInRequests &&
+              dateStr == widget.initialDate &&
+              _selectedSlot == widget.initialSlot;
+
+          if (_selectedSlot == null || (!available.contains(_selectedSlot) && !isEditingSameDateAndSlot)) {
+            _selectedSlot = available.isNotEmpty ? available.first : null;
+          }
+
+          if (available.isEmpty) {
+            _showToast('No eligible staff available on this date. Please select another date.', true);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingSlots = false);
+      }
+    }
+  }
+
+  Future<void> _loadUserAddress() async {
+    final effectiveEmail = await _resolveEffectiveEmail();
+
+    String? targetAddressID = widget.initialAddressID ?? _selectedAddressID;
+    String? targetAddressLine = widget.initialAddressLine;
+
+    // If editing/from my trade in requests and targetAddressID is still null, fetch request details
+    if ((targetAddressID == null || targetAddressID.isEmpty) &&
+        widget.tradeInRequestID.isNotEmpty &&
+        widget.fromMyTradeInRequests) {
+      try {
+        final reqDetails = await TradeInService.getTradeInRequestDetails(widget.tradeInRequestID);
+        if (reqDetails != null) {
+          if (reqDetails['addressID'] != null && reqDetails['addressID'].toString().isNotEmpty) {
+            targetAddressID = reqDetails['addressID'].toString();
+          }
+          final loc = (reqDetails['appointmentLocation'] ?? reqDetails['inspectionAddress'] ?? reqDetails['address'])?.toString();
+          if (loc != null && loc.isNotEmpty) {
+            targetAddressLine = loc;
+          }
+        }
+      } catch (_) {}
+    }
+
+    final list = await AddressService.getAddresses(effectiveEmail);
+    if (!mounted) return;
+
+    if (list.isNotEmpty) {
+      setState(() {
+        AddressModel? chosenAddr;
+
+        // 1. Try matching by addressID from booking record
+        if (targetAddressID != null && targetAddressID.isNotEmpty) {
+          try {
+            chosenAddr = list.firstWhere(
+              (a) => a.addressID == targetAddressID || a.id == targetAddressID,
+            );
+          } catch (_) {}
+        }
+
+        // 2. Try matching by address line text from booking record
+        if (chosenAddr == null && targetAddressLine != null && targetAddressLine.trim().isNotEmpty) {
+          final targetLower = targetAddressLine.trim().toLowerCase();
+          try {
+            chosenAddr = list.firstWhere(
+              (a) => a.fullAddress.trim().toLowerCase() == targetLower ||
+                     a.fullAddress.toLowerCase().contains(targetLower) ||
+                     targetLower.contains(a.fullAddress.toLowerCase()),
+            );
+          } catch (_) {}
+        }
+
+        // 3. If NOT editing an existing booking, fall back to default address
+        if (chosenAddr == null && !widget.fromMyTradeInRequests && (targetAddressID == null || targetAddressID.isEmpty)) {
+          try {
+            chosenAddr = list.firstWhere((a) => a.isDefault, orElse: () => list.first);
+          } catch (_) {}
+        }
+
+        if (chosenAddr != null) {
+          _selectedAddress = chosenAddr;
+          _selectedAddressID = chosenAddr.addressID.isNotEmpty ? chosenAddr.addressID : chosenAddr.id;
+          _recipientName = chosenAddr.recipientName.isNotEmpty ? chosenAddr.recipientName : _recipientName;
+          _phoneNumber = chosenAddr.phoneNumber.isNotEmpty ? chosenAddr.phoneNumber : _phoneNumber;
+          _addressLine = chosenAddr.fullAddress;
+        } else if (targetAddressLine != null && targetAddressLine.isNotEmpty) {
+          _selectedAddressID = targetAddressID;
+          _addressLine = targetAddressLine;
+        } else {
+          final defaultAddr = list.firstWhere((a) => a.isDefault, orElse: () => list.first);
+          _selectedAddress = defaultAddr;
+          _selectedAddressID = defaultAddr.addressID.isNotEmpty ? defaultAddr.addressID : defaultAddr.id;
+          _recipientName = defaultAddr.recipientName.isNotEmpty ? defaultAddr.recipientName : _recipientName;
+          _phoneNumber = defaultAddr.phoneNumber.isNotEmpty ? defaultAddr.phoneNumber : _phoneNumber;
+          _addressLine = defaultAddr.fullAddress;
+        }
+      });
+    } else if (targetAddressLine != null && targetAddressLine.isNotEmpty) {
+      setState(() {
+        _selectedAddressID = targetAddressID;
+        _addressLine = targetAddressLine!;
+      });
+    }
+  }
+
+  Future<void> _changeAddress() async {
+    final effectiveEmail = await _resolveEffectiveEmail();
+    if (!mounted) return;
+    final result = await Navigator.push<AddressModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SelectAddressPage(
+          email: effectiveEmail,
+          currentlySelected: _selectedAddress,
+        ),
+      ),
+    );
+
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedAddress = result;
+        _selectedAddressID = result.addressID.isNotEmpty ? result.addressID : result.id;
+        _recipientName = result.recipientName;
+        _phoneNumber = result.phoneNumber;
+        _addressLine = result.fullAddress;
+      });
+    }
+  }
+
   List<String> _getAvailableSlots() {
     if (_isOnSiteInspection) {
-      // 1 hr 30 min per slot, between 09:30 and 16:30:
-      // 09:30 AM (ends 11:00 AM)
-      // 11:00 AM (ends 12:30 PM)
-      // 01:00 PM (ends 02:30 PM)
-      // 01:30 PM (ends 03:00 PM)
-      // 02:30 PM (ends 04:00 PM)
-      // 03:00 PM (ends 04:30 PM)
       return const [
         '09:30 AM',
         '11:00 AM',
@@ -107,8 +348,6 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
         '03:00 PM',
       ];
     } else {
-      // Collection / Device Shipment: half hour (30 min) a slot, between 09:30 and 16:30
-      // Excluding lunch hour (12:00 PM - 01:00 PM): 12 slots, perfectly fitting 4 rows of 3 slots
       return const [
         '09:30 AM',
         '10:00 AM',
@@ -127,135 +366,27 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
   }
 
   bool _isSlotDisabled(String slot) {
-    // No mock slashed slots; all valid scheduled slots are open
-    return false;
+    return _disabledSlots.contains(slot);
   }
 
   void _previousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
     });
+    _fetchMonthAvailability();
   }
 
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
     });
+    _fetchMonthAvailability();
   }
 
-  void _showEditAddressModal() {
-    final nameCtrl = TextEditingController(text: _recipientName);
-    final phoneCtrl = TextEditingController(text: _phoneNumber);
-    final addrCtrl = TextEditingController(text: _addressLine);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _isOnSiteInspection ? 'Edit Inspection Address' : 'Edit Collection Address',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (_savedAddresses.isNotEmpty) ...[
-                const Text('Choose from saved addresses:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                const SizedBox(height: 8),
-                ...List.generate(_savedAddresses.length, (idx) {
-                  final a = _savedAddresses[idx];
-                  final formatted = '${a.addressLine}, ${a.postcode} ${a.city}, ${a.state}';
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: const Icon(Icons.location_on_outlined, color: Color(0xFF0C5AD2)),
-                    title: Text(a.recipientName.isNotEmpty ? a.recipientName : 'Address ${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text(formatted, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                    onTap: () {
-                      setState(() {
-                        _recipientName = a.recipientName;
-                        _phoneNumber = a.phoneNumber;
-                        _addressLine = formatted;
-                      });
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }),
-                const Divider(height: 24),
-              ],
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Recipient Name', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: addrCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Address Details', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (nameCtrl.text.trim().isNotEmpty && addrCtrl.text.trim().isNotEmpty) {
-                      setState(() {
-                        _recipientName = nameCtrl.text.trim();
-                        _phoneNumber = phoneCtrl.text.trim();
-                        _addressLine = addrCtrl.text.trim();
-                      });
-                    }
-                    Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0C5AD2),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Save Address', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Future<void> _onContinueBooking() async {
     if (_selectedSlot == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an available time slot.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showToast('Please select an available time slot.', true);
       return;
     }
 
@@ -264,13 +395,15 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
     final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     final displayDate = DateFormat('MMM d, yyyy').format(_selectedDate);
 
-    // Call backend API to persist appointment details
-    await TradeInService.bookAppointment(
+    // Call backend API to persist appointment details and trigger task assignment
+    final res = await TradeInService.bookAppointment(
       tradeInRequestID: widget.tradeInRequestID,
       method: widget.method,
       appointmentDate: formattedDate,
       appointmentTime: _selectedSlot!,
+      addressID: _selectedAddressID,
       address: {
+        'addressID': _selectedAddressID,
         'recipientName': _recipientName,
         'phoneNumber': _phoneNumber,
         'addressLine': _addressLine,
@@ -279,6 +412,14 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
 
     if (!mounted) return;
     setState(() => _isBooking = false);
+
+    if (res['success'] != true) {
+      _showToast(
+        res['message'] ?? 'No eligible staff available for this slot. Please choose another slot.',
+        true,
+      );
+      return;
+    }
 
     // Show Booking Confirmation Dialog matching ReByte style
     showDialog(
@@ -345,23 +486,21 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(dialogCtx);
-                    // Navigate to trade-in requests or home
-                    if (widget.fromMyTradeInRequests) {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
-                    } else {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MyTradeInRequestsPage(
-                            email: widget.email ?? '',
-                            name: widget.name,
-                            isLoggedIn: widget.isLoggedIn,
-                          ),
+                    final effectiveEmail = (widget.email != null && widget.email!.trim().isNotEmpty)
+                        ? widget.email!.trim()
+                        : (TradeInFlowSession.currentUserEmail ?? 'customer@rebyte.com');
+
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MyTradeInRequestsPage(
+                          email: effectiveEmail,
+                          name: widget.name,
+                          isLoggedIn: widget.isLoggedIn,
                         ),
-                        (route) => route.isFirst,
-                      );
-                    }
+                      ),
+                      (route) => route.isFirst,
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0C5AD2),
@@ -369,7 +508,7 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text('View Trade-In Requests', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  child: const Text('Back to Trade-In Requests', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 ),
               ),
               const SizedBox(height: 10),
@@ -414,92 +553,145 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: const ReByteAppBar(),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Top back button row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
-                    onPressed: () => Navigator.pop(context),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Subtitle under back button
-                    Text(
-                      _isOnSiteInspection
-                          ? 'Schedule a certified technician to inspect your device at your location.'
-                          : 'Schedule a courier to collect your device at your location.',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF64748B),
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
+            Column(
+              children: [
+                // Top back button row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
+                        onPressed: () => Navigator.pop(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
-                    ),
-                    const SizedBox(height: 18),
+                    ],
+                  ),
+                ),
 
-                    // Card 1: Device Summary Card
-                    _buildDeviceCard(deviceTitle, deviceSpecs),
-
-                    const SizedBox(height: 14),
-
-                    // Card 2: Address Card
-                    _buildAddressCard(),
-
-                    const SizedBox(height: 14),
-
-                    // Card 3: Date & Time Card
-                    _buildDateTimeCard(slots),
-
-                    const SizedBox(height: 24),
-
-                    // Continue Booking Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isBooking ? null : _onContinueBooking,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0C5AD2),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Subtitle under back button
+                        Text(
+                          _isOnSiteInspection
+                              ? 'Schedule a certified technician to inspect your device at your location.'
+                              : 'Schedule a courier to collect your device at your location.',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF64748B),
+                            height: 1.45,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        child: _isBooking
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                              )
-                            : const Text(
-                                'Continue Booking',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                        const SizedBox(height: 18),
+
+                        // Card 1: Device Summary Card
+                        _buildDeviceCard(deviceTitle, deviceSpecs),
+
+                        const SizedBox(height: 14),
+
+                        // Card 2: Address Card
+                        _buildAddressCard(),
+
+                        const SizedBox(height: 14),
+
+                        // Card 3: Date & Time Card
+                        _buildDateTimeCard(slots),
+
+                        const SizedBox(height: 24),
+
+                        // Continue Booking Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _isBooking ? null : _onContinueBooking,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0C5AD2),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                      ),
+                            ),
+                            child: _isBooking
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                  )
+                                : const Text(
+                                    'Continue Booking',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                      ],
                     ),
-                    const SizedBox(height: 28),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Top Floating Toast Banner
+            if (_toastMessage != null)
+              Positioned(
+                top: 12,
+                left: 16,
+                right: 16,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _isToastError ? const Color(0xFFE11D48) : const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isToastError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _toastMessage!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _toastMessage = null),
+                          child: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -601,94 +793,133 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
 
   Widget _buildAddressCard() {
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x05000000), blurRadius: 8, offset: Offset(0, 2)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.location_on_outlined, color: Color(0xFF64748B), size: 20),
-                  const SizedBox(width: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _changeAddress,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _isOnSiteInspection
+                              ? Icons.location_on_outlined
+                              : Icons.local_shipping_outlined,
+                          color: const Color(0xFF0C5AD2),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isOnSiteInspection ? 'Inspection Address' : 'Collection Address',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Text(
+                        'Change',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0C5AD2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                const SizedBox(height: 12),
+
+                if (_selectedAddress != null) ...[
                   Text(
-                    _isOnSiteInspection ? 'Inspection Address' : 'Collection Address',
+                    _selectedAddress!.recipientName.isNotEmpty
+                        ? _selectedAddress!.recipientName
+                        : 'Recipient',
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF0F172A),
                     ),
                   ),
-                ],
-              ),
-              GestureDetector(
-                onTap: _showEditAddressModal,
-                child: const Text(
-                  'Edit',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0C5AD2),
+                  const SizedBox(height: 4),
+                  Text(
+                    _selectedAddress!.fullAddress,
+                    textAlign: TextAlign.justify,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                      height: 1.4,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Inner Grey Box
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFF1F5F9)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _recipientName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _addressLine,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF475569),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.phone_outlined, size: 14, color: Color(0xFF64748B)),
-                    const SizedBox(width: 6),
+                  if (_selectedAddress!.phoneNumber.isNotEmpty) ...[
+                    const SizedBox(height: 4),
                     Text(
-                      _phoneNumber,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                      _selectedAddress!.phoneNumber,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF94A3B8),
+                      ),
                     ),
                   ],
-                ),
+                ] else ...[
+                  Text(
+                    _recipientName.isNotEmpty ? _recipientName : 'Recipient',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _addressLine,
+                    textAlign: TextAlign.justify,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                      height: 1.4,
+                    ),
+                  ),
+                  if (_phoneNumber.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _phoneNumber,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -767,13 +998,26 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
-              Text(
-                monthTitle,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    monthTitle,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (_isLoadingMonth) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0C5AD2)),
+                    ),
+                  ],
+                ],
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right, size: 24, color: Color(0xFF334155)),
@@ -806,13 +1050,24 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
           const Divider(height: 32, color: Color(0xFFF1F5F9)),
 
           // Available Slots Title
-          Text(
-            'Available Slots for $selectedDayLabel',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Available Slots for $selectedDayLabel',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              if (_isLoadingSlots)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0C5AD2)),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
 
@@ -870,24 +1125,28 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
               }
 
               final date = DateTime(_currentMonth.year, _currentMonth.month, dayIndex);
+              final dateStr = DateFormat('yyyy-MM-dd').format(date);
               final isPastOrWithin24h = date.isBefore(minBookDate);
+              final isFullyBooked = _fullyBookedDates.contains(dateStr);
+              final isDisabled = isPastOrWithin24h || isFullyBooked;
               final isSelected = date.year == _selectedDate.year &&
                   date.month == _selectedDate.month &&
                   date.day == _selectedDate.day;
 
               return GestureDetector(
-                onTap: isPastOrWithin24h
-                    ? null
-                    : () {
-                        setState(() {
-                          _selectedDate = date;
-                          // If current slot is disabled on the newly selected day, reset selection
-                          if (_selectedSlot != null && _isSlotDisabled(_selectedSlot!)) {
-                            final valid = _getAvailableSlots().where((s) => !_isSlotDisabled(s)).toList();
-                            _selectedSlot = valid.isNotEmpty ? valid.first : null;
-                          }
-                        });
-                      },
+                onTap: () {
+                  if (isPastOrWithin24h) {
+                    _showToast('Please select a date at least 24 hours in advance.', true);
+                  } else if (isFullyBooked) {
+                    _showToast('No eligible staff available on this date. Please select another date.', true);
+                  } else {
+                    setState(() {
+                      _selectedDate = date;
+                      _selectedSlot = null;
+                    });
+                    _fetchSlotAvailability();
+                  }
+                },
                 child: Container(
                   width: 36,
                   height: 36,
@@ -901,9 +1160,11 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      decoration: isFullyBooked && !isPastOrWithin24h ? TextDecoration.lineThrough : null,
+                      decorationColor: const Color(0xFF94A3B8),
                       color: isSelected
                           ? Colors.white
-                          : isPastOrWithin24h
+                          : isDisabled
                               ? const Color(0xFFCBD5E1)
                               : const Color(0xFF1E293B),
                     ),
@@ -922,7 +1183,13 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
     final isDisabled = _isSlotDisabled(slot);
 
     return GestureDetector(
-      onTap: isDisabled ? null : () => setState(() => _selectedSlot = slot),
+      onTap: () {
+        if (isDisabled) {
+          _showToast('No eligible staff available for this slot. Please choose another slot.', true);
+        } else {
+          setState(() => _selectedSlot = slot);
+        }
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),

@@ -55,7 +55,7 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
         setState(() {
           _allTasks = tasks.where((t) {
             final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
-            return s != 'absent' && s != 'cancelled';
+            return s != 'absent' && s != 'cancelled' && s != 'reassigned';
           }).toList();
           _approvedLeaves = leaves.where((l) {
             final st = (l['leaveStatus'] ?? '').toString().toUpperCase();
@@ -566,6 +566,10 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
     final endTimeStr = task['scheduleEndTime']?.toString() ?? '10:00';
     final status = (task['taskStatus']?.toString() ?? task['scheduleStatus']?.toString() ?? 'assigned').toLowerCase();
 
+    final taskType = (task['taskType']?.toString() ?? task['type']?.toString() ?? 'deliver').toLowerCase();
+    final isInspect = taskType.contains('inspect');
+    final isCollect = taskType.contains('collect');
+
     final startParts = startTimeStr.split(':');
     final endParts = endTimeStr.split(':');
     int durationMins = 45;
@@ -582,7 +586,7 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
       durationText = m > 0 ? '${h}h ${m}m' : '${h}h';
     }
 
-    final isOngoing = status == 'shipping' || status == 'ongoing';
+    final isOngoing = status == 'shipping' || status == 'ongoing' || status == 'in progress';
     final isDone = status == 'delivered' || status == 'completed';
 
     String badgeLabel = 'Upcoming';
@@ -590,19 +594,79 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
     Color badgeColor = const Color(0xFF2563EB);
     IconData badgeIcon = Icons.access_time_rounded;
 
-    if (isOngoing) {
-      badgeLabel = 'In Progress';
-      badgeBg = const Color(0xFFFEF3C7);
-      badgeColor = const Color(0xFFD97706);
-      badgeIcon = Icons.local_shipping_outlined;
-    } else if (isDone) {
-      badgeLabel = 'Delivered';
-      badgeBg = const Color(0xFFECFDF5);
-      badgeColor = const Color(0xFF10B981);
-      badgeIcon = Icons.check_circle_outline;
+    if (isInspect) {
+      if (isOngoing) {
+        badgeLabel = 'Inspecting';
+        badgeBg = const Color(0xFFF3E8FF);
+        badgeColor = const Color(0xFF7C3AED);
+        badgeIcon = Icons.search_rounded;
+      } else if (isDone) {
+        badgeLabel = 'Inspected';
+        badgeBg = const Color(0xFFF3E8FF);
+        badgeColor = const Color(0xFF7C3AED);
+        badgeIcon = Icons.verified_outlined;
+      } else {
+        badgeLabel = 'Inspection';
+        badgeBg = const Color(0xFFF3E8FF);
+        badgeColor = const Color(0xFF7C3AED);
+        badgeIcon = Icons.assignment_outlined;
+      }
+    } else if (isCollect) {
+      if (isOngoing) {
+        badgeLabel = 'Collecting';
+        badgeBg = const Color(0xFFECFDF5);
+        badgeColor = const Color(0xFF059669);
+        badgeIcon = Icons.inventory_2_outlined;
+      } else if (isDone) {
+        badgeLabel = 'Collected';
+        badgeBg = const Color(0xFFECFDF5);
+        badgeColor = const Color(0xFF059669);
+        badgeIcon = Icons.check_circle_outline;
+      } else {
+        badgeLabel = 'Collection';
+        badgeBg = const Color(0xFFECFDF5);
+        badgeColor = const Color(0xFF059669);
+        badgeIcon = Icons.local_mall_outlined;
+      }
+    } else {
+      if (isOngoing) {
+        badgeLabel = 'In Progress';
+        badgeBg = const Color(0xFFFEF3C7);
+        badgeColor = const Color(0xFFD97706);
+        badgeIcon = Icons.local_shipping_outlined;
+      } else if (isDone) {
+        badgeLabel = 'Delivered';
+        badgeBg = const Color(0xFFECFDF5);
+        badgeColor = const Color(0xFF10B981);
+        badgeIcon = Icons.check_circle_outline;
+      } else {
+        badgeLabel = 'Upcoming';
+        badgeBg = const Color(0xFFEFF6FF);
+        badgeColor = const Color(0xFF2563EB);
+        badgeIcon = Icons.access_time_rounded;
+      }
     }
 
-    final deviceTitle = task['deviceModel']?.toString() ?? task['orderID']?.toString() ?? 'Delivery Inspection';
+    // Border styling based on task type:
+    // Inspect: purple/violet border
+    // Collect: emerald/teal border
+    // Deliver: blue/amber border
+    Color borderColor;
+    double borderWidth = 1.0;
+    if (isInspect) {
+      borderColor = isOngoing ? const Color(0xFF7C3AED) : const Color(0xFFC4B5FD);
+      borderWidth = isOngoing ? 2.0 : 1.5;
+    } else if (isCollect) {
+      borderColor = isOngoing ? const Color(0xFF059669) : const Color(0xFF6EE7B7);
+      borderWidth = isOngoing ? 2.0 : 1.5;
+    } else {
+      borderColor = isOngoing ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0);
+      borderWidth = isOngoing ? 1.5 : 1.0;
+    }
+
+    final deviceTitle = task['deviceModel']?.toString() ??
+        task['model']?.toString() ??
+        (isInspect ? 'Device Inspection' : (isCollect ? 'Device Collection' : (task['orderID']?.toString() ?? 'Delivery Package')));
     final customerName = task['customerName']?.toString() ?? 'Customer';
     final destination = task['deliveryAddress']?.toString() ?? 'Penang Hub';
 
@@ -642,8 +706,8 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: isOngoing ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0),
-                  width: isOngoing ? 1.5 : 1,
+                  color: borderColor,
+                  width: borderWidth,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -659,27 +723,58 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(badgeIcon, size: 12, color: badgeColor),
-                            const SizedBox(width: 4),
-                            Text(
-                              badgeLabel,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: badgeColor,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: badgeBg,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(badgeIcon, size: 12, color: badgeColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  badgeLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: badgeColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isInspect
+                                  ? const Color(0xFFF3E8FF)
+                                  : (isCollect ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF)),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isInspect
+                                    ? const Color(0xFFDDD6FE)
+                                    : (isCollect ? const Color(0xFFA7F3D0) : const Color(0xFFBFDBFE)),
                               ),
                             ),
-                          ],
-                        ),
+                            child: Text(
+                              isInspect ? 'INSPECT' : (isCollect ? 'COLLECT' : 'DELIVER'),
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: isInspect
+                                    ? const Color(0xFF7C3AED)
+                                    : (isCollect ? const Color(0xFF059669) : const Color(0xFF1D4ED8)),
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       Text(
                         durationText,
@@ -799,11 +894,15 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
         final dayNum = DateFormat('d').format(day);
         final hasDelivery = dayTasks.any((t) {
           final raw = (t['taskType']?.toString() ?? t['taskTypeLabel']?.toString() ?? '').toLowerCase();
-          return raw.contains('deliver') || (!raw.contains('inspect') && raw.isEmpty);
+          return raw.contains('deliver') || (!raw.contains('inspect') && !raw.contains('collect') && raw.isEmpty);
         });
         final hasInspection = dayTasks.any((t) {
           final raw = (t['taskType']?.toString() ?? t['taskTypeLabel']?.toString() ?? '').toLowerCase();
           return raw.contains('inspect');
+        });
+        final hasCollection = dayTasks.any((t) {
+          final raw = (t['taskType']?.toString() ?? t['taskTypeLabel']?.toString() ?? '').toLowerCase();
+          return raw.contains('collect');
         });
 
         final String dayTypeSubtitle;
@@ -811,12 +910,12 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
           dayTypeSubtitle = approvedLeave['leaveType']?.toString() ?? 'Approved Leave';
         } else if (dayTasks.isEmpty) {
           dayTypeSubtitle = 'No scheduled tasks';
-        } else if (hasDelivery && hasInspection) {
-          dayTypeSubtitle = 'Delivery, Inspection';
-        } else if (hasInspection) {
-          dayTypeSubtitle = 'Inspection';
         } else {
-          dayTypeSubtitle = 'Delivery';
+          final types = <String>[];
+          if (hasDelivery) types.add('Delivery');
+          if (hasInspection) types.add('Inspection');
+          if (hasCollection) types.add('Collection');
+          dayTypeSubtitle = types.isNotEmpty ? types.join(', ') : 'Delivery';
         }
 
         return Container(

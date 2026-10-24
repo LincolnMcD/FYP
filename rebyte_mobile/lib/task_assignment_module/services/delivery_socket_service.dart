@@ -16,6 +16,9 @@ class DeliverySocketService {
   void connect({
     required String orderID,
     required String role, // 'staff' or 'customer'
+    String? tradeInRequestID,
+    String? taskID,
+    String? appointmentID,
     void Function(Map<String, dynamic> locationData)? onLocationUpdate,
     void Function(Map<String, dynamic> completionData)? onDeliveryCompleted,
     VoidCallback? onConnect,
@@ -52,6 +55,9 @@ class DeliverySocketService {
         // Join the delivery room
         _socket!.emit('join-delivery', {
           'orderID': cleanOrderID,
+          if (tradeInRequestID != null) 'tradeInRequestID': tradeInRequestID.replaceAll('#', '').trim(),
+          if (taskID != null) 'taskID': taskID.replaceAll('#', '').trim(),
+          if (appointmentID != null) 'appointmentID': appointmentID.replaceAll('#', '').trim(),
           'role': role,
         });
         onConnect?.call();
@@ -89,6 +95,9 @@ class DeliverySocketService {
   /// Staff emits live GPS coordinates, distance, and duration to the delivery room
   void sendLocation({
     required String orderID,
+    String? tradeInRequestID,
+    String? taskID,
+    String? appointmentID,
     required double lat,
     required double lng,
     double heading = 0.0,
@@ -101,6 +110,9 @@ class DeliverySocketService {
     final cleanOrderID = orderID.replaceAll('#', '').trim();
     _socket!.emit('send-location', {
       'orderID': cleanOrderID,
+      if (tradeInRequestID != null) 'tradeInRequestID': tradeInRequestID.replaceAll('#', '').trim(),
+      if (taskID != null) 'taskID': taskID.replaceAll('#', '').trim(),
+      if (appointmentID != null) 'appointmentID': appointmentID.replaceAll('#', '').trim(),
       'lat': lat,
       'lng': lng,
       'heading': heading,
@@ -123,6 +135,7 @@ class DeliverySocketService {
       'proofOfDeliveryUrl': proofOfDeliveryUrl,
     });
   }
+
 
   /// Leave the delivery room
   void leaveRoom([String? orderID]) {

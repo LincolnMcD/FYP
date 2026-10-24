@@ -105,9 +105,20 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       modelName = '$brand $model'.trim();
       if (modelName.isEmpty) modelName = 'Electronic Device';
       storage = first['storage']?.toString() ?? 'Standard';
+      if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard' && !modelName.toLowerCase().contains(storage.toLowerCase())) {
+        modelName = '$modelName ($storage)';
+      }
       condition = first['condition']?.toString() ?? 'Good';
       imageUrl = first['imageUrl']?.toString();
     }
+    final taskType = (task['taskType']?.toString() ?? task['type']?.toString() ?? 'deliver').toLowerCase();
+    final isInspect = taskType.contains('inspect');
+    final isCollect = taskType.contains('collect');
+
+    final String itemsTitle = isInspect
+        ? (items.length > 1 ? 'Inspect Items' : 'Inspect Item')
+        : (isCollect ? (items.length > 1 ? 'Collect Items' : 'Collect Item') : 'Package Items');
+
     final proofOfDeliveryUrl = (_currentTask['proofOfDeliveryUrl'] ?? task['proofOfDeliveryUrl'])?.toString() ?? '';
 
     // Status styling
@@ -121,10 +132,12 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
     final isShipping = lowerSched == 'ongoing' || lowerStatus == 'shipping' || lowerStatus == 'in progress';
     final isDelivered = lowerSched == 'completed' || lowerStatus == 'delivered';
 
+    final String displayStatusText = (taskStatus.toLowerCase() == 'shipping' || (isShipping && !isDelivered)) ? 'Ongoing' : taskStatus;
+
     if (isShipping) {
       statusBgColor = const Color(0xFFDBEAFE);
       statusTextColor = const Color(0xFF1D4ED8);
-      statusIcon = Icons.local_shipping;
+      statusIcon = Icons.navigation;
     } else if (isDelivered) {
       statusBgColor = const Color(0xFFDCFCE7);
       statusTextColor = const Color(0xFF16A34A);
@@ -177,7 +190,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                         Icon(statusIcon, size: 14, color: statusTextColor),
                         const SizedBox(width: 5),
                         Text(
-                          taskStatus,
+                          displayStatusText,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -187,13 +200,39 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                       ],
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    'ID:  #$orderID',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF64748B),
+                  if (isInspect || isCollect) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                      decoration: BoxDecoration(
+                        color: isInspect ? const Color(0xFFF3E8FF) : const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isInspect ? const Color(0xFFDDD6FE) : const Color(0xFFA7F3D0),
+                        ),
+                      ),
+                      child: Text(
+                        isInspect ? 'INSPECTION' : 'COLLECTION',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: isInspect ? const Color(0xFF7C3AED) : const Color(0xFF059669),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'ID:  #$orderID',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
                     ),
                   ),
                 ],
@@ -296,13 +335,21 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                     children: [
                       Expanded(
                         child: Row(
-                          children: const [
-                            Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF0C5AD2)),
-                            SizedBox(width: 8),
+                          children: [
+                            Icon(
+                              isInspect
+                                  ? Icons.search_rounded
+                                  : (isCollect ? Icons.archive_outlined : Icons.inventory_2_outlined),
+                              size: 18,
+                              color: isInspect
+                                  ? const Color(0xFF7C3AED)
+                                  : (isCollect ? const Color(0xFF059669) : const Color(0xFF0C5AD2)),
+                            ),
+                            const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                'Package Items',
-                                style: TextStyle(
+                                itemsTitle,
+                                style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF0F172A),
@@ -317,16 +364,26 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
+                          color: isInspect
+                              ? const Color(0xFFF3E8FF)
+                              : (isCollect ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF)),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                          border: Border.all(
+                            color: isInspect
+                                ? const Color(0xFFDDD6FE)
+                                : (isCollect ? const Color(0xFFA7F3D0) : const Color(0xFFBFDBFE)),
+                          ),
                         ),
                         child: Text(
-                          '${items.isEmpty ? 1 : items.length} ${(items.isEmpty || items.length == 1) ? "Product" : "Products"}',
-                          style: const TextStyle(
+                          isInspect || isCollect
+                              ? '${items.isEmpty ? 1 : items.length} ${(items.isEmpty || items.length == 1) ? "Device" : "Devices"}'
+                              : '${items.isEmpty ? 1 : items.length} ${(items.isEmpty || items.length == 1) ? "Product" : "Products"}',
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF1D4ED8),
+                            color: isInspect
+                                ? const Color(0xFF7C3AED)
+                                : (isCollect ? const Color(0xFF059669) : const Color(0xFF1D4ED8)),
                           ),
                         ),
                       ),
@@ -646,12 +703,12 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                               taskID: taskID,
                               orderID: orderID,
                               scheduleID: scheduleID,
-                              status: 'Shipping',
+                              status: 'In Progress',
                             );
                             widget.onTaskUpdated?.call();
                             if (!context.mounted) return;
                             setState(() {
-                              _currentTask['taskStatus'] = 'Shipping';
+                              _currentTask['taskStatus'] = 'In Progress';
                               _currentTask['scheduleStatus'] = 'ongoing';
                               _isActionLoading = false;
                             });
@@ -698,7 +755,11 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                       : const Icon(Icons.navigation, color: Colors.white, size: 18),
                   label: Text(
                     isAssigned
-                        ? 'Start Navigation'
+                        ? (isInspect
+                            ? 'Start Inspection'
+                            : (isCollect
+                                ? 'Start Collect'
+                                : 'Start Delivery'))
                         : isShipping
                             ? 'Continue Navigation'
                             : 'Completed',
@@ -787,6 +848,10 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
     var name = '$brand $model'.trim();
     if (name.isEmpty) name = 'Electronic Device';
     final storage = item['storage']?.toString() ?? 'Standard';
+    if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard') {
+      name = name.replaceAll(RegExp('\\s*\\(${RegExp.escape(storage)}\\)', caseSensitive: false), '').trim();
+    }
+    name = name.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
     final condition = item['condition']?.toString() ?? 'Good';
     final color = item['color']?.toString() ?? '';
     final imageUrl = item['imageUrl']?.toString();

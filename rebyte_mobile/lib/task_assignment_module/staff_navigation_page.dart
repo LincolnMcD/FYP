@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import '../staff_module/staff_home_page.dart';
+import 'perform_device_inspection_page.dart';
 import 'services/task_assignment_service.dart';
 import 'services/delivery_socket_service.dart';
 import 'widgets/proof_of_delivery_dialog.dart';
@@ -146,9 +147,22 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
     _address =
         _task['deliveryAddress']?.toString() ?? '123 Tech Lane, Kuala Lumpur';
     _customerName = _task['customerName']?.toString() ?? 'Customer';
-    _orderID = _task['orderID']?.toString() ?? '';
     _taskID = _task['taskID']?.toString() ?? '';
     _scheduleID = _task['scheduleID']?.toString() ?? '';
+
+    // Prioritize tradeInRequestID for trade-in / inspection / collection tasks so room IDs match customer perfectly
+    final rawTradeIn = _task['tradeInRequestID']?.toString() ?? '';
+    final rawOrder = _task['orderID']?.toString() ?? '';
+    final rawAppt = _task['appointmentID']?.toString() ?? '';
+    if (rawTradeIn.isNotEmpty) {
+      _orderID = rawTradeIn.replaceAll('#', '').trim();
+    } else if (rawOrder.isNotEmpty && rawOrder != 'RB-9901') {
+      _orderID = rawOrder.replaceAll('#', '').trim();
+    } else if (rawAppt.isNotEmpty) {
+      _orderID = rawAppt.replaceAll('#', '').trim();
+    } else {
+      _orderID = rawOrder.isNotEmpty ? rawOrder.replaceAll('#', '').trim() : _taskID.replaceAll('TSK-', '').trim();
+    }
 
     _initNavigationRoute();
   }
@@ -168,6 +182,9 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
     // Connect to Socket.IO delivery room: delivery:<orderID>
     _socketService.connect(
       orderID: _orderID,
+      tradeInRequestID: _task['tradeInRequestID']?.toString(),
+      taskID: _taskID,
+      appointmentID: _task['appointmentID']?.toString(),
       role: 'staff',
     );
 
@@ -194,6 +211,9 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
           // Immediately sync staff's real-time GPS location via Socket.IO
           _socketService.sendLocation(
             orderID: _orderID,
+            tradeInRequestID: _task['tradeInRequestID']?.toString(),
+            taskID: _taskID,
+            appointmentID: _task['appointmentID']?.toString(),
             lat: pos.latitude,
             lng: pos.longitude,
             heading: _currentHeading,
@@ -769,6 +789,9 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
             // Emit live staff GPS location, distance, and duration to Socket.IO room in real-time
             _socketService.sendLocation(
               orderID: _orderID,
+              tradeInRequestID: _task['tradeInRequestID']?.toString(),
+              taskID: _taskID,
+              appointmentID: _task['appointmentID']?.toString(),
               lat: position.latitude,
               lng: position.longitude,
               heading: heading,
@@ -1166,6 +1189,15 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
             ? '${(displayDistanceM / 1000).toStringAsFixed(1)} km'
             : '${displayDistanceM.round()} meters';
 
+        final String actionText = _isInspectTask
+            ? 'start this inspection'
+            : (_isCollectTask ? 'complete this collection' : 'complete this delivery');
+        final String instructionText = _isInspectTask
+            ? 'Please proceed along the route and arrive within 65 meters of the destination before starting the inspection.'
+            : (_isCollectTask
+                ? 'Please proceed along the route and arrive within 65 meters of the destination before recording proof of collection and completing the task.'
+                : 'Please proceed along the route and arrive within 65 meters of the destination before recording proof of delivery and completing the order.');
+
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -1191,7 +1223,7 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'You cannot complete this delivery yet because your current GPS location is $distStr away from the customer delivery destination.',
+                  'You cannot $actionText yet because your current GPS location is $distStr away from the customer destination.',
                   textAlign: TextAlign.justify,
                   style: const TextStyle(
                     fontSize: 13.5,
@@ -1201,7 +1233,7 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Please proceed along the route and arrive within 65 meters of the destination before recording proof of delivery and completing the order.',
+                  instructionText,
                   textAlign: TextAlign.justify,
                   style: const TextStyle(
                     fontSize: 13.5,
@@ -1278,6 +1310,72 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
       _socketService.dispose();
       widget.onTaskUpdated?.call();
       Navigator.pop(context, 'Delivery completed with proof recorded!');
+    }
+  }
+
+  bool get _isInspectTask {
+    final t = (_task['taskType']?.toString() ?? _task['type']?.toString() ?? '').toLowerCase();
+    return t.contains('inspect');
+  }
+
+  bool get _isCollectTask {
+    final t = (_task['taskType']?.toString() ?? _task['type']?.toString() ?? '').toLowerCase();
+    return t.contains('collect');
+  }
+
+  Future<void> _handleStartInspection() async {
+    setState(() => _isActionLoading = true);
+    final isAtLocation = await _verifyStaffAtDestination();
+    if (!isAtLocation) {
+      if (mounted) setState(() => _isActionLoading = false);
+      return;
+    }
+    if (mounted) setState(() => _isActionLoading = false);
+
+    _stopLiveGpsTracking();
+    final res = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PerformDeviceInspectionPage(
+          task: _task,
+          onTaskUpdated: widget.onTaskUpdated,
+        ),
+      ),
+    );
+    if (res != null && mounted) {
+      widget.onTaskUpdated?.call();
+      Navigator.pop(context, res);
+    }
+  }
+
+  Future<void> _handleCompleteCollection() async {
+    setState(() => _isActionLoading = true);
+    final isAtLocation = await _verifyStaffAtDestination();
+    if (!isAtLocation) {
+      if (mounted) setState(() => _isActionLoading = false);
+      return;
+    }
+    if (mounted) setState(() => _isActionLoading = false);
+
+    // Prompt Proof of Collection Dialog asking staff to take a photo of the collected device
+    if (!mounted) return;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ProofOfDeliveryDialog(
+        orderID: _orderID,
+        taskID: _taskID,
+        scheduleID: _scheduleID,
+        customerName: _customerName,
+        deliveryAddress: _address,
+        isCollect: true,
+      ),
+    );
+
+    if (result != null && result['success'] == true && mounted) {
+      _stopLiveGpsTracking();
+      widget.onTaskUpdated?.call();
+      Navigator.pop(context, 'Collection completed with proof recorded!');
     }
   }
 
@@ -1766,13 +1864,21 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
                         ),
                         const SizedBox(width: 12),
 
-                        // Complete Deliver Button: checks staff GPS matches destination
+                        // Complete Deliver / Start Inspection / Complete Collect Button
                         Expanded(
                           flex: 1,
                           child: ElevatedButton(
                             onPressed: _isActionLoading
                                 ? null
-                                : _handleCompleteDelivery,
+                                : () {
+                                    if (_isInspectTask) {
+                                      _handleStartInspection();
+                                    } else if (_isCollectTask) {
+                                      _handleCompleteCollection();
+                                    } else {
+                                      _handleCompleteDelivery();
+                                    }
+                                  },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF0C5AD2),
                               elevation: 0,
@@ -1798,18 +1904,24 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
                                     ),
                                   )
                                 else
-                                  const Icon(
-                                    Icons.check_circle_outline,
+                                  Icon(
+                                    _isInspectTask
+                                        ? Icons.assignment_turned_in_outlined
+                                        : Icons.check_circle_outline,
                                     color: Colors.white,
                                     size: 17,
                                   ),
                                 const SizedBox(width: 5),
-                                const Flexible(
+                                Flexible(
                                   child: Text(
-                                    'Complete Deliver',
+                                    _isInspectTask
+                                        ? 'Start Inspection'
+                                        : _isCollectTask
+                                            ? 'Complete Collect'
+                                            : 'Complete Deliver',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.white,

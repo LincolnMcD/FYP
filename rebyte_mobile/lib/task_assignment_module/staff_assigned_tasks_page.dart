@@ -52,7 +52,10 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     );
     if (mounted) {
       setState(() {
-        _tasks = tasks;
+        _tasks = tasks.where((t) {
+          final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
+          return s != 'reassigned' && s != 'absent' && s != 'rejected' && s != 'cancelled';
+        }).toList();
         _isLoading = false;
       });
     }
@@ -79,7 +82,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     final list = _tasks.where((t) {
       final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
       final ts = (t['taskStatus']?.toString() ?? '').toLowerCase();
-      if (s == 'absent' || s == 'rejected' || s == 'cancelled' || ts == 'rejected' || ts == 'cancelled' || ts == 'unassigned') {
+      if (s == 'absent' || s == 'rejected' || s == 'cancelled' || s == 'reassigned' || ts == 'rejected' || ts == 'cancelled' || ts == 'unassigned') {
         return false;
       }
       return s == 'assigned' || ts == 'packaging';
@@ -388,18 +391,38 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
       dayLabel = DateFormat('MMM d, yyyy').format(scheduleDate); // e.g. Oct 22, 2026
     }
 
+    final taskType = (task['taskType']?.toString() ?? task['type']?.toString() ?? 'deliver').toLowerCase();
+    final isInspect = taskType.contains('inspect');
+    final isCollect = taskType.contains('collect');
+
     // Items info
     final items = task['items'] as List? ?? [];
-    String itemTitle = 'Delivery Package';
-    String itemSpecs = 'Order Delivery';
-    String? imageUrl;
+    String itemTitle = isInspect
+        ? 'Trade-In Inspection'
+        : (isCollect ? 'Trade-In Collection' : 'Delivery Package');
+    String itemSpecs = isInspect ? 'On-site Inspection' : (isCollect ? 'On-site Collection' : 'Order Delivery');
+    String? imageUrl = task['imageUrl']?.toString();
+    String storageVal = '';
     if (items.isNotEmpty && items[0] is Map) {
       final first = items[0] as Map;
-      itemTitle = '${first['brand'] ?? ''} ${first['model'] ?? ''}'.trim();
-      if (itemTitle.isEmpty) itemTitle = 'Delivery Package';
-      itemSpecs = first['storage']?.toString() ?? 'Good Condition';
-      imageUrl = first['imageUrl']?.toString();
+      final t = '${first['brand'] ?? ''} ${first['model'] ?? ''}'.trim();
+      if (t.isNotEmpty) itemTitle = t;
+      storageVal = first['storage']?.toString() ?? '';
+      itemSpecs = storageVal.isNotEmpty ? storageVal : (isInspect ? 'Device Inspection' : 'Good Condition');
+      imageUrl ??= first['imageUrl']?.toString();
     }
+    if (task['deviceModel'] != null && task['deviceModel'].toString().isNotEmpty) {
+      itemTitle = task['deviceModel'].toString();
+      if (task['storage'] != null && task['storage'].toString().isNotEmpty) {
+        storageVal = task['storage'].toString();
+        itemSpecs = storageVal;
+      }
+    }
+    // Clean storage from itemTitle if present at back, because itemSpecs below already displays the storage label!
+    if (storageVal.isNotEmpty) {
+      itemTitle = itemTitle.replaceAll(RegExp('\\s*\\(${RegExp.escape(storageVal)}\\)', caseSensitive: false), '').trim();
+    }
+    itemTitle = itemTitle.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
 
     final completedAtRaw = task['completedAt']?.toString() ?? '';
     String completedAtLabel = '';
@@ -463,23 +486,57 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
         children: [
           // Top Row: Order Badge & Time
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  orderID.startsWith('#') ? orderID : '#$orderID',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0C5AD2),
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        orderID.startsWith('#') ? orderID : '#$orderID',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0C5AD2),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isInspect || isCollect) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: isInspect ? const Color(0xFFF3E8FF) : const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isInspect ? const Color(0xFFDDD6FE) : const Color(0xFFA7F3D0),
+                          ),
+                        ),
+                        child: Text(
+                          isInspect ? 'INSPECTION' : 'COLLECTION',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: isInspect ? const Color(0xFF7C3AED) : const Color(0xFF059669),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -670,17 +727,17 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                   });
 
                                   try {
-                                    // Move to Shipping (In Progress) and transition to Navigation Page
+                                    // Move to In Progress and transition to Navigation Page
                                     await TaskAssignmentService.updateTaskStatus(
                                       taskID: taskID,
                                       orderID: orderID,
                                       scheduleID: scheduleID,
-                                      status: 'Shipping',
+                                      status: 'In Progress',
                                     );
                                     _loadTasks();
 
                                     final ongoingTask = Map<String, dynamic>.from(task);
-                                    ongoingTask['taskStatus'] = 'Shipping';
+                                    ongoingTask['taskStatus'] = 'In Progress';
                                     ongoingTask['scheduleStatus'] = 'ongoing';
 
                                     if (!mounted || !context.mounted) return;
@@ -695,11 +752,11 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                     );
                                     _loadTasks();
                                     if (res != null && mounted) {
-                                      _showToast(res is String ? res : 'Delivery completed successfully!');
+                                      _showToast(res is String ? res : '${isInspect ? "Inspection" : (isCollect ? "Collection" : "Delivery")} completed successfully!');
                                     }
                                   } catch (e) {
                                     if (mounted) {
-                                      _showToast('Failed to start delivery: $e', true);
+                                      _showToast('Failed to start ${isInspect ? "inspection" : (isCollect ? "collection" : "delivery")}: $e', true);
                                     }
                                   } finally {
                                     if (mounted) {
@@ -722,7 +779,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                   );
                                   _loadTasks();
                                   if (res != null && mounted) {
-                                    _showToast(res is String ? res : 'Delivery completed successfully!');
+                                    _showToast(res is String ? res : '${isInspect ? "Inspection" : (isCollect ? "Collection" : "Delivery")} completed successfully!');
                                   }
                                 }
                               },
@@ -762,7 +819,11 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                               )
                             : Text(
                                 isAssigned
-                                    ? 'Start Delivery'
+                                    ? (isInspect
+                                        ? 'Start Inspection'
+                                        : (isCollect
+                                            ? 'Start Collect'
+                                            : 'Start Delivery'))
                                     : 'Continue Navigation',
                                 style: const TextStyle(
                                   fontSize: 13,

@@ -54,23 +54,18 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
 
   void _onBack() {
     if (widget.fromMyTradeInRequests) {
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-        return;
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MyTradeInRequestsPage(
-              email: widget.email ?? 'customer@rebyte.com',
-              name: widget.name,
-              isLoggedIn: widget.isLoggedIn,
-            ),
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MyTradeInRequestsPage(
+            email: widget.email ?? 'customer@rebyte.com',
+            name: widget.name,
+            isLoggedIn: widget.isLoggedIn,
           ),
-          (route) => false,
-        );
-        return;
-      }
+        ),
+        (route) => false,
+      );
+      return;
     }
     // Navigate back to HomePage at Active Activity section
     // Keep TradeInFlowSession intact so the active block is visible with Quotation Pending
@@ -90,7 +85,7 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
   }
 
   void _onContinueToQuotation() {
-    Navigator.push(
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => PreliminaryQuotationPage(

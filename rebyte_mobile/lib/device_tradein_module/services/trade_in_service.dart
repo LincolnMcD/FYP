@@ -234,11 +234,89 @@ class TradeInService {
     }
   }
 
-  /// Fetch all trade-in requests for a user
+  /// Fetch all trade-in requests for a user (unpaginated backward-compatible)
   static Future<List<Map<String, dynamic>>> fetchUserTradeInRequests(String userEmail) async {
+    final result = await fetchUserTradeInRequestsPaginated(
+      userEmail: userEmail,
+      tab: 'all',
+      page: 1,
+      limit: 100,
+    );
+    return List<Map<String, dynamic>>.from(result['requests'] ?? []);
+  }
+
+  /// Fetch paginated trade-in requests for a user with tab and status filtering
+  static Future<Map<String, dynamic>> fetchUserTradeInRequestsPaginated({
+    required String userEmail,
+    String tab = 'all',
+    String? status,
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
+      final queryParams = <String, String>{
+        'userEmail': userEmail,
+        'tab': tab,
+        'page': page.toString(),
+        'limit': limit.toString(),
+      };
+      if (status != null && status.isNotEmpty && status.toLowerCase() != 'all') {
+        queryParams['status'] = status;
+      }
+
       final uri = Uri.parse('$baseUrl/user-requests').replace(
-        queryParameters: {'userEmail': userEmail},
+        queryParameters: queryParams,
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final List<Map<String, dynamic>> requests = (data['requests'] as List?)
+                  ?.map((item) => Map<String, dynamic>.from(item as Map))
+                  .toList() ??
+              [];
+          final pagination = data['pagination'] as Map<String, dynamic>? ?? {};
+          final counts = data['counts'] as Map<String, dynamic>? ?? {};
+          return {
+            'success': true,
+            'requests': requests,
+            'hasMore': pagination['hasMore'] == true,
+            'total': pagination['total'] ?? requests.length,
+            'page': pagination['page'] ?? page,
+            'counts': counts,
+          };
+        }
+      }
+      return {
+        'success': false,
+        'requests': <Map<String, dynamic>>[],
+        'hasMore': false,
+        'total': 0,
+        'page': page,
+        'counts': <String, dynamic>{},
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'requests': <Map<String, dynamic>>[],
+        'hasMore': false,
+        'total': 0,
+        'page': page,
+        'counts': <String, dynamic>{},
+      };
+    }
+  }
+
+  /// Fetch full trade-in request details (including all uploaded images and appointment info)
+  static Future<Map<String, dynamic>?> getTradeInRequestDetails(String tradeInRequestID) async {
+    try {
+      final cleanId = tradeInRequestID.replaceAll('#', '').trim();
+      final uri = Uri.parse('$baseUrl/request-details').replace(
+        queryParameters: {'tradeInRequestID': cleanId},
       );
       final response = await http.get(
         uri,
@@ -247,13 +325,13 @@ class TradeInService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true && data['requests'] is List) {
-          return List<Map<String, dynamic>>.from(data['requests']);
+        if (data['success'] == true && data['request'] is Map) {
+          return Map<String, dynamic>.from(data['request']);
         }
       }
-      return [];
-    } catch (e) {
-      return [];
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -275,19 +353,24 @@ class TradeInService {
     }
   }
 
-  /// Update the status of a trade-in request (e.g. 'Evaluated')
+  /// Update the status of a trade-in request (e.g. 'Evaluated', 'Quoted')
   static Future<Map<String, dynamic>> updateTradeInStatus({
     required String tradeInRequestID,
     required String status,
+    Map<String, dynamic>? estimatedValue,
   }) async {
     try {
+      final payload = <String, dynamic>{
+        'tradeInRequestID': tradeInRequestID,
+        'status': status,
+      };
+      if (estimatedValue != null) {
+        payload['estimatedValue'] = estimatedValue;
+      }
       final response = await http.post(
         Uri.parse('$baseUrl/update-status'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'tradeInRequestID': tradeInRequestID,
-          'status': status,
-        }),
+        body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -416,6 +499,7 @@ class TradeInService {
     required String method,
     required String appointmentDate,
     required String appointmentTime,
+    String? addressID,
     Map<String, dynamic>? address,
   }) async {
     try {
@@ -427,14 +511,49 @@ class TradeInService {
           'method': method,
           'appointmentDate': appointmentDate,
           'appointmentTime': appointmentTime,
+          'addressID': addressID,
           'address': address,
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       final data = jsonDecode(response.body);
       return data is Map<String, dynamic> ? data : {'success': true};
     } catch (e) {
       return {'success': false, 'message': 'Network error. Please try again.'};
+    }
+  }
+
+  /// Check slot availability for a given date and method
+  static Future<Map<String, dynamic>> getAvailableSlots({
+    required String method,
+    required String date,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/check-available-slots?method=${Uri.encodeComponent(method)}&date=$date'),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'disabledSlots': []};
+    } catch (e) {
+      return {'disabledSlots': []};
+    }
+  }
+
+  /// Check month date availability (returns fully booked/disabled dates and first available date)
+  static Future<Map<String, dynamic>> getMonthAvailability({
+    required String method,
+    required String month,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/check-month-availability?method=${Uri.encodeComponent(method)}&month=$month'),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'disabledDates': []};
+    } catch (e) {
+      return {'disabledDates': []};
     }
   }
 }

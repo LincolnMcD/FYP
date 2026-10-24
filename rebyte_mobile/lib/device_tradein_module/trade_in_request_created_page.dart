@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../account_management_module/home_page.dart';
 import 'inspection_method_page.dart';
 import 'models/device_model.dart';
 import 'my_trade_in_requests_page.dart';
+
+import 'services/trade_in_flow_session.dart';
 
 class TradeInRequestCreatedPage extends StatelessWidget {
   final String tradeInRequestID;
@@ -26,39 +27,21 @@ class TradeInRequestCreatedPage extends StatelessWidget {
     this.fromMyTradeInRequests = false,
   });
 
+  void _onBackToTradeInRequests(BuildContext context) {
+    final effectiveEmail = (email != null && email!.trim().isNotEmpty)
+        ? email!.trim()
+        : (TradeInFlowSession.currentUserEmail ?? 'customer@rebyte.com');
 
-
-  void _onBackToHome(BuildContext context) {
-    if (fromMyTradeInRequests) {
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-        return;
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MyTradeInRequestsPage(
-              email: email ?? 'customer@rebyte.com',
-              name: name,
-              isLoggedIn: isLoggedIn,
-            ),
-          ),
-          (route) => false,
-        );
-        return;
-      }
-    }
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(
-          isLoggedIn: isLoggedIn,
-          email: email,
+        builder: (context) => MyTradeInRequestsPage(
+          email: effectiveEmail,
           name: name,
-          initialIndex: 0,
+          isLoggedIn: isLoggedIn,
         ),
       ),
-      (route) => false,
+      (route) => route.isFirst,
     );
   }
 
@@ -75,7 +58,7 @@ class TradeInRequestCreatedPage extends StatelessWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _onBackToHome(context);
+        _onBackToTradeInRequests(context);
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -90,7 +73,7 @@ class TradeInRequestCreatedPage extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 24),
-                    onPressed: () => _onBackToHome(context),
+                    onPressed: () => _onBackToTradeInRequests(context),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -389,12 +372,12 @@ class TradeInRequestCreatedPage extends StatelessWidget {
               ],
               const SizedBox(height: 28),
 
-              // Return to Home Link
+              // Return to Trade-In Requests Link
               TextButton(
-                onPressed: () => _onBackToHome(context),
-                child: Text(
-                  fromMyTradeInRequests ? 'Return to Trade-In Requests' : 'Return to Home',
-                  style: const TextStyle(
+                onPressed: () => _onBackToTradeInRequests(context),
+                child: const Text(
+                  'Back to Trade-In Requests',
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF334155),

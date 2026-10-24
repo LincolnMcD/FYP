@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../account_management_module/home_page.dart';
+import '../account_management_module/services/session_service.dart';
 import '../widgets/rebyte_app_bar.dart';
 import 'assessment_result_page.dart';
 import 'improve_assessment_page.dart';
 import 'models/device_model.dart';
 import 'preliminary_quotation_page.dart';
+import 'schedule_inspection_page.dart';
+import 'services/trade_in_flow_session.dart';
 import 'services/trade_in_service.dart';
 import 'trade_in_request_created_page.dart';
+import 'trade_in_request_details_page.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 
 class MyTradeInRequestsPage extends StatefulWidget {
@@ -26,83 +31,234 @@ class MyTradeInRequestsPage extends StatefulWidget {
   State<MyTradeInRequestsPage> createState() => _MyTradeInRequestsPageState();
 }
 
+class _TradeInTabState {
+  final String tabKey;
+  final ScrollController scrollController = ScrollController();
+  List<Map<String, dynamic>> requests = [];
+  int page = 1;
+  bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMore = true;
+
+  _TradeInTabState({required this.tabKey});
+
+  void dispose() {
+    scrollController.dispose();
+  }
+}
+
 class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late TabController _tabController;
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _allRequests = [];
   String _activeStatusFilter = 'All';
+
+  // Toast state
+  String? _toastMessage;
+  bool _isToastError = false;
+
+  void _showToast(String message, [bool isError = false]) {
+    if (!mounted) return;
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _toastMessage == message) {
+        setState(() => _toastMessage = null);
+      }
+    });
+  }
+
+  late final List<_TradeInTabState> _tabStates = [
+    _TradeInTabState(tabKey: 'active'),
+    _TradeInTabState(tabKey: 'in_progress'),
+    _TradeInTabState(tabKey: 'completed'),
+    _TradeInTabState(tabKey: 'cancelled'),
+  ];
+
+  int _activeCount = 0;
+  int _inProgressCount = 0;
+  int _completedCount = 0;
+  int _cancelledCount = 0;
+
+  int _filterConfirmedCount = 0;
+  int _filterEvaluatedCount = 0;
+  int _filterQuotedCount = 0;
+  int _filterAcceptedCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        final idx = _tabController.index;
+        if (_tabStates[idx].requests.isEmpty && !_tabStates[idx].isLoadingMore) {
+          _loadTab(idx, isRefresh: true);
+        }
+      }
     });
-    _loadRequests();
+
+    for (int i = 0; i < _tabStates.length; i++) {
+      final idx = i;
+      _tabStates[idx].scrollController.addListener(() {
+        final ctrl = _tabStates[idx].scrollController;
+        if (ctrl.hasClients &&
+            ctrl.position.pixels >= ctrl.position.maxScrollExtent - 250) {
+          _loadMore(idx);
+        }
+      });
+    }
+
+    _loadTab(0, isRefresh: true);
+    _loadTab(1, isRefresh: true);
+    _loadTab(2, isRefresh: true);
+    _loadTab(3, isRefresh: true);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    for (final s in _tabStates) {
+      s.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _loadRequests() async {
-    setState(() => _isLoading = true);
-    final list = await TradeInService.fetchUserTradeInRequests(widget.email);
+  Future<String> _resolveEffectiveEmail() async {
+    String effectiveEmail = widget.email.trim();
+    if (effectiveEmail.isEmpty || effectiveEmail == 'customer@rebyte.com') {
+      try {
+        final session = await SessionService.getSession();
+        final sEmail = session['email']?.trim();
+        if (sEmail != null && sEmail.isNotEmpty) {
+          effectiveEmail = sEmail;
+        } else if (TradeInFlowSession.currentUserEmail != null &&
+            TradeInFlowSession.currentUserEmail!.trim().isNotEmpty) {
+          effectiveEmail = TradeInFlowSession.currentUserEmail!.trim();
+        } else {
+          final fbEmail = FirebaseAuth.instance.currentUser?.email?.trim();
+          if (fbEmail != null && fbEmail.isNotEmpty) {
+            effectiveEmail = fbEmail;
+          }
+        }
+      } catch (_) {}
+    }
 
-    if (mounted) {
+    if (effectiveEmail.isEmpty || effectiveEmail == 'customer@rebyte.com') {
+      effectiveEmail = 'lolincoln021@gmail.com';
+    }
+    return effectiveEmail;
+  }
+
+  Future<void> _loadTab(int tabIndex, {bool isRefresh = false}) async {
+    if (tabIndex < 0 || tabIndex >= _tabStates.length) return;
+    final state = _tabStates[tabIndex];
+
+    if (isRefresh) {
+      state.page = 1;
+      state.hasMore = true;
       setState(() {
-        _allRequests = list;
-        _isLoading = false;
+        state.isLoading = true;
       });
     }
-  }
 
-  bool _isActiveRequest(Map<String, dynamic> req) {
-    if (_isCompletedRequest(req) || _isCancelledRequest(req)) {
-      return false;
-    }
-    return true;
-  }
+    final email = await _resolveEffectiveEmail();
+    final String? statusFilter = (tabIndex == 0 && _activeStatusFilter != 'All')
+        ? _activeStatusFilter
+        : null;
 
-  bool _isCompletedRequest(Map<String, dynamic> req) {
-    final status = (req['requestStatus'] ?? '').toString().toLowerCase().trim();
-    return status == 'completed' ||
-        status.contains('complet') ||
-        status == 'accepted' ||
-        status.contains('accept');
-  }
+    final response = await TradeInService.fetchUserTradeInRequestsPaginated(
+      userEmail: email,
+      tab: state.tabKey,
+      status: statusFilter,
+      page: state.page,
+      limit: 10,
+    );
 
-  bool _isCancelledRequest(Map<String, dynamic> req) {
-    final status = (req['requestStatus'] ?? '').toString().toLowerCase().trim();
-    return status == 'cancelled' ||
-        status == 'canceled' ||
-        status == 'rejected' ||
-        status == 'declined';
-  }
+    if (!mounted) return;
 
-  String _formatSubmittedDate(dynamic dateVal) {
-    if (dateVal == null) return 'Oct 26, 2023';
-    try {
-      if (dateVal is DateTime) {
-        return DateFormat('MMM d, yyyy').format(dateVal);
+    final newItems = List<Map<String, dynamic>>.from(response['requests'] ?? []);
+    final counts = response['counts'] as Map<String, dynamic>? ?? {};
+    final activeFilters = counts['activeFilters'] as Map<String, dynamic>? ?? {};
+
+    setState(() {
+      if (state.page == 1) {
+        state.requests = newItems;
+      } else {
+        state.requests.addAll(newItems);
       }
-      if (dateVal is Map && dateVal['_seconds'] != null) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(
-            (dateVal['_seconds'] as int) * 1000);
-        return DateFormat('MMM d, yyyy').format(dt);
-      }
-      final str = dateVal.toString();
-      final dt = DateTime.tryParse(str);
-      if (dt != null) {
-        return DateFormat('MMM d, yyyy').format(dt);
-      }
-    } catch (_) {}
-    return 'Oct 26, 2023';
+      state.hasMore = response['hasMore'] == true;
+      state.isLoading = false;
+      state.isLoadingMore = false;
+
+      // Update global tab counts
+      if (counts['active'] != null) _activeCount = counts['active'] as int;
+      if (counts['in_progress'] != null) _inProgressCount = counts['in_progress'] as int;
+      if (counts['completed'] != null) _completedCount = counts['completed'] as int;
+      if (counts['cancelled'] != null) _cancelledCount = counts['cancelled'] as int;
+
+      if (activeFilters['all'] != null) _activeCount = activeFilters['all'] as int;
+      if (activeFilters['confirmed'] != null) _filterConfirmedCount = activeFilters['confirmed'] as int;
+      if (activeFilters['evaluated'] != null) _filterEvaluatedCount = activeFilters['evaluated'] as int;
+      if (activeFilters['quoted'] != null) _filterQuotedCount = activeFilters['quoted'] as int;
+      if (activeFilters['accepted'] != null) _filterAcceptedCount = activeFilters['accepted'] as int;
+    });
+  }
+
+  Future<void> _loadMore(int tabIndex) async {
+    if (tabIndex < 0 || tabIndex >= _tabStates.length) return;
+    final state = _tabStates[tabIndex];
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+
+    setState(() {
+      state.isLoadingMore = true;
+    });
+
+    state.page += 1;
+    final email = await _resolveEffectiveEmail();
+    final String? statusFilter = (tabIndex == 0 && _activeStatusFilter != 'All')
+        ? _activeStatusFilter
+        : null;
+
+    final response = await TradeInService.fetchUserTradeInRequestsPaginated(
+      userEmail: email,
+      tab: state.tabKey,
+      status: statusFilter,
+      page: state.page,
+      limit: 10,
+    );
+
+    if (!mounted) return;
+
+    final newItems = List<Map<String, dynamic>>.from(response['requests'] ?? []);
+    setState(() {
+      state.requests.addAll(newItems);
+      state.hasMore = response['hasMore'] == true;
+      state.isLoadingMore = false;
+    });
+  }
+
+
+
+  bool _isCollectionService(Map<String, dynamic> req) {
+    final rawMethod = (req['inspectionMethod'] ??
+            req['method'] ??
+            req['taskType'] ??
+            req['appointmentType'] ??
+            '')
+        .toString()
+        .toLowerCase();
+    return rawMethod.contains('collect') ||
+        rawMethod.contains('pickup') ||
+        rawMethod.contains('pick up') ||
+        rawMethod.contains('ship');
+  }
+
+  String _getServiceType(Map<String, dynamic> req) {
+    return _isCollectionService(req) ? 'Collection' : 'Inspection';
   }
 
   String _formatEstimatedValue(dynamic estValueVal) {
@@ -140,9 +296,40 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     return 'RM ${fmt.format(minD)} - RM ${fmt.format(maxD)}';
   }
 
-  Map<String, dynamic> _getStatusConfig(String rawStatus) {
+  Map<String, dynamic> _getStatusConfig(String rawStatus, [Map<String, dynamic>? req]) {
     final s = rawStatus.toLowerCase().trim();
-    if (s.contains('accept')) {
+    final hasBooking = (req?['bookingStatus']?.toString().toLowerCase() == 'confirmed') ||
+        (req?['appointmentDate'] != null);
+
+    if (s == 'completed' || s == 'complete') {
+      return {
+        'label': 'Completed',
+        'bg': const Color(0xFFDCFCE7),
+        'color': const Color(0xFF16A34A),
+        'icon': Icons.task_alt_rounded,
+      };
+    } else if (s.contains('hold') || s == 'on hold' || req?['bookingStatus']?.toString().toLowerCase() == 'on hold' || req?['appointmentStatus']?.toString().toLowerCase() == 'on hold') {
+      return {
+        'label': 'On Hold',
+        'bg': const Color(0xFFFFF7ED),
+        'color': const Color(0xFFEA580C),
+        'icon': Icons.pause_circle_outline_rounded,
+      };
+    } else if (s == 'in progress' || s == 'ongoing' || req?['bookingStatus']?.toString().toLowerCase() == 'in progress' || req?['appointmentStatus']?.toString().toLowerCase() == 'in progress') {
+      return {
+        'label': 'In Progress',
+        'bg': const Color(0xFFEFF6FF),
+        'color': const Color(0xFF0C5AD2),
+        'icon': Icons.navigation_rounded,
+      };
+    } else if (hasBooking || s == 'scheduled' || s.contains('schedul') || s == 'on progress') {
+      return {
+        'label': 'Scheduled',
+        'bg': const Color(0xFFEFF6FF),
+        'color': const Color(0xFF0C5AD2),
+        'icon': Icons.event_available_rounded,
+      };
+    } else if (s.contains('accept')) {
       return {
         'label': 'Accepted',
         'bg': const Color(0xFFECFDF5),
@@ -163,12 +350,12 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         'color': const Color(0xFF2563EB),
         'icon': Icons.fact_check_outlined,
       };
-    } else if (s.contains('submit') || s.contains('transit')) {
+    } else if (s.contains('submit') || s.contains('transit') || s == 'confirmed') {
       return {
-        'label': 'Submitted',
+        'label': 'Confirmed',
         'bg': const Color(0xFFFEF3C7),
         'color': const Color(0xFFD97706),
-        'icon': Icons.local_shipping_rounded,
+        'icon': Icons.verified_outlined,
       };
     } else if (s.contains('reject') || s.contains('declin')) {
       return {
@@ -186,10 +373,10 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       };
     } else {
       return {
-        'label': 'Submitted',
+        'label': 'Confirmed',
         'bg': const Color(0xFFFEF3C7),
         'color': const Color(0xFFD97706),
-        'icon': Icons.local_shipping_rounded,
+        'icon': Icons.verified_outlined,
       };
     }
   }
@@ -208,6 +395,59 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     );
   }
 
+  void _navigateToViewProgress(Map<String, dynamic> req) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TradeInRequestDetailsPage(
+          request: req,
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
+        ),
+      ),
+    ).then((_) {
+      _loadTab(_tabController.index, isRefresh: true);
+    });
+  }
+
+  void _navigateToEditBooking(Map<String, dynamic> req) {
+    final deviceObj = _buildDeviceFromReq(req);
+    final rawId = req['tradeInRequestID']?.toString() ?? 'TRD-8992-BX';
+    final cleanId = rawId.replaceAll('#', '');
+    final estValue = _formatEstimatedValue(req['estimatedValue']);
+    final isCollect = _isCollectionService(req);
+    final method = req['inspectionMethod']?.toString() ??
+        (isCollect ? 'Doorstep Collection' : 'On-Site Inspection');
+
+    final bookingAddressID = req['addressID']?.toString();
+    final bookingAddressLine = (req['appointmentLocation'] ?? req['inspectionAddress'] ?? req['address'])?.toString();
+    final bookingDate = req['appointmentDate']?.toString();
+    final bookingSlot = req['appointmentTime']?.toString();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScheduleInspectionPage(
+          tradeInRequestID: cleanId,
+          method: method,
+          device: deviceObj,
+          estimatedValue: estValue,
+          email: widget.email,
+          name: widget.name,
+          isLoggedIn: widget.isLoggedIn,
+          fromMyTradeInRequests: true,
+          initialAddressID: bookingAddressID,
+          initialAddressLine: bookingAddressLine,
+          initialDate: bookingDate,
+          initialSlot: bookingSlot,
+        ),
+      ),
+    ).then((_) {
+      _loadTab(_tabController.index, isRefresh: true);
+    });
+  }
+
   void _continueRequest(Map<String, dynamic> req) {
     final status = (req['requestStatus'] ?? '').toString().toLowerCase().trim();
     final deviceObj = _buildDeviceFromReq(req);
@@ -215,7 +455,35 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final cleanId = rawId.replaceAll('#', '');
     final estValue = _formatEstimatedValue(req['estimatedValue']);
 
-    if (status == 'submitted' || status.contains('transit') || status.contains('submit')) {
+    if (status == 'on hold' || status.contains('hold') || req['bookingStatus']?.toString().toLowerCase() == 'on hold' || req['appointmentStatus']?.toString().toLowerCase() == 'on hold') {
+      // On Hold -> Navigate to ScheduleInspectionPage so customer can reselect date, time, and address
+      final bookingAddressID = req['addressID']?.toString();
+      final bookingAddressLine = (req['appointmentLocation'] ?? req['inspectionAddress'] ?? req['address'])?.toString();
+      final bookingDate = req['appointmentDate']?.toString();
+      final bookingSlot = req['appointmentTime']?.toString();
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScheduleInspectionPage(
+            tradeInRequestID: cleanId,
+            method: req['inspectionMethod']?.toString() ?? 'On-Site Inspection',
+            device: deviceObj,
+            estimatedValue: estValue,
+            email: widget.email,
+            name: widget.name,
+            isLoggedIn: widget.isLoggedIn,
+            fromMyTradeInRequests: true,
+            initialAddressID: bookingAddressID,
+            initialAddressLine: bookingAddressLine,
+            initialDate: bookingDate,
+            initialSlot: bookingSlot,
+          ),
+        ),
+      ).then((_) {
+        _loadTab(_tabController.index, isRefresh: true);
+      });
+    } else if (status == 'submitted' || status.contains('transit') || status.contains('submit')) {
       // 1. Submitted -> Improve Your Assessment Page
       Navigator.push(
         context,
@@ -258,6 +526,19 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             name: widget.name,
             estimatedValue: estValue,
             fromMyTradeInRequests: true,
+          ),
+        ),
+      );
+    } else if (status == 'scheduled' || status.contains('schedul') || status == 'in progress' || status == 'ongoing' || req['appointmentDate'] != null) {
+      // Scheduled / In Progress -> Given Image Page (TradeInRequestDetailsPage)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TradeInRequestDetailsPage(
+            request: req,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
           ),
         ),
       );
@@ -348,21 +629,51 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       } catch (_) {}
 
       setState(() {
-        req['requestStatus'] = 'Cancelled';
+        req['requestStatus'] = 'Declined';
+        req['status'] = 'Declined';
+        req['bookingStatus'] = 'Cancelled';
       });
+      _loadTab(0, isRefresh: true);
+      _loadTab(1, isRefresh: true);
+      _loadTab(3, isRefresh: true);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Trade-in request $formattedId has been cancelled.'),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showToast('Trade-in request $formattedId has been cancelled successfully.');
     }
   }
 
   void _showRequestDetailsModal(Map<String, dynamic> req) {
+    final rawStatus = (req['requestStatus'] ?? '').toString().toLowerCase().trim();
+    final isOnHold = rawStatus == 'on hold' ||
+        rawStatus.contains('hold') ||
+        req['bookingStatus']?.toString().toLowerCase() == 'on hold' ||
+        req['appointmentStatus']?.toString().toLowerCase() == 'on hold';
+
+    if (isOnHold) {
+      _continueRequest(req);
+      return;
+    }
+
+    final isScheduled = rawStatus == 'scheduled' ||
+        rawStatus.contains('schedul') ||
+        req['appointmentDate'] != null ||
+        (req['bookingStatus'] ?? '').toString().toLowerCase() == 'confirmed';
+
+    if (isScheduled) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TradeInRequestDetailsPage(
+            request: req,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
+          ),
+        ),
+      );
+      return;
+    }
+
     final dev = req['device'] is Map<String, dynamic> ? req['device'] : null;
     final brand = dev?['brand']?.toString() ?? 'Apple';
     final model = dev?['model']?.toString() ?? 'iPhone 13 Pro';
@@ -372,7 +683,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final reqId = req['tradeInRequestID']?.toString() ?? '#TRD-8992-BX';
     final status = req['requestStatus']?.toString() ?? 'Submitted';
     final estValue = _formatEstimatedValue(req['estimatedValue']);
-    final dateSubmitted = _formatSubmittedDate(req['submittedAt']);
+    final serviceType = _getServiceType(req);
     final statusCfg = _getStatusConfig(status);
 
     showModalBottomSheet(
@@ -468,7 +779,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                     const Divider(height: 16, color: Color(0xFFE2E8F0)),
                     _buildModalInfoRow('Est. Trade-In Value', estValue, isHighlight: true),
                     const Divider(height: 16, color: Color(0xFFE2E8F0)),
-                    _buildModalInfoRow('Date Submitted', dateSubmitted),
+                    _buildModalInfoRow('Service Type', serviceType),
                   ],
                 ),
               ),
@@ -522,89 +833,6 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
 
   @override
   Widget build(BuildContext context) {
-    // 1. Separate Active, Completed, and Cancelled requests
-    List<Map<String, dynamic>> activeRequests =
-        _allRequests.where((r) => _isActiveRequest(r)).toList();
-    List<Map<String, dynamic>> completedRequests =
-        _allRequests.where((r) => _isCompletedRequest(r)).toList();
-    List<Map<String, dynamic>> cancelledRequests =
-        _allRequests.where((r) => _isCancelledRequest(r)).toList();
-
-    // If all lists are empty (e.g. fresh user or demo session), show default demo records
-    if (_allRequests.isEmpty && !_isLoading) {
-      activeRequests = [
-        {
-          'tradeInRequestID': '#TRD-8992-BX',
-          'requestStatus': 'Submitted',
-          'submittedAt': '2023-10-26T10:00:00.000Z',
-          'device': {
-            'brand': 'Apple',
-            'model': 'iPhone 13 Pro',
-            'storageCapacity': '128GB',
-            'colour': 'Graphite',
-            'imeiNum': '352948119028472',
-          },
-          'estimatedValue': {'min': 1050.5, 'max': 1520.0},
-        },
-        {
-          'tradeInRequestID': '#TRD-7412-EK',
-          'requestStatus': 'Evaluated',
-          'submittedAt': '2023-10-24T14:30:00.000Z',
-          'device': {
-            'brand': 'Samsung',
-            'model': 'Galaxy S23 Ultra',
-            'storageCapacity': '256GB',
-            'colour': 'Phantom Black',
-            'imeiNum': '358291048291024',
-          },
-          'estimatedValue': {'min': 2100.0, 'max': 2450.5},
-        },
-        {
-          'tradeInRequestID': '#TRD-6204-AQ',
-          'requestStatus': 'Quoted',
-          'submittedAt': '2023-10-22T09:15:00.000Z',
-          'device': {
-            'brand': 'Apple',
-            'model': 'iPhone 14 Pro Max',
-            'storageCapacity': '256GB',
-            'colour': 'Deep Purple',
-            'imeiNum': '359182049182019',
-          },
-          'estimatedValue': {'min': 2340.5, 'max': 2355.3},
-        },
-      ];
-      completedRequests = [
-        {
-          'tradeInRequestID': '#TRD-5510-CL',
-          'requestStatus': 'Accepted',
-          'submittedAt': '2023-10-20T16:45:00.000Z',
-          'device': {
-            'brand': 'Google',
-            'model': 'Pixel 8 Pro',
-            'storageCapacity': '128GB',
-            'colour': 'Bay Blue',
-            'imeiNum': '357192840192841',
-          },
-          'estimatedValue': {'min': 1800.0, 'max': 2100.5},
-        },
-      ];
-      cancelledRequests = [
-        {
-          'tradeInRequestID': '#TRD-3201-CL',
-          'requestStatus': 'Cancelled',
-          'submittedAt': '2023-10-18T10:41:00.000Z',
-          'device': {
-            'brand': 'Samsung',
-            'model': 'Galaxy A15',
-            'storageCapacity': '64GB',
-            'colour': 'Blue',
-            'imeiNum': '359161831531204',
-          },
-          'estimatedValue': {'min': 350.5, 'max': 450.0},
-        },
-      ];
-    }
-
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8FAFC),
@@ -618,10 +846,12 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         isTradeInRequestsSelected: true,
       ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            // Header: Back button + Title
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: Back button + Title
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Column(
@@ -665,7 +895,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             ),
             const SizedBox(height: 14),
 
-            // Tab Bar: Active, Completed, Cancelled
+            // Tab Bar: Active, On Progress, Completed, Cancelled
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Stack(
@@ -698,7 +928,17 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                           children: [
                             const Icon(Icons.sync_rounded, size: 17),
                             const SizedBox(width: 6),
-                            Text('Active (${activeRequests.length})'),
+                            Text('Active ($_activeCount)'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.pending_actions_rounded, size: 17),
+                            const SizedBox(width: 6),
+                            Text('On Progress ($_inProgressCount)'),
                           ],
                         ),
                       ),
@@ -708,7 +948,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                           children: [
                             const Icon(Icons.check_circle_outline_rounded, size: 17),
                             const SizedBox(width: 6),
-                            Text('Completed (${completedRequests.length})'),
+                            Text('Completed ($_completedCount)'),
                           ],
                         ),
                       ),
@@ -718,7 +958,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                           children: [
                             const Icon(Icons.cancel_outlined, size: 17),
                             const SizedBox(width: 6),
-                            Text('Cancelled (${cancelledRequests.length})'),
+                            Text('Cancelled ($_cancelledCount)'),
                           ],
                         ),
                       ),
@@ -729,65 +969,87 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             ),
             const SizedBox(height: 12),
 
-            // Request List Views across 3 tabs
+            // Request List Views across 4 tabs
             Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
-                    )
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildActiveTab(activeRequests),
-                        _buildRequestList(completedRequests, tabType: 'completed'),
-                        _buildRequestList(cancelledRequests, tabType: 'cancelled'),
-                      ],
-                    ),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildActiveTab(_tabStates[0]),
+                  _buildRequestList(_tabStates[1], tabType: 'in_progress'),
+                  _buildRequestList(_tabStates[2], tabType: 'completed'),
+                  _buildRequestList(_tabStates[3], tabType: 'cancelled'),
+                ],
+              ),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: const ReByteBottomNavBar(
+
+        // Top Floating Toast Banner
+        if (_toastMessage != null)
+          Positioned(
+            top: 12,
+            left: 16,
+            right: 16,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _isToastError ? const Color(0xFFE11D48) : const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isToastError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _toastMessage!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _toastMessage = null),
+                      child: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  ),
+  bottomNavigationBar: const ReByteBottomNavBar(
         selectedIndex: -1,
       ),
     );
   }
 
-  /// Builds the Active tab with 3 status filter chips: Submitted, Evaluated, Quoted
-  Widget _buildActiveTab(List<Map<String, dynamic>> activeRequests) {
-    // Compute item counts for the filter chips
-    final submittedCount = activeRequests.where((r) {
-      final s = (r['requestStatus'] ?? '').toString().toLowerCase();
-      return s.contains('submit') || s.contains('transit');
-    }).length;
-
-    final evaluatedCount = activeRequests.where((r) {
-      final s = (r['requestStatus'] ?? '').toString().toLowerCase();
-      return s.contains('evaluat');
-    }).length;
-
-    final quotedCount = activeRequests.where((r) {
-      final s = (r['requestStatus'] ?? '').toString().toLowerCase();
-      return s.contains('quote');
-    }).length;
-
-    // Filter requests according to _activeStatusFilter
-    final filteredRequests = activeRequests.where((r) {
-      if (_activeStatusFilter == 'All') return true;
-      final s = (r['requestStatus'] ?? '').toString().toLowerCase().trim();
-      if (_activeStatusFilter == 'Submitted') {
-        return s.contains('submit') || s.contains('transit');
-      } else if (_activeStatusFilter == 'Evaluated') {
-        return s.contains('evaluat');
-      } else if (_activeStatusFilter == 'Quoted') {
-        return s.contains('quote');
-      }
-      return true;
-    }).toList();
+  /// Builds the Active tab with 4 status filter chips: Confirmed, Evaluated, Quoted, Accepted
+  Widget _buildActiveTab(_TradeInTabState state) {
+    if (_activeStatusFilter == 'Scheduled') {
+      _activeStatusFilter = 'All';
+    }
 
     return Column(
       children: [
-        // Status Filter Chips: All, Submitted, Evaluated, Quoted
+        // Status Filter Chips: All, Confirmed, Evaluated, Quoted, Accepted
         Container(
           height: 44,
           margin: const EdgeInsets.only(bottom: 8),
@@ -795,20 +1057,22 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              _buildFilterChip('All', activeRequests.length),
+              _buildFilterChip('All', _activeCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Submitted', submittedCount),
+              _buildFilterChip('Confirmed', _filterConfirmedCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Evaluated', evaluatedCount),
+              _buildFilterChip('Evaluated', _filterEvaluatedCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Quoted', quotedCount),
+              _buildFilterChip('Quoted', _filterQuotedCount),
+              const SizedBox(width: 8),
+              _buildFilterChip('Accepted', _filterAcceptedCount),
             ],
           ),
         ),
-        // Filtered Request List
+        // Filtered Request List with infinite scroll
         Expanded(
           child: _buildRequestList(
-            filteredRequests,
+            state,
             tabType: 'active',
             emptyMessage: _activeStatusFilter == 'All'
                 ? 'No active trade-in requests found'
@@ -823,9 +1087,12 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final isSelected = _activeStatusFilter == label;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _activeStatusFilter = label;
-        });
+        if (_activeStatusFilter != label) {
+          setState(() {
+            _activeStatusFilter = label;
+          });
+          _loadTab(0, isRefresh: true);
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -883,16 +1150,29 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
   }
 
   Widget _buildRequestList(
-    List<Map<String, dynamic>> requests, {
+    _TradeInTabState state, {
     required String tabType,
     String? emptyMessage,
   }) {
+    final tabIdx = _tabStates.indexWhere((s) => s.tabKey == tabType);
+
+    if (state.isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+      );
+    }
+
+    final requests = state.requests;
+
     if (requests.isEmpty) {
       String defaultEmptyMsg;
       IconData emptyIcon;
       if (tabType == 'active') {
         defaultEmptyMsg = 'No active trade-in requests found';
         emptyIcon = Icons.sync_problem_rounded;
+      } else if (tabType == 'in_progress') {
+        defaultEmptyMsg = 'No trade-in requests currently on progress';
+        emptyIcon = Icons.pending_actions_rounded;
       } else if (tabType == 'completed') {
         defaultEmptyMsg = 'No completed trade-in requests';
         emptyIcon = Icons.check_circle_outline_rounded;
@@ -901,22 +1181,34 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         emptyIcon = Icons.cancel_outlined;
       }
 
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: () => _loadTab(tabIdx != -1 ? tabIdx : 0, isRefresh: true),
+        color: const Color(0xFF0C5AD2),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(
-              emptyIcon,
-              size: 54,
-              color: Colors.grey.shade300,
-            ),
-            const SizedBox(height: 14),
-            Text(
-              emptyMessage ?? defaultEmptyMsg,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.45,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      emptyIcon,
+                      size: 54,
+                      color: Colors.grey.shade300,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      emptyMessage ?? defaultEmptyMsg,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -925,13 +1217,28 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     }
 
     return RefreshIndicator(
-      onRefresh: _loadRequests,
+      onRefresh: () => _loadTab(tabIdx != -1 ? tabIdx : 0, isRefresh: true),
       color: const Color(0xFF0C5AD2),
       child: ListView.builder(
+        controller: state.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        itemCount: requests.length,
+        itemCount: requests.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (index == requests.length) {
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFF0C5AD2),
+                ),
+              ),
+            );
+          }
           final req = requests[index];
           return _buildTradeInCard(req, tabType: tabType);
         },
@@ -948,34 +1255,60 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final formattedId = reqId.startsWith('#') ? reqId : '#$reqId';
     final status = req['requestStatus']?.toString() ?? 'Submitted';
     final estValue = _formatEstimatedValue(req['estimatedValue']);
-    final dateSubmitted = _formatSubmittedDate(req['submittedAt']);
-    final statusCfg = _getStatusConfig(status);
+    final serviceType = _getServiceType(req);
+    final isCollect = _isCollectionService(req);
+    final statusCfg = _getStatusConfig(status, req);
     final String? imgUrl = req['deviceImage']?.toString();
     final isCancelled = status.toLowerCase() == 'cancelled';
+    final isOnHold = status.toLowerCase() == 'on hold' ||
+        status.toLowerCase().contains('hold') ||
+        req['bookingStatus']?.toString().toLowerCase() == 'on hold' ||
+        req['appointmentStatus']?.toString().toLowerCase() == 'on hold';
+    final hasAppointment = req['appointmentDate'] != null && req['appointmentTime'] != null;
+    final appointmentStr = hasAppointment ? '${req['appointmentDate']} • ${req['appointmentTime']}' : null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Device graphic mockup preview (centered)
-          Center(
-            child: GestureDetector(
-              onTap: () => _showRequestDetailsModal(req),
-              child: Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (tabType == 'in_progress') {
+          _navigateToViewProgress(req);
+        } else if (tabType == 'on_hold') {
+          _navigateToEditBooking(req);
+        } else {
+          _showRequestDetailsModal(req);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Device graphic mockup preview (centered)
+            Center(
+              child: GestureDetector(
+                onTap: () {
+                  if (tabType == 'in_progress') {
+                    _navigateToViewProgress(req);
+                  } else if (tabType == 'on_hold') {
+                    _navigateToEditBooking(req);
+                  } else {
+                    _showRequestDetailsModal(req);
+                  }
+                },
+                child: Container(
                 height: 125,
                 width: 125,
                 decoration: BoxDecoration(
@@ -1072,9 +1405,9 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           ),
           const SizedBox(height: 14),
 
-          // DATE SUBMITTED
+          // SERVICE TYPE
           const Text(
-            'DATE SUBMITTED',
+            'SERVICE TYPE',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -1083,17 +1416,56 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            dateSubmitted,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0F172A),
-            ),
+          Row(
+            children: [
+              Icon(
+                isCollect ? Icons.local_shipping_outlined : Icons.fact_check_outlined,
+                size: 16,
+                color: isCollect ? const Color(0xFFD97706) : const Color(0xFF0C5AD2),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                serviceType,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
           ),
+
+          // APPOINTMENT (If scheduled)
+          if (appointmentStr != null) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'APPOINTMENT SCHEDULED',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0C5AD2),
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFF0C5AD2)),
+                const SizedBox(width: 6),
+                Text(
+                  appointmentStr,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 18),
 
-          // Action Buttons: Only Active and Completed orders can continue
+          // Action Buttons: Cancelled, On Hold, In Progress, Completed, Active
           if (tabType == 'cancelled' || isCancelled) ...[
             Container(
               width: double.infinity,
@@ -1119,15 +1491,169 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                 ],
               ),
             ),
+          ] else if (isOnHold) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFEDD5)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFFEA580C), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Your scheduled ${req['inspectionMethod'] ?? 'inspection'} is currently on hold because no technician is available. Please reselect your appointment or cancel.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF9A3412),
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => _confirmCancelRequest(req),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4444),
+                        side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () => _continueRequest(req),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0C5AD2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_repeat_rounded, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Reschedule',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (tabType == 'in_progress') ...[
+            // On Progress: Cancel and View Progress buttons like active tab
+            Row(
+              children: [
+                // Cancel Button
+                Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => _confirmCancelRequest(req),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4444),
+                        side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Edit Booking Button (navigates to calendar page)
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () => _navigateToEditBooking(req),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0C5AD2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.edit_calendar_rounded, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Edit Booking',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ] else if (tabType == 'completed') ...[
-            // Completed Order: Can continue to Request Created / Inspection page
+            // Completed Order: View Completed Summary
             SizedBox(
               width: double.infinity,
               height: 44,
               child: ElevatedButton(
-                onPressed: () => _continueRequest(req),
+                onPressed: () => _showRequestDetailsModal(req),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0C5AD2),
+                  backgroundColor: const Color(0xFF16A34A),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -1137,15 +1663,15 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Icon(Icons.check_circle_outline_rounded, size: 16),
+                    SizedBox(width: 6),
                     Text(
-                      'Continue',
+                      'View Summary',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(width: 6),
-                    Icon(Icons.arrow_forward_rounded, size: 16),
                   ],
                 ),
               ),
@@ -1218,8 +1744,9 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildFallbackDeviceVisual() {
     return Container(

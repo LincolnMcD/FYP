@@ -17,6 +17,7 @@ class CustomerDeliveryTrackingPage extends StatefulWidget {
   final String? scheduleDate;
   final String? estimatedEndTime;
   final AddressModel? deliveryAddress;
+  final String? taskType;
 
   const CustomerDeliveryTrackingPage({
     super.key,
@@ -26,6 +27,7 @@ class CustomerDeliveryTrackingPage extends StatefulWidget {
     this.scheduleDate,
     this.estimatedEndTime,
     this.deliveryAddress,
+    this.taskType,
   });
 
   @override
@@ -37,6 +39,8 @@ class _CustomerDeliveryTrackingPageState
     extends State<CustomerDeliveryTrackingPage> {
   InAppWebViewController? _webViewController;
   bool _isMapLoading = true;
+  bool _hasInitialCoordsLoaded = false;
+  String? _taskType;
 
   // Fallback origin: ReByte Central Hub (Penang)
   static const double companyLat = 5.453240417145323;
@@ -81,11 +85,56 @@ class _CustomerDeliveryTrackingPageState
   final DeliverySocketService _socketService = DeliverySocketService();
   bool _isDeliveryCompleted = false;
 
+  bool get _isInspect {
+    final t = (_taskType ?? widget.taskType ?? '').toLowerCase();
+    return t.contains('inspect');
+  }
+
+  bool get _isCollect {
+    final t = (_taskType ?? widget.taskType ?? '').toLowerCase();
+    return t.contains('collect');
+  }
+
+  bool get _isTradeIn => _isInspect || _isCollect;
+
+  String get _displayStaffName {
+    if (_staffName.isEmpty || _staffName == 'Delivery Specialist') {
+      if (_isInspect) return 'Inspector';
+      if (_isCollect) return 'Collector';
+      return 'Delivery Specialist';
+    }
+    return _staffName;
+  }
+
+  String get _pageTitle {
+    if (_isInspect) return 'Track Inspection Staff';
+    if (_isCollect) return 'Track Collection Staff';
+    return 'Track Delivery';
+  }
+
+  String get _badgeStatus {
+    if (_isTradeIn) return 'Travelling';
+    return 'Delivering';
+  }
+
+  String get _pointerALabel {
+    if (_isInspect) return 'Pointer A: Inspector';
+    if (_isCollect) return 'Pointer A: Collector';
+    return 'Pointer A: Delivery Staff';
+  }
+
+  String get _destinationLabel {
+    if (_isInspect) return 'Inspection Destination';
+    if (_isCollect) return 'Collection Destination';
+    return 'Delivery Destination';
+  }
+
   @override
   void initState() {
     super.initState();
     _scheduleDate = widget.scheduleDate;
     _estimatedEndTime = widget.estimatedEndTime;
+    _taskType = widget.taskType;
 
     if (widget.deliveryAddress != null) {
       final addr = widget.deliveryAddress!;
@@ -100,6 +149,13 @@ class _CustomerDeliveryTrackingPageState
     _loadInitialTrackingData();
     _initSocketTracking();
     _startEtaTicker();
+
+    // Fallback timer: ensure map view renders within 1.5s even under slow network
+    Timer(const Duration(milliseconds: 1500), () {
+      if (mounted && !_hasInitialCoordsLoaded) {
+        setState(() => _hasInitialCoordsLoaded = true);
+      }
+    });
   }
 
   @override
@@ -127,6 +183,7 @@ class _CustomerDeliveryTrackingPageState
   void _initSocketTracking() {
     _socketService.connect(
       orderID: widget.orderID,
+      tradeInRequestID: _isTradeIn ? widget.orderID : null,
       role: 'customer',
       onLocationUpdate: (data) {
         if (!mounted || _isDeliveryCompleted) return;
@@ -138,6 +195,7 @@ class _CustomerDeliveryTrackingPageState
         final staffDurMins = (data['estimatedDurationMinutes'] as num?)?.toInt();
 
         if (newLat != null && newLng != null) {
+          final isFirstLiveGps = !_hasLiveStaffGps || !_hasInitialCoordsLoaded || (_staffLat == companyLat && _staffLng == companyLng);
           final movedDist = _calculateDistance(_staffLat, _staffLng, newLat, newLng);
 
           setState(() {
@@ -145,6 +203,7 @@ class _CustomerDeliveryTrackingPageState
             _staffLng = newLng;
             _staffHeading = heading;
             _hasLiveStaffGps = true;
+            _hasInitialCoordsLoaded = true;
             // Directly mirror the exact distance and duration from the staff's turn-by-turn navigation
             if (staffDistKm != null && staffDurMins != null) {
               _estDistanceKm = staffDistKm;
@@ -152,15 +211,22 @@ class _CustomerDeliveryTrackingPageState
             }
           });
 
-          // Move vehicle marker smoothly in real time
-          _webViewController?.evaluateJavascript(
-            source: '''
-              setVehiclePosition($_staffLat, $_staffLng, $_staffHeading, false, false);
-            ''',
-          );
+          // If this is the initial live GPS or we were previously at fallback company hub,
+          // immediately re-calculate the driving route so the starting point & polyline
+          // instantly start from the staff's live location rather than ReByte!
+          if (isFirstLiveGps) {
+            _loadOsrmRoute();
+          } else {
+            // Move vehicle marker smoothly in real time
+            _webViewController?.evaluateJavascript(
+              source: '''
+                setVehiclePosition($_staffLat, $_staffLng, $_staffHeading, false, false);
+              ''',
+            );
+          }
 
           // If staff didn't broadcast their active navigation ETA, calculate along road route
-          if (staffDistKm == null || staffDurMins == null) {
+          if (!isFirstLiveGps && (staffDistKm == null || staffDurMins == null)) {
             _handleDynamicEtaUpdate(movedDist, speed);
           }
         }
@@ -244,19 +310,31 @@ class _CustomerDeliveryTrackingPageState
   }
 
   void _showDeliveryCompletedDialog(Map<String, dynamic> data) async {
+    final titleText = _isInspect
+        ? 'Inspection Completed!'
+        : (_isCollect
+            ? 'Device Collected!'
+            : 'Package Delivered!');
+    final defaultMsg = _isInspect
+        ? 'Your device inspection has been completed successfully.'
+        : (_isCollect
+            ? 'Your device has been successfully collected.'
+            : 'Your order #${widget.orderID} has been successfully delivered by the specialist.');
+    final buttonText = _isTradeIn ? 'Back to Request Details' : 'Back to Order Details';
+
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
-          children: const [
-            Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
-            SizedBox(width: 10),
+          children: [
+            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Package Delivered!',
-                style: TextStyle(
+                titleText,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1F2937),
@@ -270,13 +348,12 @@ class _CustomerDeliveryTrackingPageState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              data['message']?.toString() ??
-                  'Your order #${widget.orderID} has been successfully delivered by the specialist.',
+              data['message']?.toString() ?? defaultMsg,
               style: const TextStyle(fontSize: 14, color: Color(0xFF374151)),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Thank you for shopping with ReByte!',
+              'Thank you for choosing ReByte!',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
             ),
           ],
@@ -294,9 +371,9 @@ class _CustomerDeliveryTrackingPageState
               onPressed: () {
                 Navigator.of(ctx).pop(true);
               },
-              child: const Text(
-                'Back to Order Details',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              child: Text(
+                buttonText,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
           ),
@@ -312,6 +389,9 @@ class _CustomerDeliveryTrackingPageState
   /// Initial load: fetch live delivery tracking data from backend and calculate route
   Future<void> _loadInitialTrackingData() async {
     await _fetchLiveDeliveryData();
+    if (mounted) {
+      setState(() => _hasInitialCoordsLoaded = true);
+    }
     await _loadOsrmRoute();
 
     // Fallback heartbeat polling only if socket is disconnected (every 20s)
@@ -358,6 +438,10 @@ class _CustomerDeliveryTrackingPageState
               data['estimatedEndTime'].toString().isNotEmpty) {
             _estimatedEndTime = data['estimatedEndTime'].toString();
           }
+          if (data['taskType'] != null &&
+              data['taskType'].toString().isNotEmpty) {
+            _taskType ??= data['taskType'].toString();
+          }
 
           if (data['staffLat'] != null && data['staffLng'] != null) {
             _staffLat = (data['staffLat'] as num).toDouble();
@@ -373,6 +457,7 @@ class _CustomerDeliveryTrackingPageState
               }
             }
           }
+          _hasInitialCoordsLoaded = true;
         });
       }
     } catch (e) {
@@ -629,8 +714,8 @@ class _CustomerDeliveryTrackingPageState
     if (_webViewController != null && _routePoints.isNotEmpty) {
       final jsonPoints = jsonEncode(_routePoints);
       final staffLabel = _hasLiveStaffGps
-          ? '$_staffName (Pointer A)'
-          : 'ReByte Central Hub (Pointer A)';
+          ? '$_displayStaffName (Pointer A)'
+          : (_isTradeIn ? _pointerALabel : 'ReByte Central Hub (Pointer A)');
       _webViewController?.evaluateJavascript(
         source: '''
           updateRoute($jsonPoints, $_staffLat, $_staffLng, $_destLat, $_destLng, '$staffLabel', $_staffHeading);
@@ -714,16 +799,18 @@ class _CustomerDeliveryTrackingPageState
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Track Delivery',
-              style: TextStyle(
+            Text(
+              _pageTitle,
+              style: const TextStyle(
                 color: Color(0xFF0F172A),
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
             ),
             Text(
-              'Order #${widget.orderID.replaceAll('#', '')}',
+              _isTradeIn
+                  ? 'Request #${widget.orderID.replaceAll('#', '')}'
+                  : 'Order #${widget.orderID.replaceAll('#', '')}',
               style: const TextStyle(
                 color: Color(0xFF64748B),
                 fontSize: 12,
@@ -753,9 +840,9 @@ class _CustomerDeliveryTrackingPageState
                   ),
                 ),
                 const SizedBox(width: 5),
-                const Text(
-                  'Delivering',
-                  style: TextStyle(
+                Text(
+                  _badgeStatus,
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF0C5AD2),
@@ -768,34 +855,62 @@ class _CustomerDeliveryTrackingPageState
       ),
       body: Stack(
         children: [
-          // 1. Interactive Leaflet Map via InAppWebView
-          InAppWebView(
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              transparentBackground: true,
-              supportZoom: true,
-              builtInZoomControls: false,
-              displayZoomControls: false,
-            ),
-            initialData: InAppWebViewInitialData(
-              data: _buildCustomerTrackingMapHtml(
-                _staffLat,
-                _staffLng,
-                _destLat,
-                _destLng,
+          // 1. Interactive Leaflet Map via InAppWebView (waits for real room/backend coordinates)
+          if (_hasInitialCoordsLoaded)
+            InAppWebView(
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                transparentBackground: true,
+                supportZoom: true,
+                builtInZoomControls: false,
+                displayZoomControls: false,
+              ),
+              initialData: InAppWebViewInitialData(
+                data: _buildCustomerTrackingMapHtml(
+                  _staffLat,
+                  _staffLng,
+                  _destLat,
+                  _destLng,
+                ),
+              ),
+              onWebViewCreated: (controller) {
+                _webViewController = controller;
+              },
+              onLoadStop: (controller, url) async {
+                setState(() => _isMapLoading = false);
+                _updateMapRoute();
+              },
+            )
+          else
+            Container(
+              color: const Color(0xFFF8FAFC),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      color: Color(0xFF0C5AD2),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _isInspect
+                          ? 'Locating assigned inspector...'
+                          : (_isCollect
+                              ? 'Locating assigned collector...'
+                              : 'Locating delivery specialist...'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            onWebViewCreated: (controller) {
-              _webViewController = controller;
-            },
-            onLoadStop: (controller, url) async {
-              setState(() => _isMapLoading = false);
-              _updateMapRoute();
-            },
-          ),
 
-          // Loading Indicator
-          if (_isMapLoading)
+          // Loading Indicator overlay while webview tiles render
+          if (_hasInitialCoordsLoaded && _isMapLoading)
             Container(
               color: Colors.white,
               child: const Center(
@@ -814,7 +929,9 @@ class _CustomerDeliveryTrackingPageState
               children: [
                 FloatingActionButton.small(
                   heroTag: 'recenter_staff',
-                  tooltip: 'Center on Delivery Staff',
+                  tooltip: _isInspect
+                      ? 'Center on Inspector'
+                      : (_isCollect ? 'Center on Collector' : 'Center on Delivery Staff'),
                   backgroundColor: Colors.white,
                   foregroundColor: const Color(0xFF0C5AD2),
                   elevation: 4,
@@ -872,9 +989,9 @@ class _CustomerDeliveryTrackingPageState
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Text(
-                    'Pointer A: Delivery Staff',
-                    style: TextStyle(
+                  Text(
+                    _pointerALabel,
+                    style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF0F172A),
@@ -920,13 +1037,17 @@ class _CustomerDeliveryTrackingPageState
                   ),
                 ],
               ),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Drag handle pill
-                  Center(
+              child: SafeArea(
+                top: false,
+                bottom: true,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Drag handle pill
+                      Center(
                     child: Container(
                       width: 36,
                       height: 4,
@@ -1072,7 +1193,7 @@ class _CustomerDeliveryTrackingPageState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _staffName,
+                              _displayStaffName,
                               style: const TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.bold,
@@ -1082,8 +1203,8 @@ class _CustomerDeliveryTrackingPageState
                             const SizedBox(height: 1),
                             Text(
                               _hasLiveStaffGps
-                                  ? 'Delivering your order • Live GPS'
-                                  : 'Assigned Delivery Specialist',
+                                  ? (_isTradeIn ? 'Travelling to your location • Live GPS' : 'Delivering your order • Live GPS')
+                                  : (_isInspect ? 'Assigned Inspector' : (_isCollect ? 'Assigned Collector' : 'Assigned Delivery Specialist')),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -1116,9 +1237,11 @@ class _CustomerDeliveryTrackingPageState
               ),
             ),
           ),
-        ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   /// Builds the complete Leaflet map HTML with Pointer A (staff GPS) and customer destination pin
@@ -1128,6 +1251,9 @@ class _CustomerDeliveryTrackingPageState
     double toLat,
     double toLng,
   ) {
+    final initialStaffLabel = _hasLiveStaffGps
+        ? '$_displayStaffName (Pointer A)'
+        : (_isTradeIn ? _pointerALabel : 'ReByte Central Hub (Pointer A)');
     return '''
 <!DOCTYPE html>
 <html>
@@ -1237,8 +1363,8 @@ class _CustomerDeliveryTrackingPageState
       iconAnchor: [16, 32]
     });
 
-    var staffMarker = L.marker([$fromLat, $fromLng], { icon: staffIcon }).addTo(map).bindPopup('Pointer A: Delivery Staff');
-    var destMarker = L.marker([$toLat, $toLng], { icon: destIcon }).addTo(map).bindPopup('Delivery Destination');
+    var staffMarker = L.marker([$fromLat, $fromLng], { icon: staffIcon }).addTo(map).bindPopup('$initialStaffLabel');
+    var destMarker = L.marker([$toLat, $toLng], { icon: destIcon }).addTo(map).bindPopup('$_destinationLabel');
 
     var routePolyline = null;
     var currentRoutePoints = [];
@@ -1255,7 +1381,7 @@ class _CustomerDeliveryTrackingPageState
 
       if (staffMarker) {
         staffMarker.setLatLng([fromLat, fromLng]);
-        staffMarker.bindPopup(fromLabel || 'Pointer A: Delivery Staff');
+        staffMarker.bindPopup(fromLabel || '$_pointerALabel');
       }
       if (destMarker) {
         destMarker.setLatLng([toLat, toLng]);

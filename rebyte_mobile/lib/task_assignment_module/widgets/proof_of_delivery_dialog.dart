@@ -9,6 +9,7 @@ class ProofOfDeliveryDialog extends StatefulWidget {
   final String? scheduleID;
   final String? customerName;
   final String? deliveryAddress;
+  final bool isCollect;
 
   const ProofOfDeliveryDialog({
     super.key,
@@ -17,6 +18,7 @@ class ProofOfDeliveryDialog extends StatefulWidget {
     this.scheduleID,
     this.customerName,
     this.deliveryAddress,
+    this.isCollect = false,
   });
 
   @override
@@ -55,7 +57,9 @@ class _ProofOfDeliveryDialogState extends State<ProofOfDeliveryDialog> {
   Future<void> _handleSubmit() async {
     if (_imageFile == null) {
       setState(() {
-        _errorMessage = 'Please take a photo as proof of delivery.';
+        _errorMessage = widget.isCollect
+            ? 'Please take a photo as proof of collection.'
+            : 'Please take a photo as proof of delivery.';
       });
       return;
     }
@@ -134,16 +138,16 @@ class _ProofOfDeliveryDialogState extends State<ProofOfDeliveryDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Proof of Delivery',
-                          style: TextStyle(
+                        Text(
+                          widget.isCollect ? 'Proof of Collection' : 'Proof of Delivery',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF0F172A),
                           ),
                         ),
                         Text(
-                          'Order $orderDisplay',
+                          widget.isCollect ? 'Task $orderDisplay' : 'Order $orderDisplay',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -177,18 +181,20 @@ class _ProofOfDeliveryDialogState extends State<ProofOfDeliveryDialog> {
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Icon(
+                  children: [
+                    const Icon(
                       Icons.info_outline,
                       color: Color(0xFF0C5AD2),
                       size: 18,
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Take a clear photo of the delivered package at the customer\'s doorstep or with the recipient to complete this delivery.',
+                        widget.isCollect
+                            ? 'Take a clear photo of the collected device from the customer to complete this collection.'
+                            : 'Take a clear photo of the delivered package at the customer\'s doorstep or with the recipient to complete this delivery.',
                         textAlign: TextAlign.justify,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12.5,
                           color: Color(0xFF334155),
                           height: 1.4,

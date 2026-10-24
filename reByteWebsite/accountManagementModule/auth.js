@@ -44,15 +44,25 @@ const ReByteAuth = {
   /**
    * Get valid fresh ID token (checks firebase.auth().currentUser first)
    */
-  async getToken() {
+  async getToken(forceRefresh = false) {
     const user = this.getUser();
     if (!user) return '';
 
     if (typeof firebase !== 'undefined' && firebase.auth) {
       try {
-        const currentUser = firebase.auth().currentUser;
+        let currentUser = firebase.auth().currentUser;
+        if (!currentUser) {
+          await new Promise(resolve => {
+            const unsub = firebase.auth().onAuthStateChanged(u => {
+              unsub();
+              resolve(u);
+            });
+            setTimeout(resolve, 1500);
+          });
+          currentUser = firebase.auth().currentUser;
+        }
         if (currentUser) {
-          const freshToken = await currentUser.getIdToken(false);
+          const freshToken = await currentUser.getIdToken(forceRefresh);
           if (freshToken) {
             user.token = freshToken;
             this.setUser(user);
@@ -61,13 +71,8 @@ const ReByteAuth = {
         }
       } catch (err) {
         console.warn('Could not refresh Firebase token via SDK:', err.message);
-        if (err?.code && (
-          err.code === 'auth/user-disabled' ||
-          err.code === 'auth/user-token-expired' ||
-          err.code === 'auth/invalid-user-token' ||
-          err.code === 'auth/null-user'
-        )) {
-          this.forceSessionLogout(err.code === 'auth/user-disabled');
+        if (err?.code === 'auth/user-disabled') {
+          this.forceSessionLogout(true);
           return '';
         }
       }
@@ -171,14 +176,23 @@ const ReByteAuth = {
    * if the server returns 401 or 403 (token rejected / expired).
    * Usage: const data = await ReByteAuth.authFetch(url, options);
    */
-  async authFetch(url, options = {}) {
-    const token = await this.getToken();
+  async authFetch(url, options = {}, isRetry = false) {
+    const token = await this.getToken(isRetry);
     const headers = Object.assign({}, options.headers || {});
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(url, { ...options, headers });
+    if (response.status === 401 && !isRetry) {
+      // Try refreshing the ID token once before logging out
+      const freshToken = await this.getToken(true);
+      if (freshToken && freshToken !== token) {
+        return this.authFetch(url, options, true);
+      }
+    }
     if (response.status === 401 || response.status === 403) {
-      this.forceSessionLogout();
-      // Return a never-resolving promise so the calling code doesn't continue
+      let errData = {};
+      try { errData = await response.clone().json(); } catch (_) {}
+      const isArchived = errData?.archived === true;
+      this.forceSessionLogout(isArchived, errData?.status);
       return new Promise(() => {});
     }
     return response;
@@ -798,8 +812,12 @@ const ReByteAuth = {
   /**
    * Helper to perform authenticated requests and handle session expiration automatically
    */
-  async authFetch(url, options = {}) {
-    const token = await this.getToken();
+  async authFetch(url, options = {}, isRetry = false) {
+    let token = await this.getToken(isRetry);
+    if (!token) {
+      // Try force refresh once before declaring session dead
+      token = await this.getToken(true);
+    }
     if (!token) {
       this.forceSessionLogout(false);
       return { ok: false, status: 401, json: async () => ({ error: 'Your session has expired. Please sign in again.' }) };
@@ -812,13 +830,17 @@ const ReByteAuth = {
 
     try {
       const response = await fetch(url, { ...options, headers });
+      if (response.status === 401 && !isRetry) {
+        const freshToken = await this.getToken(true);
+        if (freshToken && freshToken !== token) {
+          return this.authFetch(url, options, true);
+        }
+      }
       if (response.status === 401 || response.status === 403) {
         let errData = {};
         try { errData = await response.clone().json(); } catch (_) {}
-        const msg = (errData?.error || '').toLowerCase();
-        if (msg.includes('expired') || msg.includes('sign in') || msg.includes('token') || response.status === 401) {
-          this.forceSessionLogout(false);
-        }
+        const isArchived = errData?.archived === true;
+        this.forceSessionLogout(isArchived, errData?.status);
       }
       return response;
     } catch (err) {
@@ -1118,8 +1140,20 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (response.status === 401) {
         const state = await response.json().catch(() => ({}));
-        ReByteAuth.forceSessionLogout(state.archived === true, state.status);
-        return;
+        if (state.archived || state.status === 'suspended' || state.status === 'banned') {
+          ReByteAuth.forceSessionLogout(state.archived === true, state.status);
+          return;
+        }
+        // Otherwise refresh ID token and reconnect stream
+        try {
+          await firebaseUser.getIdToken(true);
+          sessionStreamRetry = Math.min(sessionStreamRetry + 1, 6);
+          setTimeout(() => startSessionStream(firebaseUser), 2000);
+          return;
+        } catch (_) {
+          ReByteAuth.forceSessionLogout(false);
+          return;
+        }
       }
       if (!response.ok || !response.body) throw new Error(`Session stream unavailable (${response.status})`);
       sessionStreamRetry = 0;
@@ -1137,8 +1171,14 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!line) continue;
           const state = JSON.parse(line.slice(5).trim());
           if (state.expired) {
-            if (ReByteAuth.isPasswordChangeInProgress() && typeof firebase !== 'undefined' && firebase.auth()?.currentUser) {
-              await new Promise((resolve) => setTimeout(resolve, 1500));
+            // If explicitly banned, suspended, or archived, log out immediately
+            if (state.archived || state.status === 'suspended' || state.status === 'banned') {
+              controller.abort();
+              ReByteAuth.forceSessionLogout(state.archived === true, state.status);
+              return;
+            }
+            // Routine token rotation / expiration: refresh token and reconnect stream smoothly
+            if (typeof firebase !== 'undefined' && firebase.auth()?.currentUser) {
               const refreshedUser = firebase.auth().currentUser;
               if (refreshedUser) {
                 try {
@@ -1198,5 +1238,13 @@ document.addEventListener('DOMContentLoaded', () => {
       clearTimeout(sessionStreamRetryTimer);
       if (user && ReByteAuth.isLoggedIn()) startSessionStream(user);
     });
+    // Proactively refresh Firebase ID token every 40 minutes so it never expires while user is on the site
+    setInterval(async () => {
+      if (ReByteAuth.isLoggedIn() && firebase.auth().currentUser) {
+        try {
+          await firebase.auth().currentUser.getIdToken(true);
+        } catch (_) {}
+      }
+    }, 40 * 60 * 1000);
   }
 });

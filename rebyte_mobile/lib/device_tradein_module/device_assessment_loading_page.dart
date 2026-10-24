@@ -11,6 +11,7 @@ class DeviceAssessmentLoadingPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromMyTradeInRequests;
 
   const DeviceAssessmentLoadingPage({
     super.key,
@@ -19,6 +20,7 @@ class DeviceAssessmentLoadingPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromMyTradeInRequests = false,
   });
 
   @override
@@ -101,6 +103,7 @@ class _DeviceAssessmentLoadingPageState extends State<DeviceAssessmentLoadingPag
                 isLoggedIn: widget.isLoggedIn,
                 email: widget.email,
                 name: widget.name,
+                fromMyTradeInRequests: widget.fromMyTradeInRequests,
               ),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
