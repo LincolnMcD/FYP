@@ -72,7 +72,6 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final tx = widget.transaction;
-    final isCompleted = tx.status == 'completed';
     final isFailed = tx.status == 'failed';
     final sign = tx.isCredit ? '+' : '';
 
@@ -171,7 +170,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
 
                     // Big Amount
                     Text(
-                      '$sign${tx.amount == 0 ? "RM0.00" : "RM" + _formatCurrency(tx.amount)}',
+                      '$sign${tx.amount == 0 ? "RM0.00" : "RM${_formatCurrency(tx.amount)}"}',
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w900,
@@ -387,7 +386,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

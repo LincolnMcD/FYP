@@ -380,7 +380,6 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
   }
 
   Widget _buildTransactionCard(CustomerTransactionModel tx) {
-    final isCompleted = tx.status == 'completed';
     final isFailed = tx.status == 'failed';
 
     // Icon background and colors
@@ -420,7 +419,7 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -501,7 +500,7 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$sign${tx.amount == 0 ? "RM0.00" : "RM" + _formatCurrency(tx.amount)}',
+                      '$sign${tx.amount == 0 ? "RM0.00" : "RM${_formatCurrency(tx.amount)}"}',
                       style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w800,
