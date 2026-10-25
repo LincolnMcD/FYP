@@ -10,6 +10,7 @@ const multer = require("multer");
 const db = require("../config/firebase");
 const { FieldValue } = require("firebase-admin/firestore");
 const { assignTradeInTask, checkSlotAvailabilityForDate, checkMonthAvailabilityForTradeIn } = require("../taskAssignmentModule/taskAssignmentService");
+const { autoResolveOverdueTradeInTasks } = require("../taskAssignmentModule/taskDelayMonitorService");
 
 const router = express.Router();
 const upload = multer({
@@ -1208,17 +1209,61 @@ router.post("/update-status", async (req, res) => {
             }
 
             const reqData = doc.data() || {};
-            const isCancelOrDecline = status.toLowerCase() === 'cancelled' || status.toLowerCase() === 'declined' || status.toLowerCase() === 'rejected';
+            const isCancel = status.toLowerCase() === 'cancelled' || status.toLowerCase() === 'canceled';
+            const isDecline = status.toLowerCase() === 'declined' || status.toLowerCase() === 'rejected';
+            const isAccepted = status.toLowerCase() === 'accepted';
+
+            // When accept or reject offer: ONLY change status and updatedAt date (bookingStatus and requestStatus NO NEED to change)
+            if (isAccepted || isDecline) {
+                const targetStatus = isAccepted 
+                    ? 'Accepted' 
+                    : (status.toLowerCase() === 'rejected' ? 'Rejected' : 'Declined');
+                const now = new Date();
+                const updatePayload = {
+                    status: targetStatus,
+                    updatedAt: now
+                };
+                if (targetStatus === 'Rejected') {
+                    updatePayload.rejectedAt = now;
+                    updatePayload.declinedAt = now;
+                } else if (targetStatus === 'Declined') {
+                    updatePayload.declinedAt = now;
+                } else {
+                    updatePayload.acceptedAt = now;
+                }
+                await requestRef.update(updatePayload);
+                if (reqData && reqData.deviceID) {
+                    await db.collection("devices").doc(reqData.deviceID).update({
+                        status: targetStatus,
+                        updatedAt: now
+                    }).catch(() => {});
+                }
+                return res.status(200).json({
+                    success: true,
+                    message: `Trade-in offer ${targetStatus.toLowerCase()} successfully.`,
+                    tradeInRequestID,
+                    status: targetStatus
+                });
+            }
+
+            const targetStatus = isCancel ? 'Cancelled' : status;
 
             const updateData = {
-                requestStatus: isCancelOrDecline ? 'Declined' : status,
-                status: isCancelOrDecline ? 'Declined' : status,
+                requestStatus: targetStatus,
+                status: targetStatus,
                 updatedAt: new Date()
             };
 
-            if (isCancelOrDecline) {
+            if (isCancel) {
                 updateData.bookingStatus = 'Cancelled';
                 updateData.cancelledAt = new Date();
+                updateData.cancelledBy = 'Customer';
+            } else if (status.toLowerCase() === 'completed') {
+                updateData.bookingStatus = 'Completed';
+                updateData.completedAt = new Date();
+            } else if (status.toLowerCase() === 'inspected') {
+                updateData.bookingStatus = 'Inspected';
+                updateData.inspectedAt = new Date();
             } else if (status.toLowerCase() === 'evaluated') {
                 updateData.evaluatedAt = new Date();
             } else if (status.toLowerCase() === 'quoted') {
@@ -1226,17 +1271,22 @@ router.post("/update-status", async (req, res) => {
                 // estimatedValue is added to the record when transitioning to 'Quoted'
                 const valToParse = estimatedValue || reqData.estimatedValue || { min: 2340.50, max: 2355.30 };
                 updateData.estimatedValue = parseEstimatedValueObject(valToParse, { min: 2340.50, max: 2355.30 });
+            } else if (status.toLowerCase() === 'agreed') {
+                updateData.agreedAt = new Date();
             }
 
             await requestRef.update(updateData);
             if (reqData && reqData.deviceID) {
                 await db.collection("devices").doc(reqData.deviceID).update({
-                    status: isCancelOrDecline ? 'declined' : status.toLowerCase(),
+                    status: isCancel ? 'cancelled' : status,
+                    deviceStatus: isCancel ? 'cancelled' : status,
                     updatedAt: new Date()
                 }).catch(() => {});
             }
 
-            if (isCancelOrDecline) {
+            // DONT change appointment and task for accept or decline!
+            // Only update appointment/task if it was an explicit pre-inspection cancellation (isCancel)
+            if (isCancel) {
                 const candidateIds = Array.from(new Set([tradeInRequestID, cleanId, `#${cleanId}`, doc.id]));
 
                 // 1. Find all appointment records linked to this request
@@ -1338,8 +1388,8 @@ router.post("/update-status", async (req, res) => {
             return res.status(200).json({
                 success: true,
                 tradeInRequestID: cleanId,
-                status: isCancelOrDecline ? 'Declined' : status,
-                message: `Trade-in request updated to ${isCancelOrDecline ? 'Declined' : status}.`
+                status: targetStatus,
+                message: `Trade-in request updated to ${targetStatus}.`
             });
         }
 
@@ -1441,12 +1491,22 @@ router.post("/book-appointment", async (req, res) => {
                 inspectionMethod: method || "On-Site Inspection",
                 bookingStatus: "Confirmed",
                 requestStatus: "Scheduled",
+                status: "Scheduled",
+                scheduledAt: new Date(),
                 onHoldReason: FieldValue.delete(),
                 onHoldAt: FieldValue.delete(),
                 holdReason: FieldValue.delete(),
                 reassignedAt: FieldValue.delete(),
                 updatedAt: new Date()
             }).catch(() => {});
+
+            if (docData && docData.deviceID) {
+                await db.collection("devices").doc(docData.deviceID).update({
+                    status: "scheduled",
+                    deviceStatus: "scheduled",
+                    updatedAt: new Date()
+                }).catch(() => {});
+            }
 
             return res.status(200).json({
                 success: true,
@@ -1567,6 +1627,7 @@ router.get("/active-submitted", async (req, res) => {
 // GET /user-requests - Fetch trade-in requests for a user with optional tab filtering and pagination
 router.get("/user-requests", async (req, res) => {
     try {
+        await autoResolveOverdueTradeInTasks().catch(() => {});
         const { userEmail, tab, status, page, limit } = req.query;
         let targetEmail = (userEmail || '').trim();
 
@@ -1598,7 +1659,7 @@ router.get("/user-requests", async (req, res) => {
                 success: true,
                 requests: [],
                 pagination: { page: 1, limit: 10, total: 0, hasMore: false },
-                counts: { active: 0, in_progress: 0, completed: 0, cancelled: 0, activeFilters: { all: 0, confirmed: 0, evaluated: 0, quoted: 0, accepted: 0 } }
+                counts: { active: 0, in_progress: 0, completed: 0, cancelled: 0, activeFilters: { all: 0, confirmed: 0, evaluated: 0, quoted: 0, agreed: 0, accepted: 0 } }
             });
         }
 
@@ -1613,24 +1674,30 @@ router.get("/user-requests", async (req, res) => {
 
         const isCompletedDoc = (d) => {
             const s = (d.requestStatus || '').toString().toLowerCase().trim();
-            return s === 'completed' || s === 'complete';
+            const b = (d.bookingStatus || '').toString().toLowerCase().trim();
+            const st = (d.status || '').toString().toLowerCase().trim();
+            return s === 'completed' || s === 'complete' || s === 'paid' || b === 'completed' || st === 'accepted' || st === 'completed' || st === 'paid' || d.isPaid === true;
         };
 
         const isCancelledDoc = (d) => {
             const s = (d.requestStatus || '').toString().toLowerCase().trim();
-            return s === 'cancelled' || s === 'canceled' || s === 'rejected' || s === 'declined';
+            const st = (d.status || '').toString().toLowerCase().trim();
+            return s === 'cancelled' || s === 'canceled' || s === 'rejected' || s === 'declined' || st === 'declined' || st === 'rejected';
         };
 
         const isInProgressDoc = (d) => {
             if (isCompletedDoc(d) || isCancelledDoc(d)) return false;
             const s = (d.requestStatus || '').toString().toLowerCase().trim();
             const b = (d.bookingStatus || '').toString().toLowerCase().trim();
-            return s === 'scheduled' ||
+            return s === 'inspecting' ||
+                s.includes('inspect') ||
+                s === 'scheduled' ||
                 s.includes('schedul') ||
                 s === 'in progress' ||
                 s === 'on progress' ||
                 s === 'on hold' ||
                 s.includes('hold') ||
+                b === 'inspecting' ||
                 b === 'confirmed' ||
                 b === 'on hold' ||
                 d.appointmentDate != null ||
@@ -1649,7 +1716,7 @@ router.get("/user-requests", async (req, res) => {
         let confCount = 0;
         let evalCount = 0;
         let quoteCount = 0;
-        let accCount = 0;
+        let agreedCount = 0;
 
         snapshot.docs.forEach((doc) => {
             const d = doc.data();
@@ -1662,10 +1729,11 @@ router.get("/user-requests", async (req, res) => {
             } else {
                 activeCount++;
                 const s = (d.requestStatus || '').toString().toLowerCase();
+                const st = (d.status || '').toString().toLowerCase();
                 if (s.includes('submit') || s.includes('transit') || s === 'confirmed') confCount++;
                 if (s.includes('evaluat')) evalCount++;
                 if (s.includes('quote')) quoteCount++;
-                if (s.includes('accept')) accCount++;
+                if (s.includes('agree') || s.includes('accept') || st === 'agreed' || st === 'accepted') agreedCount++;
             }
         });
 
@@ -1679,14 +1747,15 @@ router.get("/user-requests", async (req, res) => {
                 if (!isActiveDoc(d)) return false;
                 if (requestedStatus && requestedStatus !== 'all') {
                     const s = (d.requestStatus || '').toString().toLowerCase();
+                    const st = (d.status || '').toString().toLowerCase();
                     if (requestedStatus === 'confirmed' || requestedStatus === 'submitted') {
                         return s.includes('submit') || s.includes('transit') || s === 'confirmed';
                     } else if (requestedStatus === 'evaluated') {
                         return s.includes('evaluat');
                     } else if (requestedStatus === 'quoted') {
                         return s.includes('quote');
-                    } else if (requestedStatus === 'accepted') {
-                        return s.includes('accept');
+                    } else if (requestedStatus === 'agreed' || requestedStatus === 'accepted') {
+                        return s.includes('agree') || s.includes('accept') || st === 'agreed' || st === 'accepted';
                     }
                 }
                 return true;
@@ -1795,10 +1864,18 @@ router.get("/user-requests", async (req, res) => {
             if (appDoc) {
                 const app = appDoc.data();
                 appointmentID = app.appointmentID || appDoc.id;
-                const isOnHold = app.appointmentStatus === "On Hold" || data.requestStatus === "On Hold" || app.bookingStatus === "On Hold";
-                const isInProgress = app.appointmentStatus === "In Progress" || data.requestStatus === "In Progress" || app.bookingStatus === "In Progress";
-                bookingStatus = isOnHold ? "On Hold" : (isInProgress ? "In Progress" : (bookingStatus || "Confirmed"));
-                if (isOnHold && data.requestStatus !== "Cancelled") {
+                const isCancelledAppt = app.appointmentStatus === "Cancelled" || app.bookingStatus === "Cancelled" || app.status === "Cancelled";
+                const isOnHold = !isCancelledAppt && (app.appointmentStatus === "On Hold" || data.requestStatus === "On Hold" || app.bookingStatus === "On Hold");
+                const isInProgress = !isCancelledAppt && !isOnHold && (app.appointmentStatus === "In Progress" || data.requestStatus === "In Progress" || app.bookingStatus === "In Progress");
+                bookingStatus = isCancelledAppt ? "Cancelled" : (isOnHold ? "On Hold" : (isInProgress ? "In Progress" : (bookingStatus || "Confirmed")));
+
+                if (isCancelledAppt) {
+                    data.requestStatus = "Cancelled";
+                    data.status = "Cancelled";
+                    if (doc.data().requestStatus !== "Cancelled") {
+                        doc.ref.update({ requestStatus: "Cancelled", status: "Cancelled", bookingStatus: "Cancelled", cancelledAt: new Date() }).catch(() => {});
+                    }
+                } else if (isOnHold && data.requestStatus !== "Cancelled") {
                     data.requestStatus = "On Hold";
                     if (doc.data().requestStatus !== "On Hold") {
                         doc.ref.update({ requestStatus: "On Hold", bookingStatus: "On Hold" }).catch(() => {});
@@ -1843,6 +1920,7 @@ router.get("/user-requests", async (req, res) => {
 
             return {
                 tradeInRequestID: data.tradeInRequestID || doc.id,
+                status: data.status || data.requestStatus || 'Submitted',
                 requestStatus: data.requestStatus || 'Submitted',
                 bookingStatus,
                 appointmentStatus: appDoc ? (appDoc.data().appointmentStatus || null) : null,
@@ -1858,6 +1936,17 @@ router.get("/user-requests", async (req, res) => {
                 deviceImages,
                 deviceImagesDetailed,
                 estimatedValue: data.estimatedValue ? parseEstimatedValueObject(data.estimatedValue) : null,
+                finalQuotation: data.finalQuotation || null,
+                finalOfferPrice: data.finalQuotation?.finalOfferPrice || data.finalOfferPrice || null,
+                offeredPrice: data.offeredPrice || null,
+                isPaid: Boolean(data.isPaid),
+                paidAt: data.paidAt || null,
+                transactionID: data.transactionID || null,
+                inspectedAt: data.inspectedAt || null,
+                declinedAt: data.declinedAt || data.rejectedAt || data.updatedAt || null,
+                rejectedAt: data.rejectedAt || data.declinedAt || data.updatedAt || null,
+                acceptedAt: data.acceptedAt || data.updatedAt || null,
+                updatedAt: data.updatedAt || null,
             };
         }));
 
@@ -1880,7 +1969,8 @@ router.get("/user-requests", async (req, res) => {
                     confirmed: confCount,
                     evaluated: evalCount,
                     quoted: quoteCount,
-                    accepted: accCount
+                    agreed: agreedCount,
+                    accepted: agreedCount
                 }
             }
         });
@@ -1893,6 +1983,7 @@ router.get("/user-requests", async (req, res) => {
 // GET /request-details - Fetch a single trade-in request with all uploaded images and appointment info
 router.get("/request-details", async (req, res) => {
     try {
+        await autoResolveOverdueTradeInTasks().catch(() => {});
         const { tradeInRequestID } = req.query;
         if (!tradeInRequestID || !db) {
             return res.status(400).json({ success: false, message: "Missing tradeInRequestID" });
@@ -1943,9 +2034,9 @@ router.get("/request-details", async (req, res) => {
         let appointmentLocation = null;
         let inspectionMethod = data.inspectionMethod || null;
         let bookingStatus = data.bookingStatus || null;
+        let appDoc = null;
 
         try {
-            let appDoc = null;
 
             if (appointmentID) {
                 const aSnap = await db.collection("tradeInAppointment").doc(appointmentID).get();
@@ -1970,10 +2061,18 @@ router.get("/request-details", async (req, res) => {
             if (appDoc) {
                 const app = appDoc.data();
                 appointmentID = app.appointmentID || appDoc.id;
-                const isOnHold = app.appointmentStatus === "On Hold" || data.requestStatus === "On Hold" || app.bookingStatus === "On Hold";
-                const isInProgress = app.appointmentStatus === "In Progress" || data.requestStatus === "In Progress" || app.bookingStatus === "In Progress";
-                bookingStatus = isOnHold ? "On Hold" : (isInProgress ? "In Progress" : (bookingStatus || "Confirmed"));
-                if (isOnHold && data.requestStatus !== "Cancelled") {
+                const isCancelledAppt = app.appointmentStatus === "Cancelled" || app.bookingStatus === "Cancelled" || app.status === "Cancelled";
+                const isOnHold = !isCancelledAppt && (app.appointmentStatus === "On Hold" || data.requestStatus === "On Hold" || app.bookingStatus === "On Hold");
+                const isInProgress = !isCancelledAppt && !isOnHold && (app.appointmentStatus === "In Progress" || data.requestStatus === "In Progress" || app.bookingStatus === "In Progress");
+                bookingStatus = isCancelledAppt ? "Cancelled" : (isOnHold ? "On Hold" : (isInProgress ? "In Progress" : (bookingStatus || "Confirmed")));
+
+                if (isCancelledAppt) {
+                    data.requestStatus = "Cancelled";
+                    data.status = "Cancelled";
+                    if (doc.data().requestStatus !== "Cancelled") {
+                        docRef.update({ requestStatus: "Cancelled", status: "Cancelled", bookingStatus: "Cancelled", cancelledAt: new Date() }).catch(() => {});
+                    }
+                } else if (isOnHold && data.requestStatus !== "Cancelled") {
                     data.requestStatus = "On Hold";
                     if (doc.data().requestStatus !== "On Hold") {
                         docRef.update({ requestStatus: "On Hold", bookingStatus: "On Hold" }).catch(() => {});
@@ -2017,6 +2116,7 @@ router.get("/request-details", async (req, res) => {
 
         const requestDetails = {
             tradeInRequestID: data.tradeInRequestID || doc.id,
+            status: data.status || data.requestStatus || 'Submitted',
             requestStatus: data.requestStatus || 'Submitted',
             bookingStatus,
             appointmentStatus: appDoc ? (appDoc.data().appointmentStatus || null) : null,
@@ -2033,6 +2133,17 @@ router.get("/request-details", async (req, res) => {
             deviceImages,
             deviceImagesDetailed,
             estimatedValue: data.estimatedValue ? parseEstimatedValueObject(data.estimatedValue) : null,
+            finalQuotation: data.finalQuotation || null,
+            finalOfferPrice: data.finalQuotation?.finalOfferPrice || data.finalOfferPrice || null,
+            offeredPrice: data.offeredPrice || null,
+            isPaid: Boolean(data.isPaid),
+            paidAt: data.paidAt || null,
+            transactionID: data.transactionID || null,
+            inspectedAt: data.inspectedAt || null,
+            declinedAt: data.declinedAt || data.rejectedAt || data.updatedAt || null,
+            rejectedAt: data.rejectedAt || data.declinedAt || data.updatedAt || null,
+            acceptedAt: data.acceptedAt || data.updatedAt || null,
+            updatedAt: data.updatedAt || null,
         };
 
         return res.status(200).json({

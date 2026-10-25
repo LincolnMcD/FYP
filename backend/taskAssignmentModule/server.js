@@ -1,4 +1,5 @@
 const express = require("express");
+const axios = require("axios");
 const router = express.Router();
 const db = require("../config/firebase");
 const { FieldValue } = require("firebase-admin/firestore");
@@ -13,7 +14,8 @@ const {
     clearScheduleTimers,
     handleStartTimeViolation,
     handleEndTimeViolation,
-    checkAndResetMonthlyMistakes
+    checkAndResetMonthlyMistakes,
+    autoResolveOverdueTradeInTasks
 } = require("./taskDelayMonitorService");
 const nodemailer = require("nodemailer");
 
@@ -140,6 +142,125 @@ async function sendTerminationSelfPickupEmail({
     }
 }
 
+// Helper to send Trade-In Completed & Payout Confirmation Email to Customer
+async function sendTradeInPayoutEmail({
+    toEmail,
+    customerName,
+    tradeInRequestID,
+    deviceModel,
+    amount,
+    accountInfo,
+    transactionID
+}) {
+    if (!toEmail) return { success: false, error: "No recipient email" };
+
+    const formattedAmount = `RM ${Number(amount).toFixed(2)}`;
+    const nowFormatted = new Date().toLocaleString("en-MY", {
+        timeZone: "Asia/Kuala_Lumpur",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+    });
+
+    const mailOptions = {
+        from: '"ReByte Trade-In Support" <lolincoln021@gmail.com>',
+        to: toEmail,
+        subject: `Payment Successful: Trade-In #${tradeInRequestID} Completed`,
+        html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 32px 16px; margin: 0;">
+          <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 24px; text-align: center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 0 auto 16px auto;">
+                <tr>
+                  <td align="center" valign="middle" width="56" height="56" style="width: 56px; height: 56px; background-color: #10b981; border-radius: 28px; text-align: center; vertical-align: middle; line-height: 56px; padding: 0; box-shadow: 0 6px 14px rgba(16, 185, 129, 0.35);">
+                    <span style="color: #ffffff; font-size: 28px; font-weight: bold; line-height: 56px; font-family: Arial, Helvetica, sans-serif; display: inline-block; vertical-align: middle; text-align: center;">&#10003;</span>
+                  </td>
+                </tr>
+              </table>
+              <h1 style="color: #ffffff; font-size: 22px; margin: 0 0 6px; font-weight: 800; letter-spacing: -0.3px;">Trade-In Payment Completed</h1>
+              <p style="color: #94a3b8; font-size: 14px; margin: 0;">Your trade-in funds have been successfully transferred</p>
+            </div>
+
+            <!-- Content -->
+            <div style="padding: 28px 24px;">
+              <p style="color: #334155; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
+                Hi <strong>${customerName}</strong>,
+              </p>
+              <p style="color: #475569; font-size: 14.5px; line-height: 1.6; margin: 0 0 24px;">
+                Great news! Your trade-in transaction has been completed and the final offer price of <strong style="color: #0f172a;">${formattedAmount}</strong> has been transferred directly to your designated account.
+              </p>
+
+              <!-- Payment Summary Box -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px;">Transaction Summary</div>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Trade-In ID:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0c5ad2;">#${tradeInRequestID}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Device:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${deviceModel}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Payout Amount:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 800; color: #16a34a; font-size: 16px;">${formattedAmount}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Transferred To:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${accountInfo}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Account Holder:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${customerName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Transaction ID:</td>
+                    <td style="padding: 6px 0; text-align: right; font-family: monospace; font-size: 12.5px; font-weight: 700; color: #334155;">${transactionID}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #64748b;">Date & Time:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 500; color: #475569;">${nowFormatted}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Notice Box -->
+              <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 6px; padding: 12px 16px; margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 13px; color: #065f46; line-height: 1.5;">
+                  <strong>Payment Notice:</strong> Funds have been disbursed via DuitNow Instant Transfer to your default payment account. Please allow a few minutes for the amount to reflect in your banking statement depending on your bank's processing schedule.
+                </p>
+              </div>
+
+              <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 6px;">
+                Thank you for trading in with <strong>ReByte</strong>. If you have any inquiries, feel free to reply to this email or contact customer support.
+              </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="background-color: #f1f5f9; padding: 16px 24px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8;">
+              &copy; ${new Date().getFullYear()} ReByte Inc. All rights reserved.
+            </div>
+          </div>
+        </div>
+        `
+    };
+
+    try {
+        const info = await terminationEmailTransporter.sendMail(mailOptions);
+        console.log(`[TRADE-IN PAYOUT EMAIL SENT] to ${toEmail} for ${tradeInRequestID}. Message ID: ${info.messageId}`);
+        return { success: true, messageId: info.messageId };
+    } catch (e) {
+        console.error(`[TRADE-IN PAYOUT EMAIL ERROR] Failed to send email to ${toEmail}:`, e.message);
+        return { success: false, error: e.message };
+    }
+}
+
 // Helper to stream upload buffer to Cloudinary
 function uploadBufferToCloudinary(fileBuffer, folder, filename) {
     return new Promise((resolve, reject) => {
@@ -199,6 +320,7 @@ router.post("/assign", requireAuth, async (req, res) => {
  */
 router.get("/staff-tasks", async (req, res) => {
     try {
+        await autoResolveOverdueTradeInTasks().catch(() => {});
         const { staffID, email } = req.query;
         let targetStaffID = staffID;
 
@@ -367,12 +489,24 @@ router.get("/staff-tasks", async (req, res) => {
                         if (!devDoc.exists) {
                             devDoc = await db.collection("device").doc(deviceID).get();
                         }
-                        if (devDoc.exists) {
+                        if (!devDoc.exists) {
+                            const devQuery = await db.collection("devices").where("deviceID", "==", deviceID).limit(1).get();
+                            if (!devQuery.empty) devDoc = devQuery.docs[0];
+                        }
+                        if (devDoc && devDoc.exists) {
                             devData = devDoc.data() || {};
                         }
                     } catch (dErr) {
                         console.error("Error fetching device for trade-in:", dErr);
                     }
+                }
+                if (!devData.model && trID) {
+                    try {
+                        const devQuery = await db.collection("devices").where("tradeInRequestID", "==", trID).limit(1).get();
+                        if (!devQuery.empty) {
+                            devData = devQuery.docs[0].data() || {};
+                        }
+                    } catch (_) {}
                 }
 
                 // Fetch device image from subcollection if not on record
@@ -395,6 +529,8 @@ router.get("/staff-tasks", async (req, res) => {
                 const storage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
                 const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
                 const condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+                const deviceAge = devData.deviceAge || trData.deviceAge || "";
+                const ram = devData.ram || trData.ram || "";
                 let tradeInEstimate = trData.tradeInEstimate || trData.offeredPrice || 0;
                 if (!tradeInEstimate && trData.estimatedValue) {
                     if (typeof trData.estimatedValue === "number") {
@@ -420,8 +556,11 @@ router.get("/staff-tasks", async (req, res) => {
                     storage,
                     color,
                     condition,
+                    deviceAge,
+                    ram,
                     price: tradeInEstimate,
                     tradeInEstimate,
+                    estimatedValue: trData.estimatedValue || devData.estimatedValue || tradeInEstimate,
                     imei,
                     imageUrl,
                     tradeInRequestID: trID,
@@ -439,12 +578,18 @@ router.get("/staff-tasks", async (req, res) => {
                 taskData.tradeInRequestID = trID;
                 taskData.deviceID = deviceID;
                 taskData.deviceModel = `${deviceBrand} ${deviceModel}`.trim();
+                taskData.brand = deviceBrand;
+                taskData.model = deviceModel.trim();
                 taskData.storage = storage;
                 taskData.color = color;
                 taskData.reportedCondition = condition;
                 taskData.tradeInEstimate = tradeInEstimate;
+                taskData.estimatedValue = trData.estimatedValue || devData.estimatedValue || tradeInEstimate;
                 taskData.imei = imei;
                 taskData.imageUrl = imageUrl;
+                taskData.deviceAge = deviceAge;
+                taskData.ram = ram;
+                taskData.device = devData;
                 if (typeof trData.inspectionAddress === "string" && trData.inspectionAddress.trim()) {
                     taskData.deliveryAddress = trData.inspectionAddress.trim();
                 }
@@ -678,6 +823,7 @@ router.patch("/update-status", async (req, res) => {
             if (normalized === "Shipping" || normalized === "In Progress" || normalized === "ongoing" || normalized === "Ongoing") schedStatus = "ongoing";
             if (isCompleted) schedStatus = "completed";
             if (isRejected || isTerminated) schedStatus = "rejected";
+            if (normalized === "Cancelled" || normalized === "Canceled" || status.toLowerCase().includes("cancel")) schedStatus = "cancelled";
 
             const schedUpdate = {
                 scheduleStatus: schedStatus,
@@ -797,22 +943,86 @@ router.patch("/update-status", async (req, res) => {
                 }, { merge: true });
             }
         } else if (isCompleted) {
+            let trData = {};
+            if (tradeInReqID) {
+                try {
+                    const trDoc = await db.collection("tradeInRequests").doc(tradeInReqID).get();
+                    if (trDoc.exists) trData = trDoc.data() || {};
+                } catch (_) {}
+            }
+            const rawTaskType = String(
+                (taskData && taskData.taskType) ||
+                (schedData && schedData.taskType) ||
+                trData.inspectionMethod ||
+                ""
+            ).toLowerCase();
+            const isCollectionTask = rawTaskType.includes("collect");
+            const reqStatusToSet = isCollectionTask ? "Inspecting" : "Completed";
+
             if (apptID) {
-                batch.set(db.collection("tradeInAppointment").doc(apptID), {
+                const apptUpdate = {
                     appointmentStatus: "Completed",
                     status: "Completed",
+                    bookingStatus: "Completed",
                     completedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                };
+                if (proofOfDeliveryUrl) apptUpdate.proofOfCollectionUrl = proofOfDeliveryUrl;
+                batch.set(db.collection("tradeInAppointment").doc(apptID), apptUpdate, { merge: true });
+            }
+            if (tradeInReqID) {
+                const trUpdate = {
+                    requestStatus: reqStatusToSet,
+                    status: reqStatusToSet,
+                    bookingStatus: reqStatusToSet,
+                    collectedAt: new Date(),
+                    updatedAt: new Date()
+                };
+                if (!isCollectionTask) {
+                    trUpdate.completedAt = FieldValue.serverTimestamp();
+                }
+                if (proofOfDeliveryUrl) trUpdate.proofOfCollectionUrl = proofOfDeliveryUrl;
+                batch.set(db.collection("tradeInRequests").doc(tradeInReqID), trUpdate, { merge: true });
+
+                const devId = trData.deviceID;
+                if (devId) {
+                    batch.set(db.collection("devices").doc(devId), {
+                        status: reqStatusToSet,
+                        updatedAt: new Date()
+                    }, { merge: true });
+                }
+            }
+        } else if (normalized === "Cancelled" || normalized === "Canceled" || status.toLowerCase().includes("cancel")) {
+            if (apptID) {
+                batch.set(db.collection("tradeInAppointment").doc(apptID), {
+                    appointmentStatus: "Cancelled",
+                    status: "Cancelled",
+                    bookingStatus: "Cancelled",
+                    cancelledAt: FieldValue.serverTimestamp(),
                     updatedAt: new Date()
                 }, { merge: true });
             }
             if (tradeInReqID) {
-                const resolvedStatus = (taskData && taskData.taskType === "collect") ? "Collected" : "Inspected";
                 batch.set(db.collection("tradeInRequests").doc(tradeInReqID), {
-                    requestStatus: resolvedStatus,
-                    status: resolvedStatus,
-                    bookingStatus: "Completed",
+                    requestStatus: "Cancelled",
+                    status: "Cancelled",
+                    bookingStatus: "Cancelled",
+                    cancelledAt: FieldValue.serverTimestamp(),
                     updatedAt: new Date()
                 }, { merge: true });
+
+                let trData = {};
+                try {
+                    const trDoc = await db.collection("tradeInRequests").doc(tradeInReqID).get();
+                    if (trDoc.exists) trData = trDoc.data() || {};
+                } catch (_) {}
+
+                if (trData.deviceID) {
+                    batch.set(db.collection("devices").doc(trData.deviceID), {
+                        status: "cancelled",
+                        updatedAt: new Date()
+                    }, { merge: true });
+                }
             }
         }
 
@@ -952,11 +1162,96 @@ router.post("/complete-delivery", (req, res, next) => {
 
         const batch = db.batch();
 
-        const isTradeIn = String(orderID || "").startsWith("TR") || String(taskID || "").includes("APP") || String(orderID || "").includes("APP");
+        // Pre-fetch task & schedule records to accurately resolve trade-in and appointment IDs
+        let effectiveTradeInReqID = null;
+        let effectiveApptID = null;
+
+        let taskData = null;
+        if (taskID) {
+            try {
+                const tDoc = await db.collection("task").doc(taskID).get();
+                if (tDoc.exists) {
+                    taskData = tDoc.data();
+                    if (taskData.tradeInRequestID) effectiveTradeInReqID = taskData.tradeInRequestID;
+                    if (taskData.appointmentID) effectiveApptID = taskData.appointmentID;
+                }
+            } catch (_) {}
+        }
+
+        let schedData = null;
+        if (scheduleID) {
+            try {
+                const sDoc = await db.collection("schedule").doc(scheduleID).get();
+                if (sDoc.exists) {
+                    schedData = sDoc.data();
+                    if (!effectiveTradeInReqID && schedData.tradeInRequestID) effectiveTradeInReqID = schedData.tradeInRequestID;
+                    if (!effectiveApptID && schedData.appointmentID) effectiveApptID = schedData.appointmentID;
+                    if (!effectiveTradeInReqID && schedData.orderID && String(schedData.orderID).startsWith("TR")) {
+                        effectiveTradeInReqID = schedData.orderID;
+                    }
+                    if (!effectiveApptID && schedData.orderID && String(schedData.orderID).startsWith("APP")) {
+                        effectiveApptID = schedData.orderID;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        if (orderID) {
+            const cleanOrd = String(orderID).replace(/^#/, '').trim();
+            if (cleanOrd.startsWith("TR")) {
+                if (!effectiveTradeInReqID) effectiveTradeInReqID = cleanOrd;
+            } else if (cleanOrd.startsWith("APP")) {
+                if (!effectiveApptID) effectiveApptID = cleanOrd;
+            }
+        }
+
+        if (taskID) {
+            const cleanTask = String(taskID).replace(/^TSK-/, '').replace(/^#/, '').trim();
+            if (cleanTask.startsWith("TR")) {
+                if (!effectiveTradeInReqID) effectiveTradeInReqID = cleanTask;
+            } else if (cleanTask.startsWith("APP")) {
+                if (!effectiveApptID) effectiveApptID = cleanTask;
+            }
+        }
+
+        if (effectiveApptID && !effectiveTradeInReqID) {
+            try {
+                const aSnap = await db.collection("tradeInAppointment").doc(effectiveApptID).get();
+                if (aSnap.exists && aSnap.data().tradeInRequestID) {
+                    effectiveTradeInReqID = aSnap.data().tradeInRequestID;
+                }
+            } catch (_) {}
+        }
+
+        if (effectiveTradeInReqID && !effectiveApptID) {
+            try {
+                const trSnap = await db.collection("tradeInRequests").doc(effectiveTradeInReqID).get();
+                if (trSnap.exists && trSnap.data().appointmentID) {
+                    effectiveApptID = trSnap.data().appointmentID;
+                }
+                if (!effectiveApptID) {
+                    const candidateIds = Array.from(new Set([effectiveTradeInReqID, `#${effectiveTradeInReqID}`, effectiveTradeInReqID.replace(/^#/, '')]));
+                    const aSnap = await db.collection("tradeInAppointment")
+                        .where("tradeInRequestID", "in", candidateIds.slice(0, 10))
+                        .limit(1)
+                        .get();
+                    if (!aSnap.empty) {
+                        effectiveApptID = aSnap.docs[0].id;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        const isTradeIn = Boolean(effectiveTradeInReqID || effectiveApptID) ||
+            String(orderID || "").startsWith("TR") ||
+            String(taskID || "").includes("APP") ||
+            String(orderID || "").includes("APP") ||
+            (taskData && (taskData.taskType === "inspect" || taskData.taskType === "collect"));
 
         if (taskID) {
             const taskUpdate = {
                 taskStatus: isTradeIn ? "Completed" : "Delivered",
+                status: isTradeIn ? "Completed" : "Delivered",
                 completedAt: FieldValue.serverTimestamp(),
                 updatedAt: new Date()
             };
@@ -973,15 +1268,61 @@ router.post("/complete-delivery", (req, res, next) => {
             batch.set(db.collection("schedule").doc(scheduleID), schedUpdate, { merge: true });
         }
 
-        if (orderID && orderID.startsWith("TR")) {
-            const trDoc = await db.collection("tradeInRequests").doc(orderID).get();
-            if (trDoc.exists) {
-                batch.set(trDoc.ref, {
-                    requestStatus: "Collected",
-                    collectedAt: new Date(),
-                    proofOfCollectionUrl: proofOfDeliveryUrl || null,
+        if (isTradeIn) {
+            let trSnap = null;
+            let trData = {};
+            if (effectiveTradeInReqID) {
+                try {
+                    trSnap = await db.collection("tradeInRequests").doc(effectiveTradeInReqID).get();
+                    if (trSnap.exists) trData = trSnap.data() || {};
+                } catch (_) {}
+            }
+
+            const rawTaskType = String(
+                (taskData && taskData.taskType) ||
+                (schedData && schedData.taskType) ||
+                trData.inspectionMethod ||
+                ""
+            ).toLowerCase();
+            const isCollectionTask = rawTaskType.includes("collect");
+
+            // Update tradeInAppointment to Completed
+            if (effectiveApptID) {
+                const apptUpdate = {
+                    appointmentStatus: "Completed",
+                    status: "Completed",
+                    bookingStatus: "Completed",
+                    completedAt: FieldValue.serverTimestamp(),
                     updatedAt: new Date()
-                }, { merge: true });
+                };
+                if (proofOfDeliveryUrl) apptUpdate.proofOfCollectionUrl = proofOfDeliveryUrl;
+                batch.set(db.collection("tradeInAppointment").doc(effectiveApptID), apptUpdate, { merge: true });
+            }
+
+            // Update tradeInRequests: Collection tasks change to Inspecting; other tasks to Completed
+            if (effectiveTradeInReqID) {
+                const trRef = db.collection("tradeInRequests").doc(effectiveTradeInReqID);
+                const reqStatusToSet = isCollectionTask ? "Inspecting" : "Completed";
+                const reqUpdate = {
+                    requestStatus: reqStatusToSet,
+                    status: reqStatusToSet,
+                    bookingStatus: reqStatusToSet,
+                    collectedAt: new Date(),
+                    updatedAt: new Date()
+                };
+                if (!isCollectionTask) {
+                    reqUpdate.completedAt = FieldValue.serverTimestamp();
+                }
+                if (proofOfDeliveryUrl) reqUpdate.proofOfCollectionUrl = proofOfDeliveryUrl;
+                batch.set(trRef, reqUpdate, { merge: true });
+
+                const devId = (trSnap && trSnap.exists && trSnap.data().deviceID) || trData.deviceID;
+                if (devId) {
+                    batch.set(db.collection("devices").doc(devId), {
+                        status: reqStatusToSet,
+                        updatedAt: new Date()
+                    }, { merge: true });
+                }
             }
         } else if (orderID) {
             const delID = `DEL-${orderID}`;
@@ -1070,6 +1411,469 @@ router.post("/complete-delivery", (req, res, next) => {
         });
     } catch (err) {
         console.error("complete-delivery error:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/task-assignment/admin/submit-final-quotation
+ * Admin submits final device quotation and condition report for inspecting trade-in task
+ */
+router.post("/admin/submit-final-quotation", async (req, res) => {
+    try {
+        const {
+            tradeInRequestID,
+            taskID,
+            modelName,
+            colour,
+            storage,
+            ram,
+            conditionReport,
+            finalOfferPrice
+        } = req.body;
+
+        if (!tradeInRequestID && !taskID) {
+            return res.status(400).json({ success: false, message: "Missing tradeInRequestID or taskID." });
+        }
+        if (!modelName || !colour || storage == null || ram == null || finalOfferPrice == null) {
+            return res.status(400).json({ success: false, message: "All device specification and price fields are required." });
+        }
+
+        const intStorage = parseInt(storage, 10);
+        const intRam = parseInt(ram, 10);
+        const numFinalPrice = isNaN(parseFloat(finalOfferPrice)) ? NaN : parseFloat(parseFloat(finalOfferPrice).toFixed(2));
+
+        if (isNaN(intStorage) || isNaN(intRam) || isNaN(numFinalPrice)) {
+            return res.status(400).json({ success: false, message: "Storage and RAM must be integers, and Final Offer Price must be a valid number." });
+        }
+
+        const cleanReqID = tradeInRequestID ? String(tradeInRequestID).replace(/^#/, '').trim() : null;
+        let trRef = cleanReqID ? db.collection("tradeInRequests").doc(cleanReqID) : null;
+        let trSnap = trRef ? await trRef.get() : null;
+
+        if ((!trSnap || !trSnap.exists) && taskID) {
+            const tDoc = await db.collection("task").doc(taskID).get().catch(() => null);
+            if (tDoc && tDoc.exists) {
+                const reqIdFromTask = tDoc.data().tradeInRequestID || tDoc.data().orderID;
+                if (reqIdFromTask) {
+                    trRef = db.collection("tradeInRequests").doc(String(reqIdFromTask).replace(/^#/, '').trim());
+                    trSnap = await trRef.get().catch(() => null);
+                }
+            }
+        }
+
+        if (!trSnap || !trSnap.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request record not found." });
+        }
+
+        const trData = trSnap.data() || {};
+        const batch = db.batch();
+
+        const quotationPayload = {
+            modelName: String(modelName).trim(),
+            colour: String(colour).trim(),
+            storage: intStorage,
+            ram: intRam,
+            conditionReport: {
+                screen: {
+                    crack: conditionReport?.screen?.crack != null ? parseInt(conditionReport.screen.crack, 10) : 0,
+                    scratch: conditionReport?.screen?.scratch != null ? parseInt(conditionReport.screen.scratch, 10) : 0,
+                    discolouration: conditionReport?.screen?.discolouration != null ? parseInt(conditionReport.screen.discolouration, 10) : 0
+                },
+                back: {
+                    crack: conditionReport?.back?.crack != null ? parseInt(conditionReport.back.crack, 10) : 0,
+                    scratch: conditionReport?.back?.scratch != null ? parseInt(conditionReport.back.scratch, 10) : 0
+                },
+                frame: {
+                    scratch: conditionReport?.frame?.scratch != null ? parseInt(conditionReport.frame.scratch, 10) : 0,
+                    dent: conditionReport?.frame?.dent != null ? parseInt(conditionReport.frame.dent, 10) : 0
+                }
+            },
+            finalOfferPrice: numFinalPrice,
+            submittedAt: new Date()
+        };
+
+        // 1. Update tradeInRequests: status change to Inspected, remove finalOfferPrice
+        const trUpdate = {
+            requestStatus: "Inspected",
+            bookingStatus: "Inspected",
+            status: "Inspected",
+            finalQuotation: quotationPayload,
+            finalOfferPrice: FieldValue.delete(),
+            inspectedAt: FieldValue.serverTimestamp(),
+            updatedAt: new Date()
+        };
+        batch.set(trRef, trUpdate, { merge: true });
+
+        // 2. Update linked devices record: change status to Inspected
+        const deviceID = trData.deviceID;
+        if (deviceID) {
+            batch.set(db.collection("devices").doc(deviceID), {
+                model: String(modelName).trim(),
+                colour: String(colour).trim(),
+                storageCapacity: `${intStorage} GB`,
+                ram: `${intRam} GB`,
+                status: "Inspected",
+                deviceStatus: "Inspected",
+                conditionReport: quotationPayload.conditionReport,
+                updatedAt: new Date()
+            }, { merge: true });
+        }
+
+        // 3. Task collection: intentionally left unchanged per requirement
+
+        await batch.commit();
+
+        console.log(`[FINAL QUOTATION SUBMITTED] Trade-In #${trSnap.id} set to Inspected with final offer RM ${numFinalPrice}`);
+
+        return res.status(200).json({
+            success: true,
+            message: "Final quotation submitted successfully. Trade-in request status changed to Inspected.",
+            tradeInRequestID: trSnap.id,
+            finalOfferPrice: numFinalPrice
+        });
+    } catch (err) {
+        console.error("submit-final-quotation error:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * Helper to generate transactionID format: YYMMDDTRANXXXXX
+ * Takes the latest same-date record + 1, or 00001 if none exists today
+ */
+async function generateTransactionID() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const prefix = `${yy}${mm}${dd}TRAN`;
+
+    let maxSequence = 0;
+    try {
+        const snapshot = await db.collection("transaction")
+            .where("transactionID", ">=", prefix)
+            .where("transactionID", "<=", prefix + "\uf8ff")
+            .get();
+
+        snapshot.forEach((doc) => {
+            const tId = doc.data().transactionID || doc.id || "";
+            if (tId.startsWith(prefix)) {
+                const seqPart = tId.slice(prefix.length);
+                const parsed = parseInt(seqPart, 10);
+                if (!isNaN(parsed) && parsed > maxSequence) {
+                    maxSequence = parsed;
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Error finding largest sequence number for transactionID:", e);
+    }
+
+    const nextSequence = maxSequence + 1;
+    const sequenceFormatted = String(nextSequence).padStart(5, '0');
+    return `${prefix}${sequenceFormatted}`;
+}
+
+/**
+ * Helper to retrieve customer's default active card from paymentAccount
+ */
+async function getCustomerDefaultCard({ customerID, email }) {
+    let card = null;
+
+    if (customerID) {
+        try {
+            const snap = await db.collection("paymentAccount")
+                .where("customerID", "==", customerID)
+                .where("isDefault", "==", true)
+                .get();
+            for (const doc of snap.docs) {
+                const d = doc.data();
+                if (d.status !== "delete" && !card) {
+                    card = { id: doc.id, ...d };
+                    break;
+                }
+            }
+        } catch (e) {
+            console.error("getCustomerDefaultCard error (customerID):", e);
+        }
+    }
+
+    if (!card && email) {
+        try {
+            const snap = await db.collection("paymentAccount")
+                .where("email", "==", email)
+                .where("isDefault", "==", true)
+                .get();
+            for (const doc of snap.docs) {
+                const d = doc.data();
+                if (d.status !== "delete" && !card) {
+                    card = { id: doc.id, ...d };
+                    break;
+                }
+            }
+        } catch (e) {
+            console.error("getCustomerDefaultCard error (email):", e);
+        }
+    }
+
+    return card;
+}
+
+/**
+ * Helper to resolve customer full name from users collection
+ */
+async function resolveCustomerFullName({ customerID, email }) {
+    if (customerID) {
+        try {
+            const uDoc = await db.collection("users").doc(customerID).get();
+            if (uDoc.exists) {
+                const ud = uDoc.data();
+                const name = ud.fullName || ud.name || ud.username;
+                if (name) return name;
+            }
+        } catch (_) {}
+    }
+    if (email) {
+        try {
+            const uSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+            if (!uSnap.empty) {
+                const ud = uSnap.docs[0].data();
+                const name = ud.fullName || ud.name || ud.username;
+                if (name) return name;
+            }
+        } catch (_) {}
+    }
+    return "ReByte Customer";
+}
+
+/**
+ * GET /api/task-assignment/admin/trade-in-payment-preview/:orderID
+ * Returns trade-in request details, final offer price, and customer default stored card for payment preview
+ */
+router.get("/admin/trade-in-payment-preview/:orderID", async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        if (!orderID) {
+            return res.status(400).json({ success: false, message: "orderID is required." });
+        }
+
+        const cleanId = String(orderID).replace(/^#/, '').trim();
+        let trRef = db.collection("tradeInRequests").doc(cleanId);
+        let trSnap = await trRef.get();
+
+        if (!trSnap.exists) {
+            const tDoc = await db.collection("task").doc(cleanId).get().catch(() => null);
+            if (tDoc && tDoc.exists) {
+                const reqId = tDoc.data().tradeInRequestID || tDoc.data().orderID;
+                if (reqId) {
+                    trRef = db.collection("tradeInRequests").doc(String(reqId).replace(/^#/, '').trim());
+                    trSnap = await trRef.get().catch(() => null);
+                }
+            }
+        }
+
+        if (!trSnap || !trSnap.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request record not found." });
+        }
+
+        const trData = trSnap.data() || {};
+        const exactOfferPrice = trData.finalQuotation?.finalOfferPrice != null
+            ? trData.finalQuotation.finalOfferPrice
+            : trData.finalOfferPrice;
+
+        const customerID = trData.userID || trData.customerID || "";
+        const email = trData.userEmail || trData.customerEmail || "";
+        const customerName = await resolveCustomerFullName({ customerID, email });
+        const defaultCard = await getCustomerDefaultCard({ customerID, email });
+
+        return res.json({
+            success: true,
+            tradeInRequestID: trSnap.id,
+            deviceModel: trData.finalQuotation?.modelName || trData.deviceModel || trData.model || "Device",
+            customerName,
+            customerEmail: email,
+            finalOfferPrice: exactOfferPrice != null ? Number(exactOfferPrice) : null,
+            finalQuotation: trData.finalQuotation || null,
+            isPaid: Boolean(trData.isPaid),
+            transactionID: trData.transactionID || null,
+            defaultCard: defaultCard ? {
+                paymentAccountID: defaultCard.paymentAccountID || defaultCard.id,
+                providerName: defaultCard.providerName || "Card",
+                last4: String(defaultCard.cardNumber || "").slice(-4)
+            } : null
+        });
+    } catch (err) {
+        console.error("trade-in-payment-preview error:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/task-assignment/admin/pay-trade-in
+ * Admin transfers exact offer price to customer default stored card via linked Xendit,
+ * and creates a transaction record adhering strictly to existing attributes.
+ */
+router.post("/admin/pay-trade-in", async (req, res) => {
+    try {
+        const { orderID, tradeInRequestID } = req.body;
+        const targetID = tradeInRequestID || orderID;
+        if (!targetID) {
+            return res.status(400).json({ success: false, message: "tradeInRequestID or orderID is required." });
+        }
+
+        const cleanId = String(targetID).replace(/^#/, '').trim();
+        let trRef = db.collection("tradeInRequests").doc(cleanId);
+        let trSnap = await trRef.get();
+
+        if (!trSnap.exists) {
+            const tDoc = await db.collection("task").doc(cleanId).get().catch(() => null);
+            if (tDoc && tDoc.exists) {
+                const reqId = tDoc.data().tradeInRequestID || tDoc.data().orderID;
+                if (reqId) {
+                    trRef = db.collection("tradeInRequests").doc(String(reqId).replace(/^#/, '').trim());
+                    trSnap = await trRef.get().catch(() => null);
+                }
+            }
+        }
+
+        if (!trSnap || !trSnap.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request record not found." });
+        }
+
+        const trData = trSnap.data() || {};
+
+        if (trData.isPaid) {
+            return res.status(400).json({
+                success: false,
+                message: `This trade-in request has already been paid with Transaction ID: ${trData.transactionID || 'N/A'}`
+            });
+        }
+
+        const rawPrice = trData.finalQuotation?.finalOfferPrice != null
+            ? trData.finalQuotation.finalOfferPrice
+            : trData.finalOfferPrice;
+
+        if (rawPrice == null || isNaN(parseFloat(rawPrice)) || parseFloat(rawPrice) <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No valid final offer price found for this trade-in request."
+            });
+        }
+        const numOfferPrice = parseFloat(parseFloat(rawPrice).toFixed(2));
+
+        const customerID = trData.userID || trData.customerID || "";
+        const email = trData.userEmail || trData.customerEmail || "";
+        const defaultCard = await getCustomerDefaultCard({ customerID, email });
+
+        if (!defaultCard || !defaultCard.cardNumber) {
+            return res.status(400).json({
+                success: false,
+                message: "No active default card found for this customer in paymentAccount."
+            });
+        }
+
+        const customerName = await resolveCustomerFullName({ customerID, email });
+
+        // Check if transaction already exists for this trade-in request
+        const existingTxnSnap = await db.collection("transaction")
+            .where("tradeInRequestID", "==", trSnap.id)
+            .get();
+        if (!existingTxnSnap.empty) {
+            return res.status(400).json({
+                success: false,
+                message: `Transaction record (${existingTxnSnap.docs[0].id}) already exists for this trade-in request.`
+            });
+        }
+
+        // Call Xendit Payouts API using XENDIT_PAYOUT_KEY
+        const XENDIT_PAYOUT_KEY = process.env.XENDIT_PAYOUT_KEY || "xnd_development_bsf40RnuxT620dWSNMwaGNSf9V2vN9lJIQEx5W9oAJFI6YUdQ4Rz5RadOo1A0lQ";
+        const payoutAuthHeader = `Basic ${Buffer.from(XENDIT_PAYOUT_KEY + ":").toString("base64")}`;
+
+        let gatewayTransactionID = "";
+        try {
+            const xenditRes = await axios.post("https://api.xendit.co/v2/payouts", {
+                reference_id: `pay_${trSnap.id}_${Date.now()}`,
+                currency: "MYR",
+                amount: numOfferPrice,
+                channel_code: "MY_DUITNOW",
+                channel_properties: {
+                    account_number: String(defaultCard.cardNumber).trim(),
+                    account_holder_name: customerName
+                },
+                description: `Trade-in payout for ${trSnap.id}`
+            }, {
+                headers: {
+                    Authorization: payoutAuthHeader,
+                    "Idempotency-key": `idem_pay_${trSnap.id}_${Date.now()}`
+                }
+            });
+
+            gatewayTransactionID = xenditRes.data?.id || xenditRes.data?.reference_id || `disb_${Date.now()}`;
+        } catch (xErr) {
+            const xErrData = xErr.response?.data;
+            console.error("Xendit Payout Error:", xErrData || xErr.message);
+            return res.status(502).json({
+                success: false,
+                message: `Xendit payout failed: ${xErrData?.message || xErr.message || 'Payment gateway error'}`
+            });
+        }
+
+        // Generate Transaction ID (format: YYMMDDTRANXXXXX)
+        const txnID = await generateTransactionID();
+
+        // Create Transaction Record - ONLY existing attributes, NO extra attribute!
+        const transactionData = {
+            transactionID: txnID,
+            transactionType: "Payout",
+            transactionStatus: "Success",
+            transactionAmount: numOfferPrice,
+            transactionDate: new Date().toISOString(),
+            gatewayTransactionID: String(gatewayTransactionID),
+            paymentAccountID: String(defaultCard.paymentAccountID || defaultCard.id || ""),
+            orderID: null,
+            rentalID: null,
+            tradeInRequestID: String(trSnap.id),
+            createdAt: FieldValue.serverTimestamp()
+        };
+
+        await db.collection("transaction").doc(txnID).set(transactionData);
+
+        // Update trade-in request document
+        await trRef.update({
+            status: "paid",
+            requestStatus: "Paid",
+            isPaid: true,
+            paidAt: new Date().toISOString(),
+            transactionID: txnID
+        });
+
+        // Send payout confirmation email via nodemailer indicating account details
+        const maskedCard = String(defaultCard.cardNumber).trim().slice(-4);
+        const accountInfo = `${defaultCard.providerName || 'Bank / Card'} (ending in •••• ${maskedCard})`;
+        const deviceModel = trData.finalQuotation?.modelName || trData.deviceModel || trData.model || "Electronic Device";
+
+        sendTradeInPayoutEmail({
+            toEmail: email,
+            customerName,
+            tradeInRequestID: trSnap.id,
+            deviceModel,
+            amount: numOfferPrice,
+            accountInfo,
+            transactionID: txnID
+        }).catch(e => console.error("Error in background payout email:", e));
+
+        console.log(`[TRADE-IN PAYOUT SUCCESS] Transferred RM ${numOfferPrice.toFixed(2)} for ${trSnap.id}. Transaction ID: ${txnID}, Gateway: ${gatewayTransactionID}`);
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully transferred RM ${numOfferPrice.toFixed(2)} to customer's default ${defaultCard.providerName || 'Card'} (•••• ${String(defaultCard.cardNumber).slice(-4)}).`,
+            transactionID: txnID,
+            gatewayTransactionID,
+            amount: numOfferPrice
+        });
+    } catch (err) {
+        console.error("pay-trade-in error:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -1969,12 +2773,22 @@ async function getOrBuildTasksDataset() {
         // Determine Admin displayStatus based on requirement:
         // Cancelled - show in cancel tab
         // Ongoing - show in assigned tab
+        // Inspecting - for collection tasks after collection is done (ONLY collection)
         // Completed - show in completed tab
         const rawStatus = String(tData.taskStatus || schedData.scheduleStatus || aData.appointmentStatus || "Ongoing").toLowerCase();
+        const rawTrStatus = String(trData.status || trData.requestStatus || "").toLowerCase();
         let displayStatus = "Assigned";
-        if (rawStatus.includes("cancel")) {
+        if (rawTrStatus === "declined" || rawTrStatus === "rejected") {
+            displayStatus = "Terminated";
+        } else if (rawStatus.includes("cancel") || rawTrStatus.includes("cancel")) {
             displayStatus = "Cancelled";
-        } else if (rawStatus.includes("complete") || rawStatus.includes("done") || rawStatus === "inspected" || rawStatus === "collected") {
+        } else if (rawTrStatus === "accepted" || rawTrStatus === "completed" || rawTrStatus === "paid" || trData.isPaid) {
+            displayStatus = "Completed";
+        } else if (rawTrStatus === "inspected") {
+            displayStatus = "Inspected";
+        } else if (rawTrStatus === "inspecting" || (taskType === "Collect" && (rawStatus.includes("complete") || rawStatus.includes("done") || rawStatus === "collected"))) {
+            displayStatus = "Inspecting";
+        } else if (rawStatus.includes("complete") || rawStatus.includes("done") || rawStatus === "collected") {
             displayStatus = "Completed";
         } else {
             // Ongoing -> show in assigned tab
@@ -2064,16 +2878,28 @@ async function getOrBuildTasksDataset() {
             deliveryAddress: customerAddress || "Customer Address",
             deviceSummary,
             taskType, // "Inspect" or "Collect"
+            tradeInRequestID: tradeInRequestID || null,
+            appointmentID: appointmentID || null,
+            status: trData.status || trData.requestStatus || null,
+            requestStatus: trData.requestStatus || null,
+            finalQuotation: trData.finalQuotation || null,
+            finalOfferPrice: trData.finalQuotation?.finalOfferPrice || trData.finalOfferPrice || null,
+            isPaid: Boolean(trData.isPaid),
+            transactionID: trData.transactionID || null,
+            paidAt: trData.paidAt || null,
+            proofOfCollectionUrl: aData.proofOfCollectionUrl || trData.proofOfCollectionUrl || tData.proofOfDeliveryUrl || "",
             device: {
                 name: `${deviceBrand} ${deviceModel}`.trim(),
                 brand: deviceBrand,
                 model: deviceModel,
                 storage,
                 color,
+                ram: devData.ram || trData.ram || "8",
                 condition,
                 imei,
                 imageUrl: devImageUrl,
-                tradeInEstimate
+                tradeInEstimate,
+                deviceAge: devData.deviceAge || trData.deviceAge || ""
             },
             items: [{
                 productID: tradeInRequestID || appointmentID || tid,
@@ -2081,7 +2907,9 @@ async function getOrBuildTasksDataset() {
                 model: deviceModel,
                 storage,
                 color,
+                ram: devData.ram || trData.ram || "8",
                 condition,
+                deviceAge: devData.deviceAge || trData.deviceAge || "",
                 price: tradeInEstimate,
                 tradeInEstimate,
                 imei,
@@ -2099,7 +2927,7 @@ async function getOrBuildTasksDataset() {
             estimatedValueRange,
             rejectionReason: "",
             rejectionNotes: "",
-            proofOfDeliveryUrl: "",
+            proofOfDeliveryUrl: tData.proofOfDeliveryUrl || aData.proofOfCollectionUrl || trData.proofOfCollectionUrl || "",
             estimatedDistance: tData.estimatedDistance || 0,
             estimatedDuration: tData.estimatedDuration || 0,
             completedAt: tData.completedAt || null,
@@ -2118,13 +2946,16 @@ async function getOrBuildTasksDataset() {
         cancelled: 0,
         refunded: 0,
         terminated: 0,
+        inspecting: 0,
         completed: 0,
         total: taskList.length
     };
 
     taskList.forEach(t => {
         const key = (t.displayStatus || '').toLowerCase();
-        if (counts[key] !== undefined) {
+        if (key === 'inspected') {
+            counts.inspecting++;
+        } else if (counts[key] !== undefined) {
             counts[key]++;
         }
     });
@@ -2151,6 +2982,7 @@ async function getOrBuildTasksDataset() {
  */
 router.get("/admin/tasks", async (req, res) => {
     try {
+        await autoResolveOverdueTradeInTasks().catch(() => {});
         const { taskList, counts } = await getOrBuildTasksDataset();
 
         const tab = String(req.query.tab || "").trim().toLowerCase();
@@ -2163,7 +2995,14 @@ router.get("/admin/tasks", async (req, res) => {
         // 1. Filter by Tab
         let filtered = taskList;
         if (tab && tab !== "all") {
-            filtered = filtered.filter(t => (t.displayStatus || "").toLowerCase() === tab);
+            if (tab === "inspecting") {
+                filtered = filtered.filter(t => {
+                    const s = (t.displayStatus || "").toLowerCase();
+                    return s === "inspecting" || s === "inspected";
+                });
+            } else {
+                filtered = filtered.filter(t => (t.displayStatus || "").toLowerCase() === tab);
+            }
         }
 
         // 1b. Filter by Task Type (Deliver, Inspect, Collect)

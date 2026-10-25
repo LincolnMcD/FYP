@@ -567,6 +567,367 @@ function clearScheduleTimers(scheduleID) {
 
 /**
  * Startup Recovery Scanner:
+/**
+ * Helper to check if a schedule or appointment date is strictly before today (reached 00:00 next day)
+ */
+function isDateBeforeToday(dateVal) {
+    if (!dateVal) return false;
+    let dStr = "";
+    if (typeof dateVal === "string") {
+        let s = dateVal.trim();
+        if (s.includes("T")) s = s.split("T")[0];
+        if (s.includes("/")) {
+            const parts = s.split("/");
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    dStr = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+                } else {
+                    dStr = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+                }
+            }
+        } else if (s.includes("-")) {
+            const parts = s.split("-");
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    dStr = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+                } else {
+                    dStr = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+                }
+            }
+        }
+    } else {
+        let d = null;
+        if (dateVal.toDate && typeof dateVal.toDate === "function") d = dateVal.toDate();
+        else if (dateVal._seconds) d = new Date(dateVal._seconds * 1000);
+        else if (dateVal instanceof Date) d = dateVal;
+        if (d && !isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            dStr = `${y}-${m}-${day}`;
+        }
+    }
+
+    if (!dStr || dStr.length < 10) return false;
+
+    // Use current local date YYYY-MM-DD
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    return dStr < todayStr;
+}
+
+/**
+ * Auto-resolves active trade-in tasks (inspect or collect) whose scheduled date has passed (>= 1 day / reached 00:00 next day)
+ * and have not yet been cancelled or completed:
+ * - For inspection tasks: auto set to "Completed"
+ * - For collection tasks: auto set to "Inspecting"
+ */
+async function autoResolveOverdueTradeInTasks() {
+    try {
+        // 1. Scan tasks with taskType "inspect", "collect", "inspection", "collection"
+        const taskSnap = await db.collection("task")
+            .where("taskType", "in", ["inspect", "collect", "inspection", "collection", "Inspect", "Collect", "Inspection", "Collection"])
+            .get();
+
+        for (const taskDoc of taskSnap.docs) {
+            const taskData = taskDoc.data();
+            const taskStatus = String(taskData.taskStatus || taskData.status || "").toLowerCase();
+
+            // Skip if already cancelled, rejected, or completed
+            if (taskStatus === "cancelled" || taskStatus === "canceled" ||
+                taskStatus === "rejected" || taskStatus === "declined" ||
+                taskStatus === "completed") {
+                continue;
+            }
+
+            const rawType = String(taskData.taskType || "").toLowerCase();
+            const isCollect = rawType.includes("collect");
+
+            // If collection task is already inspecting, skip
+            if (isCollect && taskStatus === "inspecting") {
+                continue;
+            }
+
+            // Determine schedule date
+            let sDate = taskData.scheduleDate || null;
+            let schedData = null;
+            if (!sDate && taskData.scheduleID) {
+                const sDoc = await db.collection("schedule").doc(taskData.scheduleID).get().catch(() => null);
+                if (sDoc && sDoc.exists) {
+                    schedData = sDoc.data();
+                    sDate = schedData.scheduleDate || schedData.scheduledAt;
+                }
+            }
+
+            let apptData = null;
+            if (taskData.appointmentID) {
+                const aDoc = await db.collection("tradeInAppointment").doc(taskData.appointmentID).get().catch(() => null);
+                if (aDoc && aDoc.exists) {
+                    apptData = aDoc.data();
+                    if (!sDate) sDate = apptData.scheduledAt || apptData.appointmentDate;
+                }
+            }
+
+            let trData = null;
+            const trID = taskData.tradeInRequestID || (apptData && apptData.tradeInRequestID);
+            if (trID) {
+                const trDoc = await db.collection("tradeInRequests").doc(trID).get().catch(() => null);
+                if (trDoc && trDoc.exists) {
+                    trData = trDoc.data();
+                    if (!sDate) sDate = trData.appointmentDate || trData.scheduledAt;
+                }
+            }
+
+            if (!isDateBeforeToday(sDate)) {
+                // Not overdue yet (scheduled for today or in the future)
+                continue;
+            }
+
+            const reqStatusToSet = isCollect ? "Inspecting" : "Completed";
+            console.log(`[OVERDUE AUTO-RESOLVE] Overdue ${isCollect ? 'Collection' : 'Inspection'} Task #${taskDoc.id} (Scheduled: ${sDate}). Setting tradeInRequest to ${reqStatusToSet}, and task/schedule/appointment to Completed...`);
+
+            const batch = db.batch();
+
+            // Task update: ALWAYS Completed
+            batch.set(db.collection("task").doc(taskDoc.id), {
+                taskStatus: "Completed",
+                status: "Completed",
+                completedAt: FieldValue.serverTimestamp(),
+                autoCompletedAt: FieldValue.serverTimestamp(),
+                autoCompletedReason: `Scheduled date passed; auto-set to Completed at midnight rollover`,
+                updatedAt: new Date()
+            }, { merge: true });
+
+            // Schedule update: ALWAYS completed
+            const schedID = taskData.scheduleID || (apptData && apptData.scheduleID);
+            if (schedID) {
+                batch.set(db.collection("schedule").doc(schedID), {
+                    scheduleStatus: "completed",
+                    completedAt: FieldValue.serverTimestamp(),
+                    autoCompletedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                }, { merge: true });
+                clearScheduleTimers(schedID);
+            }
+
+            // tradeInAppointment update: ALWAYS Completed
+            const apptID = taskData.appointmentID || (trData && trData.appointmentID);
+            if (apptID) {
+                batch.set(db.collection("tradeInAppointment").doc(apptID), {
+                    appointmentStatus: "Completed",
+                    status: "Completed",
+                    bookingStatus: "Completed",
+                    completedAt: FieldValue.serverTimestamp(),
+                    autoCompletedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+
+            // tradeInRequests update: ONLY tradeInRequest is Inspecting for collection, Completed for inspection
+            if (trID) {
+                const trUpdate = {
+                    requestStatus: reqStatusToSet,
+                    status: reqStatusToSet,
+                    bookingStatus: reqStatusToSet,
+                    updatedAt: new Date(),
+                    autoTransitionAt: FieldValue.serverTimestamp(),
+                    autoTransitionReason: `Scheduled date passed; auto-set to ${reqStatusToSet}`
+                };
+                if (isCollect) {
+                    trUpdate.collectedAt = new Date();
+                } else {
+                    trUpdate.completedAt = FieldValue.serverTimestamp();
+                }
+                batch.set(db.collection("tradeInRequests").doc(trID), trUpdate, { merge: true });
+
+                const devID = (trData && trData.deviceID);
+                if (devID) {
+                    batch.set(db.collection("devices").doc(devID), {
+                        status: reqStatusToSet,
+                        updatedAt: new Date()
+                    }, { merge: true });
+                }
+            }
+
+            await batch.commit();
+        }
+
+        // 2. Scan active tradeInAppointment docs
+        const apptSnap = await db.collection("tradeInAppointment").get();
+        for (const aDoc of apptSnap.docs) {
+            const aData = aDoc.data();
+            const rawStatus = String(aData.appointmentStatus || aData.status || aData.bookingStatus || "").toLowerCase();
+            if (rawStatus.includes("cancel") || rawStatus.includes("declin") || rawStatus.includes("reject") || rawStatus === "completed") {
+                continue;
+            }
+
+            const apptType = String(aData.appointmentType || "").toLowerCase();
+            const isCollect = apptType.includes("collect");
+            if (isCollect && rawStatus === "inspecting") {
+                continue;
+            }
+
+            const sDate = aData.scheduledAt || aData.appointmentDate;
+            if (!isDateBeforeToday(sDate)) {
+                continue;
+            }
+
+            const reqStatusToSet = isCollect ? "Inspecting" : "Completed";
+            console.log(`[OVERDUE AUTO-RESOLVE] Overdue Appointment #${aDoc.id} (Scheduled: ${sDate}, Type: ${aData.appointmentType}). Setting appointment/task/schedule to Completed, tradeInRequest to ${reqStatusToSet}...`);
+
+            const batch = db.batch();
+            // tradeInAppointment: ALWAYS Completed
+            batch.set(db.collection("tradeInAppointment").doc(aDoc.id), {
+                appointmentStatus: "Completed",
+                status: "Completed",
+                bookingStatus: "Completed",
+                completedAt: FieldValue.serverTimestamp(),
+                autoCompletedAt: FieldValue.serverTimestamp(),
+                updatedAt: new Date()
+            }, { merge: true });
+
+            // Link and update task if present: ALWAYS Completed
+            const tSnap = await db.collection("task").where("appointmentID", "==", aDoc.id).limit(1).get().catch(() => null);
+            if (tSnap && !tSnap.empty) {
+                batch.set(tSnap.docs[0].ref, {
+                    taskStatus: "Completed",
+                    status: "Completed",
+                    completedAt: FieldValue.serverTimestamp(),
+                    autoCompletedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                }, { merge: true });
+                const schedId = tSnap.docs[0].data().scheduleID;
+                if (schedId) {
+                    batch.set(db.collection("schedule").doc(schedId), {
+                        scheduleStatus: "completed",
+                        completedAt: FieldValue.serverTimestamp(),
+                        updatedAt: new Date()
+                    }, { merge: true });
+                    clearScheduleTimers(schedId);
+                }
+            }
+
+            // tradeInRequests: ONLY tradeInRequest is Inspecting for collection, Completed for inspection
+            if (aData.tradeInRequestID) {
+                const trRef = db.collection("tradeInRequests").doc(aData.tradeInRequestID);
+                const trSnap = await trRef.get().catch(() => null);
+                if (trSnap && trSnap.exists) {
+                    const trData = trSnap.data();
+                    const trStatus = String(trData.requestStatus || "").toLowerCase();
+                    if (!trStatus.includes("cancel") && !trStatus.includes("declin") && !trStatus.includes("reject") && trStatus !== "completed" && !(isCollect && trStatus === "inspecting")) {
+                        const trUpdate = {
+                            requestStatus: reqStatusToSet,
+                            status: reqStatusToSet,
+                            bookingStatus: reqStatusToSet,
+                            updatedAt: new Date(),
+                            autoTransitionAt: FieldValue.serverTimestamp(),
+                            autoTransitionReason: `Scheduled date passed; auto-set to ${reqStatusToSet}`
+                        };
+                        if (isCollect) {
+                            trUpdate.collectedAt = new Date();
+                        } else {
+                            trUpdate.completedAt = FieldValue.serverTimestamp();
+                        }
+                        batch.set(trRef, trUpdate, { merge: true });
+
+                        if (trData.deviceID) {
+                            batch.set(db.collection("devices").doc(trData.deviceID), {
+                                status: reqStatusToSet,
+                                updatedAt: new Date()
+                            }, { merge: true });
+                        }
+                    }
+                }
+            }
+
+            await batch.commit();
+        }
+
+        // 3. Scan tradeInRequests directly for any unhandled active overdue requests
+        const trSnap = await db.collection("tradeInRequests").get();
+        for (const trDoc of trSnap.docs) {
+            const trData = trDoc.data();
+            const s = String(trData.requestStatus || trData.status || trData.bookingStatus || "").toLowerCase();
+            if (s.includes("cancel") || s.includes("declin") || s.includes("reject") || s === "completed") {
+                continue;
+            }
+            const method = String(trData.inspectionMethod || "").toLowerCase();
+            const isCollect = method.includes("collect");
+            if (isCollect && s === "inspecting") {
+                continue;
+            }
+
+            const sDate = trData.appointmentDate || trData.scheduledAt;
+            if (!isDateBeforeToday(sDate)) {
+                continue;
+            }
+
+            const reqStatusToSet = isCollect ? "Inspecting" : "Completed";
+            console.log(`[OVERDUE AUTO-RESOLVE] Overdue TradeInRequest #${trDoc.id} (Scheduled: ${sDate}). Setting tradeInRequest to ${reqStatusToSet}, appointment to Completed...`);
+
+            const batch = db.batch();
+            const trUpdate = {
+                requestStatus: reqStatusToSet,
+                status: reqStatusToSet,
+                bookingStatus: reqStatusToSet,
+                updatedAt: new Date(),
+                autoTransitionAt: FieldValue.serverTimestamp(),
+                autoTransitionReason: `Scheduled date passed; auto-set to ${reqStatusToSet}`
+            };
+            if (isCollect) {
+                trUpdate.collectedAt = new Date();
+            } else {
+                trUpdate.completedAt = FieldValue.serverTimestamp();
+            }
+            batch.set(trDoc.ref, trUpdate, { merge: true });
+
+            if (trData.deviceID) {
+                batch.set(db.collection("devices").doc(trData.deviceID), {
+                    status: reqStatusToSet,
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+
+            if (trData.appointmentID) {
+                batch.set(db.collection("tradeInAppointment").doc(trData.appointmentID), {
+                    appointmentStatus: "Completed",
+                    status: "Completed",
+                    bookingStatus: "Completed",
+                    completedAt: FieldValue.serverTimestamp(),
+                    autoCompletedAt: FieldValue.serverTimestamp(),
+                    updatedAt: new Date()
+                }, { merge: true });
+            }
+
+            await batch.commit();
+        }
+
+        // 4. Complete any orphaned active schedules for trade-in tasks where scheduleDate is past
+        const schedSnap = await db.collection("schedule")
+            .where("scheduleStatus", "in", ["assigned", "ongoing"])
+            .get();
+
+        for (const sDoc of schedSnap.docs) {
+            const sData = sDoc.data();
+            if (sData.orderID) continue; // delivery tasks handled separately
+            if (!isDateBeforeToday(sData.scheduleDate)) continue;
+
+            await sDoc.ref.update({
+                scheduleStatus: "completed",
+                completedAt: FieldValue.serverTimestamp(),
+                autoCompletedAt: FieldValue.serverTimestamp(),
+                updatedAt: new Date()
+            }).catch(() => {});
+            clearScheduleTimers(sDoc.id);
+        }
+    } catch (err) {
+        console.error("[AUTO-RESOLVE OVERDUE TRADE-IN ERROR]:", err);
+    }
+}
+
+/**
+ * Startup Recovery & Ongoing Scanner
  * Runs when backend starts or recovers to scan all active schedules and set up timers
  */
 async function initializeScheduleMonitoring() {
@@ -590,12 +951,18 @@ async function initializeScheduleMonitoring() {
         // Check if 1st of month reset is due on startup
         await checkAndResetMonthlyMistakes();
 
+        // Check and auto-resolve any overdue trade-in tasks on startup
+        await autoResolveOverdueTradeInTasks();
+
         // Also run a lightweight periodic sweep every 60 seconds as a safety net
         // to catch any drift, network pauses, or missed scheduled timers without heavy queries
         setInterval(async () => {
             try {
                 // Check 1st of month rollover
                 await checkAndResetMonthlyMistakes();
+
+                // Auto-resolve overdue trade-in tasks (inspect/collect) that passed their scheduled date
+                await autoResolveOverdueTradeInTasks();
 
                 const activeSnap = await db.collection("schedule")
                     .where("scheduleStatus", "in", ["assigned", "ongoing"])
@@ -640,5 +1007,7 @@ module.exports = {
     clearScheduleTimers,
     handleStartTimeViolation,
     handleEndTimeViolation,
-    checkAndResetMonthlyMistakes
+    checkAndResetMonthlyMistakes,
+    autoResolveOverdueTradeInTasks,
+    isDateBeforeToday
 };

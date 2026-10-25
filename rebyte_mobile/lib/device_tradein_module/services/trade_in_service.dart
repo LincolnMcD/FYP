@@ -87,6 +87,27 @@ class TradeInService {
     return _cachedModelCodes[bKey]?[model];
   }
 
+  /// Fetch a single device record by deviceID from backend
+  static Future<Map<String, dynamic>?> getDeviceById(String deviceId) async {
+    try {
+      final cleanId = deviceId.trim();
+      final response = await http.get(
+        Uri.parse('$baseUrl/device/$cleanId'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['device'] is Map) {
+          return Map<String, dynamic>.from(data['device']);
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Create a new device record with status pending
   static Future<Map<String, dynamic>> createDeviceRecord({
     required String brand,
@@ -381,6 +402,17 @@ class TradeInService {
       return {'success': false, 'message': e.toString()};
     }
   }
+
+  /// Alias for updateTradeInStatus
+  static Future<Map<String, dynamic>> updateStatus({
+    required String tradeInRequestID,
+    required String status,
+    Map<String, dynamic>? estimatedValue,
+  }) => updateTradeInStatus(
+    tradeInRequestID: tradeInRequestID,
+    status: status,
+    estimatedValue: estimatedValue,
+  );
 
   /// Check if the user has an existing pending trade-in request to resume
   static Future<Map<String, dynamic>> getActivePendingTradeIn(String userEmail) async {

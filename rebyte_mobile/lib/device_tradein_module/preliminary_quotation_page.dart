@@ -105,7 +105,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     );
   }
 
-  // Blue Button: Accept Offer -> Status Accepted -> Navigate to TradeInRequestCreatedPage (Accepted state)
+  // Blue Button: Accept Offer -> Status Agreed -> Navigate to TradeInRequestCreatedPage
   Future<void> _onAcceptOffer() async {
     if (_isProcessingAction) return;
     setState(() => _isProcessingAction = true);
@@ -114,7 +114,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
       if (widget.tradeInRequestID.isNotEmpty) {
         await TradeInService.updateTradeInStatus(
           tradeInRequestID: widget.tradeInRequestID,
-          status: 'Accepted',
+          status: 'Agreed',
         );
       }
     } catch (_) {}
@@ -184,7 +184,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
       if (widget.tradeInRequestID.isNotEmpty) {
         await TradeInService.updateTradeInStatus(
           tradeInRequestID: widget.tradeInRequestID,
-          status: 'Rejected',
+          status: 'Declined',
         );
       }
     } catch (_) {}

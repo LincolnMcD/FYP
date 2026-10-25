@@ -565,5 +565,377 @@ router.get("/get-invoice", async (req, res) => {
         });
     }
 });
+/**
+ * GET /api/payment/transactions
+ * Retrieves real user transaction records directly from Firestore 'transaction' collection.
+ * Tracks back ownership via orderID (order), tradeInRequestID (tradeInRequests), or rentalID (rental).
+ * Uses orderID, tradeInRequestID, or rentalID to identify purchase, trade-in, or rental.
+ */
+router.get("/transactions", async (req, res) => {
+    try {
+        const { email, type = "all", searchId = "" } = req.query;
+        const limitNum = parseInt(req.query.limit, 10) || 5;
+        const offsetNum = parseInt(req.query.offset, 10) || 0;
+
+        if (!email) {
+            return res.json({
+                success: true,
+                totalCount: 0,
+                offset: offsetNum,
+                limit: limitNum,
+                hasMore: false,
+                transactions: []
+            });
+        }
+
+        const { customerID, email: userEmail } = await getCustomerInfo(email);
+        const targetCustIds = [customerID].filter(Boolean);
+        const targetEmails = [email, userEmail].filter(Boolean);
+
+        // 1. Gather all user's orders to track back orderID
+        const userOrdersMap = new Map();
+        for (const cId of targetCustIds) {
+            const snap = await db.collection("order").where("customerID", "==", cId).get();
+            snap.forEach(d => {
+                userOrdersMap.set(d.id, d.data());
+                if (d.data().orderID) userOrdersMap.set(d.data().orderID, d.data());
+            });
+        }
+        for (const em of targetEmails) {
+            const snap = await db.collection("order").where("email", "==", em).get();
+            snap.forEach(d => {
+                userOrdersMap.set(d.id, d.data());
+                if (d.data().orderID) userOrdersMap.set(d.data().orderID, d.data());
+            });
+        }
+
+        // 2. Gather all user's trade-in requests to track back tradeInRequestID
+        const userTradeInsMap = new Map();
+        for (const em of targetEmails) {
+            const snap = await db.collection("tradeInRequests").where("userEmail", "==", em).get();
+            snap.forEach(d => {
+                userTradeInsMap.set(d.id, d.data());
+                if (d.data().tradeInRequestID) userTradeInsMap.set(d.data().tradeInRequestID, d.data());
+            });
+        }
+        for (const cId of targetCustIds) {
+            const snap = await db.collection("tradeInRequests").where("userId", "==", cId).get();
+            snap.forEach(d => {
+                userTradeInsMap.set(d.id, d.data());
+                if (d.data().tradeInRequestID) userTradeInsMap.set(d.data().tradeInRequestID, d.data());
+            });
+        }
+
+        // 3. Gather rentals if rental collection exists
+        const userRentalsMap = new Map();
+        try {
+            for (const em of targetEmails) {
+                const snap = await db.collection("rental").where("userEmail", "==", em).get();
+                snap.forEach(d => {
+                    userRentalsMap.set(d.id, d.data());
+                    if (d.data().rentalID) userRentalsMap.set(d.data().rentalID, d.data());
+                });
+            }
+        } catch (_) {}
+
+        // 4. Query transaction collection from Firestore
+        const tranSnap = await db.collection("transaction").get();
+
+        // 5. Caches for product, devices, paymentAccount to avoid duplicate queries
+        const productCache = new Map();
+        const deviceCache = new Map();
+        const paymentAccountCache = new Map();
+
+        const allMatchedTransactions = [];
+
+        for (const doc of tranSnap.docs) {
+            const t = doc.data();
+
+            let matchedType = null;
+            let parentData = null;
+
+            if (t.orderID && userOrdersMap.has(t.orderID)) {
+                matchedType = "purchase";
+                parentData = userOrdersMap.get(t.orderID);
+            } else if (t.tradeInRequestID && userTradeInsMap.has(t.tradeInRequestID)) {
+                matchedType = "trade-in";
+                parentData = userTradeInsMap.get(t.tradeInRequestID);
+            } else if (t.rentalID && userRentalsMap.has(t.rentalID)) {
+                matchedType = "rental";
+                parentData = userRentalsMap.get(t.rentalID);
+            }
+
+            // If not owned by this user, skip
+            if (!matchedType) continue;
+
+            const rawAmount = Number(t.transactionAmount || 0);
+            const isTrade = matchedType === "trade-in";
+            const isRefund = (t.transactionType || "").toLowerCase() === "refund";
+            const isPayout = (t.transactionType || "").toLowerCase() === "payout";
+            const isCredit = isTrade || isRefund || isPayout;
+
+            // Normalize transaction status
+            const rawStatus = (t.transactionStatus || "").toLowerCase();
+            let status = "completed";
+            if (rawStatus === "fail" || rawStatus === "failed") {
+                status = "failed";
+            } else if (rawStatus === "pending") {
+                status = "pending";
+            }
+
+            // Parse date
+            let isoDate = new Date().toISOString();
+            if (t.transactionDate) {
+                if (t.transactionDate._seconds) {
+                    isoDate = new Date(t.transactionDate._seconds * 1000).toISOString();
+                } else if (typeof t.transactionDate === "string") {
+                    isoDate = t.transactionDate;
+                }
+            } else if (t.createdAt && t.createdAt._seconds) {
+                isoDate = new Date(t.createdAt._seconds * 1000).toISOString();
+            }
+
+            const dateObj = new Date(isoDate);
+            const formattedDate = !isNaN(dateObj.getTime())
+                ? dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : "Recent";
+
+            // Resolve Payment Method
+            let paymentMethod = "Visa •••• 4242";
+            const payAccId = t.paymentAccountID || "";
+            if (payAccId === "fpx_online_banking") {
+                paymentMethod = "FPX Online Banking";
+            } else if (payAccId === "ewallet_all") {
+                paymentMethod = "Touch 'n Go eWallet";
+            } else if (isPayout || isTrade) {
+                paymentMethod = "Bank Transfer";
+            } else if (payAccId) {
+                if (!paymentAccountCache.has(payAccId)) {
+                    try {
+                        const paSnap = await db.collection("paymentAccount").doc(payAccId).get();
+                        paymentAccountCache.set(payAccId, paSnap.exists ? paSnap.data() : null);
+                    } catch (_) {
+                        paymentAccountCache.set(payAccId, null);
+                    }
+                }
+                const paData = paymentAccountCache.get(payAccId);
+                if (paData && paData.cardNumber) {
+                    const brand = paData.providerName || "Card";
+                    const last4 = paData.cardNumber.slice(-4);
+                    paymentMethod = `${brand} •••• ${last4}`;
+                }
+            }
+
+            // Resolve Title & Related Item
+            // Resolve Title & Related Items (supports all products in multi-item orders)
+            let title = "Transaction Item";
+            const relatedItems = [];
+
+            if (matchedType === "purchase" && parentData) {
+                const prodIds = Array.isArray(parentData.productIDs) ? parentData.productIDs : [];
+                for (const prodId of prodIds) {
+                    if (!productCache.has(prodId)) {
+                        try {
+                            const pSnap = await db.collection("product").doc(prodId).get();
+                            productCache.set(prodId, pSnap.exists ? pSnap.data() : null);
+                        } catch (_) {
+                            productCache.set(prodId, null);
+                        }
+                    }
+                    const pData = productCache.get(prodId);
+                    if (pData) {
+                        let itemName = pData.description ? pData.description.split(" - ")[0] : (pData.productName || "Product");
+                        let itemImageUrl = pData.imageUrl || "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg";
+                        let itemImei = "";
+                        let itemDeviceId = pData.deviceID || "";
+                        let itemStorage = "";
+                        let itemColor = "";
+
+                        if (pData.deviceID) {
+                            if (!deviceCache.has(pData.deviceID)) {
+                                try {
+                                    const dSnap = await db.collection("devices").doc(pData.deviceID).get();
+                                    deviceCache.set(pData.deviceID, dSnap.exists ? dSnap.data() : null);
+                                } catch (_) {
+                                    deviceCache.set(pData.deviceID, null);
+                                }
+                            }
+                            const dData = deviceCache.get(pData.deviceID);
+                            if (dData) {
+                                itemName = [dData.brand, dData.model].filter(Boolean).join(" ") || itemName;
+                                itemImei = dData.imeiNum || "";
+                                itemDeviceId = dData.deviceID || pData.deviceID || "";
+                                itemStorage = dData.storage || dData.storageCapacity || "";
+                                itemColor = dData.color || dData.colour || "";
+                            }
+                        }
+
+                        relatedItems.push({
+                            name: itemName,
+                            imei: itemImei,
+                            deviceID: itemDeviceId,
+                            imageUrl: itemImageUrl,
+                            storage: itemStorage,
+                            color: itemColor
+                        });
+                    }
+                }
+                if (relatedItems.length > 0) {
+                    title = relatedItems.map(i => i.name).join(", ");
+                } else {
+                    title = "Product Purchase";
+                    relatedItems.push({
+                        name: "Product Purchase",
+                        imei: "",
+                        deviceID: "",
+                        imageUrl: "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg",
+                        storage: "",
+                        color: ""
+                    });
+                }
+            } else if (matchedType === "trade-in" && parentData) {
+                const devId = parentData.deviceID;
+                let itemName = "Trade-In Device";
+                let itemImei = parentData.imeiNum || "";
+                let itemDeviceId = devId || "";
+                let itemImageUrl = "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg";
+                let itemStorage = "";
+                let itemColor = "";
+
+                if (devId) {
+                    if (!deviceCache.has(devId)) {
+                        try {
+                            const dSnap = await db.collection("devices").doc(devId).get();
+                            deviceCache.set(devId, dSnap.exists ? dSnap.data() : null);
+                        } catch (_) {
+                            deviceCache.set(devId, null);
+                        }
+                    }
+                    const dData = deviceCache.get(devId);
+                    if (dData) {
+                        itemName = [dData.brand, dData.model].filter(Boolean).join(" ") || "Trade-In Device";
+                        itemImei = dData.imeiNum || parentData.imeiNum || "";
+                        itemDeviceId = dData.deviceID || devId || "";
+                        itemStorage = dData.storageCapacity || dData.storage || "";
+                        itemColor = dData.colour || dData.color || "";
+                    }
+                }
+
+                relatedItems.push({
+                    name: itemName,
+                    imei: itemImei,
+                    deviceID: itemDeviceId,
+                    imageUrl: itemImageUrl,
+                    storage: itemStorage,
+                    color: itemColor
+                });
+                title = itemName;
+            } else if (matchedType === "rental") {
+                title = "Device Rental";
+                relatedItems.push({
+                    name: "Device Rental",
+                    imei: "",
+                    deviceID: "",
+                    imageUrl: "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg",
+                    storage: "",
+                    color: ""
+                });
+            }
+
+            // Breakdown: only base amount and total paid (no tax)
+            const baseAmount = Number(parentData?.subtotal || parentData?.finalOfferPrice || rawAmount);
+
+            // Use orderID, tradeInRequestID, or rentalID as primary business ID
+            const businessId = (matchedType === "purchase" ? t.orderID : (matchedType === "trade-in" ? t.tradeInRequestID : t.rentalID))
+                || t.orderID
+                || t.tradeInRequestID
+                || t.rentalID
+                || t.transactionID
+                || doc.id;
+
+            allMatchedTransactions.push({
+                id: doc.id,
+                transactionId: businessId,
+                rawTransactionId: t.transactionID || doc.id,
+                orderID: t.orderID || null,
+                tradeInRequestID: t.tradeInRequestID || null,
+                rentalID: t.rentalID || null,
+                title,
+                type: matchedType,
+                amount: rawAmount,
+                isCredit,
+                status,
+                date: isoDate,
+                formattedDate,
+                paymentMethod,
+                relatedItem: relatedItems[0] || {
+                    name: title,
+                    imei: "N/A",
+                    imageUrl: "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg",
+                    storage: "",
+                    color: ""
+                },
+                relatedItems,
+                breakdown: {
+                    baseAmount,
+                    taxAmount: 0.00,
+                    totalPaid: rawAmount
+                }
+            });
+        }
+
+        // Sort by date (newest first)
+        allMatchedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Filter by category type ('all', 'purchase', 'trade-in', 'rental')
+        let filtered = allMatchedTransactions;
+        if (type && type.toLowerCase() !== "all") {
+            const cleanType = type.toLowerCase().replace(/s$/, '').replace(/_/g, '-');
+            filtered = filtered.filter(tx => {
+                const txType = (tx.type || "").toLowerCase().replace(/_/g, '-');
+                if (cleanType === "purchase") return txType === "purchase";
+                if (cleanType === "trade-in" || cleanType === "tradein") return txType === "trade-in";
+                if (cleanType === "rental") return txType === "rental";
+                return true;
+            });
+        }
+
+        // Search bar: strictly search by ID (supports orderID, tradeInRequestID, rentalID, or transactionID)
+        if (searchId && searchId.trim().length > 0) {
+            const cleanSearch = searchId.trim().toLowerCase().replace(/^#/, '');
+            filtered = filtered.filter(tx => {
+                const txId = (tx.transactionId || "").toLowerCase().replace(/^#/, '');
+                const rawId = (tx.id || "").toLowerCase();
+                const rawTxId = (tx.rawTransactionId || "").toLowerCase();
+                const ordId = (tx.orderID || "").toLowerCase();
+                const trId = (tx.tradeInRequestID || "").toLowerCase();
+                const rntId = (tx.rentalID || "").toLowerCase();
+                return txId.includes(cleanSearch) || 
+                       rawId.includes(cleanSearch) || 
+                       rawTxId.includes(cleanSearch) || 
+                       ordId.includes(cleanSearch) || 
+                       trId.includes(cleanSearch) || 
+                       rntId.includes(cleanSearch);
+            });
+        }
+
+        const totalCount = filtered.length;
+        const pagedData = filtered.slice(offsetNum, offsetNum + limitNum);
+        const hasMore = (offsetNum + limitNum) < totalCount;
+
+        return res.json({
+            success: true,
+            totalCount,
+            offset: offsetNum,
+            limit: limitNum,
+            hasMore,
+            transactions: pagedData
+        });
+    } catch (err) {
+        console.error("Error fetching transactions:", err);
+        return res.status(500).json({ success: false, error: "Failed to fetch transactions" });
+    }
+});
 
 module.exports = router;
+

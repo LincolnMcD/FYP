@@ -382,7 +382,7 @@ class _CustomerDeliveryTrackingPageState
     );
 
     if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context); // Return to Order Detail page
+      Navigator.pop(context, true); // Return to Order Detail / Request Details page
     }
   }
 

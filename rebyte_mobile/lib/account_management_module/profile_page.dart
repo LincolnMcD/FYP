@@ -3,6 +3,7 @@ import 'home_page.dart';
 import 'edit_profile_page.dart';
 import 'manage_address_page.dart';
 import 'manage_payment_method_page.dart';
+import 'payment_history_page.dart';
 import 'services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../product_purchase_module/my_orders_page.dart';
@@ -177,7 +178,21 @@ class ProfilePage extends StatelessWidget {
           _buildDivider(),
           _buildMenuItem(Icons.pending_actions_outlined, 'Pending Payment'),
           _buildDivider(),
-          _buildMenuItem(Icons.history_outlined, 'Payment History'),
+          _buildMenuItem(
+            Icons.history_outlined,
+            'Payment History',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PaymentHistoryPage(
+                    email: email ?? 'customer@rebyte.com',
+                    name: name,
+                  ),
+                ),
+              );
+            },
+          ),
           _buildDivider(),
           _buildMenuItem(
             Icons.logout,

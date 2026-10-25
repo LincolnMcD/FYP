@@ -11,6 +11,7 @@ class DeviceModel {
   final String? deviceAge;
   final String? userEmail;
   final DateTime? createdAt;
+  final String? ram;
 
   DeviceModel({
     required this.deviceID,
@@ -25,6 +26,7 @@ class DeviceModel {
     this.deviceAge,
     this.userEmail,
     this.createdAt,
+    this.ram,
   });
 
   Map<String, dynamic> toJson() {
@@ -41,6 +43,7 @@ class DeviceModel {
       'deviceAge': deviceAge,
       'userEmail': userEmail,
       'createdAt': createdAt?.toIso8601String(),
+      'ram': ram,
     };
   }
 
@@ -64,6 +67,7 @@ class DeviceModel {
               ? DateTime.fromMillisecondsSinceEpoch(json['createdAt']['_seconds'] * 1000)
               : DateTime.tryParse(json['createdAt'].toString()))
           : null,
+      ram: json['ram']?.toString(),
     );
   }
 
@@ -80,6 +84,7 @@ class DeviceModel {
     String? deviceAge,
     String? userEmail,
     DateTime? createdAt,
+    String? ram,
   }) {
     return DeviceModel(
       deviceID: deviceID ?? this.deviceID,
@@ -94,6 +99,7 @@ class DeviceModel {
       deviceAge: deviceAge ?? this.deviceAge,
       userEmail: userEmail ?? this.userEmail,
       createdAt: createdAt ?? this.createdAt,
+      ram: ram ?? this.ram,
     );
   }
 }

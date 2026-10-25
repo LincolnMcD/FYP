@@ -185,14 +185,17 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Top KPI Summary Cards Grid */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 14px;
       margin-bottom: 26px;
     }
     @media (max-width: 1450px) {
+      .kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
       .kpi-grid {
         grid-template-columns: repeat(3, 1fr);
       }
@@ -244,6 +247,7 @@
     .kpi-icon-wrap.cancelled { background: #fee2e2; color: #b91c1c; }
     .kpi-icon-wrap.refunded { background: #fdf2f8; color: #db2777; }
     .kpi-icon-wrap.terminated { background: #f1f5f9; color: #475569; }
+    .kpi-icon-wrap.inspecting { background: #ede9fe; color: #6d28d9; }
     .kpi-icon-wrap.completed { background: #dcfce7; color: #166534; }
     .kpi-icon-wrap svg { width: 22px; height: 22px; }
 
@@ -269,6 +273,7 @@
     .badge-review { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     .badge-refunded { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
     .badge-closed { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+    .badge-inspecting { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
     .badge-delivered { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 
     .kpi-bottom { margin-top: 14px; }
@@ -589,6 +594,11 @@
     .status-cancelled { background: #ffdada; color: #b4232f; }
     .status-refunded { background: #fdf2f8; color: #be185d; }
     .status-terminated { background: #ffdfc9; color: #9a4d0b; }
+    .status-inspecting { background: #ede9fe; color: #6d28d9; }
+    .status-inspected { background: #ede9fe; color: #6d28d9; }
+    .status-accepted { background: #dcfce7; color: #15803d; }
+    .status-declined { background: #ffdada; color: #b4232f; }
+    .status-rejected { background: #ffdada; color: #b4232f; }
     .status-completed { background: #dcfce7; color: #15803d; }
     .status-self-pickup { background: #fef3c7; color: #b45309; }
     .type-pill {
@@ -686,6 +696,46 @@
       background: #d1fae5;
       color: #065f46;
       border-color: #34d399;
+    }
+    .btn-quotation {
+      background: #f5f3ff;
+      color: #6d28d9;
+      border: 1px solid #ddd6fe;
+      font-weight: 700;
+    }
+    .btn-quotation:hover {
+      background: #ede9fe;
+      color: #5b21b6;
+      border-color: #c4b5fd;
+    }
+    .btn-pay {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+      font-weight: 700;
+    }
+    .btn-pay:hover {
+      background: #059669;
+      color: #ffffff;
+      border-color: #047857;
+    }
+    .btn-paid {
+      background: #ecfdf5;
+      color: #059669;
+      border: 1px solid #a7f3d0;
+      font-weight: 600;
+      cursor: not-allowed;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0.85;
+      user-select: none;
+    }
+    .btn-paid:disabled,
+    .btn-paid[disabled] {
+      cursor: not-allowed;
+      pointer-events: none;
+      box-shadow: none;
     }
 
     /* Table Footer & Pagination - Consistent with Customer Management */
@@ -1123,7 +1173,21 @@
           </div>
         </div>
 
-        <!-- 6. Completed -->
+        <!-- 6. Inspecting -->
+        <div class="kpi-card" data-filter="inspecting" id="kpiInspecting">
+          <div class="kpi-top">
+            <div class="kpi-icon-wrap inspecting">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </div>
+            <span class="kpi-badge badge-inspecting">Inspecting</span>
+          </div>
+          <div class="kpi-bottom">
+            <div class="kpi-count" id="countInspecting">—</div>
+            <div class="kpi-label">Inspecting Tasks</div>
+          </div>
+        </div>
+
+        <!-- 7. Completed -->
         <div class="kpi-card" data-filter="completed" id="kpiCompleted">
           <div class="kpi-top">
             <div class="kpi-icon-wrap completed">
@@ -1140,7 +1204,7 @@
 
       <!-- Main Data Table Container -->
       <section class="task-card" aria-label="Task Management Table">
-        <!-- 6 Status Tabs -->
+        <!-- Status Tabs -->
         <div class="tabs-bar" role="tablist">
           <button type="button" class="tab-btn active" role="tab" data-tab="unassigned">
             Unassigned
@@ -1161,6 +1225,10 @@
           <button type="button" class="tab-btn" role="tab" data-tab="terminated">
             Terminated
             <span class="tab-pill" id="pillTerminated">0</span>
+          </button>
+          <button type="button" class="tab-btn" role="tab" data-tab="inspecting">
+            Inspecting
+            <span class="tab-pill" id="pillInspecting">0</span>
           </button>
           <button type="button" class="tab-btn" role="tab" data-tab="completed">
             Completed
@@ -1386,6 +1454,282 @@
       </div>
       <div style="padding: 0 24px 24px; text-align: center;">
         <button type="button" class="btn-primary" style="width: 100%; justify-content: center; min-height: 44px; font-size: 14px; font-weight: 700; background: #059669; border-color: #059669;" onclick="closeModal('successPickedModal')">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Final Quotation Dialog -->
+  <div class="modal-overlay" id="quotationModal">
+    <div class="modal-dialog" style="max-width: 640px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-head" style="border-bottom: 1px solid #e2e8f0; padding: 18px 24px;">
+        <h3 style="color: #6d28d9; display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span id="quoteModalTitleText">Provide Final Device Quotation</span>
+        </h3>
+        <button type="button" class="modal-close" onclick="closeModal('quotationModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+          <div>
+            <span style="color: #64748b;">Request / Order: </span>
+            <strong style="color: #0f172a;" id="quoteModalOrderID">—</strong>
+          </div>
+          <div>
+            <span style="color: #64748b;">Customer: </span>
+            <strong style="color: #0f172a;" id="quoteModalCustomer">—</strong>
+          </div>
+        </div>
+
+        <form id="finalQuotationForm" onsubmit="event.preventDefault(); submitFinalQuotation();">
+          <!-- 1. Device Specifications -->
+          <div style="margin-bottom: 18px;">
+            <label style="font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">1. Device Specifications</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Model Name <span style="color:#ef4444;">*</span></label>
+                <input type="text" id="quoteModelName" class="form-control" placeholder="e.g. iPhone 13 Pro" required style="width: 100%; height: 38px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; font-size: 13px;">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Color <span style="color:#ef4444;">*</span></label>
+                <select id="quoteColour" class="form-control" required style="width: 100%; height: 38px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; font-size: 13px; background: #fff;">
+                  <option value="">-- Select Color --</option>
+                  <option value="Black / Midnight / Space Gray">Black / Midnight / Space Gray</option>
+                  <option value="White / Silver / Starlight">White / Silver / Starlight</option>
+                  <option value="Natural Titanium / Titanium Gray">Natural Titanium / Titanium Gray</option>
+                  <option value="Blue / Sierra Blue / Deep Navy">Blue / Sierra Blue / Deep Navy</option>
+                  <option value="Purple / Deep Purple / Lavender">Purple / Deep Purple / Lavender</option>
+                  <option value="Green / Alpine Green / Mint">Green / Alpine Green / Mint</option>
+                  <option value="Gold / Rose Gold / Bronze">Gold / Rose Gold / Bronze</option>
+                  <option value="Red / (PRODUCT)RED">Red / (PRODUCT)RED</option>
+                  <option value="Yellow / Amber">Yellow / Amber</option>
+                  <option value="Orange / Coral / Peach">Orange / Coral / Peach</option>
+                  <option value="Graphite">Graphite</option>
+                  <option value="Other Color">Other Color</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">Storage (GB) <span style="color:#ef4444;">*</span></label>
+                <input type="text" inputmode="numeric" id="quoteStorage" class="form-control" placeholder="e.g. 128" required style="width: 100%; height: 38px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; font-size: 13px;">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">RAM (GB) <span style="color:#ef4444;">*</span></label>
+                <input type="text" inputmode="numeric" id="quoteRam" class="form-control" placeholder="e.g. 8" required style="width: 100%; height: 38px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; font-size: 13px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Screen Part -->
+          <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;">
+            <div style="font-size: 13px; font-weight: 800; color: #6d28d9; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <span>📱 Screen Rating (0 - 100%)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Crack <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteScreenCrack" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Scratch <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteScreenScratch" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Discolouration <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteScreenDiscolouration" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Back Part -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;">
+            <div style="font-size: 13px; font-weight: 800; color: #15803d; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <span>🛡️ Back Rating (0 - 100%)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Crack <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteBackCrack" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Scratch <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteBackScratch" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Frame Part -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 800; color: #334155; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <span>🔲 Frame Rating (0 - 100%)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Scratch <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteFrameScratch" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; font-weight: 700; color: #4b5563; display: block; margin-bottom: 4px;">Dent <span style="color:#ef4444;">*</span></label>
+                <div style="position: relative;">
+                  <input type="text" inputmode="numeric" id="quoteFrameDent" class="form-control quote-percent-input" placeholder="0" required style="width: 100%; height: 36px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 24px 0 10px; font-size: 13px;">
+                  <span style="position: absolute; right: 8px; top: 9px; font-size: 12px; color: #94a3b8; font-weight: 700;">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Final Price Offer -->
+          <div style="margin-bottom: 14px;">
+            <label style="font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
+              Final Price Offer (RM) <span style="color:#ef4444;">*</span>
+            </label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 12px; top: 11px; font-weight: 700; color: #64748b; font-size: 14px;">RM</span>
+              <input type="number" step="0.01" min="0" id="quoteFinalPrice" class="form-control" placeholder="0.00" required style="width: 100%; height: 42px; border-radius: 8px; border: 2px solid #cbd5e1; padding: 0 12px 0 42px; font-size: 15px; font-weight: 700; color: #0f172a;">
+            </div>
+            <div id="quoteEstimateHint" style="font-size: 12px; color: #64748b; margin-top: 4px;"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-foot" style="border-top: 1px solid #e2e8f0; padding: 14px 24px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn-secondary" id="btnCancelQuotation" onclick="closeModal('quotationModal')">Cancel</button>
+        <button type="button" class="btn-primary" id="btnSubmitFinalQuotation" disabled style="background: #7c3aed; border-color: #7c3aed; font-weight: 700; padding: 0 20px;" onclick="submitFinalQuotation()">
+          Submit Final Quotation
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Success Quotation Popup Dialog -->
+  <div class="modal-overlay" id="successQuotationModal">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div style="padding: 28px 24px 10px; text-align: center;">
+        <div style="width: 58px; height: 58px; border-radius: 50%; background: #ede9fe; color: #7c3aed; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(124, 58, 237, 0.2);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #10264b;">Quotation Submitted</h3>
+        <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.5;">
+          The final quotation has been saved. The trade-in request status is now Inspected.
+        </p>
+      </div>
+      <div style="padding: 16px 24px 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13px;" id="successQuotationDetails">
+          <!-- Dynamically populated details -->
+        </div>
+      </div>
+      <div style="padding: 0 24px 24px; text-align: center;">
+        <button type="button" class="btn-primary" style="width: 100%; justify-content: center; min-height: 44px; font-size: 14px; font-weight: 700; background: #7c3aed; border-color: #7c3aed;" onclick="closeModal('successQuotationModal')">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Pay Customer Trade-in Offer -->
+  <div class="modal-overlay" id="payCustomerModal">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-head" style="border-bottom: 1px solid #e2e8f0; padding: 18px 24px;">
+        <h3 style="color: #047857; display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+          </svg>
+          Confirm Payout to Customer
+        </h3>
+        <button type="button" class="modal-close" onclick="closeModal('payCustomerModal')" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px 24px;">
+        <p style="font-size: 14px; color: #1e293b; margin: 0 0 16px; line-height: 1.5; font-weight: 600;">
+          Are you sure you want to transfer this trade-in offer price to the customer's default selected card via linked Xendit?
+        </p>
+
+        <!-- Amount Box -->
+        <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 16px 20px; text-align: center; margin-bottom: 16px;">
+          <span style="font-size: 12px; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 0.5px;">Offer Payout Amount</span>
+          <div style="font-size: 28px; font-weight: 900; color: #065f46; margin: 4px 0 0;" id="payModalAmount">RM 0.00</div>
+        </div>
+
+        <!-- Details Box -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #64748b;">Trade-In ID</span>
+            <span style="font-weight: 700; color: #0f172a;" id="payModalTradeInID">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #64748b;">Device</span>
+            <span style="font-weight: 600; color: #0f172a;" id="payModalDevice">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #64748b;">Customer</span>
+            <span style="font-weight: 600; color: #0f172a;" id="payModalCustomer">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #64748b;">Target Stored Card</span>
+            <span style="font-weight: 700; color: #1e40af; display: inline-flex; align-items: center; gap: 6px;" id="payModalCard">
+              Loading card...
+            </span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #64748b;">Payment Gateway</span>
+            <span style="font-weight: 600; color: #059669; display: inline-flex; align-items: center; gap: 4px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+              Xendit Linked (MY_DUITNOW)
+            </span>
+          </div>
+        </div>
+
+        <!-- Notice Box (dynamic warnings if no card or error) -->
+        <div id="payModalNotice" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 12px;"></div>
+      </div>
+      <div class="modal-foot" style="border-top: 1px solid #e2e8f0; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('payCustomerModal')">Cancel</button>
+        <button type="button" class="btn-primary" id="btnConfirmPay" style="background: #059669; border-color: #059669; font-weight: 700; padding: 0 22px; min-height: 40px;" onclick="handleConfirmPayCustomer()">
+          Confirm &amp; Transfer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Success Pay Popup Dialog -->
+  <div class="modal-overlay" id="successPayModal">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div style="padding: 28px 24px 10px; text-align: center;">
+        <div style="width: 58px; height: 58px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; box-shadow: 0 6px 16px rgba(22, 163, 74, 0.2);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #10264b;">Transfer Completed</h3>
+        <p style="margin: 0; font-size: 13.5px; color: #64748b; line-height: 1.5;">
+          The exact offer price has been transferred to the customer's default card via Xendit.
+        </p>
+      </div>
+      <div style="padding: 16px 24px 20px;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: grid; gap: 10px; font-size: 13px;" id="successPayDetails">
+          <!-- Dynamically populated details -->
+        </div>
+      </div>
+      <div style="padding: 0 24px 24px; text-align: center;">
+        <button type="button" class="btn-primary" style="width: 100%; justify-content: center; min-height: 44px; font-size: 14px; font-weight: 700; background: #059669; border-color: #059669;" onclick="closeModal('successPayModal')">
           Done
         </button>
       </div>
@@ -1769,6 +2113,7 @@
       setVal('countCancelled', counts.cancelled || 0);
       setVal('countRefunded', counts.refunded || 0);
       setVal('countTerminated', counts.terminated || 0);
+      setVal('countInspecting', counts.inspecting || 0);
       setVal('countCompleted', counts.completed || 0);
 
       setVal('pillUnassigned', counts.unassigned || 0);
@@ -1776,6 +2121,7 @@
       setVal('pillCancelled', counts.cancelled || 0);
       setVal('pillRefunded', counts.refunded || 0);
       setVal('pillTerminated', counts.terminated || 0);
+      setVal('pillInspecting', counts.inspecting || 0);
       setVal('pillCompleted', counts.completed || 0);
     }
 
@@ -1844,11 +2190,22 @@
 
         // Column 5: Status (Single dot provided by .status-pill::before)
         const tdStatus = document.createElement('td');
-        const pillClass = `status-${(task.displayStatus || 'unassigned').toLowerCase()}`;
+        let displayStatusText = task.displayStatus || 'Unassigned';
+        if ((task.status || task.requestStatus || '').toLowerCase() === 'accepted') {
+          displayStatusText = 'Accepted';
+        } else if ((task.status || task.requestStatus || '').toLowerCase() === 'rejected') {
+          displayStatusText = 'Rejected';
+        } else if ((task.status || task.requestStatus || '').toLowerCase() === 'declined') {
+          displayStatusText = 'Declined';
+        } else if ((displayStatusText.toLowerCase() === 'inspecting' || displayStatusText.toLowerCase() === 'inspected') &&
+            ((task.requestStatus || '').toLowerCase() === 'inspected' || displayStatusText.toLowerCase() === 'inspected' || Boolean(task.finalQuotation))) {
+          displayStatusText = 'Inspected';
+        }
+        const pillClass = `status-${displayStatusText.toLowerCase()}`;
         const isSelfPickupCompleted = (task.displayStatus || '').toLowerCase() === 'completed' &&
           (Boolean(task.pickedAt) || String(task.fulfillmentType || '').toLowerCase().includes('pickup') || String(task.fulfillmentType || '').toLowerCase().includes('self'));
 
-        let statusHtml = `<span class="status-pill ${pillClass}">${escapeHtml(task.displayStatus)}</span>`;
+        let statusHtml = `<span class="status-pill ${pillClass}">${escapeHtml(displayStatusText)}</span>`;
         if (isSelfPickupCompleted) {
           statusHtml += `<div class="sublabel-badge">Self Pickup</div>`;
         }
@@ -1923,6 +2280,11 @@
         const rawTaskType = (task.taskType || 'Deliver').toLowerCase();
         const isInspect = rawTaskType.includes('inspect');
         const isCollect = rawTaskType.includes('collect');
+        if (task.finalQuotation) {
+          btns += `
+            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+          `;
+        }
         if (!isInspect && !isCollect) {
           btns += `
             <button type="button" class="btn-act btn-reassign" onclick="promptReassign('${task.orderID}')">Reassign</button>
@@ -1934,17 +2296,95 @@
         btns += `
           <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
         `;
-      } else if (status === 'completed') {
-        if (task.proofOfDeliveryUrl) {
-          btns += `<button type="button" class="btn-act btn-pod" onclick="openPodModal('${escapeHtml(task.proofOfDeliveryUrl)}', '${task.orderID}')">View POD</button>`;
+      } else if (status === 'inspecting' || status === 'inspected') {
+        const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
+        const isCollect = rawTaskType.includes('collect');
+        const isInspected = status === 'inspected' || (task.requestStatus || '').toLowerCase() === 'inspected' || Boolean(task.finalQuotation);
+        const rawTrStatus = String(task.status || task.requestStatus || '').toLowerCase();
+
+        if (task.isPaid || rawTrStatus === 'accepted' || rawTrStatus === 'completed') {
+          if (task.isPaid) {
+            btns += `
+              <button type="button" class="btn-act btn-paid" disabled>Paid</button>
+            `;
+          } else {
+            btns += `
+              <button type="button" class="btn-act btn-pay" onclick="openPayModal('${task.orderID}')">Pay</button>
+            `;
+          }
         }
-        btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+
+        if (isInspected) {
+          btns += `
+            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+          `;
+        } else {
+          btns += `
+            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', false)">Final Quotation</button>
+          `;
+        }
+      } else if (status === 'completed') {
+        const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
+        const isCollect = rawTaskType.includes('collect');
+        if (isCollect) {
+          if (task.isPaid) {
+            btns += `
+              <button type="button" class="btn-act btn-paid" disabled>Paid</button>
+            `;
+          } else {
+            btns += `
+              <button type="button" class="btn-act btn-pay" onclick="openPayModal('${task.orderID}')">Pay</button>
+            `;
+          }
+          btns += `
+            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+          `;
+        } else {
+          if (task.finalQuotation || task.isPaid) {
+            if (task.isPaid) {
+              btns += `
+                <button type="button" class="btn-act btn-paid" disabled>Paid</button>
+              `;
+            } else {
+              btns += `
+                <button type="button" class="btn-act btn-pay" onclick="openPayModal('${task.orderID}')">Pay</button>
+              `;
+            }
+            btns += `
+              <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+            `;
+          }
+          const pod = task.proofOfDeliveryUrl;
+          if (pod) {
+            btns += `<button type="button" class="btn-act btn-pod" onclick="openPodModal('${escapeHtml(pod)}', '${task.orderID}')">View POD</button>`;
+          }
+          btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+        }
       } else {
-        // Terminated: Show 'Picked' button to confirm customer collected item, plus Details
-        btns += `
-          <button type="button" class="btn-act btn-picked" onclick="promptMarkPicked('${task.orderID}')">Picked</button>
-          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
-        `;
+        // Terminated tab: collect task only has View Quotation button
+        const rawTrStatus = String(task.status || task.requestStatus || '').toLowerCase();
+        const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
+        const isCollect = rawTaskType.includes('collect');
+        if (isCollect) {
+          btns += `
+            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+          `;
+        } else {
+          const isTradeInTask = Boolean(task.tradeInRequestID || rawTaskType.includes('inspect'));
+          if (task.finalQuotation) {
+            btns += `
+              <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+            `;
+          }
+          if (!isTradeInTask && rawTrStatus !== 'declined' && rawTrStatus !== 'rejected') {
+            btns += `
+              <button type="button" class="btn-act btn-picked" onclick="promptMarkPicked('${task.orderID}')">Picked</button>
+            `;
+          }
+          btns += `
+            <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+          `;
+        }
       }
 
       if (btns === '<div class="action-group">') {
@@ -2358,6 +2798,571 @@
         <div style="font-size: 12px; color: #64748b; margin-top: 10px;">Cloudinary Secured Verification Photo</div>
       `;
       openModal('podModal');
+    }
+
+    // ==========================================
+    // FINAL QUOTATION MODAL LOGIC (INSPECTING TAB)
+    // ==========================================
+    let currentQuotationTask = null;
+    let quotationListenersAttached = false;
+
+    async function openQuotationModal(orderID, isViewOnly = false) {
+      let task = allTasks.find(t => t.orderID === orderID || t.taskID === orderID || t.tradeInRequestID === orderID);
+      if (!task) {
+        task = { orderID };
+      }
+      currentQuotationTask = task;
+
+      // Auto-detect view only if task is already inspected, paid, or has quotation
+      if (task.displayStatus === 'Inspected' || (task.requestStatus || '').toLowerCase() === 'inspected' || task.finalQuotation || task.isPaid) {
+        isViewOnly = true;
+      }
+
+      // If finalQuotation is not yet loaded on task, fetch it from preview endpoint
+      if (!task.finalQuotation) {
+        try {
+          const res = await fetch(`${API_BASE}/api/task-assignment/admin/trade-in-payment-preview/${encodeURIComponent(orderID)}`);
+          const data = await res.json();
+          if (data.success && data.finalQuotation) {
+            task.finalQuotation = data.finalQuotation;
+            if (data.finalOfferPrice != null) task.finalOfferPrice = data.finalOfferPrice;
+            if (data.deviceModel) task.deviceSummary = data.deviceModel;
+            if (data.customerName) task.customerName = data.customerName;
+            if (data.isPaid != null) task.isPaid = data.isPaid;
+          }
+        } catch (e) {
+          console.warn('Could not fetch quotation preview:', e);
+        }
+      }
+
+      const titleEl = document.getElementById('quoteModalTitleText');
+      if (titleEl) {
+        titleEl.textContent = isViewOnly ? 'View Final Device Quotation' : 'Provide Final Device Quotation';
+      }
+
+      // Hide or show bottom right submit button (no submit button in view mode)
+      const submitBtn = document.getElementById('btnSubmitFinalQuotation');
+      if (submitBtn) {
+        submitBtn.style.display = isViewOnly ? 'none' : 'inline-flex';
+      }
+
+      const cancelBtn = document.getElementById('btnCancelQuotation');
+      if (cancelBtn) {
+        cancelBtn.textContent = isViewOnly ? 'Close' : 'Cancel';
+      }
+
+      // Configure readOnly / disabled for all inputs in view mode
+      const inputIds = [
+        'quoteModelName', 'quoteColour', 'quoteStorage', 'quoteRam',
+        'quoteScreenCrack', 'quoteScreenScratch', 'quoteScreenDiscolouration',
+        'quoteBackCrack', 'quoteBackScratch',
+        'quoteFrameScratch', 'quoteFrameDent',
+        'quoteFinalPrice'
+      ];
+      inputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.tagName === 'SELECT') {
+          el.disabled = isViewOnly;
+        } else {
+          el.readOnly = isViewOnly;
+        }
+        el.style.backgroundColor = isViewOnly ? '#f8fafc' : (el.tagName === 'SELECT' ? '#fff' : '');
+      });
+
+      document.getElementById('quoteModalOrderID').textContent = task.tradeInRequestID || task.orderID || `#${task.taskID}`;
+      document.getElementById('quoteModalCustomer').textContent = task.customerName || 'Customer';
+
+      // Prefill values
+      const existingQuotation = task.finalQuotation || {};
+      const dev = task.device || (task.items && task.items[0]) || {};
+
+      // 1. Model Name
+      const modelVal = existingQuotation.modelName || dev.model || dev.name || task.deviceSummary || '';
+      document.getElementById('quoteModelName').value = modelVal;
+
+      // 2. Colour - select dropdown
+      const colorVal = existingQuotation.colour || dev.color || dev.colour || '';
+      const colourSelect = document.getElementById('quoteColour');
+      if (colorVal) {
+        let matched = false;
+        for (let i = 0; i < colourSelect.options.length; i++) {
+          if (colourSelect.options[i].value.toLowerCase() === colorVal.toLowerCase()) {
+            colourSelect.selectedIndex = i;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && colorVal) {
+          const newOpt = document.createElement('option');
+          newOpt.value = colorVal;
+          newOpt.textContent = colorVal;
+          colourSelect.appendChild(newOpt);
+          colourSelect.value = colorVal;
+        }
+      } else {
+        colourSelect.value = '';
+      }
+
+      // 3. Storage (allow int only)
+      let storageInt = '';
+      if (existingQuotation.storage != null) {
+        storageInt = String(parseInt(existingQuotation.storage, 10) || '');
+      } else if (dev.storage) {
+        const cleanStorage = String(dev.storage).replace(/[^0-9]/g, '');
+        storageInt = cleanStorage;
+      }
+      document.getElementById('quoteStorage').value = storageInt;
+
+      // 4. RAM - empty to let admin fill
+      let ramInt = '';
+      if (existingQuotation.ram != null) {
+        ramInt = String(parseInt(existingQuotation.ram, 10) || '');
+      }
+      document.getElementById('quoteRam').value = ramInt;
+
+      // Condition Report (3 parts)
+      const report = existingQuotation.conditionReport || {};
+      const screen = report.screen || {};
+      const back = report.back || {};
+      const frame = report.frame || {};
+
+      document.getElementById('quoteScreenCrack').value = screen.crack != null ? screen.crack : '';
+      document.getElementById('quoteScreenScratch').value = screen.scratch != null ? screen.scratch : '';
+      document.getElementById('quoteScreenDiscolouration').value = screen.discolouration != null ? screen.discolouration : '';
+
+      document.getElementById('quoteBackCrack').value = back.crack != null ? back.crack : '';
+      document.getElementById('quoteBackScratch').value = back.scratch != null ? back.scratch : '';
+
+      document.getElementById('quoteFrameScratch').value = frame.scratch != null ? frame.scratch : '';
+      document.getElementById('quoteFrameDent').value = frame.dent != null ? frame.dent : '';
+
+      // Final Price Offer (double)
+      const priceVal = existingQuotation.finalOfferPrice != null ? existingQuotation.finalOfferPrice : (task.finalOfferPrice || '');
+      document.getElementById('quoteFinalPrice').value = priceVal ? Number(priceVal).toFixed(2) : '';
+
+      const hintEl = document.getElementById('quoteEstimateHint');
+      if (task.estimatedValueRange) {
+        hintEl.textContent = `Estimated Value: ${task.estimatedValueRange}`;
+      } else if (task.tradeInEstimate) {
+        hintEl.textContent = `Initial Estimate: RM ${Number(task.tradeInEstimate).toFixed(2)}`;
+      } else {
+        hintEl.textContent = '';
+      }
+
+      setupQuotationFormListeners();
+      validateQuotationForm();
+      openModal('quotationModal');
+    }
+
+    function setupQuotationFormListeners() {
+      if (quotationListenersAttached) return;
+      quotationListenersAttached = true;
+
+      // Integer-only fields
+      ['quoteStorage', 'quoteRam'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function() {
+          this.value = this.value.replace(/[^0-9]/g, '');
+          validateQuotationForm();
+        });
+      });
+
+      // Percent rating fields: Integer only, 0 to 100
+      [
+        'quoteScreenCrack', 'quoteScreenScratch', 'quoteScreenDiscolouration',
+        'quoteBackCrack', 'quoteBackScratch',
+        'quoteFrameScratch', 'quoteFrameDent'
+      ].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function() {
+          let clean = this.value.replace(/[^0-9]/g, '');
+          if (clean !== '') {
+            let num = parseInt(clean, 10);
+            if (num > 100) num = 100;
+            if (num < 0) num = 0;
+            this.value = String(num);
+          } else {
+            this.value = '';
+          }
+          validateQuotationForm();
+        });
+      });
+
+      // Price input: limit to 2 decimal places
+      const priceEl = document.getElementById('quoteFinalPrice');
+      if (priceEl) {
+        priceEl.addEventListener('input', function() {
+          if (this.value.includes('.')) {
+            const parts = this.value.split('.');
+            if (parts[1] && parts[1].length > 2) {
+              this.value = parts[0] + '.' + parts[1].slice(0, 2);
+            }
+          }
+          validateQuotationForm();
+        });
+        priceEl.addEventListener('blur', function() {
+          const val = parseFloat(this.value);
+          if (!isNaN(val) && val >= 0) {
+            this.value = val.toFixed(2);
+          }
+          validateQuotationForm();
+        });
+        priceEl.addEventListener('change', function() {
+          const val = parseFloat(this.value);
+          if (!isNaN(val) && val >= 0) {
+            this.value = val.toFixed(2);
+          }
+          validateQuotationForm();
+        });
+      }
+
+      const modelEl = document.getElementById('quoteModelName');
+      if (modelEl) {
+        modelEl.addEventListener('input', validateQuotationForm);
+      }
+
+      const colourEl = document.getElementById('quoteColour');
+      if (colourEl) {
+        colourEl.addEventListener('change', validateQuotationForm);
+      }
+    }
+
+    function validateQuotationForm() {
+      const model = (document.getElementById('quoteModelName')?.value || '').trim();
+      const colour = (document.getElementById('quoteColour')?.value || '').trim();
+      const storage = (document.getElementById('quoteStorage')?.value || '').trim();
+      const ram = (document.getElementById('quoteRam')?.value || '').trim();
+
+      const screenCrack = (document.getElementById('quoteScreenCrack')?.value || '').trim();
+      const screenScratch = (document.getElementById('quoteScreenScratch')?.value || '').trim();
+      const screenDiscolouration = (document.getElementById('quoteScreenDiscolouration')?.value || '').trim();
+
+      const backCrack = (document.getElementById('quoteBackCrack')?.value || '').trim();
+      const backScratch = (document.getElementById('quoteBackScratch')?.value || '').trim();
+
+      const frameScratch = (document.getElementById('quoteFrameScratch')?.value || '').trim();
+      const frameDent = (document.getElementById('quoteFrameDent')?.value || '').trim();
+
+      const finalPrice = (document.getElementById('quoteFinalPrice')?.value || '').trim();
+
+      const isValid = model.length > 0 &&
+        colour.length > 0 &&
+        storage.length > 0 &&
+        ram.length > 0 &&
+        screenCrack.length > 0 &&
+        screenScratch.length > 0 &&
+        screenDiscolouration.length > 0 &&
+        backCrack.length > 0 &&
+        backScratch.length > 0 &&
+        frameScratch.length > 0 &&
+        frameDent.length > 0 &&
+        finalPrice.length > 0 &&
+        !isNaN(parseFloat(finalPrice)) &&
+        parseFloat(finalPrice) > 0;
+
+      const btn = document.getElementById('btnSubmitFinalQuotation');
+      if (btn) {
+        btn.disabled = !isValid;
+        if (!isValid) {
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+        } else {
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      }
+      return isValid;
+    }
+
+    async function submitFinalQuotation() {
+      if (!validateQuotationForm() || !currentQuotationTask) return;
+
+      const btn = document.getElementById('btnSubmitFinalQuotation');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Submitting Quotation...</span>';
+
+      const tradeInRequestID = currentQuotationTask.tradeInRequestID || currentQuotationTask.orderID;
+      const taskID = currentQuotationTask.taskID;
+      const rawPrice = parseFloat(document.getElementById('quoteFinalPrice').value.trim());
+      const finalPriceNum = isNaN(rawPrice) ? 0 : parseFloat(rawPrice.toFixed(2));
+      document.getElementById('quoteFinalPrice').value = finalPriceNum.toFixed(2);
+
+      const payload = {
+        tradeInRequestID,
+        taskID,
+        modelName: document.getElementById('quoteModelName').value.trim(),
+        colour: document.getElementById('quoteColour').value.trim(),
+        storage: parseInt(document.getElementById('quoteStorage').value.trim(), 10),
+        ram: parseInt(document.getElementById('quoteRam').value.trim(), 10),
+        conditionReport: {
+          screen: {
+            crack: parseInt(document.getElementById('quoteScreenCrack').value.trim(), 10),
+            scratch: parseInt(document.getElementById('quoteScreenScratch').value.trim(), 10),
+            discolouration: parseInt(document.getElementById('quoteScreenDiscolouration').value.trim(), 10)
+          },
+          back: {
+            crack: parseInt(document.getElementById('quoteBackCrack').value.trim(), 10),
+            scratch: parseInt(document.getElementById('quoteBackScratch').value.trim(), 10)
+          },
+          frame: {
+            scratch: parseInt(document.getElementById('quoteFrameScratch').value.trim(), 10),
+            dent: parseInt(document.getElementById('quoteFrameDent').value.trim(), 10)
+          }
+        },
+        finalOfferPrice: finalPriceNum
+      };
+
+      const candidates = [
+        API_BASE,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ].filter((v, i, arr) => arr.indexOf(v) === i);
+
+      let success = false;
+      let errorMsg = 'Failed to submit quotation.';
+
+      for (const base of candidates) {
+        try {
+          const res = await fetch(`${base}/api/task-assignment/admin/submit-final-quotation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (data.success) {
+            success = true;
+            break;
+          } else {
+            errorMsg = data.message || data.error || errorMsg;
+          }
+        } catch (e) {
+          console.warn(`Could not submit quotation to ${base}:`, e.message);
+        }
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+
+      if (success) {
+        closeModal('quotationModal');
+
+        // Populate and show popup success modal instead of system toast
+        const detailsEl = document.getElementById('successQuotationDetails');
+        if (detailsEl) {
+          detailsEl.innerHTML = `
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Request ID</span>
+              <strong style="color: #0f172a;">${escapeHtml(tradeInRequestID)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Device Model</span>
+              <strong style="color: #0f172a;">${escapeHtml(payload.modelName)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Final Offer Price</span>
+              <strong style="color: #7c3aed; font-size: 14.5px;">RM ${finalPriceNum.toFixed(2)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #64748b;">Trade-In Status</span>
+              <span style="font-weight: 700; color: #6d28d9; background: #ede9fe; padding: 2px 8px; border-radius: 6px; font-size: 12px;">Inspected</span>
+            </div>
+          `;
+        }
+        openModal('successQuotationModal');
+        await loadTasks();
+      } else {
+        alert(errorMsg);
+      }
+    }
+
+    let currentPayTask = null;
+
+    async function openPayModal(orderID) {
+      if (!orderID) return;
+
+      // Find task in allTasks
+      let task = Array.isArray(allTasks)
+        ? allTasks.find(t => String(t.orderID) === String(orderID) || String(t.taskID) === String(orderID) || String(t.tradeInRequestID) === String(orderID))
+        : null;
+
+      currentPayTask = task ? { ...task } : { orderID };
+      selectedTaskForAction = currentPayTask;
+
+      // Extract brief record info
+      const tradeInID = currentPayTask.tradeInRequestID || currentPayTask.orderID || `#${orderID}`;
+      const customerName = currentPayTask.customerName || 'Customer';
+      const customerEmail = currentPayTask.customerEmail || '';
+      const deviceName = (currentPayTask.device && currentPayTask.device.name) || currentPayTask.deviceSummary || 'Trade-in Device';
+      const offerPrice = currentPayTask.finalOfferPrice != null
+        ? Number(currentPayTask.finalOfferPrice)
+        : (currentPayTask.finalQuotation?.finalOfferPrice != null ? Number(currentPayTask.finalQuotation.finalOfferPrice) : 0);
+
+      document.getElementById('payModalTradeInID').textContent = tradeInID;
+      document.getElementById('payModalDevice').textContent = deviceName;
+      document.getElementById('payModalCustomer').textContent = customerEmail ? `${customerName} (${customerEmail})` : customerName;
+      document.getElementById('payModalAmount').textContent = offerPrice > 0 ? `RM ${offerPrice.toFixed(2)}` : 'RM 0.00';
+
+      const cardEl = document.getElementById('payModalCard');
+      const noticeEl = document.getElementById('payModalNotice');
+      const confirmBtn = document.getElementById('btnConfirmPay');
+
+      cardEl.innerHTML = `<span style="color:#64748b; font-weight:normal;">Fetching default card...</span>`;
+      noticeEl.style.display = 'none';
+      noticeEl.textContent = '';
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = `Confirm &amp; Transfer`;
+
+      // Open the confirmation modal immediately
+      openModal('payCustomerModal');
+
+      // Fetch preview to get customer's default stored card and exact latest values from backend
+      try {
+        const res = await fetch(`${API_BASE}/api/task-assignment/admin/trade-in-payment-preview/${encodeURIComponent(orderID)}`);
+        const data = await res.json();
+
+        if (data.success) {
+          if (data.tradeInRequestID) {
+            document.getElementById('payModalTradeInID').textContent = data.tradeInRequestID;
+            currentPayTask.tradeInRequestID = data.tradeInRequestID;
+          }
+          if (data.deviceModel) {
+            document.getElementById('payModalDevice').textContent = data.deviceModel;
+            currentPayTask.deviceModel = data.deviceModel;
+          }
+          if (data.customerName) {
+            document.getElementById('payModalCustomer').textContent = data.customerEmail ? `${data.customerName} (${data.customerEmail})` : data.customerName;
+            currentPayTask.customerName = data.customerName;
+            currentPayTask.customerEmail = data.customerEmail;
+          }
+          if (data.finalOfferPrice != null) {
+            document.getElementById('payModalAmount').textContent = `RM ${Number(data.finalOfferPrice).toFixed(2)}`;
+            currentPayTask.finalOfferPrice = data.finalOfferPrice;
+          }
+
+          if (data.isPaid) {
+            cardEl.innerHTML = `<span style="color:#15803d; font-weight:700;">Already Paid (Txn: ${data.transactionID || 'Success'})</span>`;
+            noticeEl.style.display = 'block';
+            noticeEl.style.background = '#f0fdf4';
+            noticeEl.style.border = '1px solid #bbf7d0';
+            noticeEl.style.color = '#15803d';
+            noticeEl.innerHTML = `<strong>Payment Completed:</strong> This offer was already paid to the customer (Txn ID: ${data.transactionID || 'N/A'}).`;
+            confirmBtn.disabled = true;
+            return;
+          }
+
+          if (!data.defaultCard) {
+            cardEl.innerHTML = `<span style="color:#b91c1c; font-weight:700;">No Default Card Found</span>`;
+            noticeEl.style.display = 'block';
+            noticeEl.style.background = '#fef2f2';
+            noticeEl.style.border = '1px solid #fecaca';
+            noticeEl.style.color = '#b91c1c';
+            noticeEl.innerHTML = `<strong>Attention:</strong> No active default stored card was found in paymentAccount for ${data.customerEmail || 'this customer'}. Please advise customer to select a default card.`;
+            confirmBtn.disabled = true;
+          } else {
+            const provider = data.defaultCard.providerName || 'Card';
+            const last4 = data.defaultCard.last4 || '••••';
+            cardEl.innerHTML = `
+              <span style="background:#eff6ff; color:#1d4ed8; padding:3px 8px; border-radius:6px; font-weight:700; border:1px solid #bfdbfe;">${provider} •••• ${last4}</span>
+              <span style="font-size:11px; color:#15803d; font-weight:700; background:#dcfce7; padding:2px 6px; border-radius:4px;">Default</span>
+            `;
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `Confirm &amp; Transfer RM ${Number(data.finalOfferPrice || offerPrice).toFixed(2)}`;
+          }
+        } else {
+          cardEl.innerHTML = `<span style="color:#b91c1c;">Error: ${data.message || 'Could not verify card'}</span>`;
+          noticeEl.style.display = 'block';
+          noticeEl.style.background = '#fef2f2';
+          noticeEl.style.border = '1px solid #fecaca';
+          noticeEl.style.color = '#b91c1c';
+          noticeEl.textContent = data.message || 'Failed to load customer card details.';
+          confirmBtn.disabled = true;
+        }
+      } catch (err) {
+        console.error('trade-in-payment-preview error:', err);
+        cardEl.innerHTML = `<span style="color:#b91c1c;">Network Error</span>`;
+        confirmBtn.disabled = true;
+      }
+    }
+
+    async function handleConfirmPayCustomer() {
+      if (!currentPayTask) return;
+
+      const confirmBtn = document.getElementById('btnConfirmPay');
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;">Transferring via Xendit...</span>`;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/task-assignment/admin/pay-trade-in`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderID: currentPayTask.orderID,
+            tradeInRequestID: currentPayTask.tradeInRequestID
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // Close confirmation modal
+          closeModal('payCustomerModal');
+
+          // Populate success modal with order brief record
+          const detailsEl = document.getElementById('successPayDetails');
+          if (detailsEl) {
+            const devName = currentPayTask.deviceModel || (currentPayTask.device && currentPayTask.device.name) || currentPayTask.deviceSummary || 'Trade-in Device';
+            detailsEl.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Transaction ID</span>
+                <span style="font-weight: 800; color: #0f172a; font-family: monospace;">${escapeHtml(data.transactionID)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Device / Phone</span>
+                <span style="font-weight: 700; color: #0f172a;">${escapeHtml(devName)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Amount Transferred</span>
+                <span style="font-weight: 800; color: #15803d; font-size: 16px;">RM ${Number(data.amount).toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eef2f6; padding-bottom: 8px;">
+                <span style="color: #64748b;">Customer</span>
+                <span style="font-weight: 600; color: #0f172a;">${escapeHtml(currentPayTask.customerName || 'Customer')}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #64748b;">Payment Gateway</span>
+                <span style="font-weight: 700; color: #15803d; background: #dcfce7; padding: 2px 8px; border-radius: 6px; font-size: 12px;">✓ Transferred (Xendit)</span>
+              </div>
+            `;
+          }
+          // Open the successful message popup modal!
+          openModal('successPayModal');
+
+          // Update task in local state and re-render
+          currentPayTask.isPaid = true;
+          currentPayTask.transactionID = data.transactionID;
+          if (Array.isArray(allTasks)) {
+            const found = allTasks.find(t => String(t.orderID) === String(currentPayTask.orderID) || String(t.tradeInRequestID) === String(currentPayTask.orderID));
+            if (found) {
+              found.isPaid = true;
+              found.transactionID = data.transactionID;
+            }
+          }
+          renderTable();
+          await loadTasks();
+        } else {
+          alert(data.message || 'Payment transfer failed.');
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = `Confirm &amp; Transfer`;
+        }
+      } catch (err) {
+        console.error('pay-trade-in error:', err);
+        alert('Network error while processing transfer: ' + err.message);
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = `Confirm &amp; Transfer`;
+      }
     }
 
     function escapeHtml(str) {

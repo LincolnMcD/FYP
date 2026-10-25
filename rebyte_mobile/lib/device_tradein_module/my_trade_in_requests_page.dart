@@ -6,6 +6,7 @@ import '../account_management_module/services/session_service.dart';
 import '../widgets/rebyte_app_bar.dart';
 import 'assessment_result_page.dart';
 import 'improve_assessment_page.dart';
+import 'inspection_method_page.dart';
 import 'models/device_model.dart';
 import 'preliminary_quotation_page.dart';
 import 'schedule_inspection_page.dart';
@@ -85,7 +86,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
   int _filterConfirmedCount = 0;
   int _filterEvaluatedCount = 0;
   int _filterQuotedCount = 0;
-  int _filterAcceptedCount = 0;
+  int _filterAgreedCount = 0;
 
   @override
   void initState() {
@@ -204,7 +205,11 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       if (activeFilters['confirmed'] != null) _filterConfirmedCount = activeFilters['confirmed'] as int;
       if (activeFilters['evaluated'] != null) _filterEvaluatedCount = activeFilters['evaluated'] as int;
       if (activeFilters['quoted'] != null) _filterQuotedCount = activeFilters['quoted'] as int;
-      if (activeFilters['accepted'] != null) _filterAcceptedCount = activeFilters['accepted'] as int;
+      if (activeFilters['agreed'] != null) {
+        _filterAgreedCount = activeFilters['agreed'] as int;
+      } else if (activeFilters['accepted'] != null) {
+        _filterAgreedCount = activeFilters['accepted'] as int;
+      }
     });
   }
 
@@ -296,38 +301,164 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     return 'RM ${fmt.format(minD)} - RM ${fmt.format(maxD)}';
   }
 
+  String _getDeclinedReturnDate(Map<String, dynamic> req) {
+    DateTime? declineDate;
+    final rawDate = req['rejectedAt'] ?? req['declinedAt'] ?? req['updatedAt'];
+    if (rawDate != null) {
+      if (rawDate is DateTime) {
+        declineDate = rawDate;
+      } else if (rawDate is String) {
+        declineDate = DateTime.tryParse(rawDate);
+      } else if (rawDate is Map && rawDate['_seconds'] != null) {
+        final sec = int.tryParse(rawDate['_seconds'].toString()) ?? 0;
+        final nano = int.tryParse(rawDate['_nanoseconds']?.toString() ?? '0') ?? 0;
+        declineDate = DateTime.fromMillisecondsSinceEpoch(sec * 1000 + (nano / 1000000).round());
+      }
+    }
+    declineDate ??= DateTime.now();
+    final returnDate = declineDate.add(const Duration(days: 3));
+    return DateFormat('dd-MM-yyyy').format(returnDate);
+  }
+
   Map<String, dynamic> _getStatusConfig(String rawStatus, [Map<String, dynamic>? req]) {
     final s = rawStatus.toLowerCase().trim();
-    final hasBooking = (req?['bookingStatus']?.toString().toLowerCase() == 'confirmed') ||
-        (req?['appointmentDate'] != null);
+    final rawBooking = (req?['bookingStatus'] ?? '').toString().toLowerCase().trim();
+    final rawAppt = (req?['appointmentStatus'] ?? '').toString().toLowerCase().trim();
 
-    if (s == 'completed' || s == 'complete') {
+    final docStatus = (req?['status'] ?? '').toString().toLowerCase().trim();
+    final isCancelled = s == 'cancelled' ||
+        s == 'canceled' ||
+        s.contains('cancel') ||
+        rawBooking == 'cancelled' ||
+        rawAppt == 'cancelled';
+    final isRejected = s == 'rejected' ||
+        s.contains('reject') ||
+        docStatus == 'rejected' ||
+        rawBooking == 'rejected' ||
+        rawAppt == 'rejected';
+    final isDeclined = !isRejected && (s == 'declined' ||
+        s.contains('declin') ||
+        docStatus == 'declined' ||
+        rawBooking == 'declined' ||
+        rawAppt == 'declined');
+    final isPaid = req?['isPaid'] == true || s == 'paid' || docStatus == 'paid';
+    final isAccepted = !isPaid && (docStatus == 'accepted' || s == 'accepted');
+    final isInProgress = !isCancelled &&
+        !isRejected &&
+        !isDeclined &&
+        !isPaid &&
+        !isAccepted &&
+        !(s == 'completed' || s == 'complete') &&
+        !(s == 'inspected' || docStatus == 'inspected' || rawBooking == 'inspected' || rawAppt == 'inspected' || (req?['finalQuotation'] != null)) &&
+        !(s == 'inspecting' || s.contains('inspect') || rawBooking == 'inspecting' || rawAppt == 'inspecting') &&
+        !(s.contains('hold') || s == 'on hold' || rawBooking == 'on hold' || rawAppt == 'on hold') &&
+        (s == 'in progress' ||
+            s == 'ongoing' ||
+            s == 'on progress' ||
+            s.contains('progress') ||
+            rawBooking == 'in progress' ||
+            rawBooking == 'ongoing' ||
+            rawAppt == 'in progress' ||
+            rawAppt == 'ongoing' ||
+            docStatus == 'in progress' ||
+            docStatus == 'ongoing');
+    final hasBooking = !isInProgress &&
+        ((rawBooking == 'confirmed') ||
+            (req?['appointmentDate'] != null) ||
+            (req?['appointmentID'] != null) ||
+            s == 'scheduled' ||
+            docStatus == 'scheduled' ||
+            s.contains('schedul') ||
+            docStatus.contains('schedul'));
+    final isAgreed = !isPaid && !isAccepted && !hasBooking && !isInProgress && (docStatus == 'agreed' || s == 'agreed' || s.contains('agree') || docStatus.contains('agree'));
+
+    if (isCancelled) {
+      return {
+        'label': 'Cancelled',
+        'bg': const Color(0xFFF1F5F9),
+        'color': const Color(0xFF64748B),
+        'icon': Icons.close_rounded,
+      };
+    } else if (isRejected) {
+      return {
+        'label': 'Rejected',
+        'bg': const Color(0xFFFEE2E2),
+        'color': const Color(0xFFDC2626),
+        'icon': Icons.cancel_outlined,
+      };
+    } else if (isDeclined) {
+      return {
+        'label': 'Declined',
+        'bg': const Color(0xFFFEE2E2),
+        'color': const Color(0xFFDC2626),
+        'icon': Icons.cancel_outlined,
+      };
+    } else if (isPaid) {
+      return {
+        'label': 'Paid',
+        'bg': const Color(0xFFDCFCE7),
+        'color': const Color(0xFF16A34A),
+        'icon': Icons.paid_outlined,
+      };
+    } else if (isAccepted) {
+      return {
+        'label': 'Accepted',
+        'bg': const Color(0xFFDCFCE7),
+        'color': const Color(0xFF16A34A),
+        'icon': Icons.task_alt_rounded,
+      };
+    } else if (s == 'completed' || s == 'complete') {
       return {
         'label': 'Completed',
         'bg': const Color(0xFFDCFCE7),
         'color': const Color(0xFF16A34A),
         'icon': Icons.task_alt_rounded,
       };
-    } else if (s.contains('hold') || s == 'on hold' || req?['bookingStatus']?.toString().toLowerCase() == 'on hold' || req?['appointmentStatus']?.toString().toLowerCase() == 'on hold') {
+    } else if (s == 'inspected' ||
+        docStatus == 'inspected' ||
+        rawBooking == 'inspected' ||
+        rawAppt == 'inspected' ||
+        (req?['finalQuotation'] != null && !isAccepted && !(s == 'completed' || s == 'complete'))) {
+      return {
+        'label': 'Inspected',
+        'bg': const Color(0xFFF5F3FF),
+        'color': const Color(0xFF7C3AED),
+        'icon': Icons.fact_check_outlined,
+      };
+    } else if (s.contains('hold') || s == 'on hold' || rawBooking == 'on hold' || rawAppt == 'on hold') {
       return {
         'label': 'On Hold',
         'bg': const Color(0xFFFFF7ED),
         'color': const Color(0xFFEA580C),
         'icon': Icons.pause_circle_outline_rounded,
       };
-    } else if (s == 'in progress' || s == 'ongoing' || req?['bookingStatus']?.toString().toLowerCase() == 'in progress' || req?['appointmentStatus']?.toString().toLowerCase() == 'in progress') {
+    } else if (s == 'inspecting' || s.contains('inspect') || rawBooking == 'inspecting' || rawAppt == 'inspecting') {
+      return {
+        'label': 'Inspecting',
+        'bg': const Color(0xFFF5F3FF),
+        'color': const Color(0xFF7C3AED),
+        'icon': Icons.fact_check_outlined,
+      };
+    } else if (isInProgress) {
       return {
         'label': 'In Progress',
         'bg': const Color(0xFFEFF6FF),
         'color': const Color(0xFF0C5AD2),
         'icon': Icons.navigation_rounded,
       };
-    } else if (hasBooking || s == 'scheduled' || s.contains('schedul') || s == 'on progress') {
+    } else if (hasBooking || s == 'scheduled' || s.contains('schedul')) {
       return {
         'label': 'Scheduled',
         'bg': const Color(0xFFEFF6FF),
         'color': const Color(0xFF0C5AD2),
         'icon': Icons.event_available_rounded,
+      };
+    } else if (isAgreed) {
+      return {
+        'label': 'Agreed',
+        'bg': const Color(0xFFECFDF5),
+        'color': const Color(0xFF059669),
+        'icon': Icons.check_circle_outline_rounded,
       };
     } else if (s.contains('accept')) {
       return {
@@ -356,20 +487,6 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         'bg': const Color(0xFFFEF3C7),
         'color': const Color(0xFFD97706),
         'icon': Icons.verified_outlined,
-      };
-    } else if (s.contains('reject') || s.contains('declin')) {
-      return {
-        'label': 'Declined',
-        'bg': const Color(0xFFFEE2E2),
-        'color': const Color(0xFFDC2626),
-        'icon': Icons.cancel_outlined,
-      };
-    } else if (s.contains('cancel')) {
-      return {
-        'label': 'Cancelled',
-        'bg': const Color(0xFFF1F5F9),
-        'color': const Color(0xFF64748B),
-        'icon': Icons.close_rounded,
       };
     } else {
       return {
@@ -407,7 +524,10 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         ),
       ),
     ).then((_) {
-      _loadTab(_tabController.index, isRefresh: true);
+      _loadTab(0, isRefresh: true);
+      _loadTab(1, isRefresh: true);
+      _loadTab(2, isRefresh: true);
+      _loadTab(3, isRefresh: true);
     });
   }
 
@@ -454,6 +574,16 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final rawId = req['tradeInRequestID']?.toString() ?? 'TRD-8992-BX';
     final cleanId = rawId.replaceAll('#', '');
     final estValue = _formatEstimatedValue(req['estimatedValue']);
+    final rawBooking = (req['bookingStatus'] ?? '').toString().toLowerCase().trim();
+    final rawAppt = (req['appointmentStatus'] ?? '').toString().toLowerCase().trim();
+
+    // If cancelled or declined, do nothing
+    if (status == 'cancelled' || status == 'canceled' || status.contains('cancel') ||
+        status == 'declined' || status == 'rejected' || status.contains('declin') || status.contains('reject') ||
+        rawBooking == 'cancelled' || rawBooking == 'declined' ||
+        rawAppt == 'cancelled' || rawAppt == 'declined') {
+      return;
+    }
 
     if (status == 'on hold' || status.contains('hold') || req['bookingStatus']?.toString().toLowerCase() == 'on hold' || req['appointmentStatus']?.toString().toLowerCase() == 'on hold') {
       // On Hold -> Navigate to ScheduleInspectionPage so customer can reselect date, time, and address
@@ -529,7 +659,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           ),
         ),
       );
-    } else if (status == 'scheduled' || status.contains('schedul') || status == 'in progress' || status == 'ongoing' || req['appointmentDate'] != null) {
+    } else if (status == 'scheduled' || status.contains('schedul') || status == 'in progress' || status == 'ongoing' || status == 'inspected' || status == 'inspecting' || status.contains('inspect') || req['appointmentDate'] != null) {
       // Scheduled / In Progress -> Given Image Page (TradeInRequestDetailsPage)
       Navigator.push(
         context,
@@ -542,6 +672,24 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           ),
         ),
       );
+    } else if (status == 'agreed' || status.contains('agree')) {
+      // Agreed -> Choose Inspection Method Page (InspectionMethodPage)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InspectionMethodPage(
+            tradeInRequestID: cleanId,
+            device: deviceObj,
+            estimatedValue: estValue,
+            email: widget.email,
+            name: widget.name,
+            isLoggedIn: widget.isLoggedIn,
+            fromMyTradeInRequests: true,
+          ),
+        ),
+      ).then((_) {
+        _loadTab(_tabController.index, isRefresh: true);
+      });
     } else if (status == 'accepted' || status.contains('accept') || status == 'completed') {
       // 4. Accepted -> Given Image Page (Request Created Page)
       Navigator.push(
@@ -629,8 +777,8 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       } catch (_) {}
 
       setState(() {
-        req['requestStatus'] = 'Declined';
-        req['status'] = 'Declined';
+        req['requestStatus'] = 'Cancelled';
+        req['status'] = 'Cancelled';
         req['bookingStatus'] = 'Cancelled';
       });
       _loadTab(0, isRefresh: true);
@@ -643,11 +791,22 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
   }
 
   void _showRequestDetailsModal(Map<String, dynamic> req) {
-    final rawStatus = (req['requestStatus'] ?? '').toString().toLowerCase().trim();
+    final rawStatus = (req['requestStatus'] ?? req['status'] ?? '').toString().toLowerCase().trim();
+    final rawBooking = (req['bookingStatus'] ?? '').toString().toLowerCase().trim();
+    final rawAppt = (req['appointmentStatus'] ?? '').toString().toLowerCase().trim();
+
+    // If cancelled or declined, do nothing
+    if (rawStatus == 'cancelled' || rawStatus == 'canceled' || rawStatus.contains('cancel') ||
+        rawStatus == 'declined' || rawStatus == 'rejected' || rawStatus.contains('declin') || rawStatus.contains('reject') ||
+        rawBooking == 'cancelled' || rawBooking == 'declined' ||
+        rawAppt == 'cancelled' || rawAppt == 'declined') {
+      return;
+    }
+
     final isOnHold = rawStatus == 'on hold' ||
         rawStatus.contains('hold') ||
-        req['bookingStatus']?.toString().toLowerCase() == 'on hold' ||
-        req['appointmentStatus']?.toString().toLowerCase() == 'on hold';
+        rawBooking == 'on hold' ||
+        rawAppt == 'on hold';
 
     if (isOnHold) {
       _continueRequest(req);
@@ -656,6 +815,9 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
 
     final isScheduled = rawStatus == 'scheduled' ||
         rawStatus.contains('schedul') ||
+        rawStatus == 'inspected' ||
+        rawStatus == 'inspecting' ||
+        rawStatus.contains('inspect') ||
         req['appointmentDate'] != null ||
         (req['bookingStatus'] ?? '').toString().toLowerCase() == 'confirmed';
 
@@ -684,7 +846,51 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final status = req['requestStatus']?.toString() ?? 'Submitted';
     final estValue = _formatEstimatedValue(req['estimatedValue']);
     final serviceType = _getServiceType(req);
-    final statusCfg = _getStatusConfig(status);
+    final statusCfg = _getStatusConfig(status, req);
+
+    final quotation = req['finalQuotation'] is Map<String, dynamic>
+        ? req['finalQuotation'] as Map<String, dynamic>
+        : (req['finalQuotation'] is Map
+            ? Map<String, dynamic>.from(req['finalQuotation'] as Map)
+            : <String, dynamic>{});
+
+    double? resolvedFinalOffer;
+    if (quotation['finalOfferPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(quotation['finalOfferPrice'].toString());
+    } else if (req['finalOfferPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(req['finalOfferPrice'].toString());
+    } else if (req['finalOfferedValue'] != null) {
+      resolvedFinalOffer = double.tryParse(req['finalOfferedValue'].toString());
+    } else if (req['offeredPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(req['offeredPrice'].toString());
+    }
+
+    final docStatus = (req['status'] ?? '').toString().toLowerCase().trim();
+    final isRejected = rawStatus == 'rejected' ||
+        rawStatus.contains('reject') ||
+        docStatus == 'rejected' ||
+        rawBooking == 'rejected' ||
+        rawAppt == 'rejected';
+    final isDeclined = !isRejected && (rawStatus == 'declined' ||
+        rawStatus.contains('declin') ||
+        docStatus == 'declined' ||
+        rawBooking == 'declined' ||
+        rawAppt == 'declined');
+    final isPaid = req['isPaid'] == true || rawStatus == 'paid' || docStatus == 'paid';
+    final isAccepted = !isPaid && (docStatus == 'accepted' || rawStatus == 'accepted');
+    final isCompleted = isPaid || isAccepted || rawStatus == 'completed' || rawStatus == 'complete';
+
+    final bool isInspected = rawStatus == 'inspected' ||
+        rawBooking == 'inspected' ||
+        rawAppt == 'inspected' ||
+        docStatus == 'inspected' ||
+        req['inspectedAt'] != null ||
+        quotation.isNotEmpty ||
+        req['finalOfferPrice'] != null;
+
+    final bool showOfferPrice = (isInspected || isPaid || isAccepted || isCompleted || isRejected || isDeclined) &&
+        resolvedFinalOffer != null &&
+        resolvedFinalOffer > 0;
 
     showModalBottomSheet(
       context: context,
@@ -777,7 +983,13 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                     const Divider(height: 16, color: Color(0xFFE2E8F0)),
                     _buildModalInfoRow('IMEI Number', imei),
                     const Divider(height: 16, color: Color(0xFFE2E8F0)),
-                    _buildModalInfoRow('Est. Trade-In Value', estValue, isHighlight: true),
+                    _buildModalInfoRow(
+                      showOfferPrice ? 'Actual Offer Price' : 'Est. Trade-In Value',
+                      showOfferPrice
+                          ? 'RM ${NumberFormat('#,##0.00').format(resolvedFinalOffer)}'
+                          : estValue,
+                      isHighlight: true,
+                    ),
                     const Divider(height: 16, color: Color(0xFFE2E8F0)),
                     _buildModalInfoRow('Service Type', serviceType),
                   ],
@@ -1065,7 +1277,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
               const SizedBox(width: 8),
               _buildFilterChip('Quoted', _filterQuotedCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Accepted', _filterAcceptedCount),
+              _buildFilterChip('Agreed', _filterAgreedCount),
             ],
           ),
         ),
@@ -1259,18 +1471,108 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final isCollect = _isCollectionService(req);
     final statusCfg = _getStatusConfig(status, req);
     final String? imgUrl = req['deviceImage']?.toString();
-    final isCancelled = status.toLowerCase() == 'cancelled';
-    final isOnHold = status.toLowerCase() == 'on hold' ||
-        status.toLowerCase().contains('hold') ||
-        req['bookingStatus']?.toString().toLowerCase() == 'on hold' ||
-        req['appointmentStatus']?.toString().toLowerCase() == 'on hold';
-    final hasAppointment = req['appointmentDate'] != null && req['appointmentTime'] != null;
-    final appointmentStr = hasAppointment ? '${req['appointmentDate']} • ${req['appointmentTime']}' : null;
+    final docStatus = (req['status'] ?? '').toString().toLowerCase().trim();
+    final rawStatus = status.toLowerCase().trim();
+    final rawBookingStatus = (req['bookingStatus'] ?? '').toString().toLowerCase().trim();
+    final rawApptStatus = (req['appointmentStatus'] ?? '').toString().toLowerCase().trim();
+    final isRejected = rawStatus == 'rejected' ||
+        rawStatus.contains('reject') ||
+        docStatus == 'rejected' ||
+        rawBookingStatus == 'rejected' ||
+        rawApptStatus == 'rejected';
+    final isDeclined = !isRejected && (rawStatus == 'declined' ||
+        rawStatus.contains('declin') ||
+        docStatus == 'declined' ||
+        rawBookingStatus == 'declined' ||
+        rawApptStatus == 'declined');
+    final isCancelled = !isRejected && !isDeclined && (rawStatus == 'cancelled' ||
+        rawStatus == 'canceled' ||
+        rawStatus.contains('cancel') ||
+        rawBookingStatus == 'cancelled' ||
+        rawApptStatus == 'cancelled');
+    final isPaid = req['isPaid'] == true || rawStatus == 'paid' || docStatus == 'paid';
+    final isAccepted = !isPaid && (docStatus == 'accepted' || rawStatus == 'accepted');
+    final isCompleted = tabType == 'completed' || isPaid || isAccepted || rawStatus == 'completed' || rawStatus == 'complete';
+
+    final quotation = req['finalQuotation'] is Map<String, dynamic>
+        ? req['finalQuotation'] as Map<String, dynamic>
+        : (req['finalQuotation'] is Map
+            ? Map<String, dynamic>.from(req['finalQuotation'] as Map)
+            : <String, dynamic>{});
+
+    double? resolvedFinalOffer;
+    if (quotation['finalOfferPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(quotation['finalOfferPrice'].toString());
+    } else if (req['finalOfferPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(req['finalOfferPrice'].toString());
+    } else if (req['finalOfferedValue'] != null) {
+      resolvedFinalOffer = double.tryParse(req['finalOfferedValue'].toString());
+    } else if (req['offeredPrice'] != null) {
+      resolvedFinalOffer = double.tryParse(req['offeredPrice'].toString());
+    }
+
+    final bool isInspected = rawStatus == 'inspected' ||
+        rawBookingStatus == 'inspected' ||
+        rawApptStatus == 'inspected' ||
+        docStatus == 'inspected' ||
+        req['inspectedAt'] != null ||
+        quotation.isNotEmpty ||
+        req['finalOfferPrice'] != null;
+
+    final bool showOfferPrice = (isInspected || isPaid || isAccepted || isCompleted || isRejected || isDeclined) &&
+        resolvedFinalOffer != null &&
+        resolvedFinalOffer > 0;
+
+    final String displayPrice = showOfferPrice
+        ? 'RM ${NumberFormat('#,##0.00').format(resolvedFinalOffer)}'
+        : estValue;
+    final String priceLabel = showOfferPrice ? 'ACTUAL OFFER PRICE' : 'EST. VALUE';
+
+    final Color priceColor;
+    final Color priceLabelColor;
+    if (showOfferPrice) {
+      if (isAccepted || isCompleted) {
+        priceColor = const Color(0xFF16A34A);
+        priceLabelColor = const Color(0xFF16A34A);
+      } else if (isRejected || isDeclined) {
+        priceColor = const Color(0xFF0F172A);
+        priceLabelColor = const Color(0xFF64748B);
+      } else {
+        // Inspected
+        priceColor = const Color(0xFF7C3AED);
+        priceLabelColor = const Color(0xFF7C3AED);
+      }
+    } else {
+      priceColor = const Color(0xFF0F172A);
+      priceLabelColor = const Color(0xFF64748B);
+    }
+
+    final isInspecting = !isAccepted && !isCompleted && !isInspected && (rawStatus == 'inspecting' ||
+        rawBookingStatus == 'inspecting' ||
+        rawApptStatus == 'inspecting');
+    final isInProgress = !isCancelled && !isDeclined && !isRejected && !isCompleted && !isAccepted && (isInspecting ||
+        isInspected ||
+        rawStatus == 'in progress' ||
+        rawStatus == 'ongoing' ||
+        rawStatus.contains('progress') ||
+        rawBookingStatus == 'in progress' ||
+        rawBookingStatus == 'ongoing' ||
+        rawApptStatus == 'in progress' ||
+        rawApptStatus == 'ongoing');
+    final isOnHold = !isCancelled && !isDeclined && !isRejected && !isCompleted && !isAccepted && !isInspected && (rawStatus == 'on hold' ||
+        rawStatus.contains('hold') ||
+        rawBookingStatus == 'on hold' ||
+        rawApptStatus == 'on hold');
+    final hasDateTime = req['appointmentDate'] != null && req['appointmentTime'] != null;
+    final appointmentStr = hasDateTime ? '${req['appointmentDate']} • ${req['appointmentTime']}' : null;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        if (tabType == 'in_progress') {
+        if (tabType == 'cancelled' || isCancelled || isDeclined || isRejected) {
+          // Do nothing on cancelled/declined cards
+          return;
+        } else if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
           _navigateToViewProgress(req);
         } else if (tabType == 'on_hold') {
           _navigateToEditBooking(req);
@@ -1300,7 +1602,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             Center(
               child: GestureDetector(
                 onTap: () {
-                  if (tabType == 'in_progress') {
+                  if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
                     _navigateToViewProgress(req);
                   } else if (tabType == 'on_hold') {
                     _navigateToEditBooking(req);
@@ -1383,23 +1685,23 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           ),
           const SizedBox(height: 14),
 
-          // EST. VALUE
-          const Text(
-            'EST. VALUE',
+          // Price Section: ACTUAL OFFER PRICE or EST. VALUE
+          Text(
+            priceLabel,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF64748B),
+              color: priceLabelColor,
               letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            estValue,
-            style: const TextStyle(
+            displayPrice,
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
+              color: priceColor,
               letterSpacing: -0.3,
             ),
           ),
@@ -1466,7 +1768,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
           const SizedBox(height: 18),
 
           // Action Buttons: Cancelled, On Hold, In Progress, Completed, Active
-          if (tabType == 'cancelled' || isCancelled) ...[
+          if (tabType == 'cancelled' || isCancelled || isDeclined || isRejected) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1477,15 +1779,22 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
-                  SizedBox(width: 8),
-                  Text(
-                    'This trade-in request has been cancelled',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      (isRejected || (isDeclined && (req['finalQuotation'] != null || req['finalOfferPrice'] != null || req['inspectedAt'] != null)))
+                          ? 'The phone will be sent to you at ${_getDeclinedReturnDate(req)}'
+                          : (isDeclined
+                              ? 'This trade-in request has been declined'
+                              : 'This trade-in request has been cancelled'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
                 ],
@@ -1580,6 +1889,37 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                 ),
               ],
             ),
+          ] else if (isInProgress) ...[
+            // In Progress: Staff has started task, cancel and edit booking cannot appear
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                onPressed: () => _navigateToViewProgress(req),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0C5AD2),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'View Progress',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ] else if (tabType == 'in_progress') ...[
             // On Progress: Cancel and View Progress buttons like active tab
             Row(
@@ -1645,13 +1985,13 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
                 ),
               ],
             ),
-          ] else if (tabType == 'completed') ...[
+          ] else if (tabType == 'completed' || isAccepted || isPaid) ...[
             // Completed Order: View Completed Summary
             SizedBox(
               width: double.infinity,
               height: 44,
               child: ElevatedButton(
-                onPressed: () => _showRequestDetailsModal(req),
+                onPressed: () => _navigateToViewProgress(req),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF16A34A),
                   foregroundColor: Colors.white,

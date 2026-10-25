@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../widgets/rebyte_app_bar.dart';
-import '../device_tradein_module/models/device_model.dart';
-import '../decision_assistance_module/diagnostic_suite_page.dart';
+import 'widgets/staff_app_bar_and_drawer.dart';
+import 'staff_device_inspection_specs_page.dart';
 
 class PerformDeviceInspectionPage extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -32,15 +31,16 @@ class PerformDeviceInspectionPage extends StatelessWidget {
       deviceModel = deviceModel.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
     }
 
-    final rawEstimate = task['tradeInEstimate'] ??
+    final rawEstimate = task['estimatedValue'] ??
+        task['estimatedValueRange'] ??
+        task['tradeInEstimate'] ??
         task['totalAmount'] ??
         task['price'] ??
-        task['estimatedValue'] ??
         task['offeredPrice'] ??
         (task['items'] is List && (task['items'] as List).isNotEmpty
-            ? (task['items'][0]['tradeInEstimate'] ?? task['items'][0]['price'])
+            ? (task['items'][0]['estimatedValue'] ?? task['items'][0]['tradeInEstimate'] ?? task['items'][0]['price'])
             : null);
-    final tradeInEstimate = NumberFormatUtils.formatSingleCurrency(rawEstimate);
+    final estimateRange = NumberFormatUtils.formatEstimateRange(rawEstimate);
     final imei = task['imei']?.toString() ??
         task['imeiNum']?.toString() ??
         '3548 9201 8847 112';
@@ -48,17 +48,16 @@ class PerformDeviceInspectionPage extends StatelessWidget {
     final customerEmail = task['customerEmail']?.toString() ?? 'alex.mercer@email.com';
     final customerPhone = task['customerPhone']?.toString() ?? '(555) 019-2834';
     final imageUrl = task['imageUrl']?.toString() ?? '';
-    final tradeInRequestID = task['tradeInID']?.toString() ??
-        task['tradeInRequestID']?.toString() ??
-        task['orderID']?.toString() ??
-        task['taskID']?.toString() ??
-        '';
 
     final specsLabel = [storage, color].where((s) => s.isNotEmpty).join(' • ');
 
+    final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+
     return Scaffold(
+      key: scaffoldKey,
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const ReByteAppBar(isShopPage: false),
+      appBar: StaffAppBar(scaffoldKey: scaffoldKey),
+      drawer: const StaffDrawer(selectedIndex: 2),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -120,7 +119,7 @@ class PerformDeviceInspectionPage extends StatelessWidget {
                             ? Image.network(
                                 imageUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _buildPlaceholderPhoto(),
+                                errorBuilder: (context, error, stackTrace) => _buildPlaceholderPhoto(),
                               )
                             : _buildPlaceholderPhoto(),
                       ),
@@ -239,11 +238,21 @@ class PerformDeviceInspectionPage extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        'RM  $tradeInEstimate',
+                                        estimateRange[0],
                                         style: const TextStyle(
-                                          fontSize: 14.5,
+                                          fontSize: 13,
                                           fontWeight: FontWeight.w900,
                                           color: Color(0xFF0C5AD2),
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                      Text(
+                                        estimateRange[1],
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF0C5AD2),
+                                          height: 1.25,
                                         ),
                                       ),
                                     ],
@@ -369,27 +378,21 @@ class PerformDeviceInspectionPage extends StatelessWidget {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () {
-                      final brandGuess = deviceModel.split(' ').first;
-                      final devModel = DeviceModel(
-                        deviceID: task['deviceID']?.toString() ?? '',
-                        brand: brandGuess.isNotEmpty ? brandGuess : 'Apple',
-                        model: deviceModel,
-                        storageCapacity: storage,
-                        colour: color,
-                        imeiNum: imei,
-                      );
-
-                      Navigator.push(
+                    onPressed: () async {
+                      final res = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => DiagnosticSuitePage(
-                            tradeInRequestID: tradeInRequestID,
-                            device: devModel,
-                            isLoggedIn: true,
+                          settings: const RouteSettings(name: 'StaffDeviceInspectionSpecsPage'),
+                          builder: (_) => StaffDeviceInspectionSpecsPage(
+                            task: task,
+                            onTaskUpdated: onTaskUpdated,
                           ),
                         ),
                       );
+                      if (res != null && context.mounted) {
+                        onTaskUpdated?.call();
+                        Navigator.pop(context, res);
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0043CE),
@@ -421,25 +424,7 @@ class PerformDeviceInspectionPage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 2, // Tasks tab
-        onTap: (index) {
-          if (index != 2) {
-            Navigator.pop(context);
-          }
-        },
-        selectedItemColor: const Color(0xFF0C5AD2),
-        unselectedItemColor: const Color(0xFF64748B),
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded, size: 24), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded, size: 24), label: 'Schedule'),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined, size: 24), label: 'Tasks'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline, size: 24), label: 'Profile'),
-        ],
-      ),
+      bottomNavigationBar: const StaffBottomNavBar(currentIndex: 2),
     );
   }
 
@@ -468,6 +453,53 @@ class PerformDeviceInspectionPage extends StatelessWidget {
 }
 
 class NumberFormatUtils {
+  static List<String> formatEstimateRange(dynamic value) {
+    final fmt = NumberFormat('#,##0.00');
+    double? minD;
+    double? maxD;
+
+    if (value is Map) {
+      final min = value['min'] ?? value['minEstimatedValue'];
+      final max = value['max'] ?? value['maxEstimatedValue'];
+      if (min != null) minD = (min is num) ? min.toDouble() : double.tryParse(min.toString());
+      if (max != null) maxD = (max is num) ? max.toDouble() : double.tryParse(max.toString());
+    } else if (value is List && value.length >= 2) {
+      minD = (value[0] is num) ? value[0].toDouble() : double.tryParse(value[0].toString());
+      maxD = (value[1] is num) ? value[1].toDouble() : double.tryParse(value[1].toString());
+    } else if (value != null) {
+      final str = value.toString();
+      final matches = RegExp(r'[\d,]+(?:\.\d+)?').allMatches(str).map((m) {
+        return double.tryParse(m.group(0)!.replaceAll(',', ''));
+      }).whereType<double>().toList();
+
+      if (matches.length >= 2) {
+        minD = matches[0];
+        maxD = matches[1];
+      } else if (matches.length == 1 && matches[0] > 0) {
+        minD = matches[0];
+        maxD = matches[0];
+      }
+    }
+
+    minD ??= 2340.50;
+    maxD ??= 2355.30;
+
+    if (minD == maxD && minD > 0) {
+      minD = (minD - 14.80 > 0) ? minD - 14.80 : minD;
+    }
+
+    if (minD > maxD) {
+      final t = minD;
+      minD = maxD;
+      maxD = t;
+    }
+
+    return [
+      'RM  ${fmt.format(minD)} -',
+      'RM  ${fmt.format(maxD)}',
+    ];
+  }
+
   static String formatSingleCurrency(dynamic value) {
     if (value == null) return '1,425.00';
     double numVal = 0.0;
