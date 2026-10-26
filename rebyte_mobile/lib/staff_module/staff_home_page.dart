@@ -14,7 +14,16 @@ import '../task_assignment_module/staff_assigned_tasks_page.dart';
 class StaffHomePage extends StatefulWidget {
   final String? toastMessage;
   final int? initialIndex;
-  const StaffHomePage({super.key, this.toastMessage, this.initialIndex});
+  final int? initialTaskTabIndex;
+  final String? email;
+
+  const StaffHomePage({
+    super.key,
+    this.toastMessage,
+    this.initialIndex,
+    this.initialTaskTabIndex,
+    this.email,
+  });
 
   @override
   State<StaffHomePage> createState() => _StaffHomePageState();
@@ -57,6 +66,9 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex ?? 0;
+    if (widget.email != null && widget.email!.isNotEmpty) {
+      _email = widget.email;
+    }
     WidgetsBinding.instance.addObserver(this);
     _toastMessage = widget.toastMessage;
     if (_toastMessage != null) {
@@ -259,7 +271,9 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                 )
               : _selectedIndex == 2
                   ? StaffAssignedTasksPage(
+                      key: ValueKey('staff_tasks_${_email ?? 'session'}_${widget.initialTaskTabIndex ?? 0}'),
                       email: _email,
+                      initialTabIndex: widget.initialTaskTabIndex ?? 0,
                     )
                   : _selectedIndex == 1
                       ? StaffSchedulePage(

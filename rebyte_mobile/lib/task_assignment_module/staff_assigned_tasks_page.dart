@@ -3,17 +3,20 @@ import 'package:intl/intl.dart';
 import 'services/task_assignment_service.dart';
 import 'staff_navigation_page.dart';
 import 'staff_task_details_page.dart';
+import '../widgets/device_title_formatter.dart';
 
 class StaffAssignedTasksPage extends StatefulWidget {
   final String? email;
   final String? staffID;
   final bool showBackButton;
+  final int initialTabIndex;
 
   const StaffAssignedTasksPage({
     super.key,
     this.email,
     this.staffID,
     this.showBackButton = false,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -21,7 +24,7 @@ class StaffAssignedTasksPage extends StatefulWidget {
 }
 
 class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
-  int _selectedTabIndex = 0; // 0: Assigned, 1: In Progress, 2: Completed
+  late int _selectedTabIndex; // 0: Assigned, 1: In Progress, 2: Completed
   bool _isLoading = true;
   List<Map<String, dynamic>> _tasks = [];
   final Set<String> _startingTaskIDs = {};
@@ -31,7 +34,16 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   @override
   void initState() {
     super.initState();
+    _selectedTabIndex = widget.initialTabIndex;
     _loadTasks();
+  }
+
+  @override
+  void didUpdateWidget(StaffAssignedTasksPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.email != oldWidget.email || widget.staffID != oldWidget.staffID) {
+      _loadTasks();
+    }
   }
 
   void _showToast(String message, [bool isError = false]) {
@@ -405,7 +417,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     String storageVal = '';
     if (items.isNotEmpty && items[0] is Map) {
       final first = items[0] as Map;
-      final t = '${first['brand'] ?? ''} ${first['model'] ?? ''}'.trim();
+      final t = formatDeviceTitle(first['brand']?.toString(), first['model']?.toString());
       if (t.isNotEmpty) itemTitle = t;
       storageVal = first['storage']?.toString() ?? '';
       itemSpecs = storageVal.isNotEmpty ? storageVal : (isInspect ? 'Device Inspection' : 'Good Condition');
@@ -744,6 +756,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                     final res = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
+                                        settings: const RouteSettings(name: 'StaffNavigationPage'),
                                         builder: (_) => StaffNavigationPage(
                                           task: ongoingTask,
                                           onTaskUpdated: _loadTasks,
@@ -771,6 +784,7 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                   final res = await Navigator.push(
                                     context,
                                     MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'StaffNavigationPage'),
                                       builder: (_) => StaffNavigationPage(
                                         task: task,
                                         onTaskUpdated: _loadTasks,

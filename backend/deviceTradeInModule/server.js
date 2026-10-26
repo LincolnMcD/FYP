@@ -823,6 +823,289 @@ router.get("/device/:id", async (req, res) => {
     }
 });
 
+// POST /device/update - Update device record (Page 2: update device data & add ram attribute)
+router.post("/device/update", async (req, res) => {
+    try {
+        const {
+            deviceID,
+            brand,
+            model,
+            modelCode,
+            storageCapacity,
+            colour,
+            color,
+            imeiNum,
+            status,
+            deviceAge,
+            ram
+        } = req.body;
+
+        if (!deviceID) {
+            return res.status(400).json({ success: false, message: "Missing deviceID" });
+        }
+
+        if (!db) {
+            return res.status(200).json({ success: true, message: "Device updated successfully (mock mode)" });
+        }
+
+        const deviceRef = db.collection("devices").doc(deviceID);
+        const doc = await deviceRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ success: false, message: "Device not found" });
+        }
+
+        const updateData = {
+            updatedAt: FieldValue.serverTimestamp()
+        };
+
+        if (brand !== undefined && brand !== null) updateData.brand = brand;
+        if (model !== undefined && model !== null) updateData.model = model;
+        if (modelCode !== undefined && modelCode !== null) {
+            let codes = [];
+            if (Array.isArray(modelCode)) {
+                codes = modelCode.map(c => String(c).trim()).filter(Boolean);
+            } else if (typeof modelCode === 'string' && modelCode.trim().length > 0) {
+                codes = modelCode.split(',').map(c => c.trim()).filter(Boolean);
+            }
+            updateData.modelCode = codes.length > 0 ? codes : null;
+        }
+        if (storageCapacity !== undefined && storageCapacity !== null) updateData.storageCapacity = storageCapacity;
+        if (colour !== undefined && colour !== null) updateData.colour = colour;
+        else if (color !== undefined && color !== null) updateData.colour = color;
+        if (imeiNum !== undefined && imeiNum !== null) updateData.imeiNum = imeiNum;
+        if (status !== undefined && status !== null) updateData.status = status;
+        if (deviceAge !== undefined && deviceAge !== null) updateData.deviceAge = deviceAge;
+        if (ram !== undefined && ram !== null) updateData.ram = ram;
+
+        await deviceRef.update(updateData);
+
+        const updatedDoc = await deviceRef.get();
+        return res.status(200).json({
+            success: true,
+            message: "Device record updated successfully.",
+            device: updatedDoc.data()
+        });
+    } catch (err) {
+        console.error("Error updating device:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /staff/upload-images - Page 3: Upload staff images to Cloudinary in folder rebyte/trade_in/<tradeInRequestID>/staff and Firestore subcollection staffImages
+router.post("/staff/upload-images", upload.any(), async (req, res) => {
+    try {
+        const tradeInRequestID = (req.body.tradeInRequestID || '').replace('#', '').trim();
+        if (!tradeInRequestID) {
+            return res.status(400).json({ success: false, message: "Missing tradeInRequestID" });
+        }
+
+        const tradeInRequestRef = db ? db.collection("tradeInRequests").doc(tradeInRequestID) : null;
+        const files = req.files || [];
+        if (files.length === 0) {
+            return res.status(400).json({ success: false, message: "No image files provided." });
+        }
+
+        // Folder inside trade in request folder with 'staff' folder
+        const folder = `rebyte/trade_in/${tradeInRequestID}/staff`;
+        const uploadedImages = [];
+
+        const uploadTasks = files.map(async (file) => {
+            const imageView = file.fieldname;
+            const publicName = `${imageView}_${Date.now()}`;
+
+            try {
+                // Delete existing images for this imageView from Firestore staffImages & Cloudinary
+                if (tradeInRequestRef) {
+                    const existingImgDocs = await tradeInRequestRef.collection("staffImages")
+                        .where("imageView", "==", imageView)
+                        .get();
+
+                    for (const doc of existingImgDocs.docs) {
+                        const oldData = doc.data();
+                        if (oldData && oldData.imageUrl) {
+                            try {
+                                const matches = oldData.imageUrl.match(/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
+                                if (matches && matches[1]) {
+                                    await cloudinary.uploader.destroy(matches[1]).catch(() => {});
+                                }
+                            } catch (_) {}
+                        }
+                        await doc.ref.delete().catch(() => {});
+                    }
+                }
+
+                // Upload new image to Cloudinary in staff folder
+                const cloudResult = await uploadBufferToCloudinary(file.buffer, folder, publicName);
+
+                // Use exact same attribute for each image record as TradeInRequestImage
+                const reqImage = new TradeInRequestImage({
+                    imageUrl: cloudResult.secure_url,
+                    imageView: imageView,
+                    tradeInRequestID: tradeInRequestID
+                });
+
+                if (tradeInRequestRef) {
+                    await tradeInRequestRef.collection("staffImages").doc(reqImage.imageID).set(reqImage.toJSON());
+                }
+
+                uploadedImages.push(reqImage.toJSON());
+            } catch (uploadErr) {
+                console.error(`Failed to process staff image ${imageView}:`, uploadErr);
+                throw uploadErr;
+            }
+        });
+
+        await Promise.all(uploadTasks);
+
+        return res.status(200).json({
+            success: true,
+            message: "Staff images uploaded successfully.",
+            images: uploadedImages
+        });
+    } catch (err) {
+        console.error("staff/upload-images error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /staff/verify-device - Page 4: Store ownership proof image url in trade in request and update new IMEI in same device record
+router.post("/staff/verify-device", upload.single("ownershipProof"), async (req, res) => {
+    try {
+        const tradeInRequestID = (req.body.tradeInRequestID || '').replace('#', '').trim();
+        const deviceID = req.body.deviceID?.trim();
+        const imeiNum = req.body.imeiNum?.trim();
+
+        if (!tradeInRequestID) {
+            return res.status(400).json({ success: false, message: "Missing tradeInRequestID" });
+        }
+
+        let ownershipProofImageUrl = req.body.ownershipProofImageUrl || null;
+
+        // If an ownership proof image file is uploaded, upload to Cloudinary in staff folder
+        if (req.file) {
+            const folder = `rebyte/trade_in/${tradeInRequestID}/staff`;
+            const publicName = `ownership_proof_${Date.now()}`;
+            const cloudResult = await uploadBufferToCloudinary(req.file.buffer, folder, publicName);
+            ownershipProofImageUrl = cloudResult.secure_url;
+        }
+
+        if (db) {
+            // 1. Add new attribute for storing ownership proof image Url in trade in request
+            const tradeInRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+            const tradeInDoc = await tradeInRef.get();
+            const tradeInData = tradeInDoc.exists ? tradeInDoc.data() : {};
+
+            const tradeInUpdates = {
+                updatedAt: FieldValue.serverTimestamp()
+            };
+            if (ownershipProofImageUrl) {
+                tradeInUpdates.ownershipProofImageUrl = ownershipProofImageUrl;
+            }
+            if (imeiNum) {
+                tradeInUpdates.imeiNum = imeiNum;
+            }
+            await tradeInRef.update(tradeInUpdates).catch(() => {});
+
+            // 2. Update the new IMEI at same device record
+            const targetDeviceID = deviceID || tradeInData.deviceID;
+            if (targetDeviceID) {
+                const deviceRef = db.collection("devices").doc(targetDeviceID);
+                const devDoc = await deviceRef.get();
+                if (devDoc.exists) {
+                    const devUpdates = {
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
+                    if (imeiNum) {
+                        devUpdates.imeiNum = imeiNum;
+                    }
+                    await deviceRef.update(devUpdates).catch(() => {});
+                }
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Ownership proof and device IMEI updated successfully.",
+            ownershipProofImageUrl: ownershipProofImageUrl,
+            imeiNum: imeiNum
+        });
+    } catch (err) {
+        console.error("staff/verify-device error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /staff/set-final-offer - Page 5: Add finalOfferPrice attribute with random price to tradeInRequest record
+router.post("/staff/set-final-offer", async (req, res) => {
+    try {
+        const tradeInRequestID = (req.body.tradeInRequestID || '').replace('#', '').trim();
+        if (!tradeInRequestID) {
+            return res.status(400).json({ success: false, message: "Missing tradeInRequestID" });
+        }
+
+        if (!db) {
+            return res.status(500).json({ success: false, message: "Database not connected" });
+        }
+
+        let tradeInRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+        let tradeInDoc = await tradeInRef.get();
+        if (!tradeInDoc.exists) {
+            const tDoc = await db.collection("task").doc(tradeInRequestID).get().catch(() => null);
+            if (tDoc && tDoc.exists) {
+                const trId = tDoc.data().tradeInRequestID || tDoc.data().orderID;
+                if (trId) {
+                    tradeInRef = db.collection("tradeInRequests").doc(String(trId).replace('#', '').trim());
+                    tradeInDoc = await tradeInRef.get().catch(() => null);
+                }
+            }
+        }
+
+        if (!tradeInDoc || !tradeInDoc.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request not found." });
+        }
+
+        const tradeInData = tradeInDoc.data() || {};
+        let finalOfferPrice = tradeInData.finalOfferPrice;
+
+        // If already has finalOfferPrice, keep it unless forceNew is true
+        if (finalOfferPrice == null || isNaN(Number(finalOfferPrice)) || Number(finalOfferPrice) <= 0 || req.body.forceNew === true) {
+            const est = tradeInData.estimatedValue;
+            if (est && typeof est === 'object') {
+                const min = Number(est.min != null ? est.min : (est.minEstimatedValue || 0));
+                const max = Number(est.max != null ? est.max : (est.maxEstimatedValue || 0));
+                if (max > min && min > 0) {
+                    finalOfferPrice = Number((Math.random() * (max - min) + min).toFixed(2));
+                } else if (min > 0) {
+                    finalOfferPrice = Number((min * (0.95 + Math.random() * 0.1)).toFixed(2));
+                }
+            }
+            if (!finalOfferPrice || isNaN(Number(finalOfferPrice)) || Number(finalOfferPrice) <= 0) {
+                // Random realistic price between RM 1,200 and RM 2,400
+                const base = Math.floor(Math.random() * (2400 - 1200 + 1) + 1200);
+                const cents = [0.00, 0.50, 0.80, 0.25][Math.floor(Math.random() * 4)];
+                finalOfferPrice = Number((base + cents).toFixed(2));
+            }
+
+            await tradeInRef.update({
+                finalOfferPrice: Number(finalOfferPrice),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } else {
+            finalOfferPrice = Number(Number(finalOfferPrice).toFixed(2));
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "finalOfferPrice updated successfully.",
+            tradeInRequestID: tradeInRef.id,
+            finalOfferPrice: Number(finalOfferPrice)
+        });
+    } catch (err) {
+        console.error("staff/set-final-offer error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // Helper to generate tradeInRequestID format: TRYYMMDDXXXXX (X is sequence number based on today's existing tradeInRequests records)
 async function generateTradeInRequestID() {
     const now = new Date();
@@ -2028,6 +2311,19 @@ router.get("/request-details", async (req, res) => {
             }
         } catch (_) {}
 
+        let staffImages = {};
+        try {
+            const sImgSnap = await docRef.collection("staffImages").get();
+            if (!sImgSnap.empty) {
+                sImgSnap.docs.forEach(sDoc => {
+                    const sData = sDoc.data();
+                    if (sData && sData.imageView && sData.imageUrl) {
+                        staffImages[sData.imageView] = sData.imageUrl;
+                    }
+                });
+            }
+        } catch (_) {}
+
         let appointmentID = data.appointmentID || null;
         let appointmentDate = data.appointmentDate || null;
         let appointmentTime = data.appointmentTime || null;
@@ -2144,6 +2440,8 @@ router.get("/request-details", async (req, res) => {
             rejectedAt: data.rejectedAt || data.declinedAt || data.updatedAt || null,
             acceptedAt: data.acceptedAt || data.updatedAt || null,
             updatedAt: data.updatedAt || null,
+            ownershipProofImageUrl: data.ownershipProofImageUrl || null,
+            staffImages: staffImages,
         };
 
         return res.status(200).json({

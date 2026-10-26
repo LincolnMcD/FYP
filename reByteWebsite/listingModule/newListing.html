@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Listing - ReByte Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../accountManagementModule/styles.css">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --primary-blue: #0c5ad2;
+      --blue-hover: #0a4cb3;
+      --navy: #10264b;
+      --bg-light: #f5f7fb;
+      --border-color: #e2e8f0;
+      --text-dark: #0f172a;
+      --text-muted: #64748b;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      background: var(--bg-light);
+      color: var(--text-dark);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select { font: inherit; }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 260px;
+      flex: 0 0 260px;
+      background: #ffffff;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 20;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active {
+      color: #fff;
+      background: var(--navy);
+      font-weight: 600;
+    }
+    .nav-item.active svg { color: #fff; }
+
+    /* Main Area */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .content {
+      padding: 30px 40px 48px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Back Button */
+    .back {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 20px -8px;
+      transition: color 0.15s ease;
+    }
+    .back:hover { color: #10264b; }
+    .back svg { width: 20px; height: 20px; }
+
+    /* Page Header */
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .page-title-left h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+    .page-title-left p {
+      margin: 0;
+      font-size: 14.5px;
+      color: var(--text-muted);
+    }
+    .header-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .selected-counter {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #64748b;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 8px 14px;
+      border-radius: 20px;
+    }
+    .btn-create-bulk {
+      height: 42px;
+      padding: 0 22px;
+      border-radius: 22px;
+      background: var(--primary-blue);
+      color: #ffffff;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 2px 6px rgba(12, 90, 210, 0.25);
+    }
+    .btn-create-bulk:hover:not(:disabled) {
+      background: var(--blue-hover);
+      box-shadow: 0 4px 10px rgba(12, 90, 210, 0.35);
+    }
+    .btn-create-bulk:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #94a3b8;
+      box-shadow: none;
+    }
+
+    /* Filter Toolbar Card */
+    .toolbar-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      flex-wrap: wrap;
+    }
+    .search-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      height: 40px;
+      padding: 0 14px;
+      width: min(380px, 45vw);
+      transition: border-color 0.15s ease;
+    }
+    .search-box:focus-within {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.1);
+    }
+    .search-box svg { width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0; }
+    .search-box input {
+      border: none;
+      background: none;
+      outline: none;
+      font-size: 13.5px;
+      color: #0f172a;
+      width: 100%;
+    }
+    .stats-badge {
+      font-size: 13.5px;
+      color: #64748b;
+    }
+    .stats-badge strong {
+      color: var(--primary-blue);
+      font-weight: 700;
+    }
+
+    /* Table Container */
+    .table-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    thead th {
+      padding: 14px 20px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-color);
+      background: #fafbfd;
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid #f1f5f9;
+      transition: background 0.12s ease;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td {
+      padding: 16px 20px;
+      font-size: 13.5px;
+      color: #1e293b;
+      vertical-align: middle;
+    }
+
+    .paid-checkbox {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--primary-blue);
+      cursor: pointer;
+    }
+
+    /* Product Thumbnail & Details */
+    .product-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .product-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 3px;
+    }
+
+    /* Badges */
+    .grade-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .grade-a { background: #dcfce7; color: #15803d; }
+    .grade-b { background: #ede9fe; color: #6d28d9; }
+    .grade-c { background: #fef3c7; color: #b45309; }
+    .grade-d { background: #fee2e2; color: #991b1b; }
+
+    .status-paid-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #dcfce7;
+      color: #15803d;
+      white-space: nowrap;
+    }
+    .status-paid-pill .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+
+    /* Price Inputs */
+    .selling-price-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      height: 36px;
+      padding: 0 10px;
+      width: 130px;
+      transition: border-color 0.15s ease;
+    }
+    .selling-price-wrap:focus-within {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 2px rgba(12, 90, 210, 0.15);
+    }
+    .selling-price-wrap .currency {
+      font-size: 12px;
+      font-weight: 700;
+      color: #64748b;
+    }
+    .selling-price-wrap input {
+      border: none;
+      background: none;
+      outline: none;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--primary-blue);
+      width: 100%;
+    }
+
+    /* Single Draft Button */
+    .btn-single-draft {
+      height: 34px;
+      padding: 0 16px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 17px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary-blue);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-single-draft:hover:not(:disabled) {
+      background: var(--primary-blue);
+      color: #ffffff;
+      border-color: var(--primary-blue);
+    }
+    .btn-single-draft:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Filter Pills */
+    .filter-pills {
+      display: inline-flex;
+      align-items: center;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+    .filter-pill {
+      border: none;
+      background: transparent;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .filter-pill:hover {
+      color: #0f172a;
+    }
+    .filter-pill.active {
+      background: #ffffff;
+      color: var(--primary-blue);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .filter-pill .pill-count {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      background: #e2e8f0;
+      color: #475569;
+    }
+    .filter-pill.active .pill-count {
+      background: var(--light-blue);
+      color: var(--primary-blue);
+    }
+
+    /* View Draft Button & Badges */
+    .btn-view-draft {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 17px;
+      font-size: 12.5px;
+      font-weight: 600;
+      background: #eff6ff;
+      color: #0c5ad2;
+      border: 1px solid #bfdbfe;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-view-draft:hover {
+      background: #dbeafe;
+      border-color: #93c5fd;
+    }
+    .badge-drafted-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e0f2fe;
+      color: #0369a1;
+      margin-top: 4px;
+    }
+
+    /* Table Footer */
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: #ffffff;
+      border-top: 1px solid var(--border-color);
+      font-size: 13.5px;
+      color: #64748b;
+    }
+
+    /* Loading Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-spinner {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--primary-blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Toast Notification (Top Center matching Admin Pages) */
+    .toast-banner {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: #0f172a;
+      color: #ffffff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 9999;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .toast-banner.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toast-banner.success { background: #16a34a; }
+    .toast-banner.error { background: #ef4444; }
+    .toast-banner.info { background: #0c5ad2; }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .content { padding: 20px 16px; }
+      .toolbar-card { flex-direction: column; align-items: stretch; }
+      .search-box { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Dashboard
+      </a>
+      <a href="listing.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        Listing
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        System Config
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>
+        Analytics
+      </a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>
+        Task Assignment
+      </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>
+        Leave Management
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>
+        Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Area -->
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="New Listing"></header>
+
+    <div class="content">
+      <!-- Back button -->
+      <a class="back" href="listing.html" aria-label="Back to Product Listings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg>
+      </a>
+
+      <!-- Page Title Row -->
+      <div class="page-title-row">
+        <div class="page-title-left">
+          <h1>New Listing - Paid Trade-In Devices</h1>
+          <p>Select paid trade-in devices to create draft recommerce product listings.</p>
+        </div>
+        <div class="header-actions-right">
+          <span class="selected-counter" id="selectedPaidCounter">0 devices selected</span>
+          <button type="button" class="btn-create-bulk" id="btnBulkCreateDraft" onclick="handleBulkCreateDraft()" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Create Draft for Selected (0)
+          </button>
+        </div>
+      </div>
+
+      <!-- Toolbar Card -->
+      <div class="toolbar-card">
+        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="search" id="paidSearchInput" placeholder="Search by TR ID, device ID, model, IMEI, color..." oninput="applyFilters()">
+          </div>
+          <div class="filter-pills" id="paidStatusFilterPills">
+            <button type="button" class="filter-pill active" data-filter="unlisted" onclick="setListingFilter('unlisted')">
+              Ready for Listing <span class="pill-count" id="countUnlisted">0</span>
+            </button>
+            <button type="button" class="filter-pill" data-filter="drafted" onclick="setListingFilter('drafted')">
+              Draft Created <span class="pill-count" id="countDrafted">0</span>
+            </button>
+            <button type="button" class="filter-pill" data-filter="all" onclick="setListingFilter('all')">
+              All Paid <span class="pill-count" id="countAll">0</span>
+            </button>
+          </div>
+        </div>
+        <div class="stats-badge">
+          Ready to List: <strong id="paidAvailableCount">0</strong> of <span id="paidTotalCount">0</span> paid devices
+        </div>
+      </div>
+
+      <!-- Data Table Card -->
+      <div class="table-card" id="paidTableContainer">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast Banner -->
+  <div class="toast-banner" id="toastBanner">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    <span id="toastText">Action completed successfully</span>
+  </div>
+
+  <script src="../accountManagementModule/auth.js"></script>
+  <script src="../adminModule/adminHeader.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // Authentication guard
+    if (typeof ReByteAuth !== 'undefined') {
+      const adminUser = ReByteAuth.getUser();
+      if (!adminUser || adminUser.role !== 'Admin') {
+        window.location.href = '../accountManagementModule/login.html';
+      }
+    }
+
+    let allPaidDevices = [];
+    let currentFilter = 'unlisted'; // 'unlisted' | 'drafted' | 'all'
+    let selectedPaidIds = new Set();
+    let isLoading = true;
+
+    async function initNewListingPage() {
+      await fetchPaidDevices();
+    }
+
+    async function fetchPaidDevices() {
+      const container = document.getElementById('paidTableContainer');
+      if (!container) return;
+
+      isLoading = true;
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; color: #64748b;">
+          <div class="loading-spinner" style="margin-bottom: 14px;"></div>
+          <div style="font-size: 15px; font-weight: 700; color: #0f172a;">Loading Paid Trade-In Devices...</div>
+          <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Fetching paid requests and linked device specifications from database</div>
+        </div>
+      `;
+
+      try {
+        const candidateUrls = [
+          'http://localhost:3000/api/shop/admin/paid-tradeins',
+          'http://127.0.0.1:3000/api/shop/admin/paid-tradeins',
+          `${window.location.origin}/api/shop/admin/paid-tradeins`
+        ];
+
+        let fetchedItems = null;
+        for (const url of candidateUrls) {
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              const data = await res.json();
+              if (data && Array.isArray(data.items)) {
+                fetchedItems = data.items;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!fetchedItems && typeof firebase !== 'undefined') {
+          // Direct Firestore fallback
+          if (!firebase.apps.length && typeof ReByteAuth !== 'undefined' && ReByteAuth.initFirebase) {
+            ReByteAuth.initFirebase();
+          }
+          if (firebase.firestore) {
+            const trSnap = await firebase.firestore().collection('tradeInRequests').get();
+            const pSnap = await firebase.firestore().collection('product').get();
+            const existingTrMap = {};
+            const existingDevMap = {};
+            pSnap.docs.forEach(d => {
+              const pData = d.data() || {};
+              const pid = pData.productID || d.id;
+              if (pData.tradeInRequestID) existingTrMap[pData.tradeInRequestID] = pid;
+              if (pData.deviceID) existingDevMap[pData.deviceID] = pid;
+            });
+
+            // Filter for paid trade-in requests
+            const paidDocs = trSnap.docs.filter(doc => {
+              const tr = doc.data() || {};
+              const st = String(tr.status || '').trim().toLowerCase();
+              const reqSt = String(tr.requestStatus || '').trim().toLowerCase();
+              const paySt = String(tr.paymentStatus || '').trim().toLowerCase();
+              return (
+                tr.isPaid === true ||
+                Boolean(tr.paidAt) ||
+                Boolean(tr.transactionID) ||
+                st === 'paid' ||
+                reqSt === 'paid' ||
+                paySt === 'paid'
+              );
+            });
+
+            const devMap = {};
+            const devIds = [...new Set(paidDocs.map(d => d.data().deviceID).filter(Boolean))];
+            await Promise.all(devIds.map(async did => {
+              try {
+                const s = await firebase.firestore().collection('devices').doc(did).get();
+                if (s.exists) devMap[did] = s.data();
+              } catch (_) {}
+            }));
+
+            fetchedItems = [];
+            paidDocs.forEach(doc => {
+              const tr = doc.data() || {};
+              const did = tr.deviceID || '';
+              const dev = devMap[did] || {};
+              const fq = tr.finalQuotation || {};
+              const existingPID = existingTrMap[doc.id] || (did ? existingDevMap[did] : null) || null;
+              const isAlready = Boolean(existingPID);
+
+              let brand = fq.brand || dev.brand || tr.brand || 'Apple';
+              let model = fq.modelName || dev.model || tr.model || 'Device';
+              let storage = fq.storage || dev.storageCapacity || dev.storage || '128 GB';
+              let color = fq.colour || dev.colour || dev.color || 'Standard';
+              let imei = dev.imeiNum || tr.imei || '';
+
+              let offer = 0;
+              if (fq.finalOfferPrice !== undefined && fq.finalOfferPrice !== null && !isNaN(fq.finalOfferPrice)) {
+                offer = Number(fq.finalOfferPrice);
+              } else if (tr.finalOfferPrice !== undefined && tr.finalOfferPrice !== null && !isNaN(tr.finalOfferPrice)) {
+                offer = Number(tr.finalOfferPrice);
+              } else if (tr.quotedValue !== undefined && tr.quotedValue !== null && !isNaN(tr.quotedValue)) {
+                offer = Number(tr.quotedValue);
+              } else if (tr.estimatedValue) {
+                if (typeof tr.estimatedValue === 'object') {
+                  offer = Number(tr.estimatedValue.max || tr.estimatedValue.min || 500);
+                } else {
+                  offer = Number(tr.estimatedValue);
+                }
+              } else {
+                offer = 500;
+              }
+              offer = Math.round(offer * 100) / 100;
+              let sug = Math.round(offer * 1.2 * 100) / 100;
+
+              let paidDate = new Date().toISOString();
+              if (tr.paidAt) {
+                if (tr.paidAt.toDate) paidDate = tr.paidAt.toDate().toISOString();
+                else if (tr.paidAt._seconds) paidDate = new Date(tr.paidAt._seconds * 1000).toISOString();
+                else if (typeof tr.paidAt === 'string') paidDate = tr.paidAt;
+              } else if (tr.updatedAt) {
+                if (tr.updatedAt.toDate) paidDate = tr.updatedAt.toDate().toISOString();
+                else if (tr.updatedAt._seconds) paidDate = new Date(tr.updatedAt._seconds * 1000).toISOString();
+                else if (typeof tr.updatedAt === 'string') paidDate = tr.updatedAt;
+              }
+
+              fetchedItems.push({
+                tradeInRequestID: doc.id,
+                deviceID: did,
+                status: tr.status || tr.requestStatus || 'Paid',
+                transactionID: tr.transactionID || null,
+                userEmail: tr.userEmail || '',
+                paidDate,
+                brand,
+                model,
+                storage,
+                color,
+                imei,
+                condition: 'Grade A',
+                category: dev.deviceCategory || 'Smartphones',
+                offerPrice: offer,
+                suggestedSellingPrice: sug,
+                imageUrl: dev.imageUrl || (String(brand).toLowerCase() === 'apple' ? '../accountManagementModule/assets/images/iphone14.jpg' : '../accountManagementModule/assets/images/galaxy_s23.jpg'),
+                alreadyInProduct: isAlready,
+                existingProductID: existingPID
+              });
+            });
+          }
+        }
+
+        allPaidDevices = fetchedItems || [];
+
+        // Update counts
+        const unlistedCount = allPaidDevices.filter(it => !it.alreadyInProduct).length;
+        const draftedCount = allPaidDevices.filter(it => it.alreadyInProduct).length;
+        const totalCount = allPaidDevices.length;
+
+        const countUnlistedEl = document.getElementById('countUnlisted');
+        const countDraftedEl = document.getElementById('countDrafted');
+        const countAllEl = document.getElementById('countAll');
+        const paidAvailableCountEl = document.getElementById('paidAvailableCount');
+        const paidTotalCountEl = document.getElementById('paidTotalCount');
+
+        if (countUnlistedEl) countUnlistedEl.textContent = unlistedCount;
+        if (countDraftedEl) countDraftedEl.textContent = draftedCount;
+        if (countAllEl) countAllEl.textContent = totalCount;
+        if (paidAvailableCountEl) paidAvailableCountEl.textContent = unlistedCount;
+        if (paidTotalCountEl) paidTotalCountEl.textContent = totalCount;
+
+        applyFilters();
+      } catch (err) {
+        console.error('Error fetching paid trade-in devices:', err);
+        container.innerHTML = `
+          <div style="padding: 48px; text-align: center; color: #ef4444;">
+            <p style="font-weight: 700; font-size: 15px;">Failed to load paid trade-in devices.</p>
+            <p style="color: #64748b; font-size: 13px;">Please make sure the backend server is running.</p>
+            <button class="btn-create-bulk" style="margin-top: 12px;" onclick="fetchPaidDevices()">Try Again</button>
+          </div>
+        `;
+      } finally {
+        isLoading = false;
+      }
+    }
+
+    function setListingFilter(filterKey) {
+      currentFilter = filterKey;
+      document.querySelectorAll('#paidStatusFilterPills .filter-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === filterKey);
+      });
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const q = (document.getElementById('paidSearchInput')?.value || '').trim().toLowerCase();
+      let filtered = allPaidDevices;
+
+      if (currentFilter === 'unlisted') {
+        filtered = filtered.filter(it => !it.alreadyInProduct);
+      } else if (currentFilter === 'drafted') {
+        filtered = filtered.filter(it => it.alreadyInProduct);
+      }
+
+      if (q) {
+        filtered = filtered.filter(it => {
+          const text = `${it.tradeInRequestID} ${it.deviceID} ${it.brand} ${it.model} ${it.imei} ${it.color} ${it.userEmail} ${it.existingProductID || ''}`.toLowerCase();
+          return text.includes(q);
+        });
+      }
+
+      renderPaidTable(filtered);
+    }
+
+    function renderPaidTable(items) {
+      const container = document.getElementById('paidTableContainer');
+      if (!container) return;
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 64px 20px; color: #64748b; text-align: center;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; color: #94a3b8;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            </div>
+            <div style="font-size: 15px; font-weight: 600; color: #475569;">No paid/drafted device found</div>
+          </div>
+        `;
+        return;
+      }
+
+      // Checkable items are only those NOT already drafted
+      const checkableItems = items.filter(it => !it.alreadyInProduct);
+      const allSelected = checkableItems.length > 0 && checkableItems.every(it => selectedPaidIds.has(it.tradeInRequestID));
+
+      let rowsHtml = items.map(item => {
+        const isDrafted = Boolean(item.alreadyInProduct);
+        const isChecked = selectedPaidIds.has(item.tradeInRequestID) ? 'checked' : '';
+        const gradeClass = (item.condition || 'grade-a').toLowerCase().replace(/\s+/g, '-');
+        const paidDateFormatted = item.paidDate ? new Date(item.paidDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
+        const defaultSellingPrice = (item.suggestedSellingPrice || (item.offerPrice * 1.2)).toFixed(2);
+
+        return `
+          <tr id="tr_row_${escapeHtml(item.tradeInRequestID)}" style="${isDrafted ? 'background: #fafbfc;' : ''}">
+            <td style="width: 48px; text-align: center;">
+              ${isDrafted
+                ? `<input type="checkbox" class="paid-checkbox" disabled title="Draft already created (${escapeHtml(item.existingProductID || 'In Draft')})">`
+                : `<input type="checkbox" class="paid-checkbox" data-trid="${escapeHtml(item.tradeInRequestID)}" ${isChecked} onchange="onPaidCheckboxChange('${escapeHtml(item.tradeInRequestID)}', this.checked)">`
+              }
+            </td>
+            <td>
+              <div style="font-weight: 700; color: #0c5ad2; font-size: 13.5px;">${escapeHtml(item.tradeInRequestID)}</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 3px;">${escapeHtml(item.deviceID || 'N/A')}</div>
+              ${isDrafted ? `<span class="badge-drafted-tag">Draft: ${escapeHtml(item.existingProductID || 'Created')}</span>` : ''}
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="product-thumb">
+                  <img src="${escapeHtml(item.imageUrl || '../accountManagementModule/assets/images/iphone14.jpg')}" alt="${escapeHtml(item.model)}" onerror="this.src='../accountManagementModule/assets/images/iphone14.jpg'">
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${escapeHtml(formatProductTitle(item.brand, item.model))}</div>
+                  <div style="font-size: 12px; color: #64748b; margin-top: 3px;">
+                    <span>${escapeHtml(item.storage || '128 GB')}</span> &bull; 
+                    <span>${escapeHtml(item.color || 'Standard')}</span> &bull; 
+                    <span>IMEI: ${escapeHtml(item.imei || 'N/A')}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="font-size: 13px; color: #334155; font-weight: 600;">${paidDateFormatted}</div>
+              <div style="margin-top: 4px;">
+                <span class="status-paid-pill"><span class="dot"></span>Paid</span>
+              </div>
+            </td>
+            <td>
+              <div style="font-weight: 700; color: #475569; font-size: 14px;">RM ${Number(item.offerPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Trade-in Offer</div>
+            </td>
+            <td>
+              <div class="selling-price-wrap" style="${isDrafted ? 'background: #f8fafc; border-color: #e2e8f0;' : ''}">
+                <span class="currency">RM</span>
+                <input type="number" step="0.01" min="0" id="sp_${escapeHtml(item.tradeInRequestID)}" value="${defaultSellingPrice}" oninput="limitTwoDecimals(this)" onblur="formatTwoDecimals(this)" ${isDrafted ? 'disabled style="color:#94a3b8;"' : ''} title="Limit to 2 decimal places. Default is Offer Price * 1.2">
+              </div>
+              <div style="font-size: 11px; color: ${isDrafted ? '#94a3b8' : '#0c5ad2'}; margin-top: 2px; font-weight: 500;">
+                ${isDrafted ? 'Draft selling price' : 'Default: 1.2x Offer'}
+              </div>
+            </td>
+            <td>
+              ${isDrafted
+                ? `<a href="listing.html?tab=draft&search=${encodeURIComponent(item.existingProductID || '')}" class="btn-view-draft">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Draft Created (${escapeHtml(item.existingProductID || 'Draft')})
+                   </a>`
+                : `<button type="button" class="btn-single-draft" id="btn_draft_${escapeHtml(item.tradeInRequestID)}" onclick="singleCreateDraft('${escapeHtml(item.tradeInRequestID)}')">
+                    Create Draft
+                   </button>`
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 48px; text-align: center;">
+                <input type="checkbox" class="paid-checkbox" id="selectAllPaidCheckbox" ${allSelected ? 'checked' : ''} onchange="toggleSelectAllPaid(this.checked)" ${checkableItems.length === 0 ? 'disabled' : ''}>
+              </th>
+              <th>Trade-In / Device ID</th>
+              <th>Device Details</th>
+              <th>Status / Paid Date</th>
+              <th>Offer Price (Collected)</th>
+              <th>Selling Price (Draft)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <div>Showing <strong>${items.length}</strong> paid trade-in device${items.length === 1 ? '' : 's'}</div>
+          <div style="font-size: 12.5px; color: #94a3b8;">Rebyte</div>
+        </div>
+      `;
+
+      updateSelectedCount();
+    }
+
+    function onPaidCheckboxChange(trId, checked) {
+      if (checked) selectedPaidIds.add(trId);
+      else selectedPaidIds.delete(trId);
+
+      const selectAllCb = document.getElementById('selectAllPaidCheckbox');
+      if (selectAllCb) {
+        const visibleCheckable = document.querySelectorAll('tbody .paid-checkbox:not(:disabled)');
+        selectAllCb.checked = visibleCheckable.length > 0 && [...visibleCheckable].every(cb => cb.checked);
+      }
+      updateSelectedCount();
+    }
+
+    function toggleSelectAllPaid(checked) {
+      const visibleCheckable = document.querySelectorAll('tbody .paid-checkbox:not(:disabled)');
+      visibleCheckable.forEach(cb => {
+        cb.checked = checked;
+        const trId = cb.getAttribute('data-trid');
+        if (trId) {
+          if (checked) selectedPaidIds.add(trId);
+          else selectedPaidIds.delete(trId);
+        }
+      });
+      updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+      // Only count items that are NOT already in product
+      const validCount = [...selectedPaidIds].filter(id => {
+        const item = allPaidDevices.find(it => it.tradeInRequestID === id);
+        return item && !item.alreadyInProduct;
+      }).length;
+
+      const counterEl = document.getElementById('selectedPaidCounter');
+      const btnBulk = document.getElementById('btnBulkCreateDraft');
+      if (counterEl) {
+        counterEl.textContent = `${validCount} device${validCount === 1 ? '' : 's'} selected`;
+      }
+      if (btnBulk) {
+        btnBulk.disabled = validCount === 0;
+        btnBulk.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Create Draft for Selected (${validCount})
+        `;
+      }
+    }
+
+    function limitTwoDecimals(input) {
+      if (!input || !input.value) return;
+      const val = input.value;
+      if (val.includes('.')) {
+        const parts = val.split('.');
+        if (parts[1] && parts[1].length > 2) {
+          input.value = `${parts[0]}.${parts[1].slice(0, 2)}`;
+        }
+      }
+    }
+
+    function formatTwoDecimals(input) {
+      if (!input || !input.value || input.value.trim() === '') return;
+      const num = parseFloat(input.value);
+      if (!isNaN(num) && num >= 0) {
+        input.value = num.toFixed(2);
+      }
+    }
+
+    async function singleCreateDraft(trId) {
+      const item = allPaidDevices.find(it => it.tradeInRequestID === trId);
+      if (!item || item.alreadyInProduct) return;
+
+      const spInp = document.getElementById(`sp_${trId}`);
+      let parsed = spInp ? parseFloat(spInp.value) : NaN;
+      if (isNaN(parsed) || parsed < 0) {
+        parsed = item.suggestedSellingPrice || (item.offerPrice * 1.2);
+      }
+      const sellingPrice = Number(parsed.toFixed(2));
+
+      const btn = document.getElementById(`btn_draft_${trId}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+      }
+
+      await submitCreateDrafts([{ ...item, sellingPrice }]);
+    }
+
+    async function handleBulkCreateDraft() {
+      if (selectedPaidIds.size === 0) return;
+
+      const itemsToCreate = [];
+      allPaidDevices.forEach(item => {
+        if (!item.alreadyInProduct && selectedPaidIds.has(item.tradeInRequestID)) {
+          const spInp = document.getElementById(`sp_${item.tradeInRequestID}`);
+          let parsed = spInp ? parseFloat(spInp.value) : NaN;
+          if (isNaN(parsed) || parsed < 0) {
+            parsed = item.suggestedSellingPrice || (item.offerPrice * 1.2);
+          }
+          const sellingPrice = Number(parsed.toFixed(2));
+          itemsToCreate.push({ ...item, sellingPrice });
+        }
+      });
+
+      if (itemsToCreate.length === 0) return;
+
+      const btnBulk = document.getElementById('btnBulkCreateDraft');
+      if (btnBulk) {
+        btnBulk.disabled = true;
+        btnBulk.textContent = `Creating ${itemsToCreate.length} drafts...`;
+      }
+
+      await submitCreateDrafts(itemsToCreate);
+    }
+
+    async function submitCreateDrafts(itemsToCreate) {
+      try {
+        const candidateUrls = [
+          'http://localhost:3000/api/shop/admin/create-drafts',
+          'http://127.0.0.1:3000/api/shop/admin/create-drafts',
+          `${window.location.origin}/api/shop/admin/create-drafts`
+        ];
+
+        let result = null;
+        for (const url of candidateUrls) {
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ items: itemsToCreate })
+            });
+            if (res.ok) {
+              result = await res.json();
+              break;
+            }
+          } catch (_) {}
+        }
+
+        if (!result || !result.success) {
+          // Direct Firestore fallback
+          if (typeof firebase !== 'undefined' && firebase.firestore) {
+            const now = new Date();
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const prefix = `${yy}${mm}PRD`;
+
+            const pSnap = await firebase.firestore().collection('product').get();
+            let maxSeq = 0;
+            pSnap.docs.forEach(doc => {
+              const pid = String(doc.data().productID || doc.id || '');
+              if (pid.startsWith(prefix)) {
+                const s = parseInt(pid.slice(prefix.length), 10);
+                if (!isNaN(s) && s > maxSeq) maxSeq = s;
+              }
+            });
+
+            const batch = firebase.firestore().batch();
+            const created = [];
+            for (const it of itemsToCreate) {
+              maxSeq++;
+              const pid = `${prefix}${String(maxSeq).padStart(3, '0')}`;
+              const pData = {
+                productID: pid,
+                description: null,
+                sellingPrice: Number(Number(it.sellingPrice).toFixed(2)),
+                listingStatus: 'draft',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                deviceID: it.deviceID || '',
+                tradeInRequestID: it.tradeInRequestID || ''
+              };
+              batch.set(firebase.firestore().collection('product').doc(pid), pData);
+              created.push({ id: pid, ...pData, status: 'Draft', rawStatus: 'draft' });
+            }
+            await batch.commit();
+            result = { success: true, count: created.length, createdProducts: created, products: created };
+          }
+        }
+
+        if (result && result.success) {
+          window.location.href = `listing.html?tab=draft&created=${itemsToCreate.length}`;
+        } else {
+          showToast('Failed to create draft listings', 'error');
+          applyFilters();
+        }
+      } catch (err) {
+        console.error('Error creating drafts:', err);
+        showToast('Error creating draft products', 'error');
+        applyFilters();
+      }
+    }
+
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastText');
+      if (!banner || !text) return;
+      clearTimeout(toastTimer);
+      banner.className = `toast-banner ${type} show`;
+      text.textContent = msg;
+      toastTimer = setTimeout(() => { banner.classList.remove('show'); }, 3000);
+    }
+
+    function formatProductTitle(brand, model) {
+      const b = String(brand || '').trim();
+      let m = String(model || '').trim();
+      if (!b) return m;
+      if (!m) return b;
+      if (m.toLowerCase().startsWith(b.toLowerCase() + ' ')) {
+        m = m.slice(b.length).trim();
+      } else if (m.toLowerCase() === b.toLowerCase()) {
+        return b;
+      }
+      return `${b} ${m}`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initNewListingPage);
+    } else {
+      initNewListingPage();
+    }
+  </script>
+</body>
+</html>

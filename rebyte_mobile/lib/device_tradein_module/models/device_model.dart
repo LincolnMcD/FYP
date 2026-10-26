@@ -1,3 +1,5 @@
+import '../../widgets/device_title_formatter.dart';
+
 class DeviceModel {
   final String deviceID;
   final String deviceCategory;
@@ -12,6 +14,8 @@ class DeviceModel {
   final String? userEmail;
   final DateTime? createdAt;
   final String? ram;
+
+  String get displayTitle => formatDeviceTitle(brand, model);
 
   DeviceModel({
     required this.deviceID,

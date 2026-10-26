@@ -14,12 +14,20 @@ class Device {
         imeiNum = null,
         status = 'pending',
         deviceAge = null,
+        ram = null,
         userEmail = null
     }) {
         this.deviceID = deviceID || uuidv4();
         this.deviceCategory = deviceCategory || 'smartphone';
         this.brand = brand;
-        this.model = model;
+        let cleanModel = model;
+        if (typeof cleanModel === 'string' && typeof brand === 'string' && brand.trim()) {
+            const b = brand.trim().toLowerCase();
+            if (cleanModel.trim().toLowerCase().startsWith(b + ' ')) {
+                cleanModel = cleanModel.trim().slice(b.length).trim();
+            }
+        }
+        this.model = cleanModel;
         let codes = [];
         if (Array.isArray(modelCode)) {
             codes = modelCode.map(c => String(c).trim()).filter(Boolean);
@@ -32,6 +40,7 @@ class Device {
         this.imeiNum = imeiNum || null;
         this.status = status || 'pending';
         this.deviceAge = deviceAge || null;
+        this.ram = ram || null;
         this.userEmail = userEmail || null;
         this.createdAt = FieldValue.serverTimestamp();
         this.updatedAt = FieldValue.serverTimestamp();
@@ -49,6 +58,7 @@ class Device {
             imeiNum: this.imeiNum,
             status: this.status,
             deviceAge: this.deviceAge,
+            ram: this.ram,
             userEmail: this.userEmail,
             createdAt: this.createdAt,
             updatedAt: this.updatedAt,

@@ -243,6 +243,28 @@ async function delayFollowingTasks(staffID, scheduleDate, cutoffStartTimeStr, mi
 // Track schedules currently being processed to avoid duplicate concurrent triggers
 const processingSchedules = new Set();
 
+// Serialize automatic absent-task reassignments in arrival order. Each assignment
+// must finish writing its schedule before the next one calculates availability.
+let deliveryReassignmentQueue = Promise.resolve();
+
+function enqueueDeliveryReassignment(assignmentOptions) {
+    const queuedAssignment = deliveryReassignmentQueue.then(async () => {
+        const result = await assignDeliveryTask(assignmentOptions);
+        if (result && result.scheduleID) {
+            await registerScheduleTimer(result.scheduleID);
+        }
+        return result;
+    });
+
+    // Keep the queue usable if one assignment unexpectedly rejects, while still
+    // returning that rejection to the handler that submitted this assignment.
+    deliveryReassignmentQueue = queuedAssignment.catch((err) => {
+        console.error("[AUTO-REASSIGN QUEUE ERROR] Delivery reassignment failed:", err);
+    });
+
+    return queuedAssignment;
+}
+
 async function handleStartTimeViolation(scheduleID) {
     if (processingSchedules.has(`start_${scheduleID}`)) return;
     processingSchedules.add(`start_${scheduleID}`);
@@ -303,7 +325,7 @@ async function handleStartTimeViolation(scheduleID) {
             clearScheduleTimers(scheduleID);
 
             // Reassign ONLY this task 1 by 1 to another eligible delivery staff on the NEXT day
-            const reassignResult = await assignDeliveryTask({
+            const reassignResult = await enqueueDeliveryReassignment({
                 orderID,
                 requestedDate: sData.scheduleDate ? new Date(sData.scheduleDate) : new Date(),
                 forceNextDay: true,
@@ -311,9 +333,6 @@ async function handleStartTimeViolation(scheduleID) {
             });
 
             console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message || reassignResult.reason || "Done");
-            if (reassignResult.scheduleID) {
-                registerScheduleTimer(reassignResult.scheduleID);
-            }
         } else {
             console.log(`[START TIME VIOLATION] Schedule [${scheduleID}] staff [${staffID}] did not start on time. Delay count: ${currentStartDelays}/3`);
 
@@ -423,7 +442,7 @@ async function handleEndTimeViolation(scheduleID) {
             clearScheduleTimers(scheduleID);
 
             // Reassign ONLY this task 1 by 1 to another eligible delivery staff on the NEXT day
-            const reassignResult = await assignDeliveryTask({
+            const reassignResult = await enqueueDeliveryReassignment({
                 orderID,
                 requestedDate: sData.scheduleDate ? new Date(sData.scheduleDate) : new Date(),
                 forceNextDay: true,
@@ -431,9 +450,6 @@ async function handleEndTimeViolation(scheduleID) {
             });
 
             console.log(`[AUTO-REASSIGN RESULT] Order #${orderID} reassign result:`, reassignResult.message || reassignResult.reason || "Done");
-            if (reassignResult.scheduleID) {
-                registerScheduleTimer(reassignResult.scheduleID);
-            }
         } else {
             console.log(`[END TIME VIOLATION] Schedule [${scheduleID}] delivery not completed on time. Delay count: ${currentEndDelays}/3`);
 

@@ -565,6 +565,19 @@ router.get("/get-invoice", async (req, res) => {
         });
     }
 });
+function formatDeviceTitle(brand, model) {
+    const b = (brand || '').trim();
+    let m = (model || '').trim();
+    if (!b) return m;
+    if (!m) return b;
+    if (m.toLowerCase().startsWith(b.toLowerCase() + ' ')) {
+        m = m.substring(b.length).trim();
+    } else if (m.toLowerCase() === b.toLowerCase()) {
+        return b;
+    }
+    return `${b} ${m}`;
+}
+
 /**
  * GET /api/payment/transactions
  * Retrieves real user transaction records directly from Firestore 'transaction' collection.
@@ -762,7 +775,7 @@ router.get("/transactions", async (req, res) => {
                             }
                             const dData = deviceCache.get(pData.deviceID);
                             if (dData) {
-                                itemName = [dData.brand, dData.model].filter(Boolean).join(" ") || itemName;
+                                itemName = formatDeviceTitle(dData.brand, dData.model) || itemName;
                                 itemImei = dData.imeiNum || "";
                                 itemDeviceId = dData.deviceID || pData.deviceID || "";
                                 itemStorage = dData.storage || dData.storageCapacity || "";
@@ -813,7 +826,7 @@ router.get("/transactions", async (req, res) => {
                     }
                     const dData = deviceCache.get(devId);
                     if (dData) {
-                        itemName = [dData.brand, dData.model].filter(Boolean).join(" ") || "Trade-In Device";
+                        itemName = formatDeviceTitle(dData.brand, dData.model) || "Trade-In Device";
                         itemImei = dData.imeiNum || parentData.imeiNum || "";
                         itemDeviceId = dData.deviceID || devId || "";
                         itemStorage = dData.storageCapacity || dData.storage || "";

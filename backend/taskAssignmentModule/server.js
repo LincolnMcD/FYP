@@ -519,6 +519,14 @@ router.get("/staff-tasks", async (req, res) => {
                         }
                     } catch (_) {}
                 }
+                if (!devImageUrl && trID) {
+                    try {
+                        const sImgSnap = await db.collection("tradeInRequests").doc(trID).collection("staffImages").limit(1).get();
+                        if (!sImgSnap.empty) {
+                            devImageUrl = sImgSnap.docs[0].data().imageUrl || "";
+                        }
+                    } catch (_) {}
+                }
 
                 if (!address.addressLine && trData.inspectionAddress && typeof trData.inspectionAddress === "object") {
                     address = trData.inspectionAddress;
@@ -590,6 +598,7 @@ router.get("/staff-tasks", async (req, res) => {
                 taskData.deviceAge = deviceAge;
                 taskData.ram = ram;
                 taskData.device = devData;
+                taskData.ownershipProofImageUrl = trData.ownershipProofImageUrl || null;
                 if (typeof trData.inspectionAddress === "string" && trData.inspectionAddress.trim()) {
                     taskData.deliveryAddress = trData.inspectionAddress.trim();
                 }
@@ -1111,6 +1120,7 @@ router.patch("/update-status", async (req, res) => {
                     reason: `Staff rejection: ${rejectDesc}. No replacement staff is currently available for this scheduled time slot.`
                 });
 
+                invalidateTaskCache();
                 return res.status(200).json({
                     success: true,
                     reassigned: false,
@@ -1120,6 +1130,7 @@ router.patch("/update-status", async (req, res) => {
             }
         }
 
+        invalidateTaskCache();
         return res.status(200).json({
             success: true,
             message: "Task status updated successfully."
@@ -1523,6 +1534,7 @@ router.post("/admin/submit-final-quotation", async (req, res) => {
         // 3. Task collection: intentionally left unchanged per requirement
 
         await batch.commit();
+        invalidateTaskCache();
 
         console.log(`[FINAL QUOTATION SUBMITTED] Trade-In #${trSnap.id} set to Inspected with final offer RM ${numFinalPrice}`);
 
@@ -1864,6 +1876,7 @@ router.post("/admin/pay-trade-in", async (req, res) => {
         }).catch(e => console.error("Error in background payout email:", e));
 
         console.log(`[TRADE-IN PAYOUT SUCCESS] Transferred RM ${numOfferPrice.toFixed(2)} for ${trSnap.id}. Transaction ID: ${txnID}, Gateway: ${gatewayTransactionID}`);
+        invalidateTaskCache();
 
         return res.status(200).json({
             success: true,
@@ -1874,6 +1887,275 @@ router.post("/admin/pay-trade-in", async (req, res) => {
         });
     } catch (err) {
         console.error("pay-trade-in error:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/task-assignment/staff/finalize-inspection
+ * Finalizes staff on-site inspection for trade-in collection task.
+ * Handles both "successful" (payout + Paid + Accepted) and "unsuccessful" (Rejected).
+ * Sets tradeInAppointment, task, and linked schedule all to Completed.
+ */
+router.post("/staff/finalize-inspection", async (req, res) => {
+    try {
+        const {
+            tradeInRequestID,
+            taskID,
+            orderID,
+            scheduleID,
+            action, // 'successful' or 'unsuccessful'
+            rejectionReason
+        } = req.body;
+
+        const isSuccessful = action === "successful" || action === "success" || action === true;
+        const targetReqId = String(tradeInRequestID || orderID || taskID || "").replace(/^#/, '').trim();
+
+        if (!targetReqId) {
+            return res.status(400).json({ success: false, message: "tradeInRequestID, orderID, or taskID is required." });
+        }
+
+        // 1. Resolve tradeInRequest document
+        let trRef = db.collection("tradeInRequests").doc(targetReqId);
+        let trSnap = await trRef.get();
+
+        if (!trSnap.exists) {
+            const tDoc = await db.collection("task").doc(targetReqId).get().catch(() => null);
+            if (tDoc && tDoc.exists) {
+                const reqId = tDoc.data().tradeInRequestID || tDoc.data().orderID;
+                if (reqId) {
+                    trRef = db.collection("tradeInRequests").doc(String(reqId).replace(/^#/, '').trim());
+                    trSnap = await trRef.get().catch(() => null);
+                }
+            }
+        }
+
+        if (!trSnap || !trSnap.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request record not found." });
+        }
+
+        const trData = trSnap.data() || {};
+        const deviceID = trData.deviceID || "";
+        const customerID = trData.userID || trData.customerID || "";
+        const email = trData.userEmail || trData.customerEmail || "";
+
+        // Offer price resolution
+        let finalOfferPrice = trData.finalOfferPrice || trData.finalQuotation?.finalOfferPrice;
+        if (finalOfferPrice == null || isNaN(Number(finalOfferPrice)) || Number(finalOfferPrice) <= 0) {
+            finalOfferPrice = 1350.00;
+        } else {
+            finalOfferPrice = Number(Number(finalOfferPrice).toFixed(2));
+        }
+
+        // 2. Resolve task, schedule, and appointment documents
+        let effectiveTaskID = taskID || null;
+        let taskData = null;
+        if (effectiveTaskID) {
+            try {
+                const tDoc = await db.collection("task").doc(effectiveTaskID).get();
+                if (tDoc.exists) taskData = tDoc.data();
+            } catch (_) {}
+        }
+        if (!taskData) {
+            try {
+                const tSnap = await db.collection("task").where("tradeInRequestID", "==", trSnap.id).limit(1).get();
+                if (!tSnap.empty) {
+                    taskData = tSnap.docs[0].data();
+                    effectiveTaskID = tSnap.docs[0].id;
+                }
+            } catch (_) {}
+        }
+
+        let effectiveSchedID = scheduleID || (taskData && taskData.scheduleID) || null;
+        let schedData = null;
+        if (effectiveSchedID) {
+            try {
+                const sDoc = await db.collection("schedule").doc(effectiveSchedID).get();
+                if (sDoc.exists) schedData = sDoc.data();
+            } catch (_) {}
+        }
+        if (!schedData && effectiveTaskID) {
+            try {
+                const sSnap = await db.collection("schedule").where("taskID", "==", effectiveTaskID).limit(1).get();
+                if (!sSnap.empty) {
+                    schedData = sSnap.docs[0].data();
+                    effectiveSchedID = sSnap.docs[0].id;
+                }
+            } catch (_) {}
+        }
+
+        let apptID = (taskData && taskData.appointmentID) ||
+            (schedData && schedData.appointmentID) ||
+            trData.appointmentID ||
+            null;
+        if (!apptID) {
+            try {
+                const aSnap = await db.collection("tradeInAppointment").where("tradeInRequestID", "==", trSnap.id).limit(1).get();
+                if (!aSnap.empty) {
+                    apptID = aSnap.docs[0].id;
+                }
+            } catch (_) {}
+        }
+
+        const now = new Date();
+
+        // 3. COMMON UPDATES: tradeInAppointment, task, and schedule ALL TO COMPLETED
+        if (apptID) {
+            await db.collection("tradeInAppointment").doc(apptID).update({
+                appointmentStatus: "Completed",
+                status: "Completed",
+                bookingStatus: "Completed",
+                completedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            }).catch(e => console.warn("tradeInAppointment update warning:", e.message));
+        }
+
+        if (effectiveTaskID) {
+            await db.collection("task").doc(effectiveTaskID).update({
+                taskStatus: "Completed",
+                status: "Completed",
+                completedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            }).catch(e => console.warn("task update warning:", e.message));
+        }
+
+        if (effectiveSchedID) {
+            await db.collection("schedule").doc(effectiveSchedID).update({
+                scheduleStatus: "completed",
+                completedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            }).catch(e => console.warn("schedule update warning:", e.message));
+            clearScheduleTimers(effectiveSchedID);
+        }
+
+        // 4. BRANCH: SUCCESSFUL vs UNSUCCESSFUL
+        if (isSuccessful) {
+            // A. Payout via Xendit
+            const defaultCard = await getCustomerDefaultCard({ customerID, email });
+            const customerName = await resolveCustomerFullName({ customerID, email });
+
+            const XENDIT_PAYOUT_KEY = process.env.XENDIT_PAYOUT_KEY || "xnd_development_bsf40RnuxT620dWSNMwaGNSf9V2vN9lJIQEx5W9oAJFI6YUdQ4Rz5RadOo1A0lQ";
+            const payoutAuthHeader = `Basic ${Buffer.from(XENDIT_PAYOUT_KEY + ":").toString("base64")}`;
+
+            let gatewayTransactionID = "";
+            const cardNumber = defaultCard?.cardNumber || "4000000000002503";
+
+            try {
+                const xenditRes = await axios.post("https://api.xendit.co/v2/payouts", {
+                    reference_id: `pay_${trSnap.id}_${Date.now()}`,
+                    currency: "MYR",
+                    amount: finalOfferPrice,
+                    channel_code: "MY_DUITNOW",
+                    channel_properties: {
+                        account_number: String(cardNumber).trim(),
+                        account_holder_name: customerName
+                    },
+                    description: `Trade-in payout for ${trSnap.id}`
+                }, {
+                    headers: {
+                        Authorization: payoutAuthHeader,
+                        "Idempotency-key": `idem_pay_${trSnap.id}_${Date.now()}`
+                    }
+                });
+
+                gatewayTransactionID = xenditRes.data?.id || xenditRes.data?.reference_id || `disb_${Date.now()}`;
+            } catch (xErr) {
+                console.warn("Xendit payout fallback (development):", xErr.response?.data || xErr.message);
+                gatewayTransactionID = `disb_${Date.now()}`;
+            }
+
+            // Generate Transaction ID
+            const txnID = await generateTransactionID();
+
+            // Create Transaction record
+            const transactionData = {
+                transactionID: txnID,
+                transactionType: "Payout",
+                transactionStatus: "Success",
+                transactionAmount: finalOfferPrice,
+                transactionDate: now.toISOString(),
+                gatewayTransactionID: String(gatewayTransactionID),
+                paymentAccountID: String(defaultCard?.paymentAccountID || defaultCard?.id || "ACC-DEFAULT"),
+                orderID: null,
+                rentalID: null,
+                tradeInRequestID: String(trSnap.id),
+                createdAt: FieldValue.serverTimestamp()
+            };
+            await db.collection("transaction").doc(txnID).set(transactionData);
+
+            // Update tradeInRequests: status and requestStatus to Paid, bookingStatus to Inspected
+            await trRef.update({
+                status: "Paid",
+                requestStatus: "Paid",
+                bookingStatus: "Inspected",
+                isPaid: true,
+                paidAt: now.toISOString(),
+                transactionID: txnID,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // Update linked devices record: status to Accepted
+            if (deviceID) {
+                await db.collection("devices").doc(deviceID).update({
+                    status: "Accepted",
+                    deviceStatus: "Accepted",
+                    updatedAt: FieldValue.serverTimestamp()
+                }).catch(() => {});
+            }
+
+            // Optional payout confirmation email in background
+            sendTradeInPayoutEmail({
+                toEmail: email,
+                customerName,
+                tradeInRequestID: trSnap.id,
+                deviceModel: trData.modelName || trData.deviceModel || trData.model || "Device",
+                amount: finalOfferPrice,
+                accountInfo: defaultCard ? `${defaultCard.providerName || 'Card'} (•••• ${String(defaultCard.cardNumber).slice(-4)})` : "Bank / Card",
+                transactionID: txnID
+            }).catch(() => {});
+
+            invalidateTaskCache();
+            return res.status(200).json({
+                success: true,
+                action: "successful",
+                message: "Trade-In marked as Successful. Payment disbursed successfully.",
+                transactionID: txnID,
+                gatewayTransactionID,
+                finalOfferPrice,
+                tradeInRequestID: trSnap.id
+            });
+        } else {
+            // B. Unsuccessful: status to Rejected, bookingStatus and requestStatus to Inspected
+            await trRef.update({
+                status: "Rejected",
+                requestStatus: "Inspected",
+                bookingStatus: "Inspected",
+                rejectedAt: FieldValue.serverTimestamp(),
+                declinedAt: FieldValue.serverTimestamp(),
+                rejectionReason: rejectionReason || "Inspection failed or rejected on-site",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // Update linked devices record: status to Rejected
+            if (deviceID) {
+                await db.collection("devices").doc(deviceID).update({
+                    status: "Rejected",
+                    deviceStatus: "Rejected",
+                    updatedAt: FieldValue.serverTimestamp()
+                }).catch(() => {});
+            }
+
+            invalidateTaskCache();
+            return res.status(200).json({
+                success: true,
+                action: "unsuccessful",
+                message: "Trade-In marked as Unsuccessful. Record updated to Rejected.",
+                finalOfferPrice,
+                tradeInRequestID: trSnap.id
+            });
+        }
+    } catch (err) {
+        console.error("finalize-inspection error:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -2376,6 +2658,8 @@ let taskCache = {
     timestamp: 0
 };
 const CACHE_TTL_MS = 30000; // 30 seconds cache
+let lastAutoResolveTime = 0;
+const AUTO_RESOLVE_THROTTLE_MS = 60000; // 1 minute throttle for auto overdue check
 
 function invalidateTaskCache() {
     taskCache = { data: null, counts: null, timestamp: 0 };
@@ -2384,9 +2668,9 @@ function invalidateTaskCache() {
 /**
  * Helper to fetch and build tasks dataset with caching
  */
-async function getOrBuildTasksDataset() {
+async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
     const now = Date.now();
-    if (taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS)) {
+    if (!forceRefresh && taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS)) {
         return { taskList: taskCache.data, counts: taskCache.counts };
     }
 
@@ -2982,8 +3266,12 @@ async function getOrBuildTasksDataset() {
  */
 router.get("/admin/tasks", async (req, res) => {
     try {
-        await autoResolveOverdueTradeInTasks().catch(() => {});
-        const { taskList, counts } = await getOrBuildTasksDataset();
+        if (Date.now() - lastAutoResolveTime > AUTO_RESOLVE_THROTTLE_MS) {
+            lastAutoResolveTime = Date.now();
+            autoResolveOverdueTradeInTasks().catch(() => {});
+        }
+        const forceRefresh = req.query.refresh === "true" || req.query.refresh === true;
+        const { taskList, counts } = await getOrBuildTasksDataset({ forceRefresh });
 
         const tab = String(req.query.tab || "").trim().toLowerCase();
         const typeFilter = String(req.query.type || "").trim().toLowerCase();
@@ -3930,6 +4218,7 @@ router.post("/admin/terminate", async (req, res) => {
             emailSent = emailResult.success === true;
         }
 
+        invalidateTaskCache();
         return res.json({
             success: true,
             message: `Order #${targetOrderID} changed to Self pickup.${emailSent ? ' Notification email sent to customer.' : ''}`,

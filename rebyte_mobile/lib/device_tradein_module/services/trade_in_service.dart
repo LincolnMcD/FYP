@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../account_management_module/services/auth_service.dart';
 import '../data/phone_brands_data.dart';
@@ -586,6 +587,139 @@ class TradeInService {
       return data is Map<String, dynamic> ? data : {'disabledDates': []};
     } catch (e) {
       return {'disabledDates': []};
+    }
+  }
+
+  /// Update an existing device record (Page 2: update device data & add ram attribute)
+  static Future<Map<String, dynamic>> updateDeviceRecord({
+    required String deviceID,
+    String? brand,
+    String? model,
+    dynamic modelCode,
+    String? storageCapacity,
+    String? colour,
+    String? imeiNum,
+    String? status,
+    String? deviceAge,
+    String? ram,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/device/update'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'deviceID': deviceID,
+          if (brand != null) 'brand': brand,
+          if (model != null) 'model': model,
+          if (modelCode != null) 'modelCode': modelCode,
+          if (storageCapacity != null) 'storageCapacity': storageCapacity,
+          if (colour != null) 'colour': colour,
+          if (imeiNum != null) 'imeiNum': imeiNum,
+          if (status != null) 'status': status,
+          if (deviceAge != null) 'deviceAge': deviceAge,
+          if (ram != null) 'ram': ram,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'success': response.statusCode == 200};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error updating device: $e'};
+    }
+  }
+
+  /// Page 3: Upload staff images to Cloudinary (folder `rebyte/trade_in/<id>/staff`) & Firestore subcollection staffImages
+  static Future<Map<String, dynamic>> uploadStaffDeviceImages({
+    required String tradeInRequestID,
+    required Map<String, String> imagePaths,
+  }) async {
+    try {
+      final cleanId = tradeInRequestID.replaceAll('#', '').trim();
+      final uri = Uri.parse('$baseUrl/staff/upload-images');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.fields['tradeInRequestID'] = cleanId;
+
+      for (final entry in imagePaths.entries) {
+        final slotKey = entry.key;
+        final filePath = entry.value;
+        if (filePath.isNotEmpty && File(filePath).existsSync()) {
+          request.files.add(
+            await http.MultipartFile.fromPath(slotKey, filePath),
+          );
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'success': response.statusCode == 200};
+    } catch (e) {
+      return {'success': false, 'message': 'Error uploading staff images: $e'};
+    }
+  }
+
+  /// Page 4: Store ownership proof image url in trade in request and update new IMEI in same device record
+  static Future<Map<String, dynamic>> verifyStaffDevice({
+    required String tradeInRequestID,
+    String? deviceID,
+    String? imeiNum,
+    String? ownershipPhotoPath,
+  }) async {
+    try {
+      final cleanId = tradeInRequestID.replaceAll('#', '').trim();
+      final uri = Uri.parse('$baseUrl/staff/verify-device');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.fields['tradeInRequestID'] = cleanId;
+      if (deviceID != null && deviceID.isNotEmpty) {
+        request.fields['deviceID'] = deviceID;
+      }
+      if (imeiNum != null && imeiNum.isNotEmpty) {
+        request.fields['imeiNum'] = imeiNum;
+      }
+
+      if (ownershipPhotoPath != null &&
+          ownershipPhotoPath.isNotEmpty &&
+          File(ownershipPhotoPath).existsSync()) {
+        request.files.add(
+          await http.MultipartFile.fromPath('ownershipProof', ownershipPhotoPath),
+        );
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = jsonDecode(response.body);
+      return data is Map<String, dynamic> ? data : {'success': response.statusCode == 200};
+    } catch (e) {
+      return {'success': false, 'message': 'Error verifying device details: $e'};
+    }
+  }
+
+  /// Page 5: Add finalOfferPrice attribute with random price to tradeInRequest record
+  static Future<Map<String, dynamic>> setStaffFinalOfferPrice({
+    required String tradeInRequestID,
+    bool forceNew = false,
+  }) async {
+    try {
+      final cleanId = tradeInRequestID.replaceAll('#', '').trim();
+      final uri = Uri.parse('$baseUrl/staff/set-final-offer');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'tradeInRequestID': cleanId,
+          'forceNew': forceNew,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data is Map<String, dynamic> ? data : {'success': true};
+      }
+      return {'success': false, 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'message': 'Error setting final offer price: $e'};
     }
   }
 }

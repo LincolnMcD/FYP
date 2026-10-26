@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../staff_module/staff_home_page.dart';
 import '../../account_management_module/services/session_service.dart';
 import '../../account_management_module/welcome_page.dart';
+import '../../device_tradein_module/models/device_model.dart';
 
 class StaffAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -420,10 +421,33 @@ class StaffInspectionSession {
   static String? savedOwnershipPhotoName;
   static bool isOwnershipVerified = false;
 
+  // Page 5 state persistence
+  static bool hasReachedPage5 = false;
+  static DeviceModel? savedDevice;
+  static Map<String, dynamic>? savedTask;
+  static Map<String, String>? savedUploadedImages;
+
   static void ensureTask(String? taskId) {
     if (taskId != null && taskId.isNotEmpty && currentTaskId != taskId) {
       clear();
       currentTaskId = taskId;
+    }
+  }
+
+  static void recordPage5({
+    required String taskId,
+    required DeviceModel device,
+    required Map<String, dynamic> task,
+    required Map<String, String> uploadedImages,
+    String? ownershipPhotoPath,
+  }) {
+    currentTaskId = taskId;
+    hasReachedPage5 = true;
+    savedDevice = device;
+    savedTask = task;
+    savedUploadedImages = uploadedImages;
+    if (ownershipPhotoPath != null) {
+      savedOwnershipPhotoPath = ownershipPhotoPath;
     }
   }
 
@@ -434,6 +458,10 @@ class StaffInspectionSession {
     savedOwnershipPhotoPath = null;
     savedOwnershipPhotoName = null;
     isOwnershipVerified = false;
+    hasReachedPage5 = false;
+    savedDevice = null;
+    savedTask = null;
+    savedUploadedImages = null;
   }
 }
 

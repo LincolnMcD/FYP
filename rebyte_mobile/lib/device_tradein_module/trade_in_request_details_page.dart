@@ -10,6 +10,7 @@ import 'schedule_inspection_page.dart';
 import 'services/trade_in_flow_session.dart';
 import 'services/trade_in_service.dart';
 import '../product_purchase_module/customer_delivery_tracking_page.dart';
+import '../widgets/device_title_formatter.dart';
 
 class TradeInRequestDetailsPage extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -343,7 +344,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              '$brand $model',
+              formatDeviceTitle(brand, model),
               style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 18),
@@ -745,8 +746,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
         _request['requestStatus']?.toString().toLowerCase() == 'inspected' ||
         _request['appointmentStatus']?.toString().toLowerCase() == 'inspected' ||
         _request['inspectedAt'] != null ||
-        _request['finalQuotation'] != null ||
-        _request['finalOfferPrice'] != null);
+        _request['finalQuotation'] != null);
     final bool isInspecting = !isCancelled && !isCompletedRequest && !isInspected && (status.toLowerCase() == 'inspecting' ||
         _request['bookingStatus']?.toString().toLowerCase() == 'inspecting' ||
         _request['requestStatus']?.toString().toLowerCase() == 'inspecting' ||
@@ -1193,7 +1193,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
                         isCompleted: isCompletedRequest,
                         isDeclined: isDeclined,
                         isRejected: isRejected,
-                        defaultModel: brand.isNotEmpty ? '$brand $model' : model,
+                        defaultModel: formatDeviceTitle(brand, model),
                         defaultColour: colour,
                         defaultStorage: storage,
                       )

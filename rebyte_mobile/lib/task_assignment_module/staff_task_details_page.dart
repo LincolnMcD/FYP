@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:intl/intl.dart';
 import 'services/task_assignment_service.dart';
 import 'staff_navigation_page.dart';
+import '../widgets/device_title_formatter.dart';
 
 class StaffTaskDetailsPage extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -102,7 +103,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       final first = items[0] as Map;
       final brand = first['brand']?.toString() ?? '';
       final model = first['model']?.toString() ?? '';
-      modelName = '$brand $model'.trim();
+      modelName = formatDeviceTitle(brand, model);
       if (modelName.isEmpty) modelName = 'Electronic Device';
       storage = first['storage']?.toString() ?? 'Standard';
       if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard' && !modelName.toLowerCase().contains(storage.toLowerCase())) {
@@ -717,6 +718,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                             final completed = await Navigator.push(
                               context,
                               MaterialPageRoute(
+                                settings: const RouteSettings(name: 'StaffNavigationPage'),
                                 builder: (_) => StaffNavigationPage(
                                   task: _currentTask,
                                   onTaskUpdated: widget.onTaskUpdated,
@@ -733,6 +735,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                             final completed = await Navigator.push(
                               context,
                               MaterialPageRoute(
+                                settings: const RouteSettings(name: 'StaffNavigationPage'),
                                 builder: (_) => StaffNavigationPage(
                                   task: _currentTask,
                                   onTaskUpdated: widget.onTaskUpdated,
@@ -845,7 +848,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
     final item = rawItem;
     final brand = item['brand']?.toString() ?? '';
     final model = item['model']?.toString() ?? '';
-    var name = '$brand $model'.trim();
+    var name = formatDeviceTitle(brand, model);
     if (name.isEmpty) name = 'Electronic Device';
     final storage = item['storage']?.toString() ?? 'Standard';
     if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard') {

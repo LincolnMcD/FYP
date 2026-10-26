@@ -218,10 +218,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
   @override
   Widget build(BuildContext context) {
     final device = widget.device;
-    final String brand = device.brand.trim();
-    final String model = device.model.trim();
-    final bool hasBrand = model.toLowerCase().startsWith(brand.toLowerCase());
-    final String fullDeviceName = hasBrand ? model : '$brand $model'.trim();
+    final String fullDeviceName = device.displayTitle;
     final String storage = device.storageCapacity.isNotEmpty ? device.storageCapacity : '128GB';
     final String colour = device.colour.isNotEmpty ? device.colour : 'Graphite';
     final String reqDisplayId = widget.tradeInRequestID.isNotEmpty

@@ -37,6 +37,7 @@ class _StaffDeviceInspectionSpecsPageState
 
   final TextEditingController _deviceAgeController = TextEditingController();
   final FocusNode _deviceAgeFocusNode = FocusNode();
+  bool _isSubmitting = false;
 
   List<String> _loadedBrands = List.from(PhoneBrandsData.wellKnownPhoneBrands);
   final Map<String, List<String>> _loadedModels = {};
@@ -398,16 +399,76 @@ class _StaffDeviceInspectionSpecsPageState
     final String ramFormatted = '${ramNum}GB';
 
     final task = widget.task;
+    String deviceId = task['deviceID']?.toString() ??
+        (task['device'] is Map ? task['device']['deviceID']?.toString() : null) ??
+        '';
+
+    if (deviceId.isEmpty) {
+      final tradeInId = task['tradeInRequestID']?.toString() ??
+          task['tradeInID']?.toString() ??
+          task['orderID']?.toString() ??
+          '';
+      if (tradeInId.isNotEmpty) {
+        final reqDetails = await TradeInService.getTradeInRequestDetails(tradeInId);
+        if (reqDetails != null) {
+          deviceId = reqDetails['deviceID']?.toString() ??
+              (reqDetails['device'] is Map ? reqDetails['device']['deviceID']?.toString() : null) ??
+              '';
+        }
+      }
+    }
+
+    setState(() => _isSubmitting = true);
+
+    // Linkage to Firebase: Page 2 - Update data of linked device record and add ram attribute
+    if (deviceId.isNotEmpty) {
+      try {
+        final updateRes = await TradeInService.updateDeviceRecord(
+          deviceID: deviceId,
+          brand: _selectedBrand ?? 'Apple',
+          model: _selectedModel ?? 'iPhone 13 Pro',
+          modelCode: _selectedModelCode,
+          storageCapacity: _selectedStorage ?? '256GB',
+          colour: _selectedColour ?? 'Graphite',
+          deviceAge: formattedAge,
+          ram: ramFormatted,
+        );
+        if (updateRes['success'] != true && mounted) {
+          StaffToast.show(context, updateRes['message'] ?? 'Failed to update device record', isError: true);
+          setState(() => _isSubmitting = false);
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          StaffToast.show(context, 'Error updating device record: $e', isError: true);
+          setState(() => _isSubmitting = false);
+          return;
+        }
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
     final imei = task['imei']?.toString() ??
         task['imeiNum']?.toString() ??
         '';
 
+    // Update in-memory task device info
+    task['deviceID'] = deviceId;
+    task['ram'] = ramFormatted;
+    task['storage'] = _selectedStorage;
+    task['brand'] = _selectedBrand;
+    task['deviceModel'] = _selectedModel;
+    task['color'] = _selectedColour;
+    task['deviceAge'] = formattedAge;
+
     final devModel = DeviceModel(
-      deviceID: task['deviceID']?.toString() ?? '',
+      deviceID: deviceId,
       brand: _selectedBrand ?? 'Apple',
       model: _selectedModel ?? 'iPhone 13 Pro',
       modelCode: _selectedModelCode,
-      storageCapacity: _selectedStorage ?? '256 GB',
+      storageCapacity: _selectedStorage ?? '256GB',
       colour: _selectedColour ?? 'Graphite',
       imeiNum: imei,
       status: 'inspecting',
@@ -666,7 +727,7 @@ class _StaffDeviceInspectionSpecsPageState
                         width: double.infinity,
                         height: 46,
                         child: ElevatedButton(
-                          onPressed: isFormComplete ? _onContinue : null,
+                          onPressed: (isFormComplete && !_isSubmitting) ? _onContinue : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0C5AD2),
                             foregroundColor: Colors.white,
@@ -675,25 +736,31 @@ class _StaffDeviceInspectionSpecsPageState
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             elevation: 0,
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Continue',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Continue',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 16,
+                                      color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 16,
-                                color: isFormComplete ? Colors.white : const Color(0xFF94A3B8),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
                       const SizedBox(height: 10),

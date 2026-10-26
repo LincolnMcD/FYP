@@ -7,6 +7,7 @@ import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import 'device_info_step_page.dart';
 import 'improve_assessment_page.dart';
+import '../widgets/device_title_formatter.dart';
 
 class ImeiValidationStepPage extends StatefulWidget {
   final DeviceModel device;
@@ -626,9 +627,9 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
 
   /// Device Mismatch Card matching the user's requested UI layout and design
   Widget _buildMismatchResultCard() {
-    final expectedName = '${widget.device.brand} ${widget.device.model}';
+    final expectedName = widget.device.displayTitle;
     final detectedName = _detectedModel != null
-        ? '${_detectedBrand ?? ''} $_detectedModel'.trim()
+        ? formatDeviceTitle(_detectedBrand, _detectedModel)
         : 'Unknown Model';
 
     return Container(

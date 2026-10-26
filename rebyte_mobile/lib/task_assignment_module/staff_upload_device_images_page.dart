@@ -105,6 +105,13 @@ class _StaffUploadDeviceImagesPageState
 
   late List<StaffImageSlot> _slots;
   final Map<int, int> _slotTokens = {};
+  bool _isUploadingToServer = false;
+
+  bool get _areRequiredImagesUploaded =>
+      _slots.length >= 7 &&
+      _slots.sublist(0, 7).every(
+            (s) => s.status == StaffImageSlotStatus.success && s.localFilePath != null,
+          );
 
   @override
   void initState() {
@@ -161,14 +168,47 @@ class _StaffUploadDeviceImagesPageState
     for (int i = 0; i < _slots.length; i++) {
       final key = _slots[i].keyName;
       final savedPath = StaffInspectionSession.savedImagePaths[key];
-      if (savedPath != null && File(savedPath).existsSync()) {
+      if (savedPath != null && (savedPath.startsWith('http') || File(savedPath).existsSync())) {
         _slots[i] = _slots[i].copyWith(
           status: StaffImageSlotStatus.success,
           localFilePath: savedPath,
-          fileName: StaffInspectionSession.savedImageNames[key],
+          fileName: StaffInspectionSession.savedImageNames[key] ?? '${_slots[i].label}.jpg',
           uploadProgress: 1.0,
         );
       }
+    }
+
+    _loadExistingStaffImages();
+  }
+
+  Future<void> _loadExistingStaffImages() async {
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+    if (tradeInId.isEmpty) return;
+
+    final details = await TradeInService.getTradeInRequestDetails(tradeInId);
+    if (details != null && details['staffImages'] is Map && mounted) {
+      final Map<String, dynamic> staffImages = Map<String, dynamic>.from(details['staffImages']);
+      setState(() {
+        for (int i = 0; i < _slots.length; i++) {
+          final key = _slots[i].keyName;
+          if (_slots[i].status != StaffImageSlotStatus.success && staffImages.containsKey(key)) {
+            final imgUrl = staffImages[key]?.toString();
+            if (imgUrl != null && imgUrl.isNotEmpty) {
+              _slots[i] = _slots[i].copyWith(
+                status: StaffImageSlotStatus.success,
+                localFilePath: imgUrl,
+                fileName: '${_slots[i].label}.jpg',
+                uploadProgress: 1.0,
+              );
+              StaffInspectionSession.savedImagePaths[key] = imgUrl;
+              StaffInspectionSession.savedImageNames[key] = '${_slots[i].label}.jpg';
+            }
+          }
+        }
+      });
     }
   }
 
@@ -419,11 +459,11 @@ class _StaffUploadDeviceImagesPageState
     }
   }
 
-  void _onVerifyDeviceDetails() {
+  Future<void> _onVerifyDeviceDetails() async {
     // Check if the 7 required slots (indices 0 to 6) are fulfilled
     final requiredSlots = _slots.sublist(0, 7);
     final unverifiedSlots = requiredSlots
-        .where((s) => s.status != StaffImageSlotStatus.success)
+        .where((s) => s.status != StaffImageSlotStatus.success || s.localFilePath == null)
         .toList();
 
     if (unverifiedSlots.isNotEmpty) {
@@ -443,6 +483,42 @@ class _StaffUploadDeviceImagesPageState
         uploadedImages[s.keyName] = s.localFilePath!;
       }
     }
+
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+
+    if (tradeInId.isNotEmpty) {
+      setState(() => _isUploadingToServer = true);
+      try {
+        final res = await TradeInService.uploadStaffDeviceImages(
+          tradeInRequestID: tradeInId,
+          imagePaths: uploadedImages,
+        );
+        if (!mounted) return;
+        if (res['success'] != true) {
+          StaffToast.show(
+            context,
+            'Warning: Failed to sync images to server: ${res['message'] ?? 'Unknown error'}',
+            isError: true,
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        StaffToast.show(
+          context,
+          'Error uploading images: $e',
+          isError: true,
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _isUploadingToServer = false);
+        }
+      }
+    }
+
+    if (!mounted) return;
 
     Navigator.push(
       context,
@@ -544,30 +620,51 @@ class _StaffUploadDeviceImagesPageState
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _onVerifyDeviceDetails,
+                  onPressed: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                      ? _onVerifyDeviceDetails
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0043CE),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFCBD5E1),
+                    disabledForegroundColor: const Color(0xFF94A3B8),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Verify Device Details',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  child: _isUploadingToServer
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Verify Device Details',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                                    ? Colors.white
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              color: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                                  ? Colors.white
+                                  : const Color(0xFF94A3B8),
+                              size: 20,
+                            ),
+                          ],
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -753,14 +850,24 @@ class _StaffUploadDeviceImagesPageState
   Widget _buildSlotContent(StaffImageSlot slot) {
     if (slot.status == StaffImageSlotStatus.success &&
         slot.localFilePath != null) {
+      final isNetwork = slot.localFilePath!.startsWith('http://') ||
+          slot.localFilePath!.startsWith('https://');
       return Padding(
         padding: const EdgeInsets.all(8.0),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.file(
-            File(slot.localFilePath!),
-            fit: BoxFit.contain,
-          ),
+          child: isNetwork
+              ? Image.network(
+                  slot.localFilePath!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Icon(Icons.broken_image, color: Colors.grey),
+                  ),
+                )
+              : Image.file(
+                  File(slot.localFilePath!),
+                  fit: BoxFit.contain,
+                ),
         ),
       );
     }

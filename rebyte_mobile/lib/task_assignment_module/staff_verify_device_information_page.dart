@@ -5,6 +5,7 @@ import '../device_tradein_module/models/device_model.dart';
 import '../device_tradein_module/services/trade_in_service.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 import 'staff_assessing_device_page.dart';
+import '../widgets/device_title_formatter.dart';
 
 class StaffVerifyDeviceInformationPage extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -47,6 +48,15 @@ class _StaffVerifyDeviceInformationPageState
   String? _detectedStorage;
   String? _imeiError;
   Map<String, dynamic>? _gsmaData;
+  bool _isSubmitting = false;
+
+  bool get _isAssessReady =>
+      _isOwnershipVerified &&
+      _ownershipPhotoPath != null &&
+      _isImeiVerified &&
+      !_isMismatch &&
+      !_isValidatingImei &&
+      !_isSubmitting;
 
   @override
   void initState() {
@@ -58,11 +68,14 @@ class _StaffVerifyDeviceInformationPageState
     StaffInspectionSession.ensureTask(taskId);
 
     if (StaffInspectionSession.savedOwnershipPhotoPath != null &&
-        File(StaffInspectionSession.savedOwnershipPhotoPath!).existsSync()) {
+        (StaffInspectionSession.savedOwnershipPhotoPath!.startsWith('http') ||
+            File(StaffInspectionSession.savedOwnershipPhotoPath!).existsSync())) {
       _ownershipPhotoPath = StaffInspectionSession.savedOwnershipPhotoPath;
       _ownershipPhotoName = StaffInspectionSession.savedOwnershipPhotoName;
       _isOwnershipVerified = StaffInspectionSession.isOwnershipVerified;
     }
+
+    _loadExistingOwnershipProof();
 
     // Prefill IMEI from device or task
     final imei = widget.device.imeiNum ??
@@ -71,6 +84,29 @@ class _StaffVerifyDeviceInformationPageState
         '';
     if (imei.isNotEmpty) {
       _imeiController.text = imei;
+    }
+  }
+
+  Future<void> _loadExistingOwnershipProof() async {
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+    if (tradeInId.isEmpty) return;
+
+    final details = await TradeInService.getTradeInRequestDetails(tradeInId);
+    if (details != null && mounted) {
+      final proofUrl = details['ownershipProofImageUrl']?.toString();
+      if (proofUrl != null && proofUrl.isNotEmpty && (_ownershipPhotoPath == null || _ownershipPhotoPath!.isEmpty)) {
+        setState(() {
+          _ownershipPhotoPath = proofUrl;
+          _ownershipPhotoName = 'ownership_proof.jpg';
+          _isOwnershipVerified = true;
+        });
+        StaffInspectionSession.savedOwnershipPhotoPath = proofUrl;
+        StaffInspectionSession.savedOwnershipPhotoName = 'ownership_proof.jpg';
+        StaffInspectionSession.isOwnershipVerified = true;
+      }
     }
   }
 
@@ -264,8 +300,8 @@ class _StaffVerifyDeviceInformationPageState
     }
   }
 
-  void _onAssessDevice() {
-    if (!_isOwnershipVerified) {
+  Future<void> _onAssessDevice() async {
+    if (!_isOwnershipVerified || _ownershipPhotoPath == null) {
       StaffToast.show(
         context,
         'Please upload proof of ownership photo first.',
@@ -283,8 +319,62 @@ class _StaffVerifyDeviceInformationPageState
       return;
     }
 
+    if (_isMismatch) {
+      StaffToast.show(
+        context,
+        'Cannot proceed: Device specifications mismatch the verified IMEI.',
+        isError: true,
+      );
+      return;
+    }
+
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+    final deviceId = widget.device.deviceID.isNotEmpty
+        ? widget.device.deviceID
+        : (widget.task['deviceID']?.toString() ?? '');
+    final newImei = _imeiController.text.trim();
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      if (tradeInId.isNotEmpty) {
+        final res = await TradeInService.verifyStaffDevice(
+          tradeInRequestID: tradeInId,
+          deviceID: deviceId,
+          imeiNum: newImei,
+          ownershipPhotoPath: _ownershipPhotoPath,
+        );
+
+        if (!mounted) return;
+
+        if (res['success'] != true) {
+          StaffToast.show(
+            context,
+            'Warning: Failed to update device/ownership record: ${res['message'] ?? 'Unknown error'}',
+            isError: true,
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      StaffToast.show(
+        context,
+        'Error saving verification details: $e',
+        isError: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+
+    if (!mounted) return;
+
     final updatedDevice = widget.device.copyWith(
-      imeiNum: _imeiController.text.trim(),
+      imeiNum: newImei,
     );
 
     Navigator.push(
@@ -382,30 +472,45 @@ class _StaffVerifyDeviceInformationPageState
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _onAssessDevice,
+                  onPressed: _isAssessReady ? _onAssessDevice : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0043CE),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFCBD5E1),
+                    disabledForegroundColor: const Color(0xFF94A3B8),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Assess Device',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Assess Device',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: _isAssessReady ? Colors.white : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              color: _isAssessReady ? Colors.white : const Color(0xFF94A3B8),
+                              size: 20,
+                            ),
+                          ],
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -516,11 +621,20 @@ class _StaffVerifyDeviceInformationPageState
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.file(
-                            File(_ownershipPhotoPath!),
-                            height: 110,
-                            fit: BoxFit.cover,
-                          ),
+                          child: _ownershipPhotoPath!.startsWith('http')
+                              ? Image.network(
+                                  _ownershipPhotoPath!,
+                                  height: 110,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Center(
+                                    child: Icon(Icons.broken_image, color: Colors.grey),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(_ownershipPhotoPath!),
+                                  height: 110,
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -672,6 +786,16 @@ class _StaffVerifyDeviceInformationPageState
             controller: _imeiController,
             keyboardType: TextInputType.number,
             maxLength: 15,
+            onChanged: (_) {
+              if (_isImeiVerified || _isMismatch) {
+                setState(() {
+                  _isImeiVerified = false;
+                  _isMismatch = false;
+                  _gsmaData = null;
+                  _imeiError = null;
+                });
+              }
+            },
             decoration: InputDecoration(
               counterText: '',
               hintText: '358472910385749',
@@ -921,8 +1045,8 @@ class _StaffVerifyDeviceInformationPageState
   }
 
   Widget _buildMismatchComparisonCard() {
-    final expectedModel = '${widget.device.brand} ${widget.device.model}'.trim();
-    final detectedModel = '${_detectedBrand ?? widget.device.brand} ${_detectedModel ?? 'Unknown'}'.trim();
+    final expectedModel = widget.device.displayTitle;
+    final detectedModel = formatDeviceTitle(_detectedBrand ?? widget.device.brand, _detectedModel ?? 'Unknown');
 
     return Container(
       padding: const EdgeInsets.all(14),

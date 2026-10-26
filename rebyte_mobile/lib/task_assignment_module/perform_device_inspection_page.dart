@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 import 'staff_device_inspection_specs_page.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
 
-class PerformDeviceInspectionPage extends StatelessWidget {
+class PerformDeviceInspectionPage extends StatefulWidget {
   final Map<String, dynamic> task;
   final VoidCallback? onTaskUpdated;
 
@@ -14,7 +15,53 @@ class PerformDeviceInspectionPage extends StatelessWidget {
   });
 
   @override
+  State<PerformDeviceInspectionPage> createState() =>
+      _PerformDeviceInspectionPageState();
+}
+
+class _PerformDeviceInspectionPageState
+    extends State<PerformDeviceInspectionPage> {
+  String? _imageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final items = widget.task['items'] as List? ?? [];
+    _imageUrl = widget.task['imageUrl']?.toString() ??
+        widget.task['deviceImageUrl']?.toString() ??
+        (items.isNotEmpty && items[0] is Map ? items[0]['imageUrl']?.toString() : null);
+
+    if (_imageUrl == null || _imageUrl!.isEmpty) {
+      _fetchCloudImage();
+    }
+  }
+
+  Future<void> _fetchCloudImage() async {
+    final trId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+    if (trId.isEmpty) return;
+
+    final details = await TradeInService.getTradeInRequestDetails(trId);
+    if (details != null && mounted) {
+      final img = details['deviceImage']?.toString() ??
+          (details['deviceImages'] is List && (details['deviceImages'] as List).isNotEmpty
+              ? details['deviceImages'][0].toString()
+              : null);
+      if (img != null && img.isNotEmpty) {
+        setState(() {
+          _imageUrl = img;
+          widget.task['imageUrl'] = img;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final task = widget.task;
+    final onTaskUpdated = widget.onTaskUpdated;
     final rawDeviceModel = task['deviceModel']?.toString() ??
         task['model']?.toString() ??
         'iPhone 13 Pro';
@@ -47,7 +94,7 @@ class PerformDeviceInspectionPage extends StatelessWidget {
     final customerName = task['customerName']?.toString() ?? 'Alex Mercer';
     final customerEmail = task['customerEmail']?.toString() ?? 'alex.mercer@email.com';
     final customerPhone = task['customerPhone']?.toString() ?? '(555) 019-2834';
-    final imageUrl = task['imageUrl']?.toString() ?? '';
+    final imageUrl = _imageUrl ?? task['imageUrl']?.toString() ?? '';
 
     final specsLabel = [storage, color].where((s) => s.isNotEmpty).join(' • ');
 

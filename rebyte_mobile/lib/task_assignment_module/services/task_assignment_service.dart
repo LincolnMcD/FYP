@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../account_management_module/services/auth_service.dart';
+import '../../account_management_module/services/session_service.dart';
 
 class TaskAssignmentService {
   static String get baseUrl => AuthService.baseUrl;
@@ -15,6 +16,23 @@ class TaskAssignmentService {
       final query = <String, String>{};
       if (staffID != null && staffID.isNotEmpty) query['staffID'] = staffID;
       if (email != null && email.isNotEmpty) query['email'] = email;
+
+      // Fallback to active session if not explicitly provided
+      if (query.isEmpty) {
+        final session = await SessionService.getSession();
+        final sessionEmail = session['email']?.toString();
+        final sessionStaffID = session['userId']?.toString() ?? session['staffID']?.toString();
+        if (sessionEmail != null && sessionEmail.isNotEmpty) {
+          query['email'] = sessionEmail;
+        } else if (sessionStaffID != null && sessionStaffID.isNotEmpty) {
+          query['staffID'] = sessionStaffID;
+        }
+      }
+
+      if (query.isEmpty) {
+        debugPrint('fetchStaffTasks: No staffID or email available and no session found');
+        return [];
+      }
 
       final uri = Uri.parse(
         '$baseUrl/api/task-assignment/staff-tasks',
@@ -336,6 +354,42 @@ class TaskAssignmentService {
       return {'success': false, 'message': 'Failed to cancel leave application.'};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Finalize on-site inspection for trade-in collection task
+  static Future<Map<String, dynamic>> finalizeInspection({
+    required String tradeInRequestID,
+    String? taskID,
+    String? orderID,
+    String? scheduleID,
+    required bool isSuccessful,
+    double? finalOfferPrice,
+    String? rejectionReason,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/task-assignment/staff/finalize-inspection');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'tradeInRequestID': tradeInRequestID,
+          'action': isSuccessful ? 'successful' : 'unsuccessful',
+          ...?taskID != null ? {'taskID': taskID} : null,
+          ...?orderID != null ? {'orderID': orderID} : null,
+          ...?scheduleID != null ? {'scheduleID': scheduleID} : null,
+          ...?finalOfferPrice != null ? {'finalOfferPrice': finalOfferPrice} : null,
+          ...?rejectionReason != null ? {'rejectionReason': rejectionReason} : null,
+        }),
+      ).timeout(const Duration(seconds: 25));
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      return {'success': response.statusCode == 200};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 }

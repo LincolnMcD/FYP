@@ -1034,9 +1034,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
         Dashboard
       </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 9h16M9 13h6"></path></svg>
-        Listings
+      <a href="../listingModule/listing.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        Listing
       </a>
       <a href="#" class="nav-item">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
@@ -1992,7 +1992,7 @@
       if (svg) svg.style.animation = 'spin 0.8s linear infinite';
 
       try {
-        await loadTasks();
+        await loadTasks(true);
         await loadStaff();
       } catch (err) {
         console.error('Refresh error:', err);
@@ -2013,7 +2013,7 @@
     };
 
     // Load Tasks from Backend API (with server-side pagination & filtering)
-    async function loadTasks() {
+    async function loadTasks(forceRefresh = false) {
       let data = null;
       const candidates = [
         API_BASE,
@@ -2021,15 +2021,21 @@
         'http://127.0.0.1:3000'
       ].filter((v, i, arr) => arr.indexOf(v) === i);
 
-      const queryParams = new URLSearchParams({
+      const params = {
         tab: activeTab,
         page: currentPage,
         limit: PAGE_SIZE,
         search: searchQuery,
         sort: sortAsc ? 'asc' : 'desc',
-        type: selectedTypeFilter,
-        _t: Date.now()
-      });
+        type: selectedTypeFilter
+      };
+
+      if (forceRefresh) {
+        params.refresh = 'true';
+        params._t = Date.now();
+      }
+
+      const queryParams = new URLSearchParams(params);
 
       for (const base of candidates) {
         try {
@@ -2326,6 +2332,8 @@
       } else if (status === 'completed') {
         const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
         const isCollect = rawTaskType.includes('collect');
+        const isInspect = rawTaskType.includes('inspect') || (Boolean(task.tradeInRequestID) && !isCollect);
+
         if (isCollect) {
           if (task.isPaid) {
             btns += `
@@ -2339,21 +2347,17 @@
           btns += `
             <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
           `;
-        } else {
-          if (task.finalQuotation || task.isPaid) {
-            if (task.isPaid) {
-              btns += `
-                <button type="button" class="btn-act btn-paid" disabled>Paid</button>
-              `;
-            } else {
-              btns += `
-                <button type="button" class="btn-act btn-pay" onclick="openPayModal('${task.orderID}')">Pay</button>
-              `;
-            }
+        } else if (isInspect) {
+          if (task.isPaid) {
             btns += `
-              <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+              <button type="button" class="btn-act btn-paid" disabled>Paid</button>
+            `;
+          } else {
+            btns += `
+              <button type="button" class="btn-act btn-pay" onclick="openPayModal('${task.orderID}')">Pay</button>
             `;
           }
+        } else {
           const pod = task.proofOfDeliveryUrl;
           if (pod) {
             btns += `<button type="button" class="btn-act btn-pod" onclick="openPodModal('${escapeHtml(pod)}', '${task.orderID}')">View POD</button>`;
@@ -2405,6 +2409,9 @@
       const modal = document.getElementById(id);
       if (modal) {
         modal.classList.remove('show');
+      }
+      if (id === 'successQuotationModal' || id === 'successPayModal' || id === 'successTerminatedModal' || id === 'successPickedModal' || id === 'reassignModal') {
+        loadTasks(true);
       }
     }
 
@@ -2600,7 +2607,7 @@
         const data = await res.json();
         if (data.success) {
           closeModal('reassignModal');
-          await loadTasks();
+          await loadTasks(true);
           alert(data.message || 'Task successfully reassigned!');
         } else {
           alert(`Assignment error: ${data.reason || data.error || 'No suitable staff slot available'}`);
@@ -2704,7 +2711,7 @@
             `;
           }
           openModal('successTerminatedModal');
-          loadTasks();
+          await loadTasks(true);
         } else {
           alert('Error: ' + (data.error || 'Could not terminate task'));
         }
@@ -2778,7 +2785,7 @@
             `;
           }
           openModal('successPickedModal');
-          loadTasks();
+          await loadTasks(true);
         } else {
           alert('Error: ' + (data.error || 'Failed to update order to Completed'));
         }
@@ -3173,7 +3180,7 @@
           `;
         }
         openModal('successQuotationModal');
-        await loadTasks();
+        await loadTasks(true);
       } else {
         alert(errorMsg);
       }
@@ -3351,7 +3358,7 @@
             }
           }
           renderTable();
-          await loadTasks();
+          await loadTasks(true);
         } else {
           alert(data.message || 'Payment transfer failed.');
           confirmBtn.disabled = false;

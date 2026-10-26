@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../device_tradein_module/models/device_model.dart';
-import '../staff_module/staff_home_page.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
 import 'services/task_assignment_service.dart';
+import 'staff_trade_in_result_page.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 
 class StaffInspectionSummaryPage extends StatefulWidget {
@@ -30,8 +32,380 @@ class _StaffInspectionSummaryPageState
     extends State<StaffInspectionSummaryPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isSubmitting = false;
+  double? _finalOfferPrice;
 
-  void _onMarkSuccessful() async {
+  @override
+  void initState() {
+    super.initState();
+    final taskId = widget.task['taskID']?.toString() ??
+        widget.task['id']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        '';
+    StaffInspectionSession.recordPage5(
+      taskId: taskId,
+      device: widget.device,
+      task: widget.task,
+      uploadedImages: widget.uploadedImages,
+      ownershipPhotoPath: widget.ownershipPhotoPath,
+    );
+
+    _initFinalOfferPrice();
+  }
+
+  Future<void> _initFinalOfferPrice() async {
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        widget.task['id']?.toString() ??
+        '';
+    if (tradeInId.isEmpty) return;
+
+    if (widget.task['finalOfferPrice'] != null) {
+      final p = double.tryParse(widget.task['finalOfferPrice'].toString());
+      if (p != null && p > 0) {
+        if (mounted) setState(() => _finalOfferPrice = p);
+      }
+    }
+
+    try {
+      final res = await TradeInService.setStaffFinalOfferPrice(
+        tradeInRequestID: tradeInId,
+      );
+      if (!mounted) return;
+      if (res['success'] == true && res['finalOfferPrice'] != null) {
+        final price = double.tryParse(res['finalOfferPrice'].toString());
+        if (price != null && price > 0) {
+          setState(() {
+            _finalOfferPrice = price;
+            widget.task['finalOfferPrice'] = price;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _backToMap() {
+    Navigator.popUntil(context, (route) {
+      return route.settings.name == 'StaffNavigationPage' || route.isFirst;
+    });
+  }
+
+  void _onMarkSuccessful() {
+    _showConfirmSuccessfulDialog();
+  }
+
+  void _onMarkUnsuccessful() {
+    _showConfirmUnsuccessfulDialog();
+  }
+
+  void _showConfirmSuccessfulDialog() {
+    final modelName = widget.device.model.isNotEmpty
+        ? widget.device.model
+        : (widget.task['model']?.toString() ?? 'Device');
+    final storage = widget.device.storageCapacity.isNotEmpty
+        ? widget.device.storageCapacity
+        : (widget.task['storage']?.toString() ?? '');
+    final color = widget.device.colour.isNotEmpty
+        ? widget.device.colour
+        : (widget.task['colour']?.toString() ?? widget.task['color']?.toString() ?? '');
+    final imei = widget.device.imeiNum ??
+        widget.task['imei']?.toString() ??
+        widget.task['imeiNum']?.toString() ??
+        'N/A';
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        widget.task['id']?.toString() ??
+        '';
+
+    final formattedPrice = NumberFormat('#,##0.00').format(_finalOfferPrice ?? 1350.0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFDCFCE7),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Confirm Trade-In',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Please review the transaction valuation and trade-in details before finalizing.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+            ),
+            const SizedBox(height: 16),
+
+            // Valuation highlight box
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFC7D2FE)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'TRANSACTION PAYOUT PRICE',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF4F46E5),
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'RM $formattedPrice',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0043CE),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Basic Details Card
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  _buildDialogDetailRow('Device', modelName),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('Storage', storage.isNotEmpty ? storage : 'N/A'),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('Color', color.isNotEmpty ? color : 'N/A'),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('IMEI', imei),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('tradeInRequestID', tradeInId.isNotEmpty ? '#$tradeInId' : 'N/A'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _executeFinalizeInspection(isSuccessful: true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: const Color(0xFF0043CE),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text(
+                    'Confirm & Pay',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfirmUnsuccessfulDialog() {
+    final modelName = widget.device.model.isNotEmpty
+        ? widget.device.model
+        : (widget.task['model']?.toString() ?? 'Device');
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        widget.task['id']?.toString() ??
+        '';
+    final formattedPrice = NumberFormat('#,##0.00').format(_finalOfferPrice ?? 1350.0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEE2E2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Reject Trade-In?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to mark this trade-in inspection as unsuccessful? The trade-in will be marked as Rejected and the device will be returned to the customer.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+            ),
+            const SizedBox(height: 16),
+
+            // Basic Details Card (Device, tradeInRequestID, Final Offer)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  _buildDialogDetailRow('Device', modelName),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('tradeInRequestID', tradeInId.isNotEmpty ? '#$tradeInId' : 'N/A'),
+                  const Divider(height: 16, thickness: 0.8, color: Color(0xFFE2E8F0)),
+                  _buildDialogDetailRow('Final Offer', 'RM $formattedPrice'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _executeFinalizeInspection(isSuccessful: false);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text(
+                    'Confirm Reject',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDialogDetailRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _executeFinalizeInspection({required bool isSuccessful}) async {
     setState(() => _isSubmitting = true);
 
     final taskId = widget.task['taskID']?.toString() ??
@@ -44,99 +418,56 @@ class _StaffInspectionSummaryPageState
         widget.task['tradeInID']?.toString() ??
         taskId;
     final scheduleId = widget.task['scheduleID']?.toString();
+    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        orderId;
 
     try {
-      if (taskId.isNotEmpty) {
-        await TaskAssignmentService.updateTaskStatus(
-          taskID: taskId,
-          orderID: orderId,
-          scheduleID: scheduleId,
-          status: 'inspected',
+      final res = await TaskAssignmentService.finalizeInspection(
+        tradeInRequestID: tradeInId,
+        taskID: taskId,
+        orderID: orderId,
+        scheduleID: scheduleId,
+        isSuccessful: isSuccessful,
+        finalOfferPrice: _finalOfferPrice,
+        rejectionReason: isSuccessful ? null : 'Inspection failed or rejected by staff/customer',
+      );
+
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      if (res['success'] == true) {
+        widget.onTaskUpdated?.call();
+        StaffInspectionSession.clear();
+
+        final modelName = widget.device.model.isNotEmpty
+            ? widget.device.model
+            : (widget.task['model']?.toString() ?? 'Device');
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StaffTradeInResultPage(
+              isSuccessful: isSuccessful,
+              finalOfferPrice: _finalOfferPrice ?? 1350.0,
+              tradeInRequestID: tradeInId,
+              deviceModel: modelName,
+            ),
+          ),
+        );
+      } else {
+        StaffToast.show(
+          context,
+          res['message']?.toString() ?? 'Failed to finalize inspection. Please try again.',
+          isError: true,
         );
       }
-    } catch (_) {
-      // Ignore if offline or testing
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        StaffToast.show(context, 'Error: $e', isError: true);
+      }
     }
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-
-    widget.onTaskUpdated?.call();
-
-    StaffToast.show(context, 'Device inspection completed! Marked as Trade-In Successful.');
-
-    StaffInspectionSession.clear();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const StaffHomePage(
-          initialIndex: 2,
-          toastMessage: 'Inspection completed successfully!',
-        ),
-      ),
-      (route) => false,
-    );
-  }
-
-  void _onMarkUnsuccessful() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Mark Trade-In Unsuccessful?'),
-        content: const Text(
-          'Are you sure you want to mark this inspection as unsuccessful? The trade-in offer will be rejected and the device returned to customer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final taskId = widget.task['taskID']?.toString() ??
-                  widget.task['id']?.toString() ??
-                  widget.task['tradeInID']?.toString() ??
-                  '';
-              final orderId = widget.task['orderID']?.toString() ??
-                  widget.task['tradeInID']?.toString() ??
-                  taskId;
-              final scheduleId = widget.task['scheduleID']?.toString();
-              try {
-                if (taskId.isNotEmpty) {
-                  await TaskAssignmentService.updateTaskStatus(
-                    taskID: taskId,
-                    orderID: orderId,
-                    scheduleID: scheduleId,
-                    status: 'rejected',
-                    rejectionReason: 'Inspection failed or rejected by staff/customer',
-                  );
-                }
-              } catch (_) {}
-
-              if (!mounted) return;
-              widget.onTaskUpdated?.call();
-              StaffInspectionSession.clear();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const StaffHomePage(
-                    initialIndex: 2,
-                    toastMessage: 'Trade-In marked as unsuccessful.',
-                  ),
-                ),
-                (route) => false,
-              );
-            },
-            child: const Text('Confirm Unsuccessful'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -162,29 +493,39 @@ class _StaffInspectionSummaryPageState
           '${imei.substring(0, 2)} ${imei.substring(2, 8)} ${imei.substring(8, 14)} ${imei.substring(14)}';
     }
 
-    final frontImgPath = widget.uploadedImages['front'];
+    final frontImgPath = widget.uploadedImages['front'] ??
+        widget.uploadedImages['front_screen_open'] ??
+        widget.uploadedImages['front_screen_closed'] ??
+        widget.task['imageUrl']?.toString() ??
+        widget.task['deviceImage']?.toString();
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: StaffAppBar(scaffoldKey: _scaffoldKey),
-      drawer: const StaffDrawer(selectedIndex: 2),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Back arrow
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
-                      onPressed: () => Navigator.pop(context),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _backToMap();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: StaffAppBar(scaffoldKey: _scaffoldKey),
+        drawer: const StaffDrawer(selectedIndex: 2),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Back arrow
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
+                        onPressed: _backToMap,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
                     const SizedBox(height: 12),
 
                     // Title
@@ -312,8 +653,9 @@ class _StaffInspectionSummaryPageState
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDeviceCard({
     required String modelName,
@@ -378,10 +720,19 @@ class _StaffInspectionSummaryPageState
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: frontImgPath != null && File(frontImgPath).existsSync()
+              child: frontImgPath != null &&
+                      (frontImgPath.startsWith('http') || File(frontImgPath).existsSync())
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Image.file(File(frontImgPath), fit: BoxFit.contain),
+                      child: frontImgPath.startsWith('http')
+                          ? Image.network(
+                              frontImgPath,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => const Center(
+                                child: Icon(Icons.broken_image, color: Colors.grey),
+                              ),
+                            )
+                          : Image.file(File(frontImgPath), fit: BoxFit.contain),
                     )
                   : const Center(
                       child: Icon(
@@ -571,9 +922,11 @@ class _StaffInspectionSummaryPageState
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'RM 1,350',
-            style: TextStyle(
+          Text(
+            _finalOfferPrice != null
+                ? 'RM ${NumberFormat('#,##0.00').format(_finalOfferPrice)}'
+                : 'RM 1,350.00',
+            style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
               color: Colors.white,

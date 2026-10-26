@@ -48,7 +48,7 @@ class TradeInRequestCreatedPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final devName = device != null
-        ? '${device!.brand} ${device!.model}'.replaceAll('Apple Apple', 'Apple').trim()
+        ? device!.displayTitle
         : 'iPhone 13 Pro';
     final storage = device?.storageCapacity.isNotEmpty == true ? device!.storageCapacity : '128GB';
     final colour = device?.colour.isNotEmpty == true ? device!.colour : 'Graphite';

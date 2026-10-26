@@ -89,6 +89,7 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
+              settings: const RouteSettings(name: 'StaffInspectionSummaryPage'),
               pageBuilder: (context, animation, secondaryAnimation) =>
                   StaffInspectionSummaryPage(
                 task: widget.task,

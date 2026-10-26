@@ -10,12 +10,16 @@ class TradeInRequest {
         deviceID,
         userEmail = null,
         estimatedValue = null,
+        ownershipProofImageUrl = null,
+        finalOfferPrice = null,
     }) {
         this.tradeInRequestID = tradeInRequestID || tradeInId;
         this.requestStatus = requestStatus || status || 'Pending';
         this.submittedAt = submittedAt || FieldValue.serverTimestamp();
         this.deviceID = deviceID;
         this.userEmail = userEmail;
+        this.ownershipProofImageUrl = ownershipProofImageUrl || null;
+        this.finalOfferPrice = finalOfferPrice != null ? Number(finalOfferPrice) : null;
 
         if (estimatedValue) {
             let est = { min: 2340.50, max: 2355.30 };
@@ -55,6 +59,12 @@ class TradeInRequest {
             deviceID: this.deviceID,
             userEmail: this.userEmail,
         };
+        if (this.ownershipProofImageUrl) {
+            data.ownershipProofImageUrl = this.ownershipProofImageUrl;
+        }
+        if (this.finalOfferPrice != null) {
+            data.finalOfferPrice = this.finalOfferPrice;
+        }
         if (this.estimatedValue) {
             data.estimatedValue = this.estimatedValue;
         }

@@ -15,6 +15,7 @@ import 'services/trade_in_service.dart';
 import 'trade_in_request_created_page.dart';
 import 'trade_in_request_details_page.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
+import '../widgets/device_title_formatter.dart';
 
 class MyTradeInRequestsPage extends StatefulWidget {
   final String email;
@@ -267,6 +268,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
   }
 
   String _formatEstimatedValue(dynamic estValueVal) {
+    if (estValueVal == null) return '';
     final fmt = NumberFormat('#,##0.00');
 
     double? minD;
@@ -295,10 +297,16 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       }
     }
 
-    minD ??= 2340.50;
-    maxD ??= 2355.30;
+    if (minD == null && maxD == null) {
+      return '';
+    }
 
-    return 'RM ${fmt.format(minD)} - RM ${fmt.format(maxD)}';
+    if (minD != null && maxD != null && minD != maxD) {
+      return 'RM ${fmt.format(minD)} - RM ${fmt.format(maxD)}';
+    } else {
+      final val = minD ?? maxD!;
+      return 'RM ${fmt.format(val)}';
+    }
   }
 
   String _getDeclinedReturnDate(Map<String, dynamic> req) {
@@ -885,8 +893,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         rawAppt == 'inspected' ||
         docStatus == 'inspected' ||
         req['inspectedAt'] != null ||
-        quotation.isNotEmpty ||
-        req['finalOfferPrice'] != null;
+        quotation.isNotEmpty;
 
     final bool showOfferPrice = (isInspected || isPaid || isAccepted || isCompleted || isRejected || isDeclined) &&
         resolvedFinalOffer != null &&
@@ -960,7 +967,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
               ),
               const SizedBox(height: 8),
               Text(
-                '$brand $model',
+                formatDeviceTitle(brand, model),
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -1462,7 +1469,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final dev = req['device'] is Map<String, dynamic> ? req['device'] : null;
     final brand = dev?['brand']?.toString() ?? 'Apple';
     final model = dev?['model']?.toString() ?? 'iPhone 13 Pro';
-    final fullDeviceName = '$brand $model'.replaceAll('Apple Apple', 'Apple').trim();
+    final fullDeviceName = formatDeviceTitle(brand, model);
     final reqId = req['tradeInRequestID']?.toString() ?? '#TRD-8992-BX';
     final formattedId = reqId.startsWith('#') ? reqId : '#$reqId';
     final status = req['requestStatus']?.toString() ?? 'Submitted';
@@ -1516,8 +1523,7 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
         rawApptStatus == 'inspected' ||
         docStatus == 'inspected' ||
         req['inspectedAt'] != null ||
-        quotation.isNotEmpty ||
-        req['finalOfferPrice'] != null;
+        quotation.isNotEmpty;
 
     final bool showOfferPrice = (isInspected || isPaid || isAccepted || isCompleted || isRejected || isDeclined) &&
         resolvedFinalOffer != null &&
@@ -1566,20 +1572,56 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
     final hasDateTime = req['appointmentDate'] != null && req['appointmentTime'] != null;
     final appointmentStr = hasDateTime ? '${req['appointmentDate']} • ${req['appointmentTime']}' : null;
 
+    final String statusLabel = (statusCfg['label'] as String? ?? '').toLowerCase();
+    final bool isConfirmed = statusLabel == 'confirmed' || rawStatus.contains('submit') || rawStatus.contains('transit') || rawStatus == 'confirmed';
+    final bool isEvaluated = statusLabel == 'evaluated' || rawStatus.contains('evaluat');
+
+    final bool hasEstimatedValueInRecord = req['estimatedValue'] != null && _formatEstimatedValue(req['estimatedValue']).trim().isNotEmpty;
+    final bool isActuallyCancelled = isCancelled || (tabType == 'cancelled' && !isDeclined && !isRejected);
+
+    // On Active tab:
+    // - Confirmed and Evaluated request DONT have the est value and service type
+    // - Quoted and Agreed request DONT have the service type (they keep est value / offer price)
+    // On Cancelled:
+    // - Depends on whether it is before quoted or after quoted (checked via estimatedValue in tradeinRequest record)
+    //   If yes: have est value
+    //   If not: dont put est value
+    //   And cancelled DONT have service type
+    // On Declined:
+    // - DONT have service type
+    final bool showPriceSection;
+    if (tabType == 'active') {
+      showPriceSection = (!isConfirmed && !isEvaluated);
+    } else if (isActuallyCancelled) {
+      showPriceSection = hasEstimatedValueInRecord;
+    } else if (isDeclined || isRejected) {
+      showPriceSection = showOfferPrice || hasEstimatedValueInRecord;
+    } else {
+      showPriceSection = displayPrice.trim().isNotEmpty;
+    }
+
+    final bool showServiceTypeSection;
+    if (isRejected) {
+      showServiceTypeSection = true;
+    } else if (tabType == 'active' || isCancelled || isDeclined || isActuallyCancelled) {
+      showServiceTypeSection = false;
+    } else {
+      showServiceTypeSection = true;
+    }
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (tabType == 'cancelled' || isCancelled || isDeclined || isRejected) {
-          // Do nothing on cancelled/declined cards
-          return;
-        } else if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
-          _navigateToViewProgress(req);
-        } else if (tabType == 'on_hold') {
-          _navigateToEditBooking(req);
-        } else {
-          _showRequestDetailsModal(req);
-        }
-      },
+      onTap: (tabType == 'active' || tabType == 'cancelled' || isCancelled || isDeclined || isRejected)
+          ? null
+          : () {
+              if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
+                _navigateToViewProgress(req);
+              } else if (tabType == 'on_hold') {
+                _navigateToEditBooking(req);
+              } else {
+                _showRequestDetailsModal(req);
+              }
+            },
       child: Container(
         margin: const EdgeInsets.only(bottom: 18),
         padding: const EdgeInsets.all(20),
@@ -1601,15 +1643,17 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
             // Device graphic mockup preview (centered)
             Center(
               child: GestureDetector(
-                onTap: () {
-                  if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
-                    _navigateToViewProgress(req);
-                  } else if (tabType == 'on_hold') {
-                    _navigateToEditBooking(req);
-                  } else {
-                    _showRequestDetailsModal(req);
-                  }
-                },
+                onTap: (tabType == 'active' || tabType == 'cancelled' || isCancelled || isDeclined || isRejected)
+                    ? null
+                    : () {
+                        if (tabType == 'in_progress' || tabType == 'completed' || isAccepted || isPaid || isInspected) {
+                          _navigateToViewProgress(req);
+                        } else if (tabType == 'on_hold') {
+                          _navigateToEditBooking(req);
+                        } else {
+                          _showRequestDetailsModal(req);
+                        }
+                      },
                 child: Container(
                 height: 125,
                 width: 125,
@@ -1683,59 +1727,63 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
               letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 14),
 
           // Price Section: ACTUAL OFFER PRICE or EST. VALUE
-          Text(
-            priceLabel,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: priceLabelColor,
-              letterSpacing: 0.5,
+          if (showPriceSection) ...[
+            const SizedBox(height: 14),
+            Text(
+              priceLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: priceLabelColor,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            displayPrice,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: priceColor,
-              letterSpacing: -0.3,
+            const SizedBox(height: 4),
+            Text(
+              displayPrice,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: priceColor,
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+          ],
 
           // SERVICE TYPE
-          const Text(
-            'SERVICE TYPE',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF64748B),
-              letterSpacing: 0.5,
+          if (showServiceTypeSection) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'SERVICE TYPE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF64748B),
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Icon(
-                isCollect ? Icons.local_shipping_outlined : Icons.fact_check_outlined,
-                size: 16,
-                color: isCollect ? const Color(0xFFD97706) : const Color(0xFF0C5AD2),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                serviceType,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  isCollect ? Icons.local_shipping_outlined : Icons.fact_check_outlined,
+                  size: 16,
+                  color: isCollect ? const Color(0xFFD97706) : const Color(0xFF0C5AD2),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 6),
+                Text(
+                  serviceType,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
           // APPOINTMENT (If scheduled)
           if (appointmentStr != null) ...[

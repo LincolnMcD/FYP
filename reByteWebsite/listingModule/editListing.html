@@ -1,0 +1,2581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edit Listing - ReByte Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --primary-navy: #082f72;
+      --active-navy: #0a2558;
+      --primary-blue: #0c5ad2;
+      --blue-hover: #0a4cb3;
+      --light-blue: #eff6ff;
+      --page-bg: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #475569;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page-bg);
+      color: var(--text-main);
+      font-family: 'Inter', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #ffffff;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 100;
+    }
+    .brand {
+      height: 70px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .brand img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+    .brand span {
+      font-weight: 800;
+      font-size: 19px;
+      color: var(--primary-navy);
+      letter-spacing: -0.02em;
+    }
+    .nav-list {
+      padding: 20px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      color: var(--text-sub);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13.5px;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover {
+      background: #f1f5f9;
+      color: var(--text-main);
+    }
+    .nav-item.active {
+      background: var(--primary-navy);
+      color: #ffffff;
+    }
+    .nav-item svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Main Area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .content {
+      padding: 24px 36px 60px;
+      max-width: 1360px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Top Breadcrumb & Actions Row */
+    .top-nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .breadcrumb-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+    .back-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-sub);
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .back-btn:hover {
+      background: #f1f5f9;
+      color: var(--text-main);
+      border-color: #cbd5e1;
+    }
+    .breadcrumb-row a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .breadcrumb-row a:hover {
+      color: var(--primary-blue);
+    }
+    .breadcrumb-separator {
+      color: #cbd5e1;
+    }
+    .breadcrumb-current {
+      color: #334155;
+      font-weight: 600;
+    }
+
+    /* Page Header Row */
+    .page-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .header-title-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .header-title-left h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+    .header-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-discard {
+      padding: 9px 18px;
+      border-radius: 8px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      color: var(--text-sub);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-discard:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    .btn-save {
+      padding: 9px 20px;
+      border-radius: 8px;
+      background: var(--primary-navy);
+      border: 1px solid var(--primary-navy);
+      color: #ffffff;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 1px 3px rgba(8, 47, 114, 0.2);
+      transition: all 0.15s ease;
+    }
+    .btn-save:hover:not(:disabled) {
+      background: var(--active-navy);
+      border-color: var(--active-navy);
+    }
+    .btn-save:disabled,
+    .btn-save.disabled-gray {
+      background: #e2e8f0 !important;
+      color: #94a3b8 !important;
+      border-color: #e2e8f0 !important;
+      cursor: not-allowed !important;
+      pointer-events: none;
+      box-shadow: none !important;
+      opacity: 0.7;
+    }
+    .btn-discard:disabled,
+    .btn-discard.disabled-gray {
+      background: #f1f5f9 !important;
+      color: #94a3b8 !important;
+      border-color: #e2e8f0 !important;
+      cursor: not-allowed !important;
+      pointer-events: none;
+      box-shadow: none !important;
+      opacity: 0.7;
+    }
+
+    /* Status Pill (Exact match with product listing page showing) */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-draft { background: #f1f5f9; color: #475569; }
+    .status-draft .status-dot { background: #94a3b8; }
+    .status-listed { background: #dcfce7; color: #15803d; }
+    .status-listed .status-dot { background: #22c55e; }
+    .status-hidden { background: #fef3c7; color: #b45309; }
+    .status-hidden .status-dot { background: #f59e0b; }
+    .status-purchased { background: #dbeafe; color: #1e40af; }
+    .status-purchased .status-dot { background: #3b82f6; }
+    .status-rented { background: #f3e8ff; color: #7e22ce; }
+    .status-rented .status-dot { background: #a855f7; }
+
+    /* 2-Column Grid Layout */
+    .editor-grid {
+      display: grid;
+      grid-template-columns: 1fr 390px;
+      gap: 24px;
+      align-items: start;
+    }
+    .grid-col {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Common Card Styling */
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px 0;
+    }
+    .card-title svg {
+      width: 18px;
+      height: 18px;
+      color: var(--primary-blue);
+      flex-shrink: 0;
+    }
+
+    /* Form Controls */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    .form-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .form-label-row .form-label { margin-bottom: 0; }
+    .form-subtext {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-main);
+      font-size: 13.5px;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
+    }
+    .form-textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Image Gallery Card */
+    .gallery-preview-box {
+      width: 100%;
+      height: 380px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .gallery-main-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      transition: opacity 0.2s ease;
+    }
+    .gallery-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 30px;
+      color: var(--text-muted);
+    }
+    .gallery-empty-state svg {
+      width: 52px;
+      height: 52px;
+      stroke-width: 1.5;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .gallery-empty-state strong {
+      font-size: 15px;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+    .gallery-empty-state p {
+      margin: 0;
+      font-size: 12.5px;
+      color: #64748b;
+      max-width: 320px;
+    }
+
+    /* Thumbnails Row */
+    .thumbnails-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .thumb-item {
+      width: 72px;
+      height: 72px;
+      border-radius: 10px;
+      border: 2px solid #e2e8f0;
+      background: #ffffff;
+      padding: 2px;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      transition: all 0.15s ease;
+    }
+    .thumb-item:hover {
+      border-color: #94a3b8;
+    }
+    .thumb-item.active {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 2px rgba(12, 90, 210, 0.2);
+    }
+    .thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    .thumb-delete-btn {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.75);
+      color: #ffffff;
+      border: none;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0;
+      transition: background 0.15s ease;
+    }
+    .thumb-item:hover .thumb-delete-btn {
+      display: flex;
+    }
+    .thumb-delete-btn:hover {
+      background: #ef4444;
+    }
+
+    /* Add Image Button */
+    .btn-add-image {
+      width: 72px;
+      height: 72px;
+      border-radius: 10px;
+      border: 1.5px dashed #cbd5e1;
+      background: #ffffff;
+      color: #64748b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 0;
+    }
+    .btn-add-image:hover:not(:disabled) {
+      border-color: var(--primary-blue);
+      color: var(--primary-blue);
+      background: #f0f7ff;
+    }
+    .btn-add-image:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      border-style: solid;
+    }
+    .btn-add-image svg {
+      width: 20px;
+      height: 20px;
+    }
+    .image-limits-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Read-Only Identifiers Box */
+    .identifiers-box {
+      background: #f0f7ff;
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      padding: 12px 18px;
+      margin-top: 14px;
+    }
+    .identifiers-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #1e40af;
+      margin-bottom: 8px;
+    }
+    .identifier-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13.5px;
+    }
+    .identifier-label {
+      color: #64748b;
+      font-weight: 600;
+    }
+    .identifier-value {
+      font-family: 'Inter', Arial, sans-serif;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: normal;
+    }
+
+    /* Unit Input with fixed suffix */
+    .unit-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .unit-input-wrap .unit-input {
+      width: 100%;
+      padding: 9px 40px 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .unit-input-wrap .unit-input:focus {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
+    }
+    .unit-suffix {
+      position: absolute;
+      right: 14px;
+      font-weight: 700;
+      font-size: 13px;
+      color: #64748b;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Pricing Input with RM Prefix */
+    .currency-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .currency-prefix {
+      position: absolute;
+      left: 14px;
+      font-weight: 700;
+      font-size: 14px;
+      color: #64748b;
+      pointer-events: none;
+    }
+    .currency-input {
+      width: 100%;
+      padding: 11px 14px 11px 48px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .currency-input:focus {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
+    }
+
+    /* Suggested Price Subcard */
+    .suggested-card {
+      background: #f0f7ff;
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 14px;
+    }
+    .suggested-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #0c5ad2;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .suggested-title svg {
+      width: 16px;
+      height: 16px;
+    }
+    .suggested-amount {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .suggested-desc {
+      font-size: 11.5px;
+      color: #64748b;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    /* Marketplace Visibility (Read-only, clearly visible, light gray background) */
+    .visibility-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .locked-status-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+      user-select: none;
+    }
+    .visibility-container {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      pointer-events: none;
+      user-select: none;
+    }
+    .visibility-option {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 9px;
+      padding: 11px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #ffffff;
+      transition: all 0.15s ease;
+      cursor: not-allowed;
+    }
+    .visibility-option:last-child {
+      margin-bottom: 0;
+    }
+    .visibility-option.active {
+      border-color: #0c5ad2;
+      background: #f0f7ff;
+      box-shadow: 0 1px 3px rgba(12, 90, 210, 0.08);
+    }
+    .visibility-option input[type="radio"] {
+      margin: 0;
+      accent-color: #0c5ad2;
+      width: 16px;
+      height: 16px;
+      cursor: not-allowed;
+    }
+    .visibility-text {
+      flex: 1;
+    }
+    .visibility-text strong {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .visibility-option.active .visibility-text strong {
+      color: #0c5ad2;
+    }
+    .visibility-text span {
+      display: block;
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.35;
+    }
+    .current-selected-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      background: #dbeafe;
+      color: #1e40af;
+      display: none;
+      white-space: nowrap;
+    }
+
+    /* Inspection Report Card */
+    .report-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .report-link {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--primary-blue);
+      text-decoration: none;
+    }
+    .report-link:hover { text-decoration: underline; }
+    .report-row {
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .report-row:last-child { border-bottom: none; }
+    .report-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .badge-pass {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .badge-minor {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .report-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: #f1f5f9;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .report-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+    .fill-green { background: #16a34a; }
+    .fill-yellow { background: #f59e0b; }
+    .report-notes {
+      font-size: 11.5px;
+      color: #64748b;
+      margin: 0;
+    }
+
+    /* Top-Center Toast Notification */
+    .toast-banner {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: #0f172a;
+      color: #ffffff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 9999;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .toast-banner.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .toast-banner.success { background: #16a34a; }
+    .toast-banner.error { background: #ef4444; }
+    .toast-banner.info { background: #0c5ad2; }
+
+    /* Confirmation Modal - Exact match with customer & staff management popups */
+    .confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+    }
+    .confirm-backdrop.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .confirm-backdrop[hidden] {
+      display: none !important;
+    }
+    .confirm-card {
+      width: min(100%, 460px);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+      transform: scale(0.96);
+      transition: transform 0.2s ease;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .confirm-backdrop.show .confirm-card {
+      transform: scale(1);
+    }
+    .confirm-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 22px 16px;
+      border-bottom: 1px solid #e7eaf0;
+    }
+    .confirm-icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 40px;
+      border-radius: 50%;
+    }
+    .confirm-icon.primary { background: #eff6ff; color: #0c5ad2; }
+    .confirm-icon.warning { background: #fef3c7; color: #b45309; }
+    .confirm-icon.success { background: #dcfce7; color: #15803d; }
+    .confirm-icon.danger { background: #fee2e2; color: #b91c1c; }
+    .confirm-icon.info { background: #ecfeff; color: #0e7490; }
+    .confirm-icon svg { width: 20px; height: 20px; }
+    .confirm-head h2 {
+      margin: 0 0 4px;
+      color: #10264b;
+      font-size: 16.5px;
+      font-weight: 700;
+    }
+    .confirm-head p {
+      margin: 0;
+      color: #64748b;
+      font-size: 12.5px;
+    }
+    .confirm-body {
+      padding: 18px 22px;
+      color: #475569;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+    .confirm-product-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid #d9def0;
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+    .confirm-product-box img {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .confirm-product-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .confirm-product-title {
+      font-weight: 700;
+      color: #0f172a;
+      font-size: 13.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .confirm-product-meta {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .confirm-notice {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.45;
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+    }
+    .confirm-notice.warning { background: #fefce8; color: #854d0e; border-color: #fef08a; }
+    .confirm-notice.danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .confirm-notice.primary { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+    .confirm-notice.success { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .confirm-notice.info { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 22px 18px;
+      border-top: 1px solid #e7eaf0;
+      background: #fafbfd;
+    }
+    .confirm-actions button {
+      min-height: 40px;
+      padding: 0 18px;
+      border: 1px solid #d4d9e3;
+      border-radius: 22px;
+      background: #ffffff;
+      color: #344054;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .confirm-actions button:hover { background: #f1f5f9; }
+    .confirm-actions .confirm-submit {
+      border-color: #0c5ad2;
+      background: #0c5ad2;
+      color: #ffffff;
+    }
+    .confirm-actions .confirm-submit:hover { background: #0a4cb3; }
+    .confirm-actions .confirm-submit.warning { border-color: #d97706; background: #d97706; }
+    .confirm-actions .confirm-submit.warning:hover { background: #b45309; }
+    .confirm-actions .confirm-submit.danger { border-color: #b91c1c; background: #b91c1c; }
+    .confirm-actions .confirm-submit.danger:hover { background: #991b1b; }
+    .confirm-actions .confirm-submit.success { border-color: #16a34a; background: #16a34a; }
+    .confirm-actions .confirm-submit.success:hover { background: #15803d; }
+    .confirm-actions .confirm-submit.info { border-color: #0e7490; background: #0e7490; }
+    .confirm-actions .confirm-submit.info:hover { background: #155e75; }
+
+    @media (max-width: 1024px) {
+      .editor-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .content { padding: 20px 16px; }
+      .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Dashboard
+      </a>
+      <a href="listing.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        Listing
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        System Config
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>
+        Analytics
+      </a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>
+        Task Assignment
+      </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>
+        Leave Management
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>
+        Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Listings"></header>
+
+    <div class="content">
+      <!-- Breadcrumb & Back Row -->
+      <div class="top-nav-bar">
+        <div class="breadcrumb-row">
+          <a href="listing.html" class="back-btn" aria-label="Back to Product Listings" onclick="handleNavigationBack(event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg>
+          </a>
+          <a href="listing.html" onclick="handleNavigationBack(event)">Listings</a>
+          <span class="breadcrumb-separator">&rsaquo;</span>
+          <span class="breadcrumb-current" id="breadcrumbProductID">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Page Title & Header Actions -->
+      <div class="page-header-row">
+        <div class="header-title-left">
+          <h1 id="headerModelTitle">Device Listing</h1>
+          <!-- Status badge beside model name: exact match with product listing page showing -->
+          <span class="status-pill status-draft" id="headerStatusBadge">
+            <span class="status-dot"></span>
+            <span id="headerStatusText">Draft</span>
+          </span>
+        </div>
+        <div class="header-actions-right">
+          <button type="button" class="btn-discard disabled-gray" id="btnDiscardChanges" onclick="handleDiscardClick(event)" disabled>Discard Changes</button>
+          <button type="button" class="btn-save disabled-gray" id="btnSaveChanges" onclick="handleSaveChanges()" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Save Changes
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Editor Grid -->
+      <div class="editor-grid">
+
+        <!-- Left Column: Gallery, Device Info, Specs -->
+        <div class="grid-col">
+
+          <!-- 1. Media & Images Card -->
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              Device Photos
+            </div>
+
+            <!-- Big Main Image Preview -->
+            <div class="gallery-preview-box" id="galleryPreviewBox">
+              <div class="gallery-empty-state" id="galleryEmptyState">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <strong>No product images uploaded yet</strong>
+                <p>Initial draft products start with empty photos. Click "+ Add" below to upload photos (minimum 1, maximum 5).</p>
+              </div>
+              <img src="" alt="Main Preview" class="gallery-main-img" id="galleryMainImg" style="display: none;">
+            </div>
+
+            <!-- Thumbnails Row + Add Button -->
+            <div class="thumbnails-row" id="thumbnailsContainer">
+              <!-- Uploaded thumbs injected dynamically -->
+              <button type="button" class="btn-add-image" id="btnAddImage" onclick="triggerFileInput()" title="Add product image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <span>Add</span>
+              </button>
+            </div>
+            <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
+
+            <div class="image-limits-hint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              <span id="imageCountText">0 of 5 photos uploaded</span> • Stored in Cloudinary folder <code style="background: #f1f5f9; padding: 1px 5px; border-radius: 4px;" id="cloudinaryFolderHint">product/ID</code>
+            </div>
+          </div>
+
+          <!-- 2. Device Information Card -->
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              Device Information
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="listingTitleInput">Listing Title</label>
+              <input type="text" class="form-input" id="listingTitleInput" placeholder="e.g. iPhone 13 Pro Max - 256GB - Graphite">
+            </div>
+
+            <div class="form-row-2 form-group">
+              <div>
+                <label class="form-label" for="brandInput">Brand</label>
+                <select class="form-select" id="brandInput" onchange="onBrandSelectChanged(this.value)">
+                  <option value="Apple">Apple</option>
+                  <option value="Samsung">Samsung</option>
+                  <option value="OnePlus">OnePlus</option>
+                  <option value="Xiaomi">Xiaomi</option>
+                  <option value="Redmi">Redmi</option>
+                  <option value="POCO">POCO</option>
+                  <option value="Google">Google</option>
+                  <option value="Huawei">Huawei</option>
+                  <option value="OPPO">OPPO</option>
+                  <option value="vivo">vivo</option>
+                  <option value="HONOR">HONOR</option>
+                  <option value="realme">realme</option>
+                  <option value="Nothing">Nothing</option>
+                  <option value="Sony">Sony</option>
+                  <option value="ASUS">ASUS</option>
+                  <option value="Motorola">Motorola</option>
+                  <option value="Infinix">Infinix</option>
+                  <option value="Tecno">Tecno</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="modelInput">Model</label>
+                <select class="form-select" id="modelInput" onchange="onModelSelectChanged(this.value)">
+                  <!-- Dynamically populated based on selected brand -->
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="form-label-row">
+                <label class="form-label" for="descriptionInput">Description</label>
+                <span class="form-subtext" id="descCharCounter" style="font-weight: 600; font-size: 12px; color: #64748b;">0 / 50</span>
+              </div>
+              <textarea class="form-textarea" id="descriptionInput" rows="3" maxlength="50" placeholder="Condition or notes (max 50 chars)" oninput="updateDescriptionCharCounter(this.value)"></textarea>
+            </div>
+          </div>
+
+          <!-- 3. Specifications & Identifiers Card -->
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              Specifications & Identifiers
+            </div>
+
+            <div class="form-row-3">
+              <div>
+                <label class="form-label" for="storageInput">Storage</label>
+                <select class="form-select" id="storageInput" onchange="onStorageOrColorChanged()">
+                  <option value="64 GB">64 GB</option>
+                  <option value="128 GB">128 GB</option>
+                  <option value="256 GB">256 GB</option>
+                  <option value="512 GB">512 GB</option>
+                  <option value="1 TB">1 TB</option>
+                  <option value="2 TB">2 TB</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="colorInput">Color</label>
+                <select class="form-select" id="colorInput" onchange="onStorageOrColorChanged()">
+                  <option value="Black / Midnight / Space Gray">Black / Midnight / Space Gray</option>
+                  <option value="White / Silver / Starlight">White / Silver / Starlight</option>
+                  <option value="Natural Titanium / Titanium Gray">Natural Titanium / Titanium Gray</option>
+                  <option value="Blue / Sierra Blue / Deep Navy">Blue / Sierra Blue / Deep Navy</option>
+                  <option value="Purple / Deep Purple / Lavender">Purple / Deep Purple / Lavender</option>
+                  <option value="Green / Alpine Green / Mint">Green / Alpine Green / Mint</option>
+                  <option value="Gold / Rose Gold / Bronze">Gold / Rose Gold / Bronze</option>
+                  <option value="Red / (PRODUCT)RED">Red / (PRODUCT)RED</option>
+                  <option value="Yellow / Amber">Yellow / Amber</option>
+                  <option value="Orange / Coral / Peach">Orange / Coral / Peach</option>
+                  <option value="Other Color">Other Color</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="ramInput">RAM</label>
+                <div class="unit-input-wrap">
+                  <input type="text" class="form-input unit-input" id="ramInput" placeholder="8" maxlength="3" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                  <span class="unit-suffix">GB</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Read-only Identifiers -->
+            <div class="identifiers-box">
+              <div class="identifiers-title">Identifiers (Read-only)</div>
+              <div class="identifier-row">
+                <span class="identifier-label">IMEI</span>
+                <span class="identifier-value" id="imeiDisplay">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Pricing, Visibility & Status, Inspection Report -->
+        <div class="grid-col">
+
+          <!-- 1. Pricing Card -->
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+              Pricing
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="sellingPriceInput">Selling Price (RM)</label>
+              <div class="currency-input-wrap">
+                <span class="currency-prefix">RM</span>
+                <input type="text" class="currency-input" id="sellingPriceInput" placeholder="0.00" oninput="limitTwoDecimals(this)" onblur="formatTwoDecimals(this)">
+              </div>
+            </div>
+
+            <!-- Suggested Price Box (Collection Price * 1.2) -->
+            <div class="suggested-card">
+              <div class="suggested-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                Suggested Price
+              </div>
+              <div class="suggested-amount" id="suggestedPriceDisplay">RM 0.00</div>
+              <p class="suggested-desc" id="suggestedPriceFormulaDesc">Calculated as Collection Price &times; 1.2</p>
+            </div>
+          </div>
+
+          <!-- 2. Marketplace Visibility Card (Read-only, clearly visible, light gray styled) -->
+          <div class="card">
+            <div class="visibility-card-header">
+              <div class="card-title" style="margin: 0;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                Marketplace Visibility
+              </div>
+              <span class="locked-status-tag" title="Marketplace visibility cannot be edited directly">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Not allowed to change
+              </span>
+            </div>
+
+            <div class="visibility-container" title="Marketplace visibility cannot be edited directly">
+              <div class="visibility-option" id="optVisibilityPublic">
+                <input type="radio" name="visibilityRadio" id="radioPublic" disabled>
+                <div class="visibility-text">
+                  <strong>Public Marketplace</strong>
+                  <span>Visible to all consumers on main storefront (Listed).</span>
+                </div>
+                <span class="current-selected-badge" id="badgePublic">Selected</span>
+              </div>
+              <div class="visibility-option" id="optVisibilityHidden">
+                <input type="radio" name="visibilityRadio" id="radioHidden" disabled>
+                <div class="visibility-text">
+                  <strong>Hide From Marketplace</strong>
+                  <span>Hidden from public marketplace browsing (Draft / Hidden).</span>
+                </div>
+                <span class="current-selected-badge" id="badgeHidden">Selected</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Inspection Report Card -->
+          <div class="card">
+            <div class="report-card-header">
+              <div class="card-title" style="margin: 0;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Inspection Report
+              </div>
+              <a href="#" class="report-link" onclick="openFullInspectionReport(event)">View Full</a>
+            </div>
+
+            <div class="report-row">
+              <div class="report-row-top">
+                <span>Display & Touch</span>
+                <span class="badge-pass" id="displayReportBadge">PASS</span>
+              </div>
+              <div class="report-bar">
+                <div class="report-bar-fill fill-green" id="displayReportBar" style="width: 100%;"></div>
+              </div>
+              <p class="report-notes" id="displayReportNotes">No scratches visible, TrueTone active.</p>
+            </div>
+
+            <div class="report-row">
+              <div class="report-row-top">
+                <span>Housing & Frame</span>
+                <span class="badge-minor" id="housingReportBadge">MINOR WEAR</span>
+              </div>
+              <div class="report-bar">
+                <div class="report-bar-fill fill-yellow" id="housingReportBar" style="width: 78%;"></div>
+              </div>
+              <p class="report-notes" id="housingReportNotes">Micro-abrasions near charging port. Grade A-.</p>
+            </div>
+
+            <div class="report-row">
+              <div class="report-row-top">
+                <span>Camera System</span>
+                <span class="badge-pass" id="cameraReportBadge">PASS</span>
+              </div>
+              <div class="report-bar">
+                <div class="report-bar-fill fill-green" id="cameraReportBar" style="width: 100%;"></div>
+              </div>
+              <p class="report-notes" id="cameraReportNotes">Lenses clear, optical sensors verified.</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Discard Changes Confirmation Modal (matching customer/staff confirmation popups) -->
+  <div class="confirm-backdrop" id="discardConfirmModal" hidden onclick="if(event.target===this)closeDiscardModal()">
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="discardConfirmTitle" aria-describedby="discardConfirmQuestion">
+      <header class="confirm-head">
+        <span class="confirm-icon warning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </span>
+        <div>
+          <h2 id="discardConfirmTitle">Discard Changes?</h2>
+          <p id="discardConfirmQuestion">Unsaved modifications will be lost</p>
+        </div>
+      </header>
+      <div class="confirm-body">
+        <div class="confirm-product-box">
+          <img id="discardModalImg" src="" alt="Device" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+          <div class="confirm-product-info">
+            <div class="confirm-product-title" id="discardModalTitle">Device Listing</div>
+            <div class="confirm-product-meta" id="discardModalMeta">Product ID: -</div>
+          </div>
+        </div>
+        <div class="confirm-notice warning">
+          Discard any unsaved changes and return to product listings? Any edits made to this device will not be saved.
+        </div>
+      </div>
+      <footer class="confirm-actions">
+        <button type="button" onclick="closeDiscardModal()">Keep Editing</button>
+        <button type="button" class="confirm-submit danger" onclick="confirmDiscardAndLeave()">Discard Changes</button>
+      </footer>
+    </section>
+  </div>
+
+  <!-- Delete Photo Confirmation Modal -->
+  <div class="confirm-backdrop" id="deletePhotoConfirmModal" hidden onclick="if(event.target===this)closeDeletePhotoModal()">
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="deletePhotoTitle">
+      <header class="confirm-head">
+        <span class="confirm-icon danger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </span>
+        <div>
+          <h2 id="deletePhotoTitle">Delete Photo?</h2>
+          <p>Remove this image from listing</p>
+        </div>
+      </header>
+      <div class="confirm-body">
+        <div class="confirm-notice danger">
+          Are you sure you want to delete this product photo? This action cannot be undone.
+        </div>
+      </div>
+      <footer class="confirm-actions">
+        <button type="button" onclick="closeDeletePhotoModal()">Cancel</button>
+        <button type="button" class="confirm-submit danger" id="btnConfirmDeletePhoto" onclick="executeDeleteImage()">Delete Photo</button>
+      </footer>
+    </section>
+  </div>
+
+  <!-- Top-Center Toast Notification -->
+  <div class="toast-banner" id="toastBanner">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    <span id="toastText">Action completed successfully</span>
+  </div>
+
+  <script src="../accountManagementModule/auth.js"></script>
+  <script src="../adminModule/adminHeader.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // Authentication guard
+    if (typeof ReByteAuth !== 'undefined') {
+      const adminUser = ReByteAuth.getUser();
+      if (!adminUser || adminUser.role !== 'Admin') {
+        window.location.href = '../accountManagementModule/login.html';
+      }
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const productID = urlParams.get('id') || urlParams.get('productID');
+
+    let currentProduct = null;
+    let currentDevice = null;
+    let currentTradeIn = null;
+    let currentImages = []; // Each: { id, imageID, imageUrl, productID, uploadedAt }
+    let selectedImageIndex = 0;
+    let isPublicVisibility = true;
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getCandidateBaseUrls() {
+      const list = [];
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        list.push(window.location.origin);
+      }
+      list.push('http://localhost:3000');
+      list.push('http://127.0.0.1:3000');
+      return [...new Set(list)];
+    }
+
+    async function initEditPage() {
+      if (!productID) {
+        showToast('No product ID specified in URL', 'error');
+        setTimeout(() => { window.location.href = 'listing.html'; }, 1500);
+        return;
+      }
+
+      document.getElementById('breadcrumbProductID').textContent = productID;
+      document.getElementById('cloudinaryFolderHint').textContent = `product/${productID}`;
+
+      await loadProductData();
+    }
+
+    async function loadProductData() {
+      try {
+        let data = null;
+        const candidateBases = getCandidateBaseUrls();
+        for (const base of candidateBases) {
+          try {
+            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}`);
+            if (res.ok) {
+              const json = await res.json();
+              if (json && json.success) {
+                data = json;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Fallback: direct Firestore read
+        if (!data || !data.success) {
+          if (typeof firebase !== 'undefined') {
+            if (!firebase.apps.length && typeof ReByteAuth !== 'undefined' && ReByteAuth.initFirebase) {
+              ReByteAuth.initFirebase();
+            }
+            if (firebase.firestore) {
+              const pDoc = await firebase.firestore().collection('product').doc(productID).get();
+              if (pDoc.exists) {
+                const pData = pDoc.data();
+                let dev = null;
+                if (pData.deviceID) {
+                  const dDoc = await firebase.firestore().collection('devices').doc(pData.deviceID).get();
+                  if (dDoc.exists) dev = { id: dDoc.id, ...dDoc.data() };
+                }
+                let tr = null;
+                if (pData.tradeInRequestID) {
+                  const trDoc = await firebase.firestore().collection('tradeInRequests').doc(pData.tradeInRequestID).get();
+                  if (trDoc.exists) tr = { id: trDoc.id, ...trDoc.data() };
+                }
+
+                let imgs = [];
+                try {
+                  const imgSnap = await pDoc.ref.collection('images').orderBy('uploadedAt', 'asc').get();
+                  imgs = imgSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                } catch (_) {}
+
+                data = {
+                  success: true,
+                  product: { id: pDoc.id, ...pData },
+                  images: imgs,
+                  device: dev,
+                  tradeInRequest: tr
+                };
+              }
+            }
+          }
+        }
+
+        if (!data || !data.success || !data.product) {
+          showToast('Product not found in database', 'error');
+          return;
+        }
+
+        currentProduct = data.product;
+        currentDevice = data.device || {};
+        currentTradeIn = data.tradeInRequest || {};
+        currentImages = Array.isArray(data.images) && data.images.length > 0 ? [...data.images] : [];
+
+        // Ensure product image is never empty: fall back to product, device, tradeIn proof of collection, or sample
+        if (currentImages.length === 0) {
+          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
+          const defaultSample = String(brand).toLowerCase() === 'apple'
+            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
+            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
+          const fallbackImg = currentProduct.imageUrl ||
+                              (currentTradeIn && (currentTradeIn.imageUrl || currentTradeIn.proofOfCollectionUrl)) ||
+                              (currentDevice && (currentDevice.imageUrl || currentDevice.image)) ||
+                              defaultSample;
+          currentImages.push({
+            id: 'primary-img',
+            imageID: 'primary-img',
+            imageUrl: fallbackImg,
+            productID: productID
+          });
+        }
+
+        await renderFormFields();
+      } catch (err) {
+        console.error('Error loading product:', err);
+        showToast('Failed to load product details', 'error');
+      }
+    }
+
+    const BRAND_MODELS_MAP = {
+      'Apple': [
+        'iPhone 16 Pro Max', 'iPhone 16 Pro', 'iPhone 16 Plus', 'iPhone 16',
+        'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15',
+        'iPhone 14 Pro Max', 'iPhone 14 Pro', 'iPhone 14 Plus', 'iPhone 14',
+        'iPhone 13 Pro Max', 'iPhone 13 Pro', 'iPhone 13', 'iPhone 13 mini',
+        'iPhone 12 Pro Max', 'iPhone 12 Pro', 'iPhone 12', 'iPhone 12 mini',
+        'iPhone 11 Pro Max', 'iPhone 11 Pro', 'iPhone 11',
+        'iPhone SE (3rd Gen)', 'iPhone SE (2nd Gen)'
+      ],
+      'Samsung': [
+        'Galaxy S24 Ultra', 'Galaxy S24+', 'Galaxy S24',
+        'Galaxy S23 Ultra', 'Galaxy S23+', 'Galaxy S23', 'Galaxy S23 FE',
+        'Galaxy S22 Ultra', 'Galaxy S22+', 'Galaxy S22',
+        'Galaxy S21 Ultra 5G', 'Galaxy S21 5G',
+        'Galaxy Z Fold 6', 'Galaxy Z Flip 6', 'Galaxy Z Fold 5', 'Galaxy Z Flip 5',
+        'Galaxy A55 5G', 'Galaxy A54 5G', 'Galaxy A35 5G', 'Galaxy A25 5G', 'Galaxy A15', 'Galaxy A05s'
+      ],
+      'OnePlus': [
+        '12', '12R', '11', '11R', '10 Pro', '10T', '9 Pro', '9', '8 Pro',
+        'Open', 'Nord 4', 'Nord 3', 'Nord CE 4', 'Nord CE 3 Lite'
+      ],
+      'Xiaomi': [
+        'Xiaomi 14 Ultra', 'Xiaomi 14 Pro', 'Xiaomi 14',
+        'Xiaomi 13 Ultra', 'Xiaomi 13 Pro', 'Xiaomi 13', 'Xiaomi 13T Pro', 'Xiaomi 13T',
+        'Xiaomi 12 Pro', 'Xiaomi 12'
+      ],
+      'Redmi': [
+        'Redmi Note 13 Pro+ 5G', 'Redmi Note 13 Pro', 'Redmi Note 13',
+        'Redmi Note 12 Pro+ 5G', 'Redmi Note 12 Pro', 'Redmi Note 12',
+        'Redmi 13', 'Redmi 13C', 'Redmi 12', 'Redmi 10C'
+      ],
+      'POCO': [
+        'POCO F6 Pro', 'POCO F6', 'POCO X6 Pro', 'POCO X6', 'POCO M6 Pro',
+        'POCO F5 Pro', 'POCO F5', 'POCO X5 Pro 5G'
+      ],
+      'Google': [
+        'Pixel 9 Pro XL', 'Pixel 9 Pro', 'Pixel 9', 'Pixel 9 Pro Fold',
+        'Pixel 8 Pro', 'Pixel 8', 'Pixel 8a',
+        'Pixel 7 Pro', 'Pixel 7', 'Pixel 7a',
+        'Pixel 6 Pro', 'Pixel 6', 'Pixel 6a'
+      ],
+      'Huawei': [
+        'Pura 70 Ultra', 'Pura 70 Pro', 'Pura 70',
+        'Mate 60 Pro+', 'Mate 60 Pro', 'Mate 50 Pro', 'Mate X5',
+        'P60 Pro', 'nova 12 Pro', 'nova 11'
+      ],
+      'OPPO': [
+        'Find X7 Ultra', 'Find X7', 'Find N3', 'Find N3 Flip',
+        'Reno 12 Pro', 'Reno 12', 'Reno 11 Pro', 'Reno 11',
+        'A98 5G', 'A79 5G', 'A58'
+      ],
+      'vivo': [
+        'X100 Ultra', 'X100 Pro', 'X100', 'X Fold 3 Pro',
+        'V30 Pro', 'V30', 'V30e', 'V29 5G', 'Y200 5G', 'Y100 5G'
+      ],
+      'HONOR': [
+        'Magic V3', 'Magic V2', 'Magic6 Pro', 'Magic6',
+        'Honor 200 Pro', 'Honor 200', 'Honor 90', 'Honor X9b 5G'
+      ],
+      'realme': [
+        'GT 6', 'GT 6T', 'GT 5 Pro', 'Realme 12 Pro+ 5G', 'Realme 12+ 5G', 'Realme 11 Pro+'
+      ],
+      'Nothing': [
+        'Phone (2a) Plus', 'Phone (2a)', 'Phone (2)', 'Phone (1)', 'CMF Phone 1'
+      ],
+      'Sony': [
+        'Xperia 1 VI', 'Xperia 1 V', 'Xperia 1 IV',
+        'Xperia 5 V', 'Xperia 5 IV', 'Xperia 10 VI', 'Xperia 10 V'
+      ],
+      'ASUS': [
+        'ROG Phone 8 Pro', 'ROG Phone 8', 'ROG Phone 7', 'Zenfone 11 Ultra', 'Zenfone 10'
+      ],
+      'Motorola': [
+        'Razr 50 Ultra', 'Razr 50', 'Edge 50 Ultra', 'Edge 50 Pro', 'Edge 40 Pro'
+      ],
+      'Infinix': [
+        'Zero 40 5G', 'Zero 30 5G', 'GT 20 Pro', 'Note 40 Pro+ 5G', 'Hot 40 Pro'
+      ],
+      'Tecno': [
+        'Phantom V Fold 2', 'Phantom V Flip 2', 'Camon 30 Premier 5G', 'Spark 20 Pro+'
+      ]
+    };
+
+    let originalProductStatus = 'draft';
+    let currentCollectionPrice = 0;
+
+    function populateBrandDropdown(selectedBrand) {
+      const brandSelect = document.getElementById('brandInput');
+      if (!brandSelect) return;
+      const brands = Object.keys(BRAND_MODELS_MAP);
+      if (selectedBrand && !brands.includes(selectedBrand)) {
+        brands.unshift(selectedBrand);
+      }
+      brandSelect.innerHTML = brands.map(b => `<option value="${escapeHtml(b)}"${b.toLowerCase() === (selectedBrand || '').toLowerCase() ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+    }
+
+    function renderModelOptions(models, selectedModel, brand) {
+      const modelSelect = document.getElementById('modelInput');
+      if (!modelSelect) return;
+
+      const targetVal = String(selectedModel || '').trim().toLowerCase();
+      const brandClean = String(brand || '').trim().toLowerCase();
+
+      let matchedIndex = -1;
+      const html = models.map((m, idx) => {
+        const mClean = String(m).trim().toLowerCase();
+        const isMatch = (
+          (targetVal && mClean === targetVal) ||
+          (targetVal && `${brandClean} ${mClean}` === targetVal) ||
+          (targetVal && mClean === `${brandClean} ${targetVal}`)
+        );
+        if (isMatch && matchedIndex === -1) {
+          matchedIndex = idx;
+        }
+        return `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`;
+      }).join('');
+
+      modelSelect.innerHTML = html;
+      if (matchedIndex >= 0) {
+        modelSelect.selectedIndex = matchedIndex;
+      }
+    }
+
+    async function populateModelDropdown(brand, selectedModel) {
+      const modelSelect = document.getElementById('modelInput');
+      if (!modelSelect) return;
+
+      // 1. Immediately render initial known models from local map so dropdown is never empty
+      let models = [...(BRAND_MODELS_MAP[brand] || [])];
+      if (selectedModel && !models.some(m => m.toLowerCase() === selectedModel.toLowerCase() || (brand + ' ' + m).toLowerCase() === selectedModel.toLowerCase())) {
+        models.unshift(selectedModel);
+      }
+      renderModelOptions(models, selectedModel, brand);
+
+      // 2. Fetch comprehensive device library models from backend /api/tradein/models?brand=...
+      try {
+        const candidateBases = getCandidateBaseUrls();
+        let libraryData = null;
+        for (const base of candidateBases) {
+          try {
+            const res = await fetch(`${base}/api/tradein/models?brand=${encodeURIComponent(brand)}`);
+            if (res.ok) {
+              const json = await res.json();
+              if (json && json.success && Array.isArray(json.models)) {
+                libraryData = json;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (libraryData && Array.isArray(libraryData.models) && libraryData.models.length > 0) {
+          // Normalize model names by stripping brand prefix if present
+          const fetchedModels = libraryData.models.map(m => {
+            let name = String(m).trim();
+            if (name.toLowerCase().startsWith(brand.toLowerCase() + ' ')) {
+              name = name.slice(brand.length).trim();
+            }
+            return name;
+          });
+
+          // Deduplicate and combine with existing models
+          const combined = Array.from(new Set([...fetchedModels, ...models]));
+          if (selectedModel && !combined.some(m => m.toLowerCase() === selectedModel.toLowerCase() || (brand + ' ' + m).toLowerCase() === selectedModel.toLowerCase())) {
+            combined.unshift(selectedModel);
+          }
+          renderModelOptions(combined, selectedModel, brand);
+        }
+      } catch (err) {
+        console.warn('Could not fetch certified device library models:', err);
+      }
+    }
+
+    function onBrandSelectChanged(brand) {
+      populateModelDropdown(brand, '');
+      const firstModel = document.getElementById('modelInput').value || '';
+      onModelSelectChanged(firstModel);
+      updateChangeStatus();
+    }
+
+    function onModelSelectChanged(model) {
+      const brand = document.getElementById('brandInput').value || '';
+      document.getElementById('headerModelTitle').textContent = formatProductTitle(brand, model);
+      autoGenerateTitle();
+      updateChangeStatus();
+    }
+
+    function onStorageOrColorChanged() {
+      autoGenerateTitle();
+      updateChangeStatus();
+    }
+
+    function autoGenerateTitle() {
+      const brand = document.getElementById('brandInput').value || '';
+      const model = document.getElementById('modelInput').value || '';
+      const storage = document.getElementById('storageInput').value || '';
+      const color = document.getElementById('colorInput').value || '';
+      document.getElementById('listingTitleInput').value = `${formatProductTitle(brand, model)} - ${storage} - ${color}`;
+      updateChangeStatus();
+    }
+
+    function updateDescriptionCharCounter(val) {
+      const counter = document.getElementById('descCharCounter');
+      const len = (val || '').length;
+      if (counter) {
+        counter.textContent = `${len} / 50`;
+        counter.style.color = len >= 50 ? '#d97706' : '#64748b';
+      }
+    }
+
+    function normalizeStorage(val) {
+      if (!val) return '128 GB';
+      const clean = String(val).trim().toUpperCase();
+      if (clean.includes('64')) return '64 GB';
+      if (clean.includes('128')) return '128 GB';
+      if (clean.includes('256')) return '256 GB';
+      if (clean.includes('512')) return '512 GB';
+      if (clean.includes('2TB') || clean.includes('2 TB')) return '2 TB';
+      if (clean.includes('1TB') || clean.includes('1 TB')) return '1 TB';
+      return val;
+    }
+
+    async function renderFormFields() {
+      const p = currentProduct;
+      const dev = currentDevice;
+      const tr = currentTradeIn;
+
+      // Brand & Model
+      const brand = dev.brand || p.brand || 'Apple';
+      const model = dev.model || p.model || 'Device';
+      const storage = dev.storageCapacity || dev.storage || p.storage || '128 GB';
+      const color = dev.colour || dev.color || p.color || 'Standard';
+      const ram = dev.ram || p.ram || '8';
+      const imei = dev.imeiNum || dev.imei || p.imei || tr.imeiNum || tr.imei || '358712098812345';
+
+      document.getElementById('headerModelTitle').textContent = formatProductTitle(brand, model);
+      document.getElementById('breadcrumbProductID').textContent = p.productID || p.id;
+
+      // Populate Brand & Model Dropdowns
+      populateBrandDropdown(brand);
+      await populateModelDropdown(brand, model);
+
+      // Status Badge: original status
+      originalProductStatus = String(p.listingStatus || p.status || 'draft').toLowerCase();
+
+      // Marketplace visibility
+      // draft and hidden status is hide from marketplace, listed status is public marketplace
+      if (originalProductStatus === 'listed') {
+        isPublicVisibility = true;
+      } else {
+        isPublicVisibility = false;
+      }
+      setVisibilityOption(isPublicVisibility);
+
+      // Title & Description (limit 50 characters)
+      const defaultTitle = p.listingTitle || `${formatProductTitle(brand, model)} - ${storage} - ${color}`;
+      document.getElementById('listingTitleInput').value = defaultTitle;
+      const descVal = (p.description || '').slice(0, 50);
+      document.getElementById('descriptionInput').value = descVal;
+      updateDescriptionCharCounter(descVal);
+
+      // Storage Dropdown selection
+      const storageSelect = document.getElementById('storageInput');
+      if (storageSelect) {
+        const normStorage = normalizeStorage(storage);
+        let found = false;
+        for (let i = 0; i < storageSelect.options.length; i++) {
+          if (storageSelect.options[i].value.toLowerCase() === normStorage.toLowerCase()) {
+            storageSelect.selectedIndex = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          const opt = new Option(storage, storage);
+          storageSelect.add(opt);
+          storageSelect.value = storage;
+        }
+      }
+
+      // Color Dropdown selection
+      const colorSelect = document.getElementById('colorInput');
+      if (colorSelect) {
+        let found = false;
+        for (let i = 0; i < colorSelect.options.length; i++) {
+          const optVal = colorSelect.options[i].value.toLowerCase();
+          if (optVal.includes(color.toLowerCase()) || color.toLowerCase().includes(optVal)) {
+            colorSelect.selectedIndex = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          const opt = new Option(color, color);
+          colorSelect.add(opt);
+          colorSelect.value = color;
+        }
+      }
+
+      // RAM: Digit only (unit fixed at the back)
+      const ramDigits = String(ram || '').replace(/[^0-9]/g, '') || '8';
+      document.getElementById('ramInput').value = ramDigits;
+
+      // IMEI (standard font, same as other)
+      document.getElementById('imeiDisplay').textContent = formatIMEI(imei);
+
+      // Selling Price
+      const sp = p.sellingPrice !== undefined ? Number(p.sellingPrice) : 0;
+      document.getElementById('sellingPriceInput').value = sp > 0 ? sp.toFixed(2) : '';
+
+      // Suggested Price: Collection Price * 1.2
+      let colPrice = 0;
+      if (tr.finalQuotation && tr.finalQuotation.finalOfferPrice !== undefined && tr.finalQuotation.finalOfferPrice !== null) {
+        colPrice = Number(tr.finalQuotation.finalOfferPrice);
+      } else if (tr.finalOfferPrice !== undefined && tr.finalOfferPrice !== null) {
+        colPrice = Number(tr.finalOfferPrice);
+      } else if (p.collectedPrice !== undefined && p.collectedPrice !== null) {
+        colPrice = Number(p.collectedPrice);
+      } else if (dev.quotedValue !== undefined && dev.quotedValue !== null) {
+        colPrice = Number(dev.quotedValue);
+      } else if (sp > 0) {
+        colPrice = Math.round((sp / 1.2) * 100) / 100;
+      } else {
+        colPrice = 350;
+      }
+      currentCollectionPrice = colPrice;
+      const sugPrice = Math.round(colPrice * 1.2 * 100) / 100;
+      document.getElementById('suggestedPriceDisplay').textContent = `RM ${sugPrice.toFixed(2)}`;
+      document.getElementById('suggestedPriceFormulaDesc').innerHTML = `Collection Price (RM ${colPrice.toFixed(2)}) &times; 1.2 = <strong>RM ${sugPrice.toFixed(2)}</strong>`;
+
+      // Inspection report
+      renderInspectionReport(dev, tr);
+
+      // Render Gallery & Images
+      renderGallery();
+
+      // Attach change listeners and capture initial baseline state for change detection
+      attachChangeListeners();
+      captureInitialFormState();
+    }
+
+    function formatProductTitle(brand, model) {
+      const b = String(brand || '').trim();
+      let m = String(model || '').trim();
+      if (!b) return m;
+      if (!m) return b;
+      if (m.toLowerCase().startsWith(b.toLowerCase() + ' ')) {
+        m = m.slice(b.length).trim();
+      } else if (m.toLowerCase() === b.toLowerCase()) {
+        return b;
+      }
+      return `${b} ${m}`;
+    }
+
+    function formatIMEI(imei) {
+      if (!imei) return '-';
+      return String(imei).trim();
+    }
+
+    function updateStatusBadge(st) {
+      const badge = document.getElementById('headerStatusBadge');
+      const text = document.getElementById('headerStatusText');
+      if (!badge || !text) return;
+
+      const validStatuses = ['draft', 'listed', 'hidden', 'purchased', 'rented'];
+      const stClean = validStatuses.includes(st) ? st : 'draft';
+
+      badge.className = `status-pill status-${stClean}`;
+      const labels = {
+        draft: 'Draft',
+        listed: 'Listed',
+        hidden: 'Hidden',
+        purchased: 'Purchased',
+        rented: 'Rented'
+      };
+      text.textContent = labels[stClean] || 'Draft';
+    }
+
+    function setVisibilityOption(isPublic) {
+      isPublicVisibility = isPublic;
+      const optPub = document.getElementById('optVisibilityPublic');
+      const optHid = document.getElementById('optVisibilityHidden');
+      const rPub = document.getElementById('radioPublic');
+      const rHid = document.getElementById('radioHidden');
+      const badgePub = document.getElementById('badgePublic');
+      const badgeHid = document.getElementById('badgeHidden');
+
+      if (isPublic) {
+        if (optPub) optPub.classList.add('active');
+        if (optHid) optHid.classList.remove('active');
+        if (rPub) rPub.checked = true;
+        if (rHid) rHid.checked = false;
+        if (badgePub) badgePub.style.display = 'inline-block';
+        if (badgeHid) badgeHid.style.display = 'none';
+        updateStatusBadge('listed');
+      } else {
+        if (optPub) optPub.classList.remove('active');
+        if (optHid) optHid.classList.add('active');
+        if (rPub) rPub.checked = false;
+        if (rHid) rHid.checked = true;
+        if (badgePub) badgePub.style.display = 'none';
+        if (badgeHid) badgeHid.style.display = 'inline-block';
+        const targetSt = originalProductStatus === 'draft' ? 'draft' : 'hidden';
+        updateStatusBadge(targetSt);
+      }
+    }
+
+    function renderInspectionReport(dev, tr) {
+      const cr = dev.conditionReport || (tr.finalQuotation && tr.finalQuotation.conditionReport) || {};
+      const screenIssues = cr.screen ? Object.values(cr.screen).some(v => v > 1) : false;
+      const frameIssues = cr.frame ? Object.values(cr.frame).some(v => v > 1) : false;
+
+      // Display
+      const dispBadge = document.getElementById('displayReportBadge');
+      const dispBar = document.getElementById('displayReportBar');
+      const dispNotes = document.getElementById('displayReportNotes');
+      if (screenIssues) {
+        dispBadge.className = 'badge-minor';
+        dispBadge.textContent = 'MINOR DEFECTS';
+        dispBar.className = 'report-bar-fill fill-yellow';
+        dispBar.style.width = '75%';
+        dispNotes.textContent = 'Hairline micro-scratches documented during diagnostic run.';
+      } else {
+        dispBadge.className = 'badge-pass';
+        dispBadge.textContent = 'PASS';
+        dispBar.className = 'report-bar-fill fill-green';
+        dispBar.style.width = '100%';
+        dispNotes.textContent = 'No scratches visible, touch digitizer fully responsive.';
+      }
+
+      // Frame
+      const hBadge = document.getElementById('housingReportBadge');
+      const hBar = document.getElementById('housingReportBar');
+      const hNotes = document.getElementById('housingReportNotes');
+      if (frameIssues) {
+        hBadge.className = 'badge-minor';
+        hBadge.textContent = 'MINOR WEAR';
+        hBar.className = 'report-bar-fill fill-yellow';
+        hBar.style.width = '80%';
+        hNotes.textContent = 'Minor scuffs near corners. Grade A-.';
+      } else {
+        hBadge.className = 'badge-pass';
+        hBadge.textContent = 'PASS';
+        hBar.className = 'report-bar-fill fill-green';
+        hBar.style.width = '100%';
+        hNotes.textContent = 'Pristine housing and back chassis. No dents.';
+      }
+    }
+
+    function renderGallery() {
+      const mainImg = document.getElementById('galleryMainImg');
+      const emptyState = document.getElementById('galleryEmptyState');
+      const thumbsContainer = document.getElementById('thumbnailsContainer');
+      const countText = document.getElementById('imageCountText');
+      const btnAdd = document.getElementById('btnAddImage');
+
+      // If currentImages is empty, check if currentProduct has an imageUrl or device has one
+      if (currentImages.length === 0) {
+        const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
+        const defaultSample = String(brand).toLowerCase() === 'apple'
+          ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
+          : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
+        const fallbackUrl = (currentProduct && currentProduct.imageUrl) ||
+                            (currentDevice && (currentDevice.imageUrl || currentDevice.image)) ||
+                            (currentTradeIn && (currentTradeIn.imageUrl || currentTradeIn.proofOfCollectionUrl)) ||
+                            defaultSample;
+        currentImages.push({
+          id: 'primary-img',
+          imageID: 'primary-img',
+          imageUrl: fallbackUrl,
+          productID: productID
+        });
+      }
+
+      // Update count text: min 1, max 5
+      const count = currentImages.length;
+      countText.textContent = `${count} of 5 photos uploaded (min 1, max 5)`;
+
+      // Max 5 images: disable Add button if already 5
+      if (btnAdd) {
+        btnAdd.disabled = count >= 5;
+        btnAdd.title = count >= 5 ? 'Maximum 5 images reached' : 'Add product photo';
+      }
+
+      // Check empty state
+      if (count === 0) {
+        mainImg.style.display = 'none';
+        emptyState.style.display = 'flex';
+      } else {
+        emptyState.style.display = 'none';
+        mainImg.style.display = 'block';
+        if (selectedImageIndex >= count) selectedImageIndex = 0;
+        mainImg.src = currentImages[selectedImageIndex].imageUrl;
+        mainImg.onerror = function() {
+          this.onerror = null;
+          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
+          this.src = String(brand).toLowerCase() === 'apple'
+            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
+            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
+        };
+      }
+
+      // Remove existing thumb items except the Add button
+      const existingThumbs = thumbsContainer.querySelectorAll('.thumb-item');
+      existingThumbs.forEach(el => el.remove());
+
+      // Insert thumbnails before Add button
+      currentImages.forEach((imgObj, idx) => {
+        const item = document.createElement('div');
+        item.className = `thumb-item ${idx === selectedImageIndex ? 'active' : ''}`;
+        item.onclick = () => selectThumbnail(idx);
+
+        const img = document.createElement('img');
+        img.className = 'thumb-img';
+        img.src = imgObj.imageUrl;
+        img.alt = `Thumb ${idx + 1}`;
+        img.onerror = function() {
+          this.onerror = null;
+          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
+          this.src = String(brand).toLowerCase() === 'apple'
+            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
+            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'thumb-delete-btn';
+        delBtn.innerHTML = '&times;';
+        delBtn.title = 'Delete image';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteImage(imgObj.imageID || imgObj.id, idx);
+        };
+
+        item.appendChild(img);
+        item.appendChild(delBtn);
+        thumbsContainer.insertBefore(item, btnAdd);
+      });
+    }
+
+    function selectThumbnail(idx) {
+      if (idx < 0 || idx >= currentImages.length) return;
+      selectedImageIndex = idx;
+      const mainImg = document.getElementById('galleryMainImg');
+      mainImg.src = currentImages[idx].imageUrl;
+
+      const items = document.querySelectorAll('.thumbnails-row .thumb-item');
+      items.forEach((it, i) => {
+        if (i === idx) it.classList.add('active');
+        else it.classList.remove('active');
+      });
+    }
+
+    function triggerFileInput() {
+      if (currentImages.length >= 5) {
+        showToast('Maximum of 5 photos already uploaded', 'info');
+        return;
+      }
+      const inp = document.getElementById('imageFileInput');
+      if (inp) {
+        inp.value = '';
+        inp.click();
+      }
+    }
+
+    async function handleFileSelected(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        showToast('Please select a valid image file', 'error');
+        return;
+      }
+
+      if (currentImages.length >= 5) {
+        showToast('Maximum of 5 photos allowed (min 1, max 5)', 'error');
+        return;
+      }
+
+      const btnAdd = document.getElementById('btnAddImage');
+      if (btnAdd) {
+        btnAdd.disabled = true;
+        btnAdd.innerHTML = '<span style="font-size: 11px;">Uploading...</span>';
+      }
+
+      showToast('Uploading photo to Cloudinary...', 'info');
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        let result = null;
+        const candidateBases = getCandidateBaseUrls();
+        for (const base of candidateBases) {
+          try {
+            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images`, {
+              method: 'POST',
+              body: formData
+            });
+            if (res.ok) {
+              result = await res.json();
+              if (result && result.success) break;
+            }
+          } catch (_) {}
+        }
+
+        if (result && result.success && result.image) {
+          currentImages.push(result.image);
+          selectedImageIndex = currentImages.length - 1;
+          renderGallery();
+          showToast('Image uploaded successfully!', 'success');
+        } else {
+          showToast(result?.error || 'Failed to upload photo', 'error');
+        }
+      } catch (err) {
+        console.error('Upload error:', err);
+        showToast('Error uploading photo', 'error');
+      } finally {
+        if (btnAdd) {
+          btnAdd.disabled = currentImages.length >= 5;
+          btnAdd.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            <span>Add</span>
+          `;
+        }
+      }
+    }
+
+    let pendingDeleteImageID = null;
+    let pendingDeleteIndex = null;
+
+    function deleteImage(imageID, index) {
+      pendingDeleteImageID = imageID;
+      pendingDeleteIndex = index;
+      const modal = document.getElementById('deletePhotoConfirmModal');
+      if (modal) {
+        modal.removeAttribute('hidden');
+        requestAnimationFrame(() => modal.classList.add('show'));
+      }
+    }
+
+    function closeDeletePhotoModal() {
+      const modal = document.getElementById('deletePhotoConfirmModal');
+      if (!modal) return;
+      modal.classList.remove('show');
+      setTimeout(() => modal.setAttribute('hidden', ''), 200);
+      pendingDeleteImageID = null;
+      pendingDeleteIndex = null;
+    }
+
+    async function executeDeleteImage() {
+      if (!pendingDeleteImageID && pendingDeleteIndex === null) return;
+      const imageID = pendingDeleteImageID;
+      const index = pendingDeleteIndex;
+      closeDeletePhotoModal();
+
+      const btnConfirm = document.getElementById('btnConfirmDeletePhoto');
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Deleting...';
+      }
+
+      try {
+        let deleted = false;
+        const candidateBases = getCandidateBaseUrls();
+        for (const base of candidateBases) {
+          try {
+            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images/${encodeURIComponent(imageID)}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success) {
+                deleted = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Fallback: direct Firestore delete
+        if (!deleted && typeof firebase !== 'undefined' && firebase.firestore) {
+          await firebase.firestore().collection('product').doc(productID).collection('images').doc(imageID).delete();
+          deleted = true;
+        }
+
+        if (deleted) {
+          currentImages.splice(index, 1);
+          if (selectedImageIndex >= currentImages.length) {
+            selectedImageIndex = Math.max(0, currentImages.length - 1);
+          }
+          renderGallery();
+          showToast('Photo removed', 'success');
+        } else {
+          showToast('Failed to delete photo', 'error');
+        }
+      } catch (err) {
+        console.error('Delete error:', err);
+        showToast('Error deleting photo', 'error');
+      } finally {
+        if (btnConfirm) {
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = 'Delete Photo';
+        }
+      }
+    }
+
+    async function handleSaveChanges() {
+      const btnSave = document.getElementById('btnSaveChanges');
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.textContent = 'Saving...';
+      }
+
+      try {
+        const title = document.getElementById('listingTitleInput').value.trim();
+        const brand = document.getElementById('brandInput').value.trim();
+        const model = document.getElementById('modelInput').value.trim();
+        const desc = document.getElementById('descriptionInput').value.trim().slice(0, 50);
+        const storage = document.getElementById('storageInput').value.trim();
+        const color = document.getElementById('colorInput').value.trim();
+        const ramDigits = document.getElementById('ramInput').value.trim().replace(/[^0-9]/g, '') || '8';
+        const ram = `${ramDigits}GB`;
+        const spStr = document.getElementById('sellingPriceInput').value.trim();
+
+        // Marketplace Visibility is locked (not allowed to change)
+        // Maintain existing original status (draft, listed, or hidden)
+        const status = originalProductStatus || (isPublicVisibility ? 'listed' : 'draft');
+        const sellingPrice = spStr ? Number(parseFloat(spStr).toFixed(2)) : 0;
+
+        // Validation: Min 1 image required if listingStatus is "listed"
+        if (status === 'listed' && currentImages.length < 1) {
+          showToast('At least 1 product photo is required to publish this listing to the public marketplace (min 1, max 5).', 'error');
+          if (btnSave) {
+            btnSave.disabled = false;
+            btnSave.innerHTML = `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Save Changes
+            `;
+          }
+          return;
+        }
+
+        const payload = {
+          listingTitle: title,
+          brand,
+          model,
+          description: desc || null,
+          storage,
+          color,
+          ram,
+          sellingPrice,
+          listingStatus: status,
+          status,
+          isPublic: isPublicVisibility,
+          marketplaceVisibility: isPublicVisibility ? 'public' : 'hidden'
+        };
+
+        let saved = false;
+        const candidateBases = getCandidateBaseUrls();
+        for (const base of candidateBases) {
+          try {
+            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success) {
+                saved = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Fallback: direct Firestore write
+        if (!saved && typeof firebase !== 'undefined' && firebase.firestore) {
+          const updates = {
+            listingTitle: title,
+            description: desc || null,
+            sellingPrice,
+            listingStatus: status,
+            status: status === 'listed' ? 'listed' : status,
+            isPublic: isPublicVisibility,
+            marketplaceVisibility: isPublicVisibility ? 'public' : 'hidden',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          await firebase.firestore().collection('product').doc(productID).update(updates);
+
+          if (currentProduct.deviceID) {
+            await firebase.firestore().collection('devices').doc(currentProduct.deviceID).update({
+              brand,
+              model,
+              storageCapacity: storage,
+              storage,
+              colour: color,
+              color,
+              ram,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          }
+          saved = true;
+        }
+
+        if (saved) {
+          initialFormState = getFormSnapshot();
+          updateChangeStatus();
+          showToast('Listing changes saved successfully!', 'success');
+          updateStatusBadge(status);
+          setTimeout(() => {
+            window.location.href = `listing.html?tab=${status}`;
+          }, 800);
+        } else {
+          showToast('Failed to save changes', 'error');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        showToast('Error saving listing changes', 'error');
+      } finally {
+        if (btnSave) {
+          btnSave.disabled = !hasChanges();
+          btnSave.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Save Changes
+          `;
+          if (!hasChanges()) btnSave.classList.add('disabled-gray');
+          else btnSave.classList.remove('disabled-gray');
+        }
+      }
+    }
+
+    let initialFormState = null;
+
+    function getFormSnapshot() {
+      return {
+        title: (document.getElementById('listingTitleInput')?.value || '').trim(),
+        brand: (document.getElementById('brandInput')?.value || '').trim(),
+        model: (document.getElementById('modelInput')?.value || '').trim(),
+        description: (document.getElementById('descriptionInput')?.value || '').trim(),
+        storage: (document.getElementById('storageInput')?.value || '').trim(),
+        color: (document.getElementById('colorInput')?.value || '').trim(),
+        ram: (document.getElementById('ramInput')?.value || '').trim(),
+        sellingPrice: (document.getElementById('sellingPriceInput')?.value || '').trim(),
+        imagesCount: currentImages.length,
+        imagesList: currentImages.map(img => img.imageUrl || img.id || '').join(';')
+      };
+    }
+
+    function captureInitialFormState() {
+      initialFormState = getFormSnapshot();
+      updateChangeStatus();
+    }
+
+    function hasChanges() {
+      if (!initialFormState) return false;
+      const current = getFormSnapshot();
+      return (
+        current.title !== initialFormState.title ||
+        current.brand !== initialFormState.brand ||
+        current.model !== initialFormState.model ||
+        current.description !== initialFormState.description ||
+        current.storage !== initialFormState.storage ||
+        current.color !== initialFormState.color ||
+        current.ram !== initialFormState.ram ||
+        current.sellingPrice !== initialFormState.sellingPrice ||
+        current.imagesCount !== initialFormState.imagesCount ||
+        current.imagesList !== initialFormState.imagesList
+      );
+    }
+
+    function updateChangeStatus() {
+      const dirty = hasChanges();
+      const btnDiscard = document.getElementById('btnDiscardChanges');
+      const btnSave = document.getElementById('btnSaveChanges');
+
+      if (btnDiscard) {
+        btnDiscard.disabled = !dirty;
+        if (dirty) {
+          btnDiscard.classList.remove('disabled-gray');
+        } else {
+          btnDiscard.classList.add('disabled-gray');
+        }
+      }
+
+      if (btnSave) {
+        btnSave.disabled = !dirty;
+        if (dirty) {
+          btnSave.classList.remove('disabled-gray');
+        } else {
+          btnSave.classList.add('disabled-gray');
+        }
+      }
+    }
+
+    function attachChangeListeners() {
+      const inputIds = [
+        'listingTitleInput', 'brandInput', 'modelInput',
+        'descriptionInput', 'storageInput', 'colorInput',
+        'ramInput', 'sellingPriceInput'
+      ];
+      inputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', updateChangeStatus);
+          el.addEventListener('change', updateChangeStatus);
+        }
+      });
+    }
+
+    function handleNavigationBack(e) {
+      if (e) e.preventDefault();
+      if (hasChanges()) {
+        handleDiscardChanges(e);
+      } else {
+        const st = originalProductStatus || (currentProduct && currentProduct.listingStatus) || 'draft';
+        window.location.href = `listing.html?tab=${st}`;
+      }
+    }
+
+    function handleDiscardClick(e) {
+      if (e) e.preventDefault();
+      if (hasChanges()) {
+        handleDiscardChanges(e);
+      }
+    }
+
+    function handleDiscardChanges(e) {
+      if (e) e.preventDefault();
+      const modal = document.getElementById('discardConfirmModal');
+      if (!modal) {
+        const st = originalProductStatus || (currentProduct && currentProduct.listingStatus) || 'draft';
+        window.location.href = `listing.html?tab=${st}`;
+        return;
+      }
+
+      // Populate product info into modal
+      const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
+      const model = (currentDevice && currentDevice.model) || (currentProduct && currentProduct.model) || '';
+      const title = document.getElementById('listingTitleInput')?.value || formatProductTitle(brand, model);
+      const pid = productID || (currentProduct && currentProduct.productID) || '';
+
+      const titleEl = document.getElementById('discardModalTitle');
+      const metaEl = document.getElementById('discardModalMeta');
+      const imgEl = document.getElementById('discardModalImg');
+
+      if (titleEl) titleEl.textContent = title;
+      if (metaEl) metaEl.textContent = `Product ID: ${pid} • Status: ${String(originalProductStatus || 'DRAFT').toUpperCase()}`;
+      if (imgEl) {
+        if (currentImages && currentImages.length > 0) {
+          imgEl.src = currentImages[0].imageUrl;
+        } else if (currentProduct && currentProduct.imageUrl) {
+          imgEl.src = currentProduct.imageUrl;
+        }
+      }
+
+      modal.removeAttribute('hidden');
+      requestAnimationFrame(() => modal.classList.add('show'));
+    }
+
+    function closeDiscardModal() {
+      const modal = document.getElementById('discardConfirmModal');
+      if (!modal) return;
+      modal.classList.remove('show');
+      setTimeout(() => modal.setAttribute('hidden', ''), 200);
+    }
+
+    function confirmDiscardAndLeave() {
+      const st = originalProductStatus || (currentProduct && currentProduct.listingStatus) || 'draft';
+      window.location.href = `listing.html?tab=${st}`;
+    }
+
+    function openFullInspectionReport(e) {
+      if (e) e.preventDefault();
+      showToast('Opening complete diagnostic inspection report...', 'info');
+    }
+
+    function limitTwoDecimals(input) {
+      let val = input.value.replace(/[^0-9.]/g, '');
+      const parts = val.split('.');
+      if (parts.length > 2) {
+        val = parts[0] + '.' + parts.slice(1).join('');
+      }
+      if (parts.length === 2 && parts[1].length > 2) {
+        val = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+      input.value = val;
+      updateChangeStatus();
+    }
+
+    function formatTwoDecimals(input) {
+      const val = parseFloat(input.value);
+      if (!isNaN(val) && val >= 0) {
+        input.value = val.toFixed(2);
+      }
+      updateChangeStatus();
+    }
+
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastText');
+      if (!banner || !text) return;
+      clearTimeout(toastTimer);
+      banner.className = `toast-banner ${type} show`;
+      text.textContent = msg;
+      toastTimer = setTimeout(() => { banner.classList.remove('show'); }, 3000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initEditPage);
+    } else {
+      initEditPage();
+    }
+  </script>
+</body>
+</html>

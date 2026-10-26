@@ -186,10 +186,7 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
 
   Widget _buildEvaluatingDeviceCard() {
     final device = widget.device;
-    final String brand = device.brand.trim();
-    final String model = device.model.trim();
-    final bool hasBrand = model.toLowerCase().startsWith(brand.toLowerCase());
-    final String fullDeviceName = hasBrand ? model : '$brand $model'.trim();
+    final String fullDeviceName = device.displayTitle;
     final String storage = device.storageCapacity.isNotEmpty ? device.storageCapacity : 'N/A';
     final String colour = device.colour.isNotEmpty ? device.colour : 'N/A';
     final String? imei = device.imeiNum ?? TradeInFlowSession.lastEnteredImei;

@@ -8,9 +8,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import '../staff_module/staff_home_page.dart';
 import 'perform_device_inspection_page.dart';
+import 'staff_inspection_summary_page.dart';
 import 'services/task_assignment_service.dart';
 import 'services/delivery_socket_service.dart';
 import 'widgets/proof_of_delivery_dialog.dart';
+import 'widgets/staff_app_bar_and_drawer.dart';
+import '../device_tradein_module/models/device_model.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
 
 class StaffNavigationPage extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -1330,16 +1334,103 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
       if (mounted) setState(() => _isActionLoading = false);
       return;
     }
-    if (mounted) setState(() => _isActionLoading = false);
 
+    final taskId = _task['taskID']?.toString() ??
+        _task['id']?.toString() ??
+        _task['tradeInID']?.toString() ??
+        _task['orderID']?.toString() ??
+        '';
+    final tradeInId = _task['tradeInRequestID']?.toString() ??
+        _task['tradeInID']?.toString() ??
+        _task['orderID']?.toString() ??
+        '';
+
+    // Check whether tradeInRequest record in Firebase already has ownershipProofImageUrl (meaning Page 4 was completed -> resume at Page 5)
+    String? ownershipProof = _task['ownershipProofImageUrl']?.toString();
+    Map<String, dynamic>? fullReqDetails;
+
+    if (tradeInId.isNotEmpty) {
+      try {
+        fullReqDetails = await TradeInService.getTradeInRequestDetails(tradeInId);
+        if (fullReqDetails != null) {
+          final cloudProof = fullReqDetails['ownershipProofImageUrl']?.toString();
+          if (cloudProof != null && cloudProof.isNotEmpty) {
+            ownershipProof = cloudProof;
+            _task['ownershipProofImageUrl'] = ownershipProof;
+          }
+          if (fullReqDetails['deviceImage'] != null &&
+              (_task['imageUrl'] == null || _task['imageUrl'].toString().isEmpty)) {
+            _task['imageUrl'] = fullReqDetails['deviceImage'];
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) setState(() => _isActionLoading = false);
     _stopLiveGpsTracking();
+
+    final bool hasOwnershipProof = ownershipProof != null && ownershipProof.isNotEmpty;
+    final bool shouldGoToPage5 = hasOwnershipProof ||
+        (StaffInspectionSession.hasReachedPage5 &&
+            StaffInspectionSession.currentTaskId == taskId &&
+            StaffInspectionSession.savedDevice != null);
+
+    Widget targetPage;
+    if (shouldGoToPage5) {
+      DeviceModel deviceModel;
+      if (StaffInspectionSession.savedDevice != null) {
+        deviceModel = StaffInspectionSession.savedDevice!;
+      } else if (fullReqDetails != null && fullReqDetails['device'] is Map) {
+        deviceModel = DeviceModel.fromJson(Map<String, dynamic>.from(fullReqDetails['device']));
+      } else if (_task['device'] is Map) {
+        deviceModel = DeviceModel.fromJson(Map<String, dynamic>.from(_task['device']));
+      } else {
+        deviceModel = DeviceModel(
+          deviceID: _task['deviceID']?.toString() ?? '',
+          brand: _task['brand']?.toString() ?? 'Apple',
+          model: _task['model']?.toString() ?? 'iPhone 13 Pro',
+          modelCode: _task['modelCode']?.toString(),
+          storageCapacity: _task['storage']?.toString() ?? '256GB',
+          colour: _task['color']?.toString() ?? 'Graphite',
+          deviceAge: _task['deviceAge']?.toString() ?? '1 year',
+          imeiNum: _task['imei']?.toString() ?? _task['imeiNum']?.toString(),
+          ram: _task['ram']?.toString(),
+        );
+      }
+
+      Map<String, String> uploadedImages = StaffInspectionSession.savedUploadedImages ??
+          Map<String, String>.from(StaffInspectionSession.savedImagePaths);
+      if (uploadedImages.isEmpty && fullReqDetails != null && fullReqDetails['staffImages'] is Map) {
+        uploadedImages = Map<String, String>.from(
+          (fullReqDetails['staffImages'] as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+        );
+      }
+
+      targetPage = StaffInspectionSummaryPage(
+        task: StaffInspectionSession.savedTask ?? fullReqDetails ?? _task,
+        device: deviceModel,
+        uploadedImages: uploadedImages,
+        ownershipPhotoPath: ownershipProof ?? StaffInspectionSession.savedOwnershipPhotoPath,
+        onTaskUpdated: widget.onTaskUpdated,
+      );
+    } else {
+      targetPage = PerformDeviceInspectionPage(
+        task: _task,
+        onTaskUpdated: widget.onTaskUpdated,
+      );
+    }
+
+    if (!mounted) return;
+
     final res = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PerformDeviceInspectionPage(
-          task: _task,
-          onTaskUpdated: widget.onTaskUpdated,
+        settings: RouteSettings(
+          name: targetPage is StaffInspectionSummaryPage
+              ? 'StaffInspectionSummaryPage'
+              : 'PerformDeviceInspectionPage',
         ),
+        builder: (_) => targetPage,
       ),
     );
     if (res != null && mounted) {

@@ -4,6 +4,26 @@ const { FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const db = require("../config/firebase");
 const { assignDeliveryTask } = require("../taskAssignmentModule/taskAssignmentService");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const cloudinary = require("../config/cloudinary");
+
+function uploadBufferToCloudinary(fileBuffer, folder, filename) {
+    return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+            {
+                folder: folder,
+                public_id: filename,
+                resource_type: "image",
+            },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+            }
+        );
+        uploadStream.end(fileBuffer);
+    });
+}
 
 const router = express.Router();
 const PRODUCT_PAGE_SIZE = 20;
@@ -2090,6 +2110,824 @@ router.get("/orders", requireShopUser, async (req, res) => {
     }
 });
 
+/**
+ * GET /api/shop/admin/products
+ * Fetch all products from the "product" collection with normalized listing status
+ */
+router.get("/admin/products", async (req, res) => {
+    try {
+        const snap = await db.collection("product").get();
+        if (snap.empty) {
+            return res.json({
+                success: true,
+                products: [],
+                counts: { all: 0, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0 }
+            });
+        }
+
+        const devIds = [...new Set(snap.docs.map(d => d.data().deviceID).filter(Boolean))];
+        const trIds = [...new Set(snap.docs.map(d => d.data().tradeInRequestID).filter(Boolean))];
+        const devMap = {};
+        const trMap = {};
+        await Promise.all([
+            ...devIds.map(async id => {
+                try {
+                    const dSnap = await db.collection("devices").doc(id).get();
+                    if (dSnap.exists) devMap[id] = dSnap.data();
+                } catch (_) {}
+            }),
+            ...trIds.map(async id => {
+                try {
+                    const tSnap = await db.collection("tradeInRequests").doc(id).get();
+                    if (tSnap.exists) trMap[id] = tSnap.data();
+                } catch (_) {}
+            })
+        ]);
+
+        const counts = { all: snap.size, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0 };
+        const products = snap.docs.map(doc => {
+            const data = doc.data();
+            const devData = devMap[data.deviceID] || {};
+            const trData = trMap[data.tradeInRequestID] || {};
+            const fq = trData.finalQuotation || {};
+
+            let brandName = devData.brand || fq.brand || data.brand || "";
+            let modelName = devData.model || fq.modelName || data.model || "";
+            let storageSize = devData.storageCapacity || devData.storage || fq.storage || data.storage || "";
+            let colorName = devData.colour || devData.color || fq.colour || data.color || "Standard";
+            let conditionStr = data.condition || "Grade A";
+            const description = data.description || "";
+
+            if (!brandName || !modelName) {
+                const dashParts = description.split(" - ");
+                const titlePart = dashParts[0] || description;
+                const match = titlePart.match(/^([A-Za-z0-9]+)\s+(.+?)(?:\s*\(([^)]+)\))?$/);
+                if (match) {
+                    brandName = brandName || match[1];
+                    modelName = modelName || match[2];
+                    storageSize = storageSize || (match[3] || "");
+                } else {
+                    brandName = brandName || "Apple";
+                    modelName = modelName || titlePart || "Smartphone";
+                }
+            }
+
+            if (!conditionStr || conditionStr === "Good" || conditionStr === "Fair") {
+                if (devData.overallConditionScore) {
+                    const score = Number(devData.overallConditionScore);
+                    conditionStr = score >= 90 ? "Grade A" : score >= 75 ? "Grade B" : score >= 60 ? "Grade C" : "Grade D";
+                }
+            }
+
+            const rawSt = String(data.listingStatus || "").trim().toLowerCase();
+            let normStatus = rawSt
+                ? rawSt.charAt(0).toUpperCase() + rawSt.slice(1)
+                : "Unknown";
+            if (rawSt === "sold") {
+                normStatus = "Purchased";
+                counts.purchased++;
+            } else if (rawSt === "draft") {
+                normStatus = "Draft";
+                counts.draft++;
+            } else if (rawSt === "listed") {
+                normStatus = "Listed";
+                counts.listed++;
+            } else if (rawSt === "hidden") {
+                normStatus = "Hidden";
+                counts.hidden++;
+            } else if (rawSt === "rented") {
+                normStatus = "Rented";
+                counts.rented++;
+            }
+
+            const imei = devData.imeiNum || trData.imei || data.imei || data.modelCode || devData.modelCode || `358${doc.id.replace(/\D/g, '').padEnd(11, '0').slice(0, 11)}`;
+            const sku = data.sku || `SKU-${doc.id.substring(0, 6).toUpperCase()}`;
+
+            let dateAdded = new Date().toISOString();
+            if (data.createdAt) {
+                if (data.createdAt.toDate) dateAdded = data.createdAt.toDate().toISOString();
+                else if (data.createdAt._seconds) dateAdded = new Date(data.createdAt._seconds * 1000).toISOString();
+                else if (typeof data.createdAt === "string") dateAdded = data.createdAt;
+            }
+
+            // Price that collect the phone (from linked tradeInRequest final offer)
+            let collectedPrice = 0;
+            if (fq.finalOfferPrice !== undefined && fq.finalOfferPrice !== null && !isNaN(fq.finalOfferPrice)) {
+                collectedPrice = Number(fq.finalOfferPrice);
+            } else if (trData.finalOfferPrice !== undefined && trData.finalOfferPrice !== null && !isNaN(trData.finalOfferPrice)) {
+                collectedPrice = Number(trData.finalOfferPrice);
+            } else if (trData.quotedValue !== undefined && trData.quotedValue !== null && !isNaN(trData.quotedValue)) {
+                collectedPrice = Number(trData.quotedValue);
+            } else if (data.collectedPrice !== undefined && data.collectedPrice !== null) {
+                collectedPrice = Number(data.collectedPrice);
+            } else {
+                const sPrice = Number(data.sellingPrice || 0);
+                collectedPrice = sPrice > 0 ? Math.round((sPrice / 1.2) * 100) / 100 : 350;
+            }
+
+            const sellingPrice = (data.sellingPrice !== undefined && data.sellingPrice !== null && !isNaN(data.sellingPrice))
+                ? Number(data.sellingPrice)
+                : ((data.suggestedPrice !== undefined && data.suggestedPrice !== null && !isNaN(data.suggestedPrice))
+                    ? Number(data.suggestedPrice)
+                    : Math.round(collectedPrice * 1.2 * 100) / 100);
+            const suggestedPrice = sellingPrice;
+            const listedPrice = sellingPrice;
+            const rentalPrice = data.rentalPrice ? Number(data.rentalPrice) : Math.round(listedPrice * 0.08 * 100) / 100;
+
+            const brandLower = String(brandName).toLowerCase();
+            const sampleImg = brandLower === "apple"
+                ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
+                : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg";
+
+            return {
+                id: doc.id,
+                productID: data.productID || doc.id,
+                deviceID: data.deviceID || "",
+                tradeInRequestID: data.tradeInRequestID || "",
+                description,
+                brand: brandName || "Apple",
+                model: modelName || "Smartphone",
+                storage: storageSize || "128GB",
+                color: colorName,
+                ram: devData.ram || data.ram || "8GB",
+                condition: conditionStr,
+                estPrice: Number(listedPrice),
+                sellingPrice: Number(listedPrice),
+                collectedPrice: Number(collectedPrice),
+                suggestedPrice: Number(suggestedPrice),
+                listedPrice: Number(listedPrice),
+                rentalPrice: Number(rentalPrice),
+                purchasedPrice: Number(data.soldPrice || data.sellingPrice || 0),
+                listingStatus: rawSt,
+                status: normStatus,
+                rawStatus: rawSt,
+                sku,
+                imei,
+                imageUrl: devData.imageUrl || data.imageUrl || sampleImg,
+                dateAdded,
+                category: devData.deviceCategory || data.category || "Smartphones"
+            };
+        });
+
+        // Sort newest first
+        products.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+
+        return res.json({
+            success: true,
+            products,
+            counts
+        });
+    } catch (err) {
+        console.error("Error in GET /api/shop/admin/products:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/admin/products/:productId/status
+ * Update product listingStatus in Firestore product collection
+ */
+router.post("/admin/products/:productId/status", async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { status } = req.body;
+        if (!status) return res.status(400).json({ success: false, error: "Missing status" });
+
+        const norm = String(status).trim().toLowerCase();
+        // Allowed: draft, listed, hidden, purchased (or sold), rented
+        const dbStatus = norm === "purchased" ? "sold" : norm;
+
+        const pRef = db.collection("product").doc(productId);
+        const pSnap = await pRef.get();
+        if (!pSnap.exists) {
+            return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        await pRef.update({
+            listingStatus: dbStatus,
+            status: dbStatus,
+            isPublic: dbStatus === "listed",
+            marketplaceVisibility: dbStatus === "listed" ? "public" : "hidden",
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // Invalidate in-memory caches
+        productPageCache.clear();
+        productCache.delete(productId);
+
+        return res.json({ success: true, productId, newStatus: status });
+    } catch (err) {
+        console.error("Error updating product status:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/admin/products/batch-status
+ * Update listingStatus, status, and visibility for multiple products at once
+ */
+router.post("/admin/products/batch-status", async (req, res) => {
+    try {
+        const { productIds, status } = req.body;
+        if (!Array.isArray(productIds) || productIds.length === 0) {
+            return res.status(400).json({ success: false, error: "productIds array is required" });
+        }
+        if (!status) {
+            return res.status(400).json({ success: false, error: "status is required" });
+        }
+
+        const norm = String(status).trim().toLowerCase();
+        const dbStatus = norm === "purchased" ? "sold" : norm;
+
+        const batch = db.batch();
+        productIds.forEach(pid => {
+            const ref = db.collection("product").doc(pid);
+            batch.update(ref, {
+                listingStatus: dbStatus,
+                status: dbStatus,
+                isPublic: dbStatus === "listed",
+                marketplaceVisibility: dbStatus === "listed" ? "public" : "hidden",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        });
+        await batch.commit();
+
+        productPageCache.clear();
+        productIds.forEach(pid => productCache.delete(pid));
+
+        return res.json({ success: true, count: productIds.length, status: dbStatus });
+    } catch (err) {
+        console.error("Error in batch-status update:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/admin/products/create
+ * Create a new product listing in the product collection
+ */
+router.post("/admin/products/create", async (req, res) => {
+    try {
+        const { brand, model, category, storage, color, condition, price, status, sku, imei } = req.body;
+        if (!brand || !model) {
+            return res.status(400).json({ success: false, error: "Brand and Model are required" });
+        }
+
+        const pid = `P${Date.now().toString().slice(-7)}`;
+        const description = `${brand} ${model}${storage ? ` (${storage})` : ''} - Quality recommerce product in ${condition || 'Grade A'} condition`;
+        const norm = String(status || "Listed").trim().toLowerCase();
+        const dbStatus = norm === "purchased" ? "sold" : norm;
+
+        const docData = {
+            productID: pid,
+            brand,
+            model,
+            category: category || "Smartphones",
+            storage: storage || "128GB",
+            color: color || "Graphite",
+            condition: condition || "Grade A",
+            sellingPrice: Number(price || 0),
+            description,
+            listingStatus: dbStatus,
+            sku: sku || `SKU-${pid}`,
+            imei: imei || "",
+            imageUrl: brand.toLowerCase() === "apple"
+                ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
+                : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg",
+            createdAt: FieldValue.serverTimestamp(),
+            status: "listed"
+        };
+
+        await db.collection("product").doc(pid).set(docData);
+        productPageCache.clear();
+
+        return res.json({ success: true, productID: pid, product: { id: pid, ...docData } });
+    } catch (err) {
+        console.error("Error creating product:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/shop/admin/paid-tradeins
+ * Fetch all trade-in requests with status 'Paid' (or 'paid') and their linked device info.
+ */
+router.get("/admin/paid-tradeins", async (req, res) => {
+    try {
+        const trSnap = await db.collection("tradeInRequests").get();
+        if (trSnap.empty) {
+            return res.json({ success: true, count: 0, items: [] });
+        }
+
+        // Comprehensive filter for paid trade-in requests
+        const paidDocs = trSnap.docs.filter(doc => {
+            const tr = doc.data() || {};
+            const st = String(tr.status || "").trim().toLowerCase();
+            const reqSt = String(tr.requestStatus || "").trim().toLowerCase();
+            const paySt = String(tr.paymentStatus || "").trim().toLowerCase();
+            return (
+                tr.isPaid === true ||
+                Boolean(tr.paidAt) ||
+                Boolean(tr.transactionID) ||
+                st === "paid" ||
+                reqSt === "paid" ||
+                paySt === "paid"
+            );
+        });
+
+        if (paidDocs.length === 0) {
+            return res.json({ success: true, count: 0, items: [] });
+        }
+
+        // Check which ones already have a product record
+        const pSnap = await db.collection("product").get();
+        const existingTrMap = {};
+        const existingDevMap = {};
+        pSnap.docs.forEach(d => {
+            const pData = d.data() || {};
+            const pid = pData.productID || d.id;
+            if (pData.tradeInRequestID) existingTrMap[pData.tradeInRequestID] = pid;
+            if (pData.deviceID) existingDevMap[pData.deviceID] = pid;
+        });
+
+        // Fetch linked devices
+        const devIds = [...new Set(paidDocs.map(d => d.data().deviceID).filter(Boolean))];
+        const devMap = {};
+        await Promise.all(
+            devIds.map(async id => {
+                try {
+                    const devSnap = await db.collection("devices").doc(id).get();
+                    if (devSnap.exists) devMap[id] = devSnap.data();
+                } catch (_) {}
+            })
+        );
+
+        const items = [];
+        paidDocs.forEach(doc => {
+            const tr = doc.data() || {};
+            const devId = tr.deviceID || "";
+            const existingProductID = existingTrMap[doc.id] || (devId ? existingDevMap[devId] : null) || null;
+            const isAlreadyCreated = Boolean(existingProductID);
+            const dev = devMap[devId] || {};
+            const fq = tr.finalQuotation || {};
+
+            let brand = fq.brand || dev.brand || tr.brand || "Apple";
+            let model = fq.modelName || dev.model || tr.model || "Smartphone";
+            let storage = fq.storage || dev.storageCapacity || dev.storage || "128 GB";
+            let color = fq.colour || dev.colour || dev.color || "Standard";
+            let imei = dev.imeiNum || tr.imei || "";
+
+            let offerPrice = 0;
+            if (fq.finalOfferPrice !== undefined && fq.finalOfferPrice !== null && !isNaN(fq.finalOfferPrice)) {
+                offerPrice = Number(fq.finalOfferPrice);
+            } else if (tr.finalOfferPrice !== undefined && tr.finalOfferPrice !== null && !isNaN(tr.finalOfferPrice)) {
+                offerPrice = Number(tr.finalOfferPrice);
+            } else if (tr.quotedValue !== undefined && tr.quotedValue !== null && !isNaN(tr.quotedValue)) {
+                offerPrice = Number(tr.quotedValue);
+            } else if (tr.estimatedValue) {
+                if (typeof tr.estimatedValue === "object") {
+                    offerPrice = Number(tr.estimatedValue.max || tr.estimatedValue.min || 500);
+                } else {
+                    offerPrice = Number(tr.estimatedValue);
+                }
+            } else {
+                offerPrice = 500;
+            }
+            offerPrice = Math.round(offerPrice * 100) / 100;
+
+            const suggestedSellingPrice = Math.round(offerPrice * 1.2 * 100) / 100;
+
+            let conditionStr = "Grade A";
+            if (dev.overallConditionScore) {
+                const score = Number(dev.overallConditionScore);
+                conditionStr = score >= 90 ? "Grade A" : score >= 75 ? "Grade B" : score >= 60 ? "Grade C" : "Grade D";
+            }
+
+            let paidDate = new Date().toISOString();
+            if (tr.paidAt) {
+                if (tr.paidAt.toDate) paidDate = tr.paidAt.toDate().toISOString();
+                else if (tr.paidAt._seconds) paidDate = new Date(tr.paidAt._seconds * 1000).toISOString();
+                else if (typeof tr.paidAt === "string") paidDate = tr.paidAt;
+            } else if (tr.updatedAt) {
+                if (tr.updatedAt.toDate) paidDate = tr.updatedAt.toDate().toISOString();
+                else if (tr.updatedAt._seconds) paidDate = new Date(tr.updatedAt._seconds * 1000).toISOString();
+                else if (typeof tr.updatedAt === "string") paidDate = tr.updatedAt;
+            } else if (tr.createdAt) {
+                if (tr.createdAt.toDate) paidDate = tr.createdAt.toDate().toISOString();
+                else if (tr.createdAt._seconds) paidDate = new Date(tr.createdAt._seconds * 1000).toISOString();
+                else if (typeof tr.createdAt === "string") paidDate = tr.createdAt;
+            }
+
+            const brandLower = String(brand).toLowerCase();
+            const sampleImg = brandLower === "apple"
+                ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
+                : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg";
+
+            items.push({
+                tradeInRequestID: doc.id,
+                deviceID: devId,
+                status: tr.status || tr.requestStatus || "Paid",
+                transactionID: tr.transactionID || null,
+                userEmail: tr.userEmail || dev.userEmail || "",
+                paidDate,
+                brand,
+                model,
+                storage,
+                color,
+                imei,
+                condition: conditionStr,
+                category: dev.deviceCategory || "Smartphones",
+                offerPrice,
+                suggestedSellingPrice,
+                imageUrl: dev.imageUrl || sampleImg,
+                alreadyInProduct: isAlreadyCreated,
+                existingProductID: existingProductID
+            });
+        });
+
+        // Sort: newest paid date first
+        items.sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
+
+        return res.json({ success: true, count: items.length, items });
+    } catch (err) {
+        console.error("Error in GET /api/shop/admin/paid-tradeins:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/admin/create-drafts
+ * Create product records for selected paid trade-in devices.
+ * PK productID: YYMMPRDXXX (XXX sequence of YYMM + 1 or 001)
+ * description: null
+ * sellingPrice: default offerPrice * 1.2
+ * listingStatus: "draft"
+ * createdAt: FieldValue.serverTimestamp()
+ * FK deviceID
+ * FK tradeInRequestID
+ */
+router.post("/admin/create-drafts", async (req, res) => {
+    try {
+        const { items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: "Items array is required" });
+        }
+
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const prefix = `${yy}${mm}PRD`;
+
+        const pSnap = await db.collection("product").get();
+        let maxSeq = 0;
+        pSnap.docs.forEach(doc => {
+            const pid = String(doc.data().productID || doc.id || "");
+            if (pid.startsWith(prefix)) {
+                const seqPart = parseInt(pid.slice(prefix.length), 10);
+                if (!isNaN(seqPart) && seqPart > maxSeq) {
+                    maxSeq = seqPart;
+                }
+            }
+        });
+
+        const createdProducts = [];
+        const batch = db.batch();
+
+        for (const item of items) {
+            maxSeq++;
+            const seqStr = String(maxSeq).padStart(3, '0');
+            const productID = `${prefix}${seqStr}`;
+
+            const offerPrice = Number(item.offerPrice || 0);
+            const sellingPrice = item.sellingPrice !== undefined && item.sellingPrice !== null
+                ? Number(item.sellingPrice)
+                : Math.round(offerPrice * 1.2 * 100) / 100;
+
+            const brandLower = String(item.brand || "").toLowerCase();
+            const sampleImg = brandLower === "apple"
+                ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
+                : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg";
+            const productImg = item.imageUrl || sampleImg;
+
+            const productData = {
+                productID,
+                description: null,
+                sellingPrice: Number(sellingPrice.toFixed(2)),
+                listingStatus: "draft",
+                createdAt: FieldValue.serverTimestamp(),
+                deviceID: item.deviceID || "",
+                tradeInRequestID: item.tradeInRequestID || "",
+                imageUrl: productImg
+            };
+
+            const docRef = db.collection("product").doc(productID);
+            batch.set(docRef, productData);
+            createdProducts.push({
+                id: productID,
+                ...productData,
+                status: "Draft",
+                listingStatus: "draft",
+                createdAt: now.toISOString()
+            });
+        }
+
+        await batch.commit();
+        productPageCache.clear();
+        productCache.clear();
+
+        return res.json({
+            success: true,
+            createdCount: createdProducts.length,
+            products: createdProducts,
+            createdProducts: createdProducts
+        });
+    } catch (err) {
+        console.error("Error in POST /api/shop/admin/create-drafts:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/shop/admin/products/:productID
+ * Fetch full product details including images subcollection, linked device, and tradeInRequest
+ */
+router.get("/admin/products/:productID", async (req, res) => {
+    try {
+        const { productID } = req.params;
+        const pDoc = await db.collection("product").doc(productID).get();
+        if (!pDoc.exists) {
+            return res.status(404).json({ success: false, error: "Product not found" });
+        }
+        const pData = pDoc.data();
+
+        // Fetch images subcollection: product/{productID}/images
+        const imgSnap = await pDoc.ref.collection("images").orderBy("uploadedAt", "asc").get();
+        const images = imgSnap.docs.map(doc => {
+            const d = doc.data();
+            let upAt = d.uploadedAt;
+            if (upAt && upAt.toDate) upAt = upAt.toDate().toISOString();
+            return {
+                id: doc.id,
+                imageID: d.imageID || doc.id,
+                imageUrl: d.imageUrl,
+                productID: d.productID || productID,
+                uploadedAt: upAt
+            };
+        });
+
+        // Fetch linked device
+        let device = null;
+        if (pData.deviceID) {
+            const devDoc = await db.collection("devices").doc(pData.deviceID).get();
+            if (devDoc.exists) device = { id: devDoc.id, ...devDoc.data() };
+        }
+
+        // Fetch linked tradeInRequest
+        let tradeInRequest = null;
+        if (pData.tradeInRequestID) {
+            const trDoc = await db.collection("tradeInRequests").doc(pData.tradeInRequestID).get();
+            if (trDoc.exists) tradeInRequest = { id: trDoc.id, ...trDoc.data() };
+        } else if (pData.deviceID) {
+            const trSnap = await db.collection("tradeInRequests").where("deviceID", "==", pData.deviceID).limit(1).get();
+            if (!trSnap.empty) {
+                tradeInRequest = { id: trSnap.docs[0].id, ...trSnap.docs[0].data() };
+            }
+        }
+
+        let effectiveImageUrl = pData.imageUrl ||
+            (device && (device.imageUrl || device.image)) ||
+            (tradeInRequest && (tradeInRequest.imageUrl || tradeInRequest.proofOfCollectionUrl));
+
+        if (!effectiveImageUrl) {
+            const brandLower = String((device && device.brand) || pData.brand || "").toLowerCase();
+            effectiveImageUrl = brandLower === "apple"
+                ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
+                : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg";
+        }
+
+        // If no subcollection images exist, include effectiveImageUrl as primary image
+        if (images.length === 0 && effectiveImageUrl) {
+            images.push({
+                id: "primary",
+                imageID: "primary",
+                imageUrl: effectiveImageUrl,
+                productID,
+                uploadedAt: pData.createdAt ? (pData.createdAt.toDate ? pData.createdAt.toDate().toISOString() : pData.createdAt) : new Date().toISOString()
+            });
+        }
+
+        if (!pData.imageUrl && effectiveImageUrl) {
+            pData.imageUrl = effectiveImageUrl;
+            pDoc.ref.update({ imageUrl: effectiveImageUrl }).catch(() => {});
+        }
+
+        return res.json({
+            success: true,
+            product: { id: pDoc.id, ...pData, imageUrl: pData.imageUrl || effectiveImageUrl },
+            images,
+            device,
+            tradeInRequest
+        });
+    } catch (err) {
+        console.error("Error in GET /api/shop/admin/products/:productID:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/shop/admin/products/:productID/images
+ * Upload image to Cloudinary folder "product/{productID}" and store in subcollection "product/{productID}/images"
+ * Enforces max 5 images.
+ */
+router.post("/admin/products/:productID/images", upload.single("image"), async (req, res) => {
+    try {
+        const { productID } = req.params;
+        const pDoc = await db.collection("product").doc(productID).get();
+        if (!pDoc.exists) {
+            return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        // Check current images count in subcollection
+        const imgSnap = await pDoc.ref.collection("images").get();
+        if (imgSnap.size >= 5) {
+            return res.status(400).json({ success: false, error: "Maximum 5 images allowed for a product" });
+        }
+
+        let fileBuffer = null;
+        if (req.file && req.file.buffer) {
+            fileBuffer = req.file.buffer;
+        } else if (req.body.imageBase64) {
+            const b64 = req.body.imageBase64.replace(/^data:image\/\w+;base64,/, "");
+            fileBuffer = Buffer.from(b64, "base64");
+        } else {
+            return res.status(400).json({ success: false, error: "No image file or imageBase64 provided" });
+        }
+
+        const folder = `product/${productID}`;
+        const filename = `img_${Date.now()}`;
+        const uploadResult = await uploadBufferToCloudinary(fileBuffer, folder, filename);
+
+        const imageID = `IMG-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const imgData = {
+            imageID,
+            imageUrl: uploadResult.secure_url,
+            productID,
+            uploadedAt: FieldValue.serverTimestamp()
+        };
+
+        await pDoc.ref.collection("images").doc(imageID).set(imgData);
+
+        // Update main product imageUrl if not set or if first image
+        const pData = pDoc.data();
+        if (!pData.imageUrl || imgSnap.size === 0) {
+            await pDoc.ref.update({ imageUrl: uploadResult.secure_url });
+        }
+
+        invalidateProductCaches();
+
+        return res.json({
+            success: true,
+            image: {
+                id: imageID,
+                imageID,
+                imageUrl: uploadResult.secure_url,
+                productID,
+                uploadedAt: new Date().toISOString()
+            }
+        });
+    } catch (err) {
+        console.error("Error in POST /api/shop/admin/products/:productID/images:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/shop/admin/products/:productID/images/:imageID
+ * Delete an image record from subcollection product/{productID}/images
+ */
+router.delete("/admin/products/:productID/images/:imageID", async (req, res) => {
+    try {
+        const { productID, imageID } = req.params;
+        const pDoc = await db.collection("product").doc(productID).get();
+        if (!pDoc.exists) {
+            return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        const imgDoc = await pDoc.ref.collection("images").doc(imageID).get();
+        if (!imgDoc.exists) {
+            return res.status(404).json({ success: false, error: "Image not found" });
+        }
+        const deletedUrl = imgDoc.data().imageUrl;
+        await imgDoc.ref.delete();
+
+        // Update product imageUrl if deleted image was the primary
+        const pData = pDoc.data();
+        if (pData.imageUrl === deletedUrl) {
+            const remSnap = await pDoc.ref.collection("images").orderBy("uploadedAt", "asc").limit(1).get();
+            const nextUrl = remSnap.empty ? null : remSnap.docs[0].data().imageUrl;
+            await pDoc.ref.update({ imageUrl: nextUrl });
+        }
+
+        invalidateProductCaches();
+        return res.json({ success: true, message: "Image deleted successfully" });
+    } catch (err) {
+        console.error("Error in DELETE /api/shop/admin/products/:productID/images/:imageID:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PUT /api/shop/admin/products/:productID
+ * Update product listing details (pricing, title, description, status, visibility, specifications)
+ * Enforces min 1 image when setting status to "listed"
+ */
+router.put("/admin/products/:productID", async (req, res) => {
+    try {
+        const { productID } = req.params;
+        const pDoc = await db.collection("product").doc(productID).get();
+        if (!pDoc.exists) {
+            return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        const body = req.body || {};
+        const updates = {};
+
+        if (body.sellingPrice !== undefined) {
+            const sp = parseFloat(body.sellingPrice);
+            if (!isNaN(sp)) updates.sellingPrice = Number(sp.toFixed(2));
+        }
+
+        if (body.description !== undefined) {
+            updates.description = body.description ? String(body.description).trim() : null;
+        }
+
+        if (body.listingTitle !== undefined) {
+            updates.listingTitle = String(body.listingTitle).trim();
+        }
+
+        if (body.isPublic !== undefined) {
+            updates.isPublic = Boolean(body.isPublic);
+            updates.marketplaceVisibility = updates.isPublic ? "public" : "hidden";
+        }
+
+        if (body.listingStatus !== undefined) {
+            const newStatus = String(body.listingStatus).trim().toLowerCase();
+            if (["draft", "listed", "hidden", "purchased", "rented"].includes(newStatus)) {
+                // Min 1 image check before listing
+                if (newStatus === "listed") {
+                    const imgSnap = await pDoc.ref.collection("images").get();
+                    const hasProductImg = Boolean(pDoc.data() && pDoc.data().imageUrl);
+                    if (imgSnap.size < 1 && !hasProductImg) {
+                        return res.status(400).json({
+                            success: false,
+                            error: "At least 1 product image is required before setting listing status to Listed (minimum 1, maximum 5 images)."
+                        });
+                    }
+                }
+                updates.listingStatus = newStatus;
+                updates.status = newStatus === "listed" ? "listed" : newStatus;
+            }
+        }
+
+        updates.updatedAt = FieldValue.serverTimestamp();
+        await pDoc.ref.update(updates);
+
+        // Also update linked device specifications if provided
+        const pData = pDoc.data();
+        if (pData.deviceID && (body.brand || body.model || body.storage || body.color || body.ram)) {
+            const devUpdates = {};
+            if (body.brand) devUpdates.brand = body.brand;
+            if (body.model) devUpdates.model = body.model;
+            if (body.storage) {
+                devUpdates.storage = body.storage;
+                devUpdates.storageCapacity = body.storage;
+            }
+            if (body.color) {
+                devUpdates.colour = body.color;
+                devUpdates.color = body.color;
+            }
+            if (body.ram) devUpdates.ram = body.ram;
+            devUpdates.updatedAt = FieldValue.serverTimestamp();
+            try {
+                await db.collection("devices").doc(pData.deviceID).update(devUpdates);
+            } catch (_) {}
+        }
+
+        invalidateProductCaches();
+
+        const updatedDoc = await pDoc.ref.get();
+        return res.json({
+            success: true,
+            message: "Product listing updated successfully",
+            product: { id: updatedDoc.id, ...updatedDoc.data() }
+        });
+    } catch (err) {
+        console.error("Error in PUT /api/shop/admin/products/:productID:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
+
 
 
