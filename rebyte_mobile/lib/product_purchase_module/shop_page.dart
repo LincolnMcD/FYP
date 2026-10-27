@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'models/product_model.dart';
 import 'services/shop_service.dart';
 import 'product_detail_page.dart';
+import 'select_rental_duration_page.dart';
 import '../../account_management_module/welcome_page.dart';
 import '../device_tradein_module/data/phone_brands_data.dart';
 
@@ -18,6 +19,8 @@ class ShopPage extends StatefulWidget {
   final String? name;
   final VoidCallback? onCartUpdated;
   final VoidCallback? onOpenCart;
+  final String targetStatus;
+  final bool isRentalMode;
 
   const ShopPage({
     super.key,
@@ -26,6 +29,8 @@ class ShopPage extends StatefulWidget {
     this.name,
     this.onCartUpdated,
     this.onOpenCart,
+    this.targetStatus = 'listed',
+    this.isRentalMode = false,
   });
 
   @override
@@ -114,13 +119,28 @@ class ShopPageState extends State<ShopPage> {
       email: widget.email,
       search: _searchController.text.trim(),
       brand: _selectedBrand == 'All Brands' ? null : _selectedBrand,
+      status: widget.targetStatus,
       sort: _sortKey,
       forceRefresh: forceRefresh,
     );
     if (mounted && generation == _productRequestGeneration) {
       setState(() {
         final rawList = List<ProductModel>.from(result['products'] as List<ProductModel>);
-        _products = rawList.where((p) => p.listingStatus.toLowerCase() == 'listed').toList();
+        final expectedStatus = widget.targetStatus.toLowerCase();
+        final list = rawList.where((p) {
+          final s = p.listingStatus.toLowerCase();
+          return expectedStatus == 'rent' ? (s == 'rent' || s == 'renting') : s == expectedStatus;
+        }).toList();
+        if (widget.isRentalMode && _priceSort != PriceSortOption.none) {
+          list.sort((a, b) {
+            final priceA = a.rentalPrice > 0 ? a.rentalPrice : (a.sellingPrice * 0.08);
+            final priceB = b.rentalPrice > 0 ? b.rentalPrice : (b.sellingPrice * 0.08);
+            return _priceSort == PriceSortOption.lowToHigh
+                ? priceA.compareTo(priceB)
+                : priceB.compareTo(priceA);
+          });
+        }
+        _products = list;
         _nextCursor = result['nextCursor'] as String?;
         _hasMore = result['hasMore'] == true;
         _productLoadError = result['error']?.toString();
@@ -137,15 +157,30 @@ class ShopPageState extends State<ShopPage> {
       email: widget.email,
       search: _searchController.text.trim(),
       brand: _selectedBrand == 'All Brands' ? null : _selectedBrand,
+      status: widget.targetStatus,
       sort: _sortKey,
       cursor: _nextCursor,
     );
     if (!mounted || generation != _productRequestGeneration) return;
     setState(() {
       final existing = _products.map((product) => product.productID).toSet();
+      final expectedStatus = widget.targetStatus.toLowerCase();
       final newItems = (result['products'] as List<ProductModel>)
-          .where((item) => item.listingStatus.toLowerCase() == 'listed' && !existing.contains(item.productID));
+          .where((item) {
+            final s = item.listingStatus.toLowerCase();
+            final matches = expectedStatus == 'rent' ? (s == 'rent' || s == 'renting') : s == expectedStatus;
+            return matches && !existing.contains(item.productID);
+          });
       _products.addAll(newItems);
+      if (widget.isRentalMode && _priceSort != PriceSortOption.none) {
+        _products.sort((a, b) {
+          final priceA = a.rentalPrice > 0 ? a.rentalPrice : (a.sellingPrice * 0.08);
+          final priceB = b.rentalPrice > 0 ? b.rentalPrice : (b.sellingPrice * 0.08);
+          return _priceSort == PriceSortOption.lowToHigh
+              ? priceA.compareTo(priceB)
+              : priceB.compareTo(priceA);
+        });
+      }
       _nextCursor = result['nextCursor'] as String?;
       _hasMore = result['hasMore'] == true;
       _isLoadingMore = false;
@@ -479,12 +514,14 @@ class ShopPageState extends State<ShopPage> {
                   _searchFocusNode.unfocus();
                 }
               },
-              decoration: const InputDecoration(
-                hintText: 'Search devices, brands, or models...',
-                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              decoration: InputDecoration(
+                hintText: widget.isRentalMode
+                    ? 'Search rental phones (e.g. iPhone, Samsung)...'
+                    : 'Search devices, brands, or models...',
+                hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
               style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
               onChanged: (_) => _scheduleSearch(),
@@ -638,6 +675,7 @@ class ShopPageState extends State<ShopPage> {
                   isLoggedIn: widget.isLoggedIn,
                   email: widget.email,
                   name: widget.name,
+                  isRentalMode: widget.isRentalMode,
                   onCartUpdated: () {
                     widget.onCartUpdated?.call();
                     loadProducts(forceRefresh: true);
@@ -740,16 +778,49 @@ class ShopPageState extends State<ShopPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          'RM ${product.sellingPrice.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0C5AD2),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.isRentalMode
+                                  ? 'RM ${(product.rentalPrice > 0 ? product.rentalPrice : (product.sellingPrice * 0.08)).toStringAsFixed(2)} / mo'
+                                  : 'RM ${product.sellingPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0C5AD2),
+                              ),
+                            ),
+                            if (widget.isRentalMode && product.sellingPrice > 0)
+                              Text(
+                                'Deposit: RM ${(product.sellingPrice * 0.2).toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                              ),
+                          ],
                         ),
                         InkWell(
-                          onTap: () => _handleAddToCart(product),
+                          onTap: () {
+                            if (widget.isRentalMode) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SelectRentalDurationPage(
+                                    product: product,
+                                    isLoggedIn: widget.isLoggedIn,
+                                    email: widget.email,
+                                    name: widget.name,
+                                    onRentalCompleted: () {
+                                      widget.onCartUpdated?.call();
+                                      loadProducts(forceRefresh: true);
+                                    },
+                                  ),
+                                ),
+                              );
+                            } else {
+                              _handleAddToCart(product);
+                            }
+                          },
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
                             width: 36,
@@ -758,8 +829,8 @@ class ShopPageState extends State<ShopPage> {
                               color: Color(0xFF0C5AD2),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.shopping_cart_outlined,
+                            child: Icon(
+                              widget.isRentalMode ? Icons.calendar_month_outlined : Icons.shopping_cart_outlined,
                               color: Colors.white,
                               size: 18,
                             ),
@@ -787,9 +858,9 @@ class ShopPageState extends State<ShopPage> {
           Icon(error == null ? Icons.inventory_2_outlined : Icons.cloud_off_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(
-            error ?? 'No products found.',
+            error ?? (widget.isRentalMode ? 'No rental smartphones available at the moment.' : 'No products found.'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: Color(0xFF334155),

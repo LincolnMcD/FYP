@@ -52,6 +52,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey _activeActivityKey = GlobalKey();
   final GlobalKey<ShopPageState> _shopPageKey = GlobalKey<ShopPageState>();
+  final GlobalKey<ShopPageState> _rentalShopPageKey = GlobalKey<ShopPageState>();
   final ScrollController _homeScrollController = ScrollController();
 
   String? _toastMessage;
@@ -372,7 +373,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 isEmbedded: true,
                 onBackToHome: () => setState(() => _selectedIndex = 0),
               ),
-              const Center(child: Text('Rentals - Under Construction')),
+              ShopPage(
+                key: _rentalShopPageKey,
+                isLoggedIn: _isLoggedIn,
+                email: _email,
+                name: _name,
+                targetStatus: 'rent',
+                isRentalMode: true,
+                onCartUpdated: () {
+                  _rentalShopPageKey.currentState?.loadProducts();
+                  _loadCartCount();
+                },
+                onOpenCart: () {
+                  _openCartPage();
+                },
+              ),
               ProfilePage(
                 name: _name, 
                 email: _email,
@@ -781,7 +796,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset('assets/images/rebyte_logo.png', height: 36),
+          Image.asset(
+            'assets/images/rebyte_logo.png',
+            height: 36,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 36,
+              width: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0C5AD2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
           const Text(
             'ReByte',

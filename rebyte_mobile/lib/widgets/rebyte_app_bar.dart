@@ -54,7 +54,23 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset('assets/images/rebyte_logo.png', height: 36),
+          Image.asset(
+            'assets/images/rebyte_logo.png',
+            height: 36,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stackTrace) => Container(
+              height: 36,
+              width: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0C5AD2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
           const Text(
             'ReByte',

@@ -301,8 +301,16 @@
     .status-hidden .status-dot { background: #f59e0b; }
     .status-purchased { background: #dbeafe; color: #1e40af; }
     .status-purchased .status-dot { background: #3b82f6; }
-    .status-rented { background: #f3e8ff; color: #7e22ce; }
-    .status-rented .status-dot { background: #a855f7; }
+    .status-rented,
+    .status-rent,
+    .status-renting { background: #f3e8ff; color: #7e22ce; }
+    .status-rented .status-dot,
+    .status-rent .status-dot,
+    .status-renting .status-dot { background: #a855f7; }
+    .status-lock,
+    .status-locked { background: #fee2e2; color: #b91c1c; }
+    .status-lock .status-dot,
+    .status-locked .status-dot { background: #ef4444; }
 
     /* 2-Column Grid Layout */
     .editor-grid {
@@ -2430,7 +2438,7 @@
       const text = document.getElementById('headerStatusText');
       if (!badge || !text) return;
 
-      const validStatuses = ['draft', 'listed', 'hidden', 'purchased', 'rented'];
+      const validStatuses = ['draft', 'listed', 'hidden', 'purchased', 'rented', 'rent', 'renting', 'lock', 'locked'];
       const stClean = validStatuses.includes(st) ? st : 'draft';
 
       badge.className = `status-pill status-${stClean}`;
@@ -2439,7 +2447,11 @@
         listed: 'Listed',
         hidden: 'Hidden',
         purchased: 'Purchased',
-        rented: 'Rented'
+        rented: 'Rented',
+        rent: 'Rent',
+        renting: 'Renting',
+        lock: 'Lock',
+        locked: 'Lock'
       };
       text.textContent = labels[stClean] || 'Draft';
     }
@@ -2918,16 +2930,26 @@
 
         // Fallback: direct Firestore write
         if (!saved && typeof firebase !== 'undefined' && firebase.firestore) {
+          const isRent = ['rent', 'renting', 'lock', 'locked'].includes(String(status).toLowerCase());
           const updates = {
             listingTitle: title,
             description: desc || null,
             sellingPrice,
             listingStatus: status,
             status: status === 'listed' ? 'listed' : status,
-            isPublic: isPublicVisibility,
-            marketplaceVisibility: isPublicVisibility ? 'public' : 'hidden',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           };
+          if (isRent) {
+            updates.isPublic = firebase.firestore.FieldValue.delete();
+            updates.marketplaceVisibility = firebase.firestore.FieldValue.delete();
+            updates.lastLockCommandAt = firebase.firestore.FieldValue.delete();
+            updates.lastUnlockCommandAt = firebase.firestore.FieldValue.delete();
+            updates.restrictedAt = firebase.firestore.FieldValue.delete();
+            updates.unlockedAt = firebase.firestore.FieldValue.delete();
+          } else {
+            updates.isPublic = isPublicVisibility;
+            updates.marketplaceVisibility = isPublicVisibility ? 'public' : 'hidden';
+          }
           if (primaryImgUrl) {
             updates.imageUrl = primaryImgUrl;
           }

@@ -46,6 +46,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     _validateEmail(_emailController.text);
     if (_emailError != null || _emailController.text.isEmpty) return;
 
+    final inputEmail = _emailController.text.trim().toLowerCase();
+    if (inputEmail == 'rental@rebyte.com') {
+      _showTopToast('Password reset is not permitted for this account.', true);
+      return;
+    }
+
     setState(() => _isLoading = true);
     final result = await AuthService.requestForgotPasswordOtp(_emailController.text);
     if (!mounted) return;

@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'account_management_module/home_page.dart';
 import 'staff_module/staff_home_page.dart';
+import 'rental_managment_module/rental_management_page.dart';
 import 'account_management_module/services/session_service.dart';
 import 'account_management_module/services/app_route_observer.dart';
 import 'device_tradein_module/services/trade_in_flow_session.dart';
 
+import 'rental_managment_module/services/rental_fcm_listener.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  RentalFcmListener.initialize();
   
   final session = await SessionService.getSession();
   final bool isLoggedIn = session.isNotEmpty;
@@ -36,6 +40,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'ReByte',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0C5AD2)),
@@ -44,7 +49,9 @@ class MyApp extends StatelessWidget {
       navigatorObservers: [appRouteObserver],
       home: (isLoggedIn && role?.toLowerCase() == 'staff')
           ? const StaffHomePage()
-          : HomePage(isLoggedIn: isLoggedIn, email: email, name: name),
+          : (isLoggedIn && role?.toLowerCase() == 'rental')
+              ? const RentalManagementPage()
+              : HomePage(isLoggedIn: isLoggedIn, email: email, name: name),
       debugShowCheckedModeBanner: false,
     );
   }

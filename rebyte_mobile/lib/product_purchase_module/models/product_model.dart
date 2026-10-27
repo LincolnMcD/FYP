@@ -15,6 +15,7 @@ class ProductModel {
   final String listingStatus;
   final String deviceID;
   final String modelCode;
+  final double rentalPrice;
 
   ProductModel({
     required this.id,
@@ -33,15 +34,24 @@ class ProductModel {
     required this.listingStatus,
     this.deviceID = '',
     this.modelCode = '',
+    this.rentalPrice = 0.0,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
+    final sp = (json['sellingPrice'] is num) ? (json['sellingPrice'] as num).toDouble() : 0.0;
+    final cp = (json['collectedPrice'] is num) ? (json['collectedPrice'] as num).toDouble() : 0.0;
+    final ep = (json['estPrice'] is num) ? (json['estPrice'] as num).toDouble() : 0.0;
+    final dynamic rawRent = json['rentalPrice'] ?? json['monthlyRentalPrice'] ?? json['rentPricePerMonth'];
+    final rp = (rawRent is num && rawRent > 0)
+        ? rawRent.toDouble()
+        : (sp > 0 ? (sp * 0.08) : (cp > 0 ? (cp * 0.08) : (ep > 0 ? (ep * 0.08) : 50.0)));
     return ProductModel(
       id: json['id']?.toString() ?? '',
       productID: json['productID']?.toString() ?? json['id']?.toString() ?? '',
       listingTitle: json['listingTitle']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      sellingPrice: (json['sellingPrice'] is num) ? (json['sellingPrice'] as num).toDouble() : 0.0,
+      sellingPrice: sp,
+      rentalPrice: rp,
       imageUrl: json['imageUrl']?.toString() ?? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
       images: (json['images'] is List)
           ? (json['images'] as List).map((e) => e.toString()).where((e) => e.isNotEmpty).toList()

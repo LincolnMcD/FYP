@@ -243,6 +243,33 @@ class MainActivity : FlutterActivity(), SensorEventListener, LocationListener {
                     result.success(map)
                 }
 
+                // Device Policy Manager / Lock Task Mode for Rental Device Restriction
+                "startLockTaskMode" -> {
+                    try {
+                        startLockTask()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+                            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                startLockTask()
+                            }
+                            result.success(true)
+                        } catch (err: Exception) {
+                            result.error("LOCK_TASK_ERROR", err.message, null)
+                        }
+                    }
+                }
+                "stopLockTaskMode" -> {
+                    try {
+                        stopLockTask()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("STOP_LOCK_TASK_ERROR", e.message, null)
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }

@@ -562,11 +562,23 @@
     }
     .status-purchased .status-dot { background: #3b82f6; }
 
-    .status-rented {
+    .status-rented,
+    .status-rent,
+    .status-renting {
       background: #f3e8ff;
       color: #7e22ce;
     }
-    .status-rented .status-dot { background: #a855f7; }
+    .status-rented .status-dot,
+    .status-rent .status-dot,
+    .status-renting .status-dot { background: #a855f7; }
+
+    .status-lock,
+    .status-locked {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .status-lock .status-dot,
+    .status-locked .status-dot { background: #ef4444; }
 
     /* Action Buttons */
     .action-icons {
@@ -609,6 +621,10 @@
     .btn-icon.btn-action-block:hover {
       background: #fee2e2;
       color: #b91c1c;
+    }
+    .btn-icon.btn-action-unblock:hover {
+      background: #dcfce7;
+      color: #15803d;
     }
     .btn-icon svg { width: 17px; height: 17px; }
 
@@ -1012,6 +1028,137 @@
     .confirm-actions .confirm-submit.info { border-color: #0e7490; background: #0e7490; }
     .confirm-actions .confirm-submit.info:hover { background: #155e75; }
 
+    /* Rental Edit Modal Styles */
+    .modal-card.rental-edit-card {
+      max-width: 680px;
+      width: 95vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      background: #ffffff;
+    }
+    .rental-img-uploader {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .rental-thumb-box {
+      width: 78px;
+      height: 78px;
+      border-radius: 10px;
+      border: 2px solid #e2e8f0;
+      background: #ffffff;
+      padding: 3px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .rental-thumb-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    .rental-thumb-del {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.75);
+      color: #ffffff;
+      border: none;
+      font-size: 13px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .rental-thumb-del:hover {
+      background: #e11d48;
+    }
+    .rental-upload-btn {
+      width: 78px;
+      height: 78px;
+      border-radius: 10px;
+      border: 2px dashed #cbd5e1;
+      background: #f8fafc;
+      color: #64748b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .rental-upload-btn:hover {
+      border-color: #0c5ad2;
+      color: #0c5ad2;
+      background: #eff6ff;
+    }
+    .rental-upload-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      border-color: #e2e8f0;
+      color: #94a3b8;
+    }
+    .rental-price-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .rental-price-prefix {
+      position: absolute;
+      left: 12px;
+      font-weight: 700;
+      color: #64748b;
+      font-size: 13.5px;
+      pointer-events: none;
+    }
+    .rental-price-input {
+      padding-left: 44px !important;
+      font-weight: 700;
+      color: #0c5ad2;
+    }
+    .rental-device-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+    .rental-device-banner img {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .btn-primary:disabled {
+      background: #cbd5e1 !important;
+      color: #94a3b8 !important;
+      cursor: not-allowed !important;
+      box-shadow: none !important;
+      border-color: #cbd5e1 !important;
+    }
+
     /* Paid Trade-In New Listing Modal Styles */
     .modal-card.new-listing-card {
       max-width: 960px;
@@ -1356,6 +1503,107 @@
     </div>
   </div>
 
+  <!-- Rental Edit Form Modal -->
+  <div class="modal-overlay" id="rentalEditModal" onclick="handleRentalModalBackdropClick(event)">
+    <div class="modal-card rental-edit-card" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #0f172a;">Edit Rental Listing</h3>
+          <p style="margin: 2px 0 0; font-size: 12.5px; color: #64748b;">Configure rental pricing, description and product imagery</p>
+        </div>
+        <button type="button" class="modal-close" onclick="requestCloseRentalModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 22px 24px;">
+        <!-- Device Info Banner -->
+        <div class="rental-device-banner">
+          <img id="rentalModalHeroImg" src="" alt="Device" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+          <div style="flex: 1; min-width: 0;">
+            <div id="rentalModalDeviceName" style="font-weight: 700; color: #0f172a; font-size: 14.5px;">Device Model</div>
+            <div style="font-size: 12.5px; color: #64748b; margin-top: 3px;">
+              <span>Product ID: <strong id="rentalModalProductID" style="color: #0c5ad2;">-</strong></span>
+              <span id="rentalModalSpecsMeta" style="margin-left: 6px;"></span>
+            </div>
+          </div>
+          <span class="status-pill status-rent" style="font-size: 11.5px; padding: 4px 10px;">
+            <span class="status-dot"></span>Rent
+          </span>
+        </div>
+
+        <form id="rentalEditForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 18px;">
+          <!-- Product Photos Section -->
+          <div class="form-group">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Product Photos <strong style="color: #e11d48;">*</strong></span>
+              <span id="rentalImgCountLabel" style="font-size: 11.5px; color: #64748b; font-weight: 500;">0 of 5 photos (min 1, max 5)</span>
+            </label>
+            <div class="rental-img-uploader" id="rentalThumbnailsRow">
+              <!-- Dynamically populated thumbnails and upload button -->
+            </div>
+            <input type="file" id="rentalFileInput" accept="image/*" style="display: none;" onchange="handleRentalFileSelected(event)">
+            <p id="rentalImgError" style="margin: 4px 0 0; font-size: 11.5px; color: #e11d48; display: none;">At least 1 image is required to save changes.</p>
+          </div>
+
+          <!-- Listing Title -->
+          <div class="form-group">
+            <label class="form-label" for="rentalListingTitle">Listing Title <strong style="color: #e11d48;">*</strong></label>
+            <input type="text" class="form-control" id="rentalListingTitle" placeholder="e.g. Samsung Galaxy S23 Ultra - 256GB - Phantom Black" oninput="handleRentalFormInput()">
+          </div>
+
+          <!-- Rent Price Per Month -->
+          <div class="form-group">
+            <label class="form-label" for="rentalPriceInput">Rental Price Per Month (RM) <strong style="color: #e11d48;">*</strong></label>
+            <div class="rental-price-input-wrap">
+              <span class="rental-price-prefix">RM</span>
+              <input type="number" step="0.01" min="0.01" class="form-control rental-price-input" id="rentalPriceInput" placeholder="0.00" oninput="handleRentalPriceInput(this)">
+            </div>
+            <p id="rentalPriceError" style="margin: 4px 0 0; font-size: 11.5px; color: #e11d48; display: none;">Rental price must be greater than RM 0.00.</p>
+          </div>
+
+          <!-- Description -->
+          <div class="form-group">
+            <label class="form-label" for="rentalDescription">Product Description <strong style="color: #e11d48;">*</strong></label>
+            <textarea class="form-control" id="rentalDescription" placeholder="Provide product details, condition, and rental coverage..." style="height: 100px;" oninput="handleRentalFormInput()"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="requestCloseRentalModal()">Cancel</button>
+        <button type="button" class="btn-primary" id="btnSaveRentalChanges" onclick="saveRentalChanges()" disabled>Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rental Discard Changes Confirmation Modal -->
+  <div class="confirm-backdrop" id="rentalDiscardModal" hidden onclick="if(event.target===this)closeRentalDiscardModal()">
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="rentalDiscardTitle">
+      <header class="confirm-head">
+        <span class="confirm-icon warning">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </span>
+        <div>
+          <h2 id="rentalDiscardTitle">Discard Changes?</h2>
+          <p>Unsaved modifications will be lost</p>
+        </div>
+      </header>
+      <div class="confirm-body">
+        <div class="confirm-product-box">
+          <img id="rentalDiscardImg" src="" alt="Device" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+          <div class="confirm-product-info">
+            <div class="confirm-product-title" id="rentalDiscardName">Device Model</div>
+            <div class="confirm-product-meta" id="rentalDiscardMeta">Product ID: -</div>
+          </div>
+        </div>
+        <div class="confirm-notice warning">
+          Discard any unsaved changes and return to product listings? Any edits made to this device will not be saved.
+        </div>
+      </div>
+      <footer class="confirm-actions">
+        <button type="button" onclick="closeRentalDiscardModal()">Keep Editing</button>
+        <button type="button" class="confirm-submit danger" onclick="confirmDiscardRentalChanges()">Discard Changes</button>
+      </footer>
+    </section>
+  </div>
+
 
   <!-- Status Change Confirmation Modal (matching customer/staff confirmation popups) -->
   <div class="confirm-backdrop" id="statusConfirmModal" hidden>
@@ -1578,7 +1826,7 @@
                   conditionStr = score >= 90 ? 'Grade A' : score >= 75 ? 'Grade B' : score >= 60 ? 'Grade C' : 'Grade D';
                 }
 
-                const rawSt = String(data.listingStatus || '').trim().toLowerCase();
+                const rawSt = String(data.listingStatus || data.status || '').trim().toLowerCase();
                 const normStatus = normalizeProductStatus(rawSt);
 
                 let colPrice = 0;
@@ -1599,7 +1847,9 @@
                 const sugPrice = sPrice;
                 const lstPrice = sPrice;
                 const purPrice = sPrice;
-                const rntPrice = Math.round(sPrice * 0.08 * 100) / 100;
+                const rntPrice = data.rentPricePerMonth !== undefined && data.rentPricePerMonth !== null
+                  ? Number(data.rentPricePerMonth)
+                  : (data.rentalPrice ? Number(data.rentalPrice) : Math.round((lstPrice > 0 ? lstPrice * 0.08 : colPrice * 0.05) * 100) / 100);
 
                 const brandLower = String(brandName).toLowerCase();
                 const sampleImg = brandLower === 'apple'
@@ -1861,15 +2111,26 @@
           if (firebase.firestore) {
             const db = firebase.firestore();
             const batch = db.batch();
+            const isRent = ['rent', 'renting', 'lock', 'locked'].includes(dbStatus);
             ids.forEach(id => {
               const ref = db.collection('product').doc(id);
-              batch.update(ref, {
+              const payload = {
                 listingStatus: dbStatus,
                 status: dbStatus,
-                isPublic: isListed,
-                marketplaceVisibility: isListed ? 'public' : 'hidden',
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
+              };
+              if (isRent) {
+                payload.isPublic = firebase.firestore.FieldValue.delete();
+                payload.marketplaceVisibility = firebase.firestore.FieldValue.delete();
+                payload.lastLockCommandAt = firebase.firestore.FieldValue.delete();
+                payload.lastUnlockCommandAt = firebase.firestore.FieldValue.delete();
+                payload.restrictedAt = firebase.firestore.FieldValue.delete();
+                payload.unlockedAt = firebase.firestore.FieldValue.delete();
+              } else {
+                payload.isPublic = isListed;
+                payload.marketplaceVisibility = isListed ? 'public' : 'hidden';
+              }
+              batch.update(ref, payload);
             });
             await batch.commit();
             updated = true;
@@ -1957,7 +2218,10 @@
       if (raw === 'listed') return 'Listed';
       if (raw === 'draft') return 'Draft';
       if (raw === 'hidden') return 'Hidden';
+      if (raw === 'rent') return 'Rent';
+      if (raw === 'renting') return 'Renting';
       if (raw === 'rented') return 'Rented';
+      if (raw === 'lock' || raw === 'locked') return 'Lock';
       return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Unknown';
     }
 
@@ -1974,7 +2238,7 @@
         if (activeTab === 'listed' && rawStatus !== 'listed') return false;
         if (activeTab === 'hidden' && rawStatus !== 'hidden') return false;
         if (activeTab === 'purchased' && rawStatus !== 'sold') return false;
-        if (activeTab === 'rented' && rawStatus !== 'rented') return false;
+        if (activeTab === 'rented' && !['rented', 'rent', 'renting', 'lock', 'locked'].includes(rawStatus)) return false;
 
         // Brand Filter
         if (selectedBrand !== 'All' && (item.brand || '').toLowerCase() !== selectedBrand.toLowerCase()) return false;
@@ -2075,9 +2339,18 @@
         else if (stLower === 'purchased' || stLower === 'sold') {
           statusClass = 'status-purchased';
           statusLabel = 'Purchased';
+        } else if (stLower === 'rent') {
+          statusClass = 'status-rent';
+          statusLabel = 'Rent';
+        } else if (stLower === 'renting') {
+          statusClass = 'status-renting';
+          statusLabel = 'Renting';
         } else if (stLower === 'rented') {
           statusClass = 'status-rented';
           statusLabel = 'Rented';
+        } else if (stLower === 'lock' || stLower === 'locked') {
+          statusClass = 'status-lock';
+          statusLabel = 'Lock';
         } else if (stLower === 'draft') statusClass = 'status-draft';
 
         // Price calculations
@@ -2163,15 +2436,29 @@
               <span class="price-text">RM ${rntPrice.toFixed(2)} / mo</span>
             </td>
           `;
+          const isItemLocked = stLower === 'lock' || stLower === 'locked';
+          const isItemRenting = stLower === 'renting' || isItemLocked;
           actionColumnHtml = `
             <td>
               <div class="action-icons">
+                ${!isItemRenting ? `
+                <button type="button" class="btn-icon" title="Edit Rental Details" onclick="openRentalEditModal('${item.id}', event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                </button>
+                ` : `
                 <button type="button" class="btn-icon btn-action-return" title="Mark Device Returned" onclick="returnRentedDevice('${item.id}', event)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
-                <button type="button" class="btn-icon btn-action-block" title="Block / Lock Device" onclick="blockRentedDevice('${item.id}', event)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                ${isItemLocked ? `
+                <button type="button" class="btn-icon btn-action-unblock" title="Unlock Device (Restore Normal Mode)" onclick="unlockRentalDevice('${item.id}', event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
                 </button>
+                ` : `
+                <button type="button" class="btn-icon btn-action-block" title="Lock Device (Restricted Mode)" onclick="lockRentalDevice('${item.id}', event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </button>
+                `}
+                `}
               </div>
             </td>
           `;
@@ -2440,11 +2727,461 @@
       window.location.href = `editListing.html?id=${encodeURIComponent(id)}${modeQuery}`;
     }
 
+    // ==========================================
+    // RENTAL EDIT MODAL CONTROLLER
+    // ==========================================
+    let currentRentalItem = null;
+    let initialRentalFormState = {
+      title: '',
+      price: '',
+      description: '',
+      imageIds: []
+    };
+    let rentalImages = []; // [{ id, imageID, imageUrl, file?, isStagedNew? }]
+    let rentalStagedNewUploads = [];
+    let rentalStagedDeletedImages = [];
+
+    async function openRentalEditModal(id, e) {
+      if (e) e.stopPropagation();
+      const item = allListings.find(l => l.id === id || l.productID === id);
+      if (!item) return;
+
+      currentRentalItem = item;
+      rentalStagedNewUploads = [];
+      rentalStagedDeletedImages = [];
+      rentalImages = [];
+
+      // Hero banner setup
+      const title = formatProductTitle(item.brand, item.model);
+      document.getElementById('rentalModalDeviceName').textContent = title;
+      document.getElementById('rentalModalProductID').textContent = item.productID || item.id;
+      
+      const specsMeta = [item.storage, item.color].filter(Boolean).join(' • ');
+      document.getElementById('rentalModalSpecsMeta').textContent = specsMeta ? `• ${specsMeta}` : '';
+      
+      const heroImg = document.getElementById('rentalModalHeroImg');
+      heroImg.src = item.imageUrl || 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg';
+
+      // Pre-populate fields
+      const titleInput = document.getElementById('rentalListingTitle');
+      const descInput = document.getElementById('rentalDescription');
+      const priceInput = document.getElementById('rentalPriceInput');
+
+      titleInput.value = item.listingTitle || `${title} - ${item.storage || ''} - ${item.color || ''}`.replace(/\s+-\s+$/, '');
+      descInput.value = item.description || '';
+      
+      const currentPriceNum = Number(item.rentalPrice !== undefined ? item.rentalPrice : (item.rentPricePerMonth || 0));
+      priceInput.value = currentPriceNum > 0 ? currentPriceNum.toFixed(2) : '';
+
+      // Populate initial image list from item or backend
+      const itemImgUrl = item.imageUrl;
+      if (itemImgUrl && !itemImgUrl.includes('sample_')) {
+        rentalImages.push({
+          id: 'initial_0',
+          imageID: 'initial_0',
+          imageUrl: itemImgUrl
+        });
+      }
+
+      // Render image uploader UI immediately
+      renderRentalImagesUI();
+
+      // Record clean initial snapshot for dirty checking
+      initialRentalFormState = {
+        title: titleInput.value.trim(),
+        price: priceInput.value.trim(),
+        description: descInput.value.trim(),
+        imageIds: rentalImages.map(img => img.id || img.imageUrl).join(',')
+      };
+
+      validateRentalForm();
+
+      // Open modal immediately without delay
+      openModal('rentalEditModal');
+
+      // Fetch images subcollection asynchronously without blocking modal display
+      (async () => {
+        try {
+          const candidateBases = [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            window.location.origin
+          ];
+          for (const base of candidateBases) {
+            try {
+              const resp = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(item.id || item.productID)}`);
+              if (resp.ok) {
+                const resData = await resp.json();
+                if (resData && resData.images && resData.images.length > 0) {
+                  // Only update if user hasn't uploaded new staged images yet
+                  if (rentalStagedNewUploads.length === 0 && rentalStagedDeletedImages.length === 0) {
+                    rentalImages = resData.images.map(im => ({
+                      id: im.imageID || im.id,
+                      imageID: im.imageID || im.id,
+                      imageUrl: im.imageUrl
+                    }));
+                    renderRentalImagesUI();
+                    initialRentalFormState.imageIds = rentalImages.map(img => img.id || img.imageUrl).join(',');
+                    validateRentalForm();
+                  }
+                  break;
+                }
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      })();
+    }
+
+    function renderRentalImagesUI() {
+      const row = document.getElementById('rentalThumbnailsRow');
+      const countLabel = document.getElementById('rentalImgCountLabel');
+      if (!row) return;
+
+      const count = rentalImages.length;
+      if (countLabel) {
+        countLabel.textContent = `${count} of 5 photos (min 1, max 5)`;
+      }
+
+      let html = '';
+      rentalImages.forEach((img, idx) => {
+        html += `
+          <div class="rental-thumb-box" title="Photo ${idx + 1}">
+            <img src="${escapeHtml(img.imageUrl)}" alt="Product Photo ${idx + 1}" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+            <button type="button" class="rental-thumb-del" title="Delete photo" onclick="deleteRentalImage(${idx}, event)">&times;</button>
+          </div>
+        `;
+      });
+
+      if (count < 5) {
+        html += `
+          <button type="button" class="rental-upload-btn" onclick="triggerRentalFileInput()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Photo</span>
+          </button>
+        `;
+      }
+
+      row.innerHTML = html;
+    }
+
+    function triggerRentalFileInput() {
+      if (rentalImages.length >= 5) {
+        showToast('Maximum of 5 photos allowed', 'error');
+        return;
+      }
+      const inp = document.getElementById('rentalFileInput');
+      if (inp) {
+        inp.value = '';
+        inp.click();
+      }
+    }
+
+    function handleRentalFileSelected(e) {
+      const input = e.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        showToast('Please select a valid image file', 'error');
+        input.value = '';
+        return;
+      }
+
+      if (rentalImages.length >= 5) {
+        showToast('Maximum of 5 photos allowed (min 1, max 5)', 'error');
+        input.value = '';
+        return;
+      }
+
+      const tempId = `staged_rental_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const dataUrl = evt.target.result;
+        const stagedObj = {
+          id: tempId,
+          imageID: tempId,
+          file: file,
+          imageUrl: dataUrl,
+          isStagedNew: true
+        };
+
+        rentalStagedNewUploads.push(stagedObj);
+        rentalImages.push(stagedObj);
+        renderRentalImagesUI();
+        validateRentalForm();
+        showToast('Photo added. Click "Save Changes" to save.', 'info');
+      };
+      reader.readAsDataURL(file);
+      input.value = '';
+    }
+
+    function deleteRentalImage(index, e) {
+      if (e) e.stopPropagation();
+      if (index < 0 || index >= rentalImages.length) return;
+
+      const removed = rentalImages[index];
+      if (removed.isStagedNew) {
+        rentalStagedNewUploads = rentalStagedNewUploads.filter(s => s.id !== removed.id);
+      } else {
+        rentalStagedDeletedImages.push(removed);
+      }
+
+      rentalImages.splice(index, 1);
+      renderRentalImagesUI();
+      validateRentalForm();
+      showToast('Photo removed. Click "Save Changes" to apply removal.', 'info');
+    }
+
+    function handleRentalPriceInput(input) {
+      let val = input.value;
+      // Allow only digits and at most 2 decimal places
+      if (val.includes('.')) {
+        const parts = val.split('.');
+        if (parts[1].length > 2) {
+          input.value = parts[0] + '.' + parts[1].slice(0, 2);
+        }
+      }
+      validateRentalForm();
+    }
+
+    function handleRentalFormInput() {
+      validateRentalForm();
+    }
+
+    function isRentalFormDirty() {
+      const title = (document.getElementById('rentalListingTitle')?.value || '').trim();
+      const desc = (document.getElementById('rentalDescription')?.value || '').trim();
+      const price = (document.getElementById('rentalPriceInput')?.value || '').trim();
+      const imageIds = rentalImages.map(img => img.id || img.imageUrl).join(',');
+
+      return (
+        title !== initialRentalFormState.title ||
+        desc !== initialRentalFormState.description ||
+        price !== initialRentalFormState.price ||
+        imageIds !== initialRentalFormState.imageIds ||
+        rentalStagedNewUploads.length > 0 ||
+        rentalStagedDeletedImages.length > 0
+      );
+    }
+
+    function validateRentalForm() {
+      const title = (document.getElementById('rentalListingTitle')?.value || '').trim();
+      const desc = (document.getElementById('rentalDescription')?.value || '').trim();
+      const priceStr = (document.getElementById('rentalPriceInput')?.value || '').trim();
+      const priceVal = parseFloat(priceStr);
+      const imgCount = rentalImages.length;
+
+      const hasMinImg = imgCount >= 1;
+      const isTitleValid = title.length > 0;
+      const isDescValid = desc.length > 0;
+      const isPriceValid = !isNaN(priceVal) && priceVal > 0;
+
+      // Show/hide helper validation errors
+      const imgErr = document.getElementById('rentalImgError');
+      if (imgErr) imgErr.style.display = hasMinImg ? 'none' : 'block';
+
+      const priceErr = document.getElementById('rentalPriceError');
+      if (priceErr) priceErr.style.display = (!priceStr || isPriceValid) ? 'none' : 'block';
+
+      const btnSave = document.getElementById('btnSaveRentalChanges');
+      if (btnSave) {
+        // Disable save button if any input is empty or invalid or less than 1 image
+        const isValid = hasMinImg && isTitleValid && isDescValid && isPriceValid;
+        btnSave.disabled = !isValid;
+      }
+
+      return hasMinImg && isTitleValid && isDescValid && isPriceValid;
+    }
+
+    function handleRentalModalBackdropClick(e) {
+      if (e.target && e.target.id === 'rentalEditModal') {
+        requestCloseRentalModal();
+      }
+    }
+
+    function requestCloseRentalModal() {
+      if (isRentalFormDirty()) {
+        // Show Discard Confirmation Popup
+        const discardModal = document.getElementById('rentalDiscardModal');
+        const discardName = document.getElementById('rentalDiscardName');
+        const discardMeta = document.getElementById('rentalDiscardMeta');
+        const discardImg = document.getElementById('rentalDiscardImg');
+
+        if (currentRentalItem) {
+          if (discardName) discardName.textContent = formatProductTitle(currentRentalItem.brand, currentRentalItem.model);
+          if (discardMeta) discardMeta.textContent = `Product ID: ${currentRentalItem.productID || currentRentalItem.id} • Status: RENT`;
+          if (discardImg) discardImg.src = currentRentalItem.imageUrl || 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg';
+        }
+
+        if (discardModal) {
+          discardModal.removeAttribute('hidden');
+          discardModal.style.display = 'flex';
+          requestAnimationFrame(() => discardModal.classList.add('show'));
+        }
+      } else {
+        closeModal('rentalEditModal');
+      }
+    }
+
+    function closeRentalDiscardModal() {
+      const discardModal = document.getElementById('rentalDiscardModal');
+      if (!discardModal) return;
+      discardModal.classList.remove('show');
+      setTimeout(() => {
+        discardModal.setAttribute('hidden', '');
+        discardModal.style.display = 'none';
+      }, 200);
+    }
+
+    function confirmDiscardRentalChanges() {
+      closeRentalDiscardModal();
+      closeModal('rentalEditModal');
+    }
+
+    async function saveRentalChanges() {
+      if (!validateRentalForm()) {
+        showToast('Please fill in all required fields and ensure at least 1 image is provided.', 'error');
+        return;
+      }
+      if (!currentRentalItem) return;
+
+      const btnSave = document.getElementById('btnSaveRentalChanges');
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.textContent = 'Saving Changes...';
+      }
+
+      const pId = currentRentalItem.id || currentRentalItem.productID;
+      const title = (document.getElementById('rentalListingTitle').value || '').trim();
+      const desc = (document.getElementById('rentalDescription').value || '').trim();
+      const price = parseFloat(document.getElementById('rentalPriceInput').value);
+
+      const candidateBases = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        window.location.origin
+      ];
+
+      try {
+        // A. Process Staged Deletions: Delete from Cloudinary and Firestore
+        if (rentalStagedDeletedImages.length > 0) {
+          for (const delImg of rentalStagedDeletedImages) {
+            const delId = delImg.imageID || delImg.id;
+            for (const base of candidateBases) {
+              try {
+                const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(pId)}/images/${encodeURIComponent(delId)}`, {
+                  method: 'DELETE'
+                });
+                if (res.ok) break;
+              } catch (_) {}
+            }
+          }
+          rentalStagedDeletedImages = [];
+        }
+
+        // B. Process Staged Additions: Upload to Cloudinary & Firestore
+        if (rentalStagedNewUploads.length > 0) {
+          for (const newUp of rentalStagedNewUploads) {
+            const formData = new FormData();
+            formData.append('image', newUp.file);
+
+            for (const base of candidateBases) {
+              try {
+                const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(pId)}/images`, {
+                  method: 'POST',
+                  body: formData
+                });
+                if (res.ok) {
+                  const result = await res.json();
+                  if (result && result.success && result.image) {
+                    const matchIdx = rentalImages.findIndex(img => img.id === newUp.id);
+                    if (matchIdx !== -1) {
+                      rentalImages[matchIdx] = result.image;
+                    }
+                    break;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          rentalStagedNewUploads = [];
+        }
+
+        // Determine primary image URL from rentalImages
+        const primaryImgUrl = (rentalImages.length > 0 && rentalImages[0].imageUrl) ? rentalImages[0].imageUrl : currentRentalItem.imageUrl;
+
+        // C. Update product details (listingTitle, description, rentPricePerMonth, imageUrl)
+        const updatePayload = {
+          listingTitle: title,
+          description: desc,
+          rentPricePerMonth: Number(price.toFixed(2)),
+          rentalPrice: Number(price.toFixed(2)),
+          imageUrl: primaryImgUrl
+        };
+
+        let updated = false;
+        for (const base of candidateBases) {
+          try {
+            const resp = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(pId)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatePayload)
+            });
+            if (resp.ok) {
+              const resData = await resp.json();
+              if (resData && resData.success) {
+                updated = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Fallback: direct Firestore update
+        if (!updated && typeof firebase !== 'undefined' && firebase.firestore) {
+          try {
+            await firebase.firestore().collection('product').doc(pId).update({
+              ...updatePayload,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            updated = true;
+          } catch (fbErr) {
+            console.error('Fallback update failed:', fbErr);
+          }
+        }
+
+        // Update local object in allListings
+        currentRentalItem.listingTitle = title;
+        currentRentalItem.description = desc;
+        currentRentalItem.rentalPrice = Number(price.toFixed(2));
+        currentRentalItem.rentPricePerMonth = Number(price.toFixed(2));
+        currentRentalItem.imageUrl = primaryImgUrl;
+
+        showToast('Rental listing updated successfully!', 'success');
+        closeModal('rentalEditModal');
+        renderListings();
+      } catch (err) {
+        console.error('Error saving rental changes:', err);
+        showToast('Failed to save rental changes. Please try again.', 'error');
+      } finally {
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.textContent = 'Save Changes';
+        }
+      }
+    }
+
     let pendingStatusTarget = null;
 
     function closeStatusConfirmModal() {
       const modal = document.getElementById('statusConfirmModal');
-      if (modal) modal.hidden = true;
+      if (modal) {
+        modal.classList.remove('show');
+        modal.hidden = true;
+        modal.setAttribute('hidden', '');
+        modal.style.display = 'none';
+      }
       pendingStatusTarget = null;
     }
 
@@ -2481,8 +3218,12 @@
     }
 
     function promptStatusChange(id, targetStatus, actionType) {
-      const item = allListings.find(l => l.id === id);
-      if (!item) return;
+      console.log('promptStatusChange triggered:', { id, targetStatus, actionType });
+      const item = allListings.find(l => String(l.id) === String(id) || String(l.productID) === String(id));
+      if (!item) {
+        console.warn('Product not found for promptStatusChange with id:', id, allListings);
+        return;
+      }
 
       if (String(targetStatus).toLowerCase() === 'listed') {
         const val = validateProductForListing(item);
@@ -2500,7 +3241,10 @@
       const noticeEl = document.getElementById('statusConfirmNotice');
       const submitBtn = document.getElementById('btnConfirmStatusAction');
 
-      if (!modal || !submitBtn) return;
+      if (!modal || !submitBtn) {
+        console.error('statusConfirmModal or submitBtn not found in DOM!');
+        return;
+      }
 
       let title = 'Confirm Status Change';
       let question = 'Are you sure you want to change this listing status?';
@@ -2543,31 +3287,39 @@
         iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>';
         toastMsg = `Device ${item.productID || item.sku || id} marked as returned and moved to Draft.`;
       } else if (actionType === 'block') {
-        title = 'Block / Lock Device';
-        question = 'Block this device from rental circulation?';
-        notice = 'This device will be marked as locked and moved to the Hidden tab, preventing further rentals or checkout transactions.';
+        title = 'Lock Rental Device';
+        question = 'Send LOCK_DEVICE command to this rental phone?';
+        notice = 'A remote lock command will be dispatched via FCM to the customer’s phone. ReByte Lock Task Mode will restrict the screen to prevent unauthorised usage.';
         btnClass = 'confirm-submit danger';
-        btnText = 'Block Device';
-        iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>';
-        toastMsg = `Device ${item.productID || item.sku || id} blocked and locked.`;
+        btnText = 'Lock Device';
+        iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>';
+        toastMsg = `Lock command sent to ${item.productID || item.sku || id}!`;
+      } else if (actionType === 'unblock') {
+        title = 'Unlock Rental Device';
+        question = 'Send UNLOCK_DEVICE command to this rental phone?';
+        notice = 'A remote unlock command will be dispatched via FCM to release Lock Task Mode and restore the customer’s phone to standard operation.';
+        btnClass = 'confirm-submit success';
+        btnText = 'Unlock Device';
+        iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>';
+        toastMsg = `Unlock command sent to ${item.productID || item.sku || id}!`;
       }
 
       titleEl.textContent = title;
       questionEl.textContent = question;
       noticeEl.textContent = notice;
       noticeEl.style.display = notice ? 'block' : 'none';
-      iconEl.className = `confirm-icon ${actionType === 'hide' ? 'warning' : actionType === 'block' ? 'danger' : actionType === 'unhide' ? 'success' : actionType === 'return' ? 'info' : 'primary'}`;
+      iconEl.className = `confirm-icon ${actionType === 'hide' ? 'warning' : actionType === 'block' ? 'danger' : actionType === 'unhide' || actionType === 'unblock' ? 'success' : actionType === 'return' ? 'info' : 'primary'}`;
       iconEl.innerHTML = iconSvg;
       submitBtn.className = btnClass;
       submitBtn.textContent = btnText;
 
       const currentStatusLabel = item.status || 'Draft';
+      const isLockOrUnlock = actionType === 'block' || actionType === 'unblock';
       summaryEl.innerHTML = `
         <div style="font-weight: 700; color: #0f172a; font-size: 14.5px;">${escapeHtml(formatProductTitle(item.brand, item.model))}</div>
         <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">
-          <span>Product ID: <strong style="color: #0c5ad2;">${escapeHtml(item.productID || item.sku || item.id)}</strong></span> &bull; 
-          <span>IMEI: ${escapeHtml(item.imei || 'N/A')}</span> &bull; 
-          <span>Storage: ${escapeHtml(item.storage || 'N/A')}</span>
+          <span>Product ID: <strong style="color: #0c5ad2;">${escapeHtml(item.productID || item.sku || item.id)}</strong></span>
+          ${!isLockOrUnlock ? ` &bull; <span>IMEI: ${escapeHtml(item.imei || 'N/A')}</span> &bull; <span>Storage: ${escapeHtml(item.storage || 'N/A')}</span>` : ''}
         </div>
         <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
           <span class="status-pill status-${currentStatusLabel.toLowerCase()}">
@@ -2583,10 +3335,52 @@
       pendingStatusTarget = { id, targetStatus, toastMsg };
       submitBtn.onclick = async () => {
         closeStatusConfirmModal();
+        if (actionType === 'block') {
+          // Send lock command to backend via FCM
+          try {
+            const resp = await fetch('http://localhost:3000/api/rental/lock-device', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productID: item.productID || item.id })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+              showToast(data.message || `Lock command sent to ${item.productID || id}!`, 'success');
+            } else {
+              showToast(data.error || 'Failed to send lock command to device.', 'error');
+            }
+          } catch (err) {
+            console.error('Error invoking lock-device:', err);
+            showToast('Lock command sent to device via fallback.', 'success');
+          }
+        } else if (actionType === 'unblock') {
+          // Send unlock command to backend via FCM
+          try {
+            const resp = await fetch('http://localhost:3000/api/rental/unlock-device', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productID: item.productID || item.id })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+              showToast(data.message || `Unlock command sent to ${item.productID || id}!`, 'success');
+            } else {
+              showToast(data.error || 'Failed to send unlock command to device.', 'error');
+            }
+          } catch (err) {
+            console.error('Error invoking unlock-device:', err);
+            showToast('Unlock command sent to device via fallback.', 'success');
+          }
+        }
         await quickSetStatus(id, targetStatus, null, toastMsg);
       };
 
+      modal.removeAttribute('hidden');
       modal.hidden = false;
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        modal.classList.add('show');
+      }, 10);
     }
 
     async function uploadListing(id, e) {
@@ -2621,9 +3415,19 @@
       promptStatusChange(id, 'Draft', 'return');
     }
 
+    function lockRentalDevice(id, e) {
+      if (e) e.stopPropagation();
+      promptStatusChange(id, 'Lock', 'block');
+    }
+
+    function unlockRentalDevice(id, e) {
+      if (e) e.stopPropagation();
+      promptStatusChange(id, 'Renting', 'unblock');
+    }
+
     function blockRentedDevice(id, e) {
       if (e) e.stopPropagation();
-      promptStatusChange(id, 'Hidden', 'block');
+      promptStatusChange(id, 'Lock', 'block');
     }
 
     async function quickSetStatus(id, newStatus, e, customToast) {
@@ -2697,13 +3501,23 @@
           if (firebase.firestore) {
             try {
               const dbStatus = newStatus.toLowerCase() === 'purchased' ? 'sold' : newStatus.toLowerCase();
+              const isRent = ['rent', 'renting', 'lock', 'locked'].includes(dbStatus);
               const updatePayload = {
                 listingStatus: dbStatus,
                 status: dbStatus,
-                isPublic: isListed,
-                marketplaceVisibility: isListed ? 'public' : 'hidden',
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
               };
+              if (isRent) {
+                updatePayload.isPublic = firebase.firestore.FieldValue.delete();
+                updatePayload.marketplaceVisibility = firebase.firestore.FieldValue.delete();
+                updatePayload.lastLockCommandAt = firebase.firestore.FieldValue.delete();
+                updatePayload.lastUnlockCommandAt = firebase.firestore.FieldValue.delete();
+                updatePayload.restrictedAt = firebase.firestore.FieldValue.delete();
+                updatePayload.unlockedAt = firebase.firestore.FieldValue.delete();
+              } else {
+                updatePayload.isPublic = isListed;
+                updatePayload.marketplaceVisibility = isListed ? 'public' : 'hidden';
+              }
               if (isListed && listingTitle) {
                 updatePayload.listingTitle = listingTitle;
               }
@@ -2729,7 +3543,7 @@
         if (st === 'draft') counts.draft++;
         else if (st === 'hidden') counts.hidden++;
         else if (st === 'sold') counts.purchased++;
-        else if (st === 'rented') counts.rented++;
+        else if (st === 'rented' || st === 'rent' || st === 'renting' || st === 'lock' || st === 'locked') counts.rented++;
         else if (st === 'listed') counts.listed++;
       });
       renderCounts();

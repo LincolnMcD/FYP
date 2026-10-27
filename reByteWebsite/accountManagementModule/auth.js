@@ -396,6 +396,9 @@ const ReByteAuth = {
 
       const data = await response.json();
       if (response.ok) {
+        if (String(data.role || '').toLowerCase() === 'rental' || email.toLowerCase() === 'rental@rebyte.com') {
+          return { success: false, error: 'Rental access is constrained to the Mobile application.' };
+        }
         const user = {
           email,
           name: data.name || email.split('@')[0],

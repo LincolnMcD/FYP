@@ -7,6 +7,7 @@ const addressRouter = require("./accountManagementModule/addressServer");
 const deviceTradeInRouter = require("./deviceTradeInModule/server");
 const shopRouter = require("./accountManagementModule/shopServer");
 const taskAssignmentRouter = require("./taskAssignmentModule/server");
+const rentalManagementRouter = require("./rentalManagementModule/server");
 const path = require("path");
 const { runWithRequest, recordRequest } = require("./config/firestoreMetrics");
 
@@ -35,6 +36,8 @@ app.use("/api/shop", shopRouter);
 app.use("/shop", shopRouter);
 app.use("/api/task-assignment", taskAssignmentRouter);
 app.use("/task-assignment", taskAssignmentRouter);
+app.use("/api/rental", rentalManagementRouter);
+app.use("/rental", rentalManagementRouter);
 
 const http = require("http");
 const { Server } = require("socket.io");

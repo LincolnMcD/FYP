@@ -177,6 +177,8 @@ function serializeProduct(doc) {
         color: data.color || "",
         condition: conditionStr,
         sellingPrice: Number(data.sellingPrice || 0),
+        rentalPrice: Number(data.rentalPrice || data.monthlyRentalPrice || data.rentPricePerMonth || (data.sellingPrice ? Math.round(Number(data.sellingPrice) * 0.08 * 100) / 100 : (data.collectedPrice ? Math.round(Number(data.collectedPrice) * 0.08 * 100) / 100 : (data.estPrice ? Math.round(Number(data.estPrice) * 0.08 * 100) / 100 : 0)))),
+        monthlyRentalPrice: Number(data.monthlyRentalPrice || data.rentalPrice || data.rentPricePerMonth || (data.sellingPrice ? Math.round(Number(data.sellingPrice) * 0.08 * 100) / 100 : (data.collectedPrice ? Math.round(Number(data.collectedPrice) * 0.08 * 100) / 100 : (data.estPrice ? Math.round(Number(data.estPrice) * 0.08 * 100) / 100 : 0)))),
         listingStatus: String(data.listingStatus || data.status || "draft").toLowerCase(),
         status: String(data.listingStatus || data.status || "draft").toLowerCase(),
         imageUrl: (data.imageUrl && !String(data.imageUrl).includes("sample_")) ? String(data.imageUrl).trim() : "",
@@ -263,6 +265,7 @@ router.get("/products", async (req, res) => {
         const email = String(req.query.email || "").trim().toLowerCase();
         const search = String(req.query.search || "").trim();
         const brand = String(req.query.brand || "").trim();
+        const targetStatus = String(req.query.status || "listed").trim().toLowerCase();
         const sort = ["low", "high"].includes(String(req.query.sort)) ? String(req.query.sort) : "none";
         let userDoc = null;
         if (email) {
@@ -292,7 +295,7 @@ router.get("/products", async (req, res) => {
             return res.status(400).json({ success: false, error: "Invalid product cursor." });
         }
 
-        const cacheKey = `${email}|${search.toLowerCase()}|${brand.toLowerCase()}|${sort}|${req.query.cursor || "first"}`;
+        const cacheKey = `${email}|${targetStatus}|${search.toLowerCase()}|${brand.toLowerCase()}|${sort}|${req.query.cursor || "first"}`;
         const cached = cacheGet(productPageCache, cacheKey);
         if (cached) return res.json({ ...cached, cached: true });
 
@@ -302,9 +305,10 @@ router.get("/products", async (req, res) => {
             cartIds = new Set(storedCart.map(String));
         }
 
-        let query = db.collection("product").where("listingStatus", "==", "listed");
-        if (sort === "low") query = query.orderBy("sellingPrice", "asc").orderBy(FieldPath.documentId(), "asc");
-        else if (sort === "high") query = query.orderBy("sellingPrice", "desc").orderBy(FieldPath.documentId(), "asc");
+        const sortPriceField = targetStatus === "rent" ? "rentPricePerMonth" : "sellingPrice";
+        let query = db.collection("product").where("listingStatus", "==", targetStatus);
+        if (sort === "low") query = query.orderBy(sortPriceField, "asc").orderBy(FieldPath.documentId(), "asc");
+        else if (sort === "high") query = query.orderBy(sortPriceField, "desc").orderBy(FieldPath.documentId(), "asc");
         else query = query.orderBy(FieldPath.documentId(), "asc");
         const products = [];
         let scanAfter = cursor;
@@ -322,12 +326,12 @@ router.get("/products", async (req, res) => {
                 snapshot = await pageQuery.get();
             } catch (err) {
                 const code = String(err?.code || "").toLowerCase();
-                // If the listingStatus + sellingPrice composite index has not been
-                // deployed yet, fall back to the built-in single-field price index.
-                // Filter status on the returned page so sort/filter remains usable.
-                if (!filterListedInMemory && sort !== "none" && (code === "9" || code === "failed-precondition")) {
+                // If composite index is pending, query without where and filter in memory
+                if (!filterListedInMemory && (code === "9" || code === "failed-precondition")) {
                     filterListedInMemory = true;
-                    query = db.collection("product").orderBy("sellingPrice", sort === "low" ? "asc" : "desc");
+                    query = sort === "none" 
+                        ? db.collection("product").orderBy(FieldPath.documentId(), "asc")
+                        : db.collection("product").orderBy(sortPriceField, sort === "low" ? "asc" : "desc");
                     continue;
                 }
                 throw err;
@@ -338,18 +342,25 @@ router.get("/products", async (req, res) => {
             for (const doc of snapshot.docs) {
                 const docStatus = String(doc.get("listingStatus") || doc.get("status") || "").trim().toLowerCase();
                 const isDocPublic = doc.get("isPublic") !== false && doc.get("marketplaceVisibility") !== "hidden";
-                if (docStatus !== "listed" || !isDocPublic) {
-                    scanAfter = { id: doc.id, price: Number(doc.get("sellingPrice") || 0) };
+                const isStatusMatch = targetStatus === "rent"
+                    ? (docStatus === "rent" || docStatus === "renting")
+                    : (docStatus === targetStatus && isDocPublic);
+                const currentPrice = Number(doc.get(sortPriceField) || 0);
+                if (!isStatusMatch) {
+                    scanAfter = { id: doc.id, price: currentPrice };
                     continue;
                 }
                 const product = serializeProduct(doc);
-                if (product.listingStatus !== "listed") {
-                    scanAfter = { id: doc.id, price: Number(doc.get("sellingPrice") || 0) };
+                const isProductStatusMatch = targetStatus === "rent"
+                    ? (product.listingStatus === "rent" || product.listingStatus === "renting")
+                    : (product.listingStatus === targetStatus);
+                if (!isProductStatusMatch) {
+                    scanAfter = { id: doc.id, price: currentPrice };
                     continue;
                 }
                 const productId = String(product.productID);
                 if (cartIds.has(productId) || !productMatches(product, search, brand)) {
-                    scanAfter = { id: doc.id, price: Number(doc.get("sellingPrice") || 0) };
+                    scanAfter = { id: doc.id, price: currentPrice };
                     continue;
                 }
                 if (products.length === PRODUCT_PAGE_SIZE) {
@@ -358,7 +369,7 @@ router.get("/products", async (req, res) => {
                     break;
                 }
                 products.push(product);
-                scanAfter = { id: doc.id, price: Number(doc.get("sellingPrice") || 0) };
+                scanAfter = { id: doc.id, price: currentPrice };
             }
             if (!pageEnded || snapshot.size < PRODUCT_SCAN_PAGE_SIZE) break;
         }
@@ -2223,7 +2234,7 @@ router.get("/admin/products", async (req, res) => {
                 }
             }
 
-            const rawSt = String(data.listingStatus || "").trim().toLowerCase();
+            const rawSt = String(data.listingStatus || data.status || "").trim().toLowerCase();
             let normStatus = rawSt
                 ? rawSt.charAt(0).toUpperCase() + rawSt.slice(1)
                 : "Unknown";
@@ -2239,8 +2250,17 @@ router.get("/admin/products", async (req, res) => {
             } else if (rawSt === "hidden") {
                 normStatus = "Hidden";
                 counts.hidden++;
+            } else if (rawSt === "rent") {
+                normStatus = "Rent";
+                counts.rented++;
+            } else if (rawSt === "renting") {
+                normStatus = "Renting";
+                counts.rented++;
             } else if (rawSt === "rented") {
                 normStatus = "Rented";
+                counts.rented++;
+            } else if (rawSt === "lock" || rawSt === "locked") {
+                normStatus = "Lock";
                 counts.rented++;
             }
 
@@ -2276,7 +2296,9 @@ router.get("/admin/products", async (req, res) => {
                     : Math.round(collectedPrice * 1.2 * 100) / 100);
             const suggestedPrice = sellingPrice;
             const listedPrice = sellingPrice;
-            const rentalPrice = data.rentalPrice ? Number(data.rentalPrice) : Math.round(listedPrice * 0.08 * 100) / 100;
+            const rentalPrice = data.rentPricePerMonth !== undefined && data.rentPricePerMonth !== null
+                ? Number(data.rentPricePerMonth)
+                : (data.rentalPrice ? Number(data.rentalPrice) : Math.round((listedPrice > 0 ? listedPrice * 0.08 : collectedPrice * 0.05) * 100) / 100);
 
             const actualImg = (data.imageUrl && !String(data.imageUrl).includes("sample_"))
                 ? String(data.imageUrl).trim()
@@ -2351,13 +2373,23 @@ router.post("/admin/products/:productId/status", async (req, res) => {
         }
 
         const pData = pSnap.data() || {};
+        const isRentStatus = ["rent", "renting", "lock", "locked"].includes(dbStatus);
         const updateData = {
             listingStatus: dbStatus,
             status: dbStatus,
-            isPublic: dbStatus === "listed",
-            marketplaceVisibility: dbStatus === "listed" ? "public" : "hidden",
             updatedAt: FieldValue.serverTimestamp()
         };
+        if (isRentStatus) {
+            updateData.isPublic = FieldValue.delete();
+            updateData.marketplaceVisibility = FieldValue.delete();
+            updateData.lastLockCommandAt = FieldValue.delete();
+            updateData.lastUnlockCommandAt = FieldValue.delete();
+            updateData.restrictedAt = FieldValue.delete();
+            updateData.unlockedAt = FieldValue.delete();
+        } else {
+            updateData.isPublic = dbStatus === "listed";
+            updateData.marketplaceVisibility = dbStatus === "listed" ? "public" : "hidden";
+        }
 
         // Min 1 image check before listing
         if (dbStatus === "listed") {
@@ -2492,16 +2524,26 @@ router.post("/admin/products/batch-status", async (req, res) => {
             }
         }
 
+        const isRentStatus = ["rent", "renting", "lock", "locked"].includes(dbStatus);
         const batch = db.batch();
         for (const pid of productIds) {
             const ref = db.collection("product").doc(pid);
             const updates = {
                 listingStatus: dbStatus,
                 status: dbStatus,
-                isPublic: dbStatus === "listed",
-                marketplaceVisibility: dbStatus === "listed" ? "public" : "hidden",
                 updatedAt: FieldValue.serverTimestamp()
             };
+            if (isRentStatus) {
+                updates.isPublic = FieldValue.delete();
+                updates.marketplaceVisibility = FieldValue.delete();
+                updates.lastLockCommandAt = FieldValue.delete();
+                updates.lastUnlockCommandAt = FieldValue.delete();
+                updates.restrictedAt = FieldValue.delete();
+                updates.unlockedAt = FieldValue.delete();
+            } else {
+                updates.isPublic = dbStatus === "listed";
+                updates.marketplaceVisibility = dbStatus === "listed" ? "public" : "hidden";
+            }
             if (dbStatus === "listed") {
                 try {
                     const snap = await ref.get();
@@ -3167,6 +3209,15 @@ router.put("/admin/products/:productID", async (req, res) => {
             if (!isNaN(sp)) updates.sellingPrice = Number(sp.toFixed(2));
         }
 
+        if (body.rentPricePerMonth !== undefined || body.rentalPrice !== undefined) {
+            const rpVal = body.rentPricePerMonth !== undefined ? body.rentPricePerMonth : body.rentalPrice;
+            const rp = parseFloat(rpVal);
+            if (!isNaN(rp)) {
+                updates.rentPricePerMonth = Number(rp.toFixed(2));
+                updates.rentalPrice = Number(rp.toFixed(2));
+            }
+        }
+
         if (body.description !== undefined) {
             updates.description = body.description ? String(body.description).trim() : null;
         }
@@ -3182,7 +3233,7 @@ router.put("/admin/products/:productID", async (req, res) => {
 
         if (body.listingStatus !== undefined) {
             const newStatus = String(body.listingStatus).trim().toLowerCase();
-            if (["draft", "listed", "hidden", "purchased", "rented"].includes(newStatus)) {
+            if (["draft", "listed", "hidden", "purchased", "rented", "rent", "renting", "lock", "locked"].includes(newStatus)) {
                 // Min 1 image check before listing
                 if (newStatus === "listed") {
                     const imgSnap = await pDoc.ref.collection("images").get();
@@ -3197,6 +3248,16 @@ router.put("/admin/products/:productID", async (req, res) => {
                 updates.listingStatus = newStatus;
                 updates.status = newStatus === "listed" ? "listed" : newStatus;
             }
+        }
+
+        const effectiveStatus = String(updates.listingStatus || (pDoc.data() && (pDoc.data().listingStatus || pDoc.data().status)) || "").trim().toLowerCase();
+        if (["rent", "renting", "lock", "locked"].includes(effectiveStatus)) {
+            updates.isPublic = FieldValue.delete();
+            updates.marketplaceVisibility = FieldValue.delete();
+            updates.lastLockCommandAt = FieldValue.delete();
+            updates.lastUnlockCommandAt = FieldValue.delete();
+            updates.restrictedAt = FieldValue.delete();
+            updates.unlockedAt = FieldValue.delete();
         }
 
         updates.updatedAt = FieldValue.serverTimestamp();

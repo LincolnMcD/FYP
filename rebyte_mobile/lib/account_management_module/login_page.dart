@@ -6,6 +6,7 @@ import 'register_page.dart';
 import 'complete_profile_page.dart';
 import 'forgot_password_page.dart';
 import '../staff_module/staff_home_page.dart';
+import '../rental_managment_module/rental_management_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -103,6 +104,12 @@ class _LoginPageState extends State<LoginPage> {
             MaterialPageRoute(builder: (context) => StaffHomePage(toastMessage: result['message'] ?? 'Login successful!')),
             (route) => false,
           );
+        } else if (role.toString().toLowerCase() == 'rental') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => RentalManagementPage(toastMessage: result['message'] ?? 'Login successful!')),
+            (route) => false,
+          );
         } else {
           Navigator.pushAndRemoveUntil(
             context,
@@ -137,6 +144,12 @@ class _LoginPageState extends State<LoginPage> {
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => StaffHomePage(toastMessage: response['message'] ?? 'Login successful via OAuth!')),
+              (route) => false,
+            );
+          } else if (role.toString().toLowerCase() == 'rental') {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => RentalManagementPage(toastMessage: response['message'] ?? 'Login successful via OAuth!')),
               (route) => false,
             );
           } else {

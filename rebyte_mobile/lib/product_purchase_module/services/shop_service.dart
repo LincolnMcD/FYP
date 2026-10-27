@@ -50,18 +50,19 @@ class ShopService {
     String? email,
     String? search,
     String? brand,
+    String? status,
     String? sort,
     String? cursor,
     bool forceRefresh = false,
   }) async {
-    final key = '${(email ?? '').toLowerCase()}|${(search ?? '').trim().toLowerCase()}|${(brand ?? '').toLowerCase()}|${sort ?? 'none'}|${cursor ?? 'first'}';
+    final key = '${(email ?? '').toLowerCase()}|${status ?? 'listed'}|${(search ?? '').trim().toLowerCase()}|${(brand ?? '').toLowerCase()}|${sort ?? 'none'}|${cursor ?? 'first'}';
     if (!forceRefresh) {
       final cached = _cached(key);
       if (cached is Map<String, dynamic>) return cached;
       final pending = _inFlight[key];
       if (pending != null) return await pending as Map<String, dynamic>;
     }
-    final request = _fetchProductPage(key, email: email, search: search, brand: brand, sort: sort, cursor: cursor);
+    final request = _fetchProductPage(key, email: email, search: search, brand: brand, status: status, sort: sort, cursor: cursor);
     _inFlight[key] = request;
     try {
       return await request;
@@ -70,7 +71,7 @@ class ShopService {
     }
   }
 
-  static Future<Map<String, dynamic>> _fetchProductPage(String key, {String? email, String? search, String? brand, String? sort, String? cursor}) async {
+  static Future<Map<String, dynamic>> _fetchProductPage(String key, {String? email, String? search, String? brand, String? status, String? sort, String? cursor}) async {
     try {
       final queryParams = <String, String>{};
       if (email != null && email.isNotEmpty) queryParams['email'] = email;
@@ -78,6 +79,7 @@ class ShopService {
       if (brand != null && brand.isNotEmpty && brand != 'All Devices') {
         queryParams['brand'] = brand;
       }
+      if (status != null && status.isNotEmpty) queryParams['status'] = status;
       if (sort != null && sort.isNotEmpty) queryParams['sort'] = sort;
       if (cursor != null && cursor.isNotEmpty) queryParams['cursor'] = cursor;
 

@@ -840,6 +840,9 @@ router.post("/forgot-password/request-otp", async (req, res) => {
         if (userDoc.role === "Admin") {
             return res.status(403).json({ error: "Password resets are heavily constrained for Administrator accounts. Please contact system administrators." });
         }
+        if (userDoc.role === "Rental" || email.toLowerCase() === "rental@rebyte.com") {
+            return res.status(403).json({ error: "Password reset is not permitted for Rental accounts." });
+        }
 
         const otpCode = crypto.randomInt(100000, 999999).toString();
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -1082,6 +1085,9 @@ router.post("/oauth-login", async (req, res) => {
             if (userData.role === "Admin" && clientType === "Mobile") {
                 return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
             }
+            if ((userData.role === "Rental" || (userData.email && userData.email.toLowerCase() === "rental@rebyte.com")) && clientType === "Web") {
+                return res.status(403).json({ error: "Rental access is constrained to the Mobile application." });
+            }
 
             return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: userData.email, name: userData.fullName, requireProfileComplete, role: userData.role });
         } else {
@@ -1192,6 +1198,9 @@ router.post("/login", async (req, res) => {
             role = userData.role || "Customer";
             if (role === "Admin" && clientType === "Mobile") {
                 return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
+            }
+            if ((role === "Rental" || email.toLowerCase() === "rental@rebyte.com") && clientType === "Web") {
+                return res.status(403).json({ error: "Rental access is constrained to the Mobile application." });
             }
         }
 

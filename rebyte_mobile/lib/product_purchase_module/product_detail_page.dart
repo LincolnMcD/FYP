@@ -4,6 +4,7 @@ import 'models/cart_item_model.dart';
 import 'services/shop_service.dart';
 import 'checkout_page.dart';
 import 'cart_page.dart';
+import 'select_rental_duration_page.dart';
 import '../../account_management_module/welcome_page.dart';
 
 class ProductDetailPage extends StatefulWidget {
@@ -12,6 +13,7 @@ class ProductDetailPage extends StatefulWidget {
   final String? email;
   final String? name;
   final VoidCallback? onCartUpdated;
+  final bool isRentalMode;
 
   const ProductDetailPage({
     super.key,
@@ -20,6 +22,7 @@ class ProductDetailPage extends StatefulWidget {
     this.email,
     this.name,
     this.onCartUpdated,
+    this.isRentalMode = false,
   });
 
   @override
@@ -38,6 +41,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   bool _isLoadingSpecs = true;
   String _modelCode = '';
   String _deviceID = '';
+
+  bool get _isRentalDevice {
+    final st = _product.listingStatus.toLowerCase();
+    return widget.isRentalMode || st == 'rent' || st == 'renting';
+  }
+
+  double get _rentalAmount {
+    if (_product.rentalPrice > 0) return _product.rentalPrice;
+    if (_product.sellingPrice > 0) return _product.sellingPrice * 0.08;
+    return 50.0;
+  }
 
   @override
   void initState() {
@@ -264,38 +278,40 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
-                if (_cartItemCount > 0)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE11D48),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        '$_cartItemCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
+          if (!_isRentalDevice) ...[
+            IconButton(
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+                  if (_cartItemCount > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE11D48),
+                          shape: BoxShape.circle,
                         ),
-                        textAlign: TextAlign.center,
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        child: Text(
+                          '$_cartItemCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
+              onPressed: _openCartPage,
             ),
-            onPressed: _openCartPage,
-          ),
-          const SizedBox(width: 4),
+            const SizedBox(width: 4),
+          ],
         ],
       ),
       body: SafeArea(
@@ -822,28 +838,66 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           const SizedBox(height: 10),
 
           // Price
-          Text(
-            'RM${_product.sellingPrice.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F172A),
+          if (_isRentalDevice) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  'RM${_rentalAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0C5AD2),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  '/ month',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Free shipping. Professional verified.',
-            style: TextStyle(
-              fontSize: 13,
-              color: Color(0xFF64748B),
+            const SizedBox(height: 4),
+            Text(
+              _product.sellingPrice > 0
+                  ? 'Security Deposit: RM${(_product.sellingPrice * 0.2).toStringAsFixed(2)} (Refundable upon return)'
+                  : 'Professional verified • Free delivery & pickup',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF64748B),
+              ),
             ),
-          ),
+          ] else ...[
+            Text(
+              'RM${_product.sellingPrice.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Free shipping. Professional verified.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           // Why this price? banner
           InkWell(
             onTap: () {
-              _showTopToast('Transparent pricing based on condition & battery health.');
+              _showTopToast(_isRentalDevice
+                  ? 'Monthly rental rate includes hardware protection and regular maintenance.'
+                  : 'Transparent pricing based on condition & battery health.');
             },
             borderRadius: BorderRadius.circular(10),
             child: Container(
@@ -853,135 +907,156 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
-                children: const [
-                  Icon(Icons.info_outline, size: 18, color: Color(0xFF0C5AD2)),
-                  SizedBox(width: 8),
+                children: [
+                  const Icon(Icons.info_outline, size: 18, color: Color(0xFF0C5AD2)),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Why this price?',
-                      style: TextStyle(
+                      _isRentalDevice ? 'Why this rental rate?' : 'Why this price?',
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF1E293B),
                       ),
                     ),
                   ),
-                  Icon(Icons.chevron_right, size: 18, color: Color(0xFF64748B)),
+                  const Icon(Icons.chevron_right, size: 18, color: Color(0xFF64748B)),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 18),
 
-          // Add to Cart Button (disabled with gray overlay if already added to cart)
-          GestureDetector(
-            onTap: _isInCart
-                ? () {
-                    _showTopToast('${_product.displayTitle} already added to the cart', isError: true);
-                  }
-                : null,
-            child: SizedBox(
+          // Action Buttons: If rental device, only show "Make a Rental" button
+          if (_isRentalDevice) ...[
+            SizedBox(
               width: double.infinity,
               height: 48,
-              child: ElevatedButton(
-                onPressed: _isInCart || _isAddingToCart ? null : _handleAddToCart,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SelectRentalDurationPage(
+                        product: _product,
+                        isLoggedIn: widget.isLoggedIn,
+                        email: widget.email,
+                        name: widget.name,
+                        onRentalCompleted: widget.onCartUpdated,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.calendar_month_outlined, size: 20, color: Colors.white),
+                label: const Text(
+                  'Make a Rental',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0C5AD2),
-                  disabledBackgroundColor: Colors.grey.shade300,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: _isAddingToCart
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.shopping_cart,
-                            size: 18,
-                            color: _isInCart ? Colors.grey.shade600 : Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _isInCart ? 'Added to Cart' : 'Add to Cart',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+              ),
+            ),
+          ] else ...[
+            // Add to Cart Button (disabled with gray overlay if already added to cart)
+            GestureDetector(
+              onTap: _isInCart
+                  ? () {
+                      _showTopToast('${_product.displayTitle} already added to the cart', isError: true);
+                    }
+                  : null,
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _isInCart || _isAddingToCart ? null : _handleAddToCart,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0C5AD2),
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isAddingToCart
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.shopping_cart,
+                              size: 18,
                               color: _isInCart ? Colors.grey.shade600 : Colors.white,
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _isInCart ? 'Added to Cart' : 'Add to Cart',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _isInCart ? Colors.grey.shade600 : Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-          // Buy Now button
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: OutlinedButton(
-              onPressed: _handleBuyNow,
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF0F172A), width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+            // Buy Now button
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _handleBuyNow,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF0F172A), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              child: const Text(
-                'Buy Now',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+                child: const Text(
+                  'Buy Now',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 14),
 
-          // Compare & Rent this device row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              InkWell(
-                onTap: () {
-                  _showTopToast('Device comparison feature coming soon.');
-                },
-                child: Row(
-                  children: const [
-                    Icon(Icons.compare_arrows, size: 16, color: Color(0xFF64748B)),
-                    SizedBox(width: 6),
-                    Text(
-                      'Compare',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                    ),
-                  ],
+          // Compare device row
+          InkWell(
+            onTap: () {
+              _showTopToast('Device comparison feature coming soon.');
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.compare_arrows, size: 16, color: Color(0xFF64748B)),
+                SizedBox(width: 6),
+                Text(
+                  'Compare',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
                 ),
-              ),
-              InkWell(
-                onTap: () {
-                  _showTopToast('Rentals feature available in Rentals tab.');
-                },
-                child: Row(
-                  children: const [
-                    Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF0C5AD2)),
-                    SizedBox(width: 6),
-                    Text(
-                      'Rent this device',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0C5AD2)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
