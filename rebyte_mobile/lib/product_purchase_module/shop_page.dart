@@ -34,6 +34,7 @@ class ShopPage extends StatefulWidget {
 
 class ShopPageState extends State<ShopPage> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
   String _selectedBrand = 'All Brands';
@@ -65,6 +66,7 @@ class ShopPageState extends State<ShopPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     _searchDebounce?.cancel();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
@@ -117,7 +119,8 @@ class ShopPageState extends State<ShopPage> {
     );
     if (mounted && generation == _productRequestGeneration) {
       setState(() {
-        _products = List<ProductModel>.from(result['products'] as List<ProductModel>);
+        final rawList = List<ProductModel>.from(result['products'] as List<ProductModel>);
+        _products = rawList.where((p) => p.listingStatus.toLowerCase() == 'listed').toList();
         _nextCursor = result['nextCursor'] as String?;
         _hasMore = result['hasMore'] == true;
         _productLoadError = result['error']?.toString();
@@ -140,7 +143,9 @@ class ShopPageState extends State<ShopPage> {
     if (!mounted || generation != _productRequestGeneration) return;
     setState(() {
       final existing = _products.map((product) => product.productID).toSet();
-      _products.addAll((result['products'] as List<ProductModel>).where((item) => !existing.contains(item.productID)));
+      final newItems = (result['products'] as List<ProductModel>)
+          .where((item) => item.listingStatus.toLowerCase() == 'listed' && !existing.contains(item.productID));
+      _products.addAll(newItems);
       _nextCursor = result['nextCursor'] as String?;
       _hasMore = result['hasMore'] == true;
       _isLoadingMore = false;
@@ -346,101 +351,109 @@ class ShopPageState extends State<ShopPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-      onRefresh: () => loadProducts(forceRefresh: true),
-            color: const Color(0xFF0C5AD2),
-              child: SingleChildScrollView(
-                controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSearchBar(),
-                  const SizedBox(height: 12),
-                  _buildControlsRow(),
-                  const SizedBox(height: 16),
-                  if (_isLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 60.0),
-                      child: Center(
-                        child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_searchFocusNode.hasFocus) {
+          _searchFocusNode.unfocus();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FB),
+        body: Stack(
+          children: [
+            RefreshIndicator(
+        onRefresh: () => loadProducts(forceRefresh: true),
+              color: const Color(0xFF0C5AD2),
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 12),
+                    _buildControlsRow(),
+                    const SizedBox(height: 16),
+                    if (_isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 60.0),
+                        child: Center(
+                          child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+                        ),
+                      )
+                    else if (_products.isEmpty)
+                      _buildEmptyState(_productLoadError)
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _products.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          final product = _products[index];
+                          return _buildProductCard(product);
+                        },
                       ),
-                    )
-                  else if (_products.isEmpty)
-                    _buildEmptyState(_productLoadError)
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _products.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        final product = _products[index];
-                        return _buildProductCard(product);
-                      },
-                    ),
-                  if (_isLoadingMore)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Center(child: CircularProgressIndicator(color: Color(0xFF0C5AD2))),
-                    ),
-                  const SizedBox(height: 24),
-                ],
+                    if (_isLoadingMore)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(child: CircularProgressIndicator(color: Color(0xFF0C5AD2))),
+                      ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
-          ),
-          // Consistent ReByte top toast
-          if (_toastMessage != null)
-            Positioned(
-              top: 12,
-              left: 16,
-              right: 16,
-              child: Dismissible(
-                key: UniqueKey(),
-                direction: DismissDirection.horizontal,
-                onDismissed: (_) => setState(() => _toastMessage = null),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _isToastError ? Colors.red.shade600 : Colors.green.shade600,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isToastError ? Icons.error_outline : Icons.check_circle_outline,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _toastMessage!,
-                            textAlign: TextAlign.justify,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+            // Consistent ReByte top toast
+            if (_toastMessage != null)
+              Positioned(
+                top: 12,
+                left: 16,
+                right: 16,
+                child: Dismissible(
+                  key: UniqueKey(),
+                  direction: DismissDirection.horizontal,
+                  onDismissed: (_) => setState(() => _toastMessage = null),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _isToastError ? Colors.red.shade600 : Colors.green.shade600,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isToastError ? Icons.error_outline : Icons.check_circle_outline,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _toastMessage!,
+                              textAlign: TextAlign.justify,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -460,6 +473,12 @@ class ShopPageState extends State<ShopPage> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              focusNode: _searchFocusNode,
+              onTapOutside: (_) {
+                if (_searchFocusNode.hasFocus) {
+                  _searchFocusNode.unfocus();
+                }
+              },
               decoration: const InputDecoration(
                 hintText: 'Search devices, brands, or models...',
                 hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
@@ -469,7 +488,10 @@ class ShopPageState extends State<ShopPage> {
               ),
               style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
               onChanged: (_) => _scheduleSearch(),
-              onSubmitted: (_) => loadProducts(),
+              onSubmitted: (_) {
+                _searchFocusNode.unfocus();
+                loadProducts();
+              },
             ),
           ),
           if (_searchController.text.isNotEmpty)
@@ -646,13 +668,17 @@ class ShopPageState extends State<ShopPage> {
                         topLeft: Radius.circular(16),
                         topRight: Radius.circular(16),
                       ),
-                      child: Image.network(
-                        product.imageUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => Center(
-                          child: Icon(Icons.smartphone, size: 64, color: Colors.grey.shade300),
-                        ),
-                      ),
+                      child: (product.imageUrl.isNotEmpty && !product.imageUrl.contains('sample_'))
+                          ? Image.network(
+                              product.imageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => Center(
+                                child: Icon(Icons.smartphone, size: 64, color: Colors.grey.shade300),
+                              ),
+                            )
+                          : Center(
+                              child: Icon(Icons.smartphone, size: 64, color: Colors.grey.shade300),
+                            ),
                     ),
                   ),
                   Positioned(
@@ -696,6 +722,8 @@ class ShopPageState extends State<ShopPage> {
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF0F172A),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(

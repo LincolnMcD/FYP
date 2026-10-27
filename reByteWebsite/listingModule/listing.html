@@ -1267,11 +1267,24 @@
               <option value="All">All Brands</option>
               <option value="Apple">Apple</option>
               <option value="Samsung">Samsung</option>
-              <option value="Huawei">Huawei</option>
-              <option value="Xiaomi">Xiaomi</option>
-              <option value="Google">Google</option>
               <option value="OnePlus">OnePlus</option>
+              <option value="Xiaomi">Xiaomi</option>
+              <option value="Redmi">Redmi</option>
+              <option value="POCO">POCO</option>
+              <option value="Google">Google</option>
+              <option value="Huawei">Huawei</option>
+              <option value="OPPO">OPPO</option>
+              <option value="vivo">vivo</option>
+              <option value="HONOR">HONOR</option>
+              <option value="realme">realme</option>
+              <option value="Nothing">Nothing</option>
               <option value="Sony">Sony</option>
+              <option value="ASUS">ASUS</option>
+              <option value="Motorola">Motorola</option>
+              <option value="Infinix">Infinix</option>
+              <option value="Tecno">Tecno</option>
+              <option value="ZTE">ZTE</option>
+              <option value="nubia">nubia</option>
             </select>
 
             <!-- Sort Pill -->
@@ -1419,14 +1432,25 @@
           activeTab = btn.dataset.tab;
           currentPage = 1;
           clearBatchSelection();
+          try {
+            sessionStorage.setItem('rebyte_active_listing_tab', activeTab);
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', activeTab);
+            window.history.replaceState({}, '', url.toString());
+          } catch (_) {}
           renderTableHeader();
           renderListings();
         });
       });
 
-      // Check URL query parameters (e.g. ?tab=draft&created=1)
+      // Check URL query parameters (e.g. ?tab=listed) or preserved sessionStorage
       const urlParams = new URLSearchParams(window.location.search);
-      const tabParam = urlParams.get('tab');
+      let tabParam = urlParams.get('tab');
+      if (!tabParam) {
+        try {
+          tabParam = sessionStorage.getItem('rebyte_active_listing_tab');
+        } catch (_) {}
+      }
       if (tabParam && ['draft', 'listed', 'hidden', 'purchased', 'rented'].includes(tabParam.toLowerCase())) {
         activeTab = tabParam.toLowerCase();
         document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
@@ -1434,10 +1458,19 @@
           else btn.classList.remove('active');
         });
       }
+      try {
+        sessionStorage.setItem('rebyte_active_listing_tab', activeTab);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', activeTab);
+        window.history.replaceState({}, '', url.toString());
+      } catch (_) {}
+
       const createdCount = urlParams.get('created');
       if (createdCount) {
         showToast(`Successfully created ${createdCount} draft product(s)!`, 'success');
-        window.history.replaceState({}, document.title, window.location.pathname + (tabParam ? `?tab=${tabParam}` : ''));
+        const url = new URL(window.location.href);
+        url.searchParams.delete('created');
+        window.history.replaceState({}, '', url.toString());
       }
       const searchInput = document.getElementById('searchInput');
       if (searchInput) {
@@ -1573,9 +1606,12 @@
                   ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
                   : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
 
+                const smartTitle = data.listingTitle || `${formatProductTitle(brandName, modelName)} - ${storageSize} - ${colorName}`;
+
                 prods.push({
                   id: doc.id,
                   productID: data.productID || doc.id,
+                  listingTitle: smartTitle,
                   deviceID: data.deviceID || '',
                   tradeInRequestID: data.tradeInRequestID || '',
                   description: desc,
@@ -1597,7 +1633,7 @@
                   rawStatus: rawSt,
                   sku: `SKU-${doc.id.substring(0, 6).toUpperCase()}`,
                   imei: devData.imeiNum || trData.imei || data.imei || `358${doc.id.replace(/\D/g, '').padEnd(11, '0').slice(0, 11)}`,
-                  imageUrl: devData.imageUrl || data.imageUrl || sampleImg,
+                  imageUrl: (data.imageUrl && !data.imageUrl.includes('sample_')) ? data.imageUrl : ((devData.imageUrl && !devData.imageUrl.includes('sample_')) ? devData.imageUrl : ''),
                   category: devData.deviceCategory || data.category || 'Smartphones',
                   dateAdded: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()) : new Date().toISOString()
                 });
@@ -1618,6 +1654,9 @@
       renderCounts();
       renderTableHeader();
       renderListings();
+      try {
+        sessionStorage.setItem('rebyte_all_listings', JSON.stringify(allListings));
+      } catch (_) {}
     }
 
     // Batch Selection State
@@ -1631,10 +1670,17 @@
       updateBatchUI();
     }
 
+    const STANDARD_20_BRANDS = [
+      'Apple', 'Samsung', 'OnePlus', 'Xiaomi', 'Redmi',
+      'POCO', 'Google', 'Huawei', 'OPPO', 'vivo',
+      'HONOR', 'realme', 'Nothing', 'Sony', 'ASUS',
+      'Motorola', 'Infinix', 'Tecno', 'ZTE', 'nubia'
+    ];
+
     function populateBrandFilterOptions() {
       const select = document.getElementById('brandFilterSelect');
       if (!select) return;
-      const brandSet = new Set(['Apple', 'Samsung', 'Huawei', 'Xiaomi', 'Google', 'OnePlus', 'Sony']);
+      const brandSet = new Set(STANDARD_20_BRANDS);
       allListings.forEach(item => {
         if (item.brand && item.brand.trim()) brandSet.add(item.brand.trim());
       });
@@ -1744,6 +1790,15 @@
     async function handleBatchActionClick() {
       if (selectedProductIds.size === 0) return;
       if (activeTab === 'draft' || activeTab === 'hidden') {
+        const ids = Array.from(selectedProductIds);
+        for (const id of ids) {
+          const item = allListings.find(l => l.id === id);
+          const val = validateProductForListing(item);
+          if (!val.valid) {
+            showToast(`${item?.productID || item?.sku || id}: ${val.error}`, 'error');
+            return;
+          }
+        }
         await executeBatchStatusChange('Listed');
       } else if (activeTab === 'listed') {
         await executeBatchStatusChange('Hidden');
@@ -2067,8 +2122,8 @@
           actionColumnHtml = `
             <td>
               <div class="action-icons">
-                <button type="button" class="btn-icon" title="Edit Listing Details" onclick="openEditModal('${item.id}', event)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                <button type="button" class="btn-icon" title="View Listing (Read-only)" onclick="openEditModal('${item.id}', event, 'view')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
                 <button type="button" class="btn-icon btn-action-hide" title="Hide Listing" onclick="hideListing('${item.id}', event)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
@@ -2134,7 +2189,10 @@
           <td>
             <div class="product-cell">
               <div class="product-thumb">
-                <img src="${item.imageUrl}" alt="${item.model}" onerror="this.src='../accountManagementModule/assets/images/hero_phone.jpg';">
+                ${(item.imageUrl && !item.imageUrl.includes('sample_'))
+                  ? `<img src="${item.imageUrl}" alt="${item.model}" onerror="this.onerror=null; this.parentNode.innerHTML='<svg width=\\'22\\' height=\\'22\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'#94a3b8\\' stroke-width=\\'1.8\\'><rect x=\\'5\\' y=\\'2\\' width=\\'14\\' height=\\'20\\' rx=\\'2\\' ry=\\'2\\'></rect><line x1=\\'12\\' y1=\\'18\\' x2=\\'12.01\\' y2=\\'18\\'></line></svg>';">`
+                  : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`
+                }
               </div>
               <div class="product-info">
                 <span class="product-title">${escapeHtml(formatProductTitle(item.brand, item.model))}</span>
@@ -2305,7 +2363,10 @@
       content.innerHTML = `
         <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 24px;">
           <div style="width: 100px; height: 100px; border-radius: 12px; background: #f1f5f9; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
-            <img src="${item.imageUrl}" alt="${item.model}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='../accountManagementModule/assets/images/hero_phone.jpg';">
+            ${(item.imageUrl && !item.imageUrl.includes('sample_'))
+              ? `<img src="${item.imageUrl}" alt="${item.model}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.parentNode.innerHTML='<svg width=\\'42\\' height=\\'42\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'#94a3b8\\' stroke-width=\\'1.8\\'><rect x=\\'5\\' y=\\'2\\' width=\\'14\\' height=\\'20\\' rx=\\'2\\' ry=\\'2\\'></rect><line x1=\\'12\\' y1=\\'18\\' x2=\\'12.01\\' y2=\\'18\\'></line></svg>';">`
+              : `<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`
+            }
           </div>
           <div style="flex: 1;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -2363,9 +2424,20 @@
       openModal('viewDetailsModal');
     }
 
-    function openEditModal(id, e) {
+    function openEditModal(id, e, mode) {
       if (e) e.stopPropagation();
-      window.location.href = `editListing.html?id=${encodeURIComponent(id)}`;
+      const item = allListings.find(l => l.id === id || l.productID === id);
+      if (item) {
+        try {
+          sessionStorage.setItem('rebyte_edit_listing_preview_' + id, JSON.stringify(item));
+          if (item.productID) {
+            sessionStorage.setItem('rebyte_edit_listing_preview_' + item.productID, JSON.stringify(item));
+          }
+          sessionStorage.setItem('rebyte_current_editing_item', JSON.stringify(item));
+        } catch (_) {}
+      }
+      const modeQuery = mode ? `&mode=${encodeURIComponent(mode)}` : '';
+      window.location.href = `editListing.html?id=${encodeURIComponent(id)}${modeQuery}`;
     }
 
     let pendingStatusTarget = null;
@@ -2376,9 +2448,49 @@
       pendingStatusTarget = null;
     }
 
+    function hasProductImage(item) {
+      if (!item) return false;
+      if (item.hasActualImage) return true;
+      if (item.imageUrl && !item.imageUrl.includes('sample_iphone14') && !item.imageUrl.includes('sample_galaxy')) {
+        return true;
+      }
+      return false;
+    }
+
+    function validateProductForListing(item) {
+      if (!item) return { valid: false, error: 'Product not found.' };
+      if (!hasProductImage(item)) {
+        return { valid: false, error: 'At least 1 product image is required before listing.' };
+      }
+      const title = (item.listingTitle || '').trim();
+      if (!title) {
+        return { valid: false, error: 'Listing title is required. Please edit product details first.' };
+      }
+      const sp = Number(item.sellingPrice !== undefined && item.sellingPrice !== null ? item.sellingPrice : (item.listedPrice || 0));
+      if (!sp || isNaN(sp) || sp <= 0) {
+        return { valid: false, error: 'Selling price must be greater than RM 0.00. Please edit product details first.' };
+      }
+      const desc = (item.description || '').trim();
+      if (!desc) {
+        return { valid: false, error: 'Product description is required before listing. Please edit product details first.' };
+      }
+      if (!item.brand || !item.model) {
+        return { valid: false, error: 'Device brand and model are required.' };
+      }
+      return { valid: true };
+    }
+
     function promptStatusChange(id, targetStatus, actionType) {
       const item = allListings.find(l => l.id === id);
       if (!item) return;
+
+      if (String(targetStatus).toLowerCase() === 'listed') {
+        const val = validateProductForListing(item);
+        if (!val.valid) {
+          showToast(`Cannot list product: ${val.error}`, 'error');
+          return;
+        }
+      }
 
       const modal = document.getElementById('statusConfirmModal');
       const iconEl = document.getElementById('statusConfirmIcon');
@@ -2479,6 +2591,12 @@
 
     async function uploadListing(id, e) {
       if (e) e.stopPropagation();
+      const item = allListings.find(l => l.id === id);
+      const val = validateProductForListing(item);
+      if (!val.valid) {
+        showToast(`Cannot list product: ${val.error}`, 'error');
+        return;
+      }
       await quickSetStatus(id, 'Listed', e, 'Successfully Listed');
     }
 
@@ -2489,6 +2607,12 @@
 
     async function unhideListing(id, e) {
       if (e) e.stopPropagation();
+      const item = allListings.find(l => l.id === id);
+      const val = validateProductForListing(item);
+      if (!val.valid) {
+        showToast(`Cannot list product: ${val.error}`, 'error');
+        return;
+      }
       await quickSetStatus(id, 'Listed', e, 'Successfully Listed');
     }
 
@@ -2509,7 +2633,27 @@
 
       const isListed = String(newStatus).toLowerCase() === 'listed';
       const isHidden = String(newStatus).toLowerCase() === 'hidden';
+
+      if (isListed) {
+        const val = validateProductForListing(item);
+        if (!val.valid) {
+          showToast(`Cannot list product: ${val.error}`, 'error');
+          return;
+        }
+      }
+
       const toastSuccessMsg = customToast || (isListed ? 'Successfully Listed' : (isHidden ? 'Successfully Hidden' : `Listing ${item.productID || item.sku || id} status updated to ${newStatus}!`));
+
+      // Compute default listingTitle if missing
+      let listingTitle = item.listingTitle;
+      if (!listingTitle || !listingTitle.trim()) {
+        const title = formatProductTitle(item.brand, item.model);
+        const parts = [title];
+        if (item.storage && !title.toLowerCase().includes(item.storage.toLowerCase())) parts.push(item.storage);
+        if (item.color && item.color !== 'Standard' && !title.toLowerCase().includes(item.color.toLowerCase())) parts.push(item.color);
+        listingTitle = parts.join(' - ');
+        item.listingTitle = listingTitle;
+      }
 
       const oldStatus = item.status;
       const oldRawStatus = getRawProductStatus(item);
@@ -2534,7 +2678,7 @@
             const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: newStatus })
+              body: JSON.stringify({ status: newStatus, listingTitle: isListed ? listingTitle : undefined })
             });
             if (res.ok) {
               const data = await res.json();
@@ -2553,13 +2697,17 @@
           if (firebase.firestore) {
             try {
               const dbStatus = newStatus.toLowerCase() === 'purchased' ? 'sold' : newStatus.toLowerCase();
-              await firebase.firestore().collection('product').doc(id).update({
+              const updatePayload = {
                 listingStatus: dbStatus,
                 status: dbStatus,
                 isPublic: isListed,
                 marketplaceVisibility: isListed ? 'public' : 'hidden',
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
+              };
+              if (isListed && listingTitle) {
+                updatePayload.listingTitle = listingTitle;
+              }
+              await firebase.firestore().collection('product').doc(id).update(updatePayload);
               updated = true;
             } catch (fbErr) {
               console.error('Direct Firestore update error:', fbErr);

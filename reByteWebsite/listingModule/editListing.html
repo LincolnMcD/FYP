@@ -247,7 +247,36 @@
       opacity: 0.7;
     }
 
-    /* Status Pill (Exact match with product listing page showing) */
+    /* Read-Only Mode Styles */
+    body.read-only-mode .btn-save,
+    body.read-only-mode .btn-discard,
+    body.read-only-mode #btnAddImage,
+    body.read-only-mode .thumb-delete-btn {
+      display: none !important;
+    }
+    body.read-only-mode .form-input:disabled,
+    body.read-only-mode .form-select:disabled,
+    body.read-only-mode .form-textarea:disabled,
+    body.read-only-mode .currency-input:disabled,
+    body.read-only-mode .custom-select-trigger.disabled-view {
+      background-color: #f8fafc !important;
+      color: #1e293b !important;
+      border-color: #cbd5e1 !important;
+      cursor: default !important;
+      pointer-events: none !important;
+      opacity: 0.95 !important;
+    }
+    body.read-only-mode .custom-select-trigger.disabled-view .custom-select-chevron {
+      display: none;
+    }
+    .status-pill.status-view-only {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+    }
+    .status-pill.status-view-only .status-dot {
+      background: #0284c7;
+    }
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -349,6 +378,12 @@
       transition: all 0.15s ease;
       outline: none;
     }
+    ::placeholder,
+    input::placeholder,
+    textarea::placeholder {
+      color: #94a3b8 !important;
+      opacity: 0.8 !important;
+    }
     .form-input:focus, .form-select:focus, .form-textarea:focus {
       border-color: var(--primary-blue);
       box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
@@ -366,6 +401,136 @@
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 12px;
+    }
+
+    /* Searchable Custom Model Dropdown */
+    .searchable-dropdown-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .custom-select-trigger {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-main);
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+    }
+    .custom-select-trigger:hover {
+      border-color: #cbd5e1;
+    }
+    .custom-select-trigger.active,
+    .custom-select-trigger:focus {
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.12);
+      outline: none;
+    }
+    .custom-select-value {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+    .custom-select-chevron {
+      width: 16px;
+      height: 16px;
+      color: #64748b;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .custom-select-trigger.active .custom-select-chevron {
+      transform: rotate(180deg);
+    }
+    .custom-dropdown-panel {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      z-index: 200;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    .custom-dropdown-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: #f8fafc;
+    }
+    .custom-dropdown-search svg {
+      width: 15px;
+      height: 15px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .custom-dropdown-search input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 13px;
+      color: var(--text-main);
+      font-family: inherit;
+    }
+    .search-clear-btn {
+      border: none;
+      background: transparent;
+      font-size: 16px;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .search-clear-btn:hover {
+      color: var(--text-main);
+    }
+    .custom-dropdown-options {
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .custom-dropdown-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.12s ease;
+    }
+    .custom-dropdown-item:hover {
+      background: #f1f5f9;
+    }
+    .custom-dropdown-item.selected {
+      background: var(--light-blue);
+      color: var(--primary-blue);
+      font-weight: 600;
+    }
+    .custom-dropdown-item.selected svg {
+      color: var(--primary-blue);
+    }
+    .custom-dropdown-empty {
+      padding: 16px 12px;
+      text-align: center;
+      font-size: 12.5px;
+      color: #94a3b8;
     }
 
     /* Image Gallery Card */
@@ -1107,9 +1272,9 @@
             <!-- Big Main Image Preview -->
             <div class="gallery-preview-box" id="galleryPreviewBox">
               <div class="gallery-empty-state" id="galleryEmptyState">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                <strong>No product images uploaded yet</strong>
-                <p>Initial draft products start with empty photos. Click "+ Add" below to upload photos (minimum 1, maximum 5).</p>
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#94a3b8" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                <strong style="color: #64748b; font-size: 14px; margin-top: 8px;">No product photos</strong>
+                <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0;">Click "+ Add" below to upload photos (min 1, max 5).</p>
               </div>
               <img src="" alt="Main Preview" class="gallery-main-img" id="galleryMainImg" style="display: none;">
             </div>
@@ -1126,7 +1291,7 @@
 
             <div class="image-limits-hint">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              <span id="imageCountText">0 of 5 photos uploaded</span> • Stored in Cloudinary folder <code style="background: #f1f5f9; padding: 1px 5px; border-radius: 4px;" id="cloudinaryFolderHint">product/ID</code>
+              <span id="imageCountText">0 of 5 photos uploaded (min 1, max 5)</span>
             </div>
           </div>
 
@@ -1166,9 +1331,24 @@
                   <option value="Tecno">Tecno</option>
                 </select>
               </div>
-              <div>
+              <div class="searchable-dropdown-wrap" id="modelDropdownWrap">
                 <label class="form-label" for="modelInput">Model</label>
-                <select class="form-select" id="modelInput" onchange="onModelSelectChanged(this.value)">
+                <div class="custom-select-trigger" id="modelSelectTrigger" tabindex="0" onclick="toggleModelDropdown(event)">
+                  <span class="custom-select-value" id="modelSelectValueText">Select Model</span>
+                  <svg class="custom-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div class="custom-dropdown-panel" id="modelDropdownPanel" style="display: none;">
+                  <div class="custom-dropdown-search" onclick="event.stopPropagation()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input type="text" id="modelSearchInput" placeholder="Search model..." autocomplete="off" oninput="filterModelDropdownOptions(this.value)">
+                    <button type="button" class="search-clear-btn" id="modelSearchClearBtn" onclick="clearModelSearch(event)" style="display: none;">&times;</button>
+                  </div>
+                  <div class="custom-dropdown-options" id="modelDropdownList">
+                    <!-- Populated dynamically -->
+                  </div>
+                </div>
+                <!-- Preserved for form baseline comparison & backwards compatibility -->
+                <select class="form-select" id="modelInput" style="display: none;" onchange="onModelSelectChanged(this.value)">
                   <!-- Dynamically populated based on selected brand -->
                 </select>
               </div>
@@ -1428,6 +1608,7 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const productID = urlParams.get('id') || urlParams.get('productID');
+    const isReadOnly = (urlParams.get('mode') || '').toLowerCase() === 'view';
 
     let currentProduct = null;
     let currentDevice = null;
@@ -1435,6 +1616,67 @@
     let currentImages = []; // Each: { id, imageID, imageUrl, productID, uploadedAt }
     let selectedImageIndex = 0;
     let isPublicVisibility = true;
+
+    function applyReadOnlyMode() {
+      if (!isReadOnly) return;
+      document.body.classList.add('read-only-mode');
+
+      // 1. Disable inputs and selects
+      const fieldIds = [
+        'listingTitleInput', 'brandInput', 'modelInput',
+        'descriptionInput', 'storageInput', 'colorInput',
+        'ramInput', 'sellingPriceInput'
+      ];
+      fieldIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.disabled = true;
+          el.readOnly = true;
+        }
+      });
+
+      // 2. Disable custom model select trigger
+      const modelTrigger = document.getElementById('modelSelectTrigger');
+      if (modelTrigger) {
+        modelTrigger.classList.add('disabled-view');
+        modelTrigger.onclick = null;
+        modelTrigger.removeAttribute('tabindex');
+      }
+
+      // 3. Hide save & discard buttons, add a Back button in header actions
+      const btnSave = document.getElementById('btnSaveChanges');
+      const btnDiscard = document.getElementById('btnDiscardChanges');
+      if (btnSave) btnSave.style.display = 'none';
+      if (btnDiscard) btnDiscard.style.display = 'none';
+
+      const headerActions = document.querySelector('.header-actions-right');
+      if (headerActions && !document.getElementById('btnBackToListings')) {
+        const backBtn = document.createElement('a');
+        backBtn.id = 'btnBackToListings';
+        backBtn.href = 'listing.html?tab=listed';
+        backBtn.className = 'btn-discard';
+        backBtn.style.cssText = 'color: #0f172a; border-color: #cbd5e1; font-weight: 600; text-decoration: none;';
+        backBtn.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"></path></svg>
+          Back to Listings
+        `;
+        headerActions.appendChild(backBtn);
+      }
+
+      // 4. Update header title badge to indicate View-Only
+      const titleLeft = document.querySelector('.header-title-left');
+      if (titleLeft && !document.getElementById('viewOnlyModeBadge')) {
+        const viewBadge = document.createElement('span');
+        viewBadge.id = 'viewOnlyModeBadge';
+        viewBadge.className = 'status-pill status-view-only';
+        viewBadge.innerHTML = '<span class="status-dot"></span> View Only';
+        titleLeft.appendChild(viewBadge);
+      }
+
+      // 5. Hide image add button and limits hint
+      const btnAddImg = document.getElementById('btnAddImage');
+      if (btnAddImg) btnAddImg.style.display = 'none';
+    }
 
     function escapeHtml(str) {
       if (str === null || str === undefined) return '';
@@ -1456,6 +1698,111 @@
       return [...new Set(list)];
     }
 
+    function tryImmediatePrefill() {
+      if (!productID) return;
+      try {
+        let item = null;
+        const cachedItemStr = sessionStorage.getItem('rebyte_edit_listing_preview_' + productID);
+        if (cachedItemStr) {
+          item = JSON.parse(cachedItemStr);
+        }
+        if (!item) {
+          const currentEditingStr = sessionStorage.getItem('rebyte_current_editing_item');
+          if (currentEditingStr) {
+            const cur = JSON.parse(currentEditingStr);
+            if (cur && (cur.id === productID || cur.productID === productID)) {
+              item = cur;
+            }
+          }
+        }
+        if (!item) {
+          const allListingsStr = sessionStorage.getItem('rebyte_all_listings');
+          if (allListingsStr) {
+            const list = JSON.parse(allListingsStr);
+            if (Array.isArray(list)) {
+              item = list.find(l => l.id === productID || l.productID === productID);
+            }
+          }
+        }
+
+        if (item) {
+          currentProduct = {
+            id: item.id || productID,
+            productID: item.productID || item.id || productID,
+            listingTitle: item.listingTitle || item.title || '',
+            brand: item.brand,
+            model: item.model,
+            storage: item.storage,
+            color: item.color,
+            ram: item.ram,
+            imei: item.imei,
+            description: item.description,
+            sellingPrice: item.sellingPrice,
+            listingStatus: item.listingStatus || item.status || 'draft',
+            status: item.status || item.listingStatus || 'draft',
+            imageUrl: item.imageUrl,
+            collectedPrice: item.collectedPrice,
+            suggestedPrice: item.suggestedPrice
+          };
+          currentDevice = {
+            brand: item.brand,
+            model: item.model,
+            storage: item.storage,
+            storageCapacity: item.storage,
+            color: item.color,
+            colour: item.color,
+            ram: item.ram,
+            imei: item.imei,
+            imeiNum: item.imei,
+            quotedValue: item.collectedPrice,
+            imageUrl: item.imageUrl
+          };
+          currentTradeIn = {
+            imei: item.imei,
+            imeiNum: item.imei,
+            finalOfferPrice: item.collectedPrice,
+            finalQuotation: { finalOfferPrice: item.collectedPrice }
+          };
+          // Instant load of image 1, 2, 3, etc. without waiting for network
+          let cachedImgs = null;
+          try {
+            const storedImgsStr = sessionStorage.getItem('rebyte_product_images_' + productID);
+            if (storedImgsStr) {
+              cachedImgs = JSON.parse(storedImgsStr);
+            }
+          } catch (_) {}
+
+          if (Array.isArray(cachedImgs) && cachedImgs.length > 0) {
+            currentImages = [...cachedImgs];
+          } else if (Array.isArray(item.images) && item.images.length > 0) {
+            currentImages = item.images.map((img, idx) => {
+              if (typeof img === 'string') {
+                return {
+                  id: `img_${idx}`,
+                  imageID: `img_${idx}`,
+                  imageUrl: img,
+                  productID: productID
+                };
+              }
+              return img;
+            });
+          } else if (item.imageUrl && !String(item.imageUrl).includes('sample_')) {
+            currentImages = [{
+              id: 'primary-img',
+              imageID: 'primary-img',
+              imageUrl: item.imageUrl,
+              productID: productID
+            }];
+          } else {
+            currentImages = [];
+          }
+          renderFormFields();
+        }
+      } catch (err) {
+        console.warn('Immediate prefill error:', err);
+      }
+    }
+
     async function initEditPage() {
       if (!productID) {
         showToast('No product ID specified in URL', 'error');
@@ -1464,7 +1811,11 @@
       }
 
       document.getElementById('breadcrumbProductID').textContent = productID;
-      document.getElementById('cloudinaryFolderHint').textContent = `product/${productID}`;
+      const folderHint = document.getElementById('cloudinaryFolderHint');
+      if (folderHint) folderHint.textContent = `product/${productID}`;
+
+      // Instant prefill: no waiting for API/network
+      tryImmediatePrefill();
 
       await loadProductData();
     }
@@ -1530,30 +1881,51 @@
           return;
         }
 
+        const alreadyChanged = hasChanges();
         currentProduct = data.product;
         currentDevice = data.device || {};
         currentTradeIn = data.tradeInRequest || {};
-        currentImages = Array.isArray(data.images) && data.images.length > 0 ? [...data.images] : [];
-
-        // Ensure product image is never empty: fall back to product, device, tradeIn proof of collection, or sample
-        if (currentImages.length === 0) {
-          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
-          const defaultSample = String(brand).toLowerCase() === 'apple'
-            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
-            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
-          const fallbackImg = currentProduct.imageUrl ||
-                              (currentTradeIn && (currentTradeIn.imageUrl || currentTradeIn.proofOfCollectionUrl)) ||
-                              (currentDevice && (currentDevice.imageUrl || currentDevice.image)) ||
-                              defaultSample;
-          currentImages.push({
-            id: 'primary-img',
-            imageID: 'primary-img',
-            imageUrl: fallbackImg,
-            productID: productID
-          });
+        
+        // Preserve staged new uploads and staged deletions
+        const baseImages = Array.isArray(data.images) && data.images.length > 0 ? [...data.images] : [];
+        if (!alreadyChanged && stagedNewUploads.length === 0 && stagedDeletedImages.length === 0) {
+          currentImages = baseImages;
+        } else {
+          // Keep existing server images that weren't staged for delete, plus staged new uploads
+          const deletedIds = new Set(stagedDeletedImages.map(d => d.imageID || d.id));
+          const keptServerImages = baseImages.filter(img => !deletedIds.has(img.imageID || img.id));
+          currentImages = [...keptServerImages, ...stagedNewUploads];
         }
 
-        await renderFormFields();
+        if (!alreadyChanged && stagedNewUploads.length === 0 && stagedDeletedImages.length === 0) {
+          if (currentImages.length === 0) {
+            const isDraft = String((currentProduct && (currentProduct.listingStatus || currentProduct.status)) || 'draft').toLowerCase() === 'draft';
+            if (!isDraft) {
+              const actualImg = (currentProduct && currentProduct.imageUrl) ||
+                                (currentTradeIn && currentTradeIn.imageUrl) ||
+                                (currentDevice && (currentDevice.imageUrl || currentDevice.image));
+              if (actualImg && !String(actualImg).includes('sample_') && !String(actualImg).includes('proof_of_delivery')) {
+                currentImages.push({
+                  id: 'primary-img',
+                  imageID: 'primary-img',
+                  imageUrl: actualImg,
+                  productID: productID
+                });
+              }
+            }
+          }
+          await renderFormFields();
+        } else {
+          renderInspectionReport(currentDevice, currentTradeIn);
+          renderGallery();
+        }
+
+        // Cache all images for instant prefill on next open
+        try {
+          if (Array.isArray(currentImages) && currentImages.length > 0) {
+            sessionStorage.setItem('rebyte_product_images_' + productID, JSON.stringify(currentImages));
+          }
+        } catch (_) {}
       } catch (err) {
         console.error('Error loading product:', err);
         showToast('Failed to load product details', 'error');
@@ -1657,14 +2029,19 @@
       brandSelect.innerHTML = brands.map(b => `<option value="${escapeHtml(b)}"${b.toLowerCase() === (selectedBrand || '').toLowerCase() ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
     }
 
+    let currentBrandModels = [];
+
     function renderModelOptions(models, selectedModel, brand) {
       const modelSelect = document.getElementById('modelInput');
       if (!modelSelect) return;
+
+      currentBrandModels = [...models];
 
       const targetVal = String(selectedModel || '').trim().toLowerCase();
       const brandClean = String(brand || '').trim().toLowerCase();
 
       let matchedIndex = -1;
+      let finalSelected = '';
       const html = models.map((m, idx) => {
         const mClean = String(m).trim().toLowerCase();
         const isMatch = (
@@ -1674,6 +2051,7 @@
         );
         if (isMatch && matchedIndex === -1) {
           matchedIndex = idx;
+          finalSelected = m;
         }
         return `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`;
       }).join('');
@@ -1681,8 +2059,131 @@
       modelSelect.innerHTML = html;
       if (matchedIndex >= 0) {
         modelSelect.selectedIndex = matchedIndex;
+      } else if (models.length > 0) {
+        finalSelected = models[0];
+      }
+
+      updateCustomModelDropdownUI(finalSelected || modelSelect.value);
+    }
+
+    function toggleModelDropdown(e) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      const panel = document.getElementById('modelDropdownPanel');
+      const trigger = document.getElementById('modelSelectTrigger');
+      if (!panel || !trigger) return;
+
+      const isOpening = panel.style.display === 'none' || !panel.style.display;
+      if (isOpening) {
+        panel.style.display = 'flex';
+        trigger.classList.add('active');
+        const searchInput = document.getElementById('modelSearchInput');
+        if (searchInput) {
+          searchInput.value = '';
+          const clearBtn = document.getElementById('modelSearchClearBtn');
+          if (clearBtn) clearBtn.style.display = 'none';
+          filterModelDropdownOptions('');
+          setTimeout(() => searchInput.focus(), 60);
+        }
+      } else {
+        closeModelDropdown();
       }
     }
+
+    function closeModelDropdown() {
+      const panel = document.getElementById('modelDropdownPanel');
+      const trigger = document.getElementById('modelSelectTrigger');
+      if (panel) panel.style.display = 'none';
+      if (trigger) trigger.classList.remove('active');
+    }
+
+    function filterModelDropdownOptions(searchTerm) {
+      const listEl = document.getElementById('modelDropdownList');
+      const clearBtn = document.getElementById('modelSearchClearBtn');
+      if (!listEl) return;
+
+      const term = String(searchTerm || '').trim().toLowerCase();
+      if (clearBtn) clearBtn.style.display = term ? 'block' : 'none';
+
+      const currentVal = document.getElementById('modelInput')?.value || '';
+      const filtered = term
+        ? currentBrandModels.filter(m => m.toLowerCase().includes(term))
+        : currentBrandModels;
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="custom-dropdown-empty">No models match "${escapeHtml(searchTerm)}"</div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(m => {
+        const isSelected = m.toLowerCase() === currentVal.toLowerCase();
+        return `
+          <div class="custom-dropdown-item${isSelected ? ' selected' : ''}" onclick="selectModelOption('${escapeHtml(m).replace(/'/g, "\\'")}', event)">
+            <span>${escapeHtml(m)}</span>
+            ${isSelected ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function clearModelSearch(e) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      const searchInput = document.getElementById('modelSearchInput');
+      if (searchInput) {
+        searchInput.value = '';
+        filterModelDropdownOptions('');
+        searchInput.focus();
+      }
+    }
+
+    function selectModelOption(model, e) {
+      if (e) e.stopPropagation();
+      const modelSelect = document.getElementById('modelInput');
+      if (modelSelect) {
+        let exists = false;
+        for (let i = 0; i < modelSelect.options.length; i++) {
+          if (modelSelect.options[i].value.toLowerCase() === model.toLowerCase()) {
+            modelSelect.selectedIndex = i;
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          const opt = new Option(model, model);
+          modelSelect.add(opt);
+          modelSelect.value = model;
+        }
+      }
+      updateCustomModelDropdownUI(model);
+      closeModelDropdown();
+      onModelSelectChanged(model);
+      updateChangeStatus();
+    }
+
+    function updateCustomModelDropdownUI(selectedModel) {
+      const valEl = document.getElementById('modelSelectValueText');
+      if (valEl) {
+        valEl.textContent = selectedModel || 'Select Model';
+      }
+      filterModelDropdownOptions(document.getElementById('modelSearchInput')?.value || '');
+    }
+
+    // Close model dropdown on document click or escape
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('modelDropdownWrap');
+      if (wrap && !wrap.contains(e.target)) {
+        closeModelDropdown();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModelDropdown();
+    });
 
     async function populateModelDropdown(brand, selectedModel) {
       const modelSelect = document.getElementById('modelInput');
@@ -1801,7 +2302,7 @@
 
       // Populate Brand & Model Dropdowns
       populateBrandDropdown(brand);
-      await populateModelDropdown(brand, model);
+      populateModelDropdown(brand, model);
 
       // Status Badge: original status
       originalProductStatus = String(p.listingStatus || p.status || 'draft').toLowerCase();
@@ -1900,6 +2401,10 @@
       // Attach change listeners and capture initial baseline state for change detection
       attachChangeListeners();
       captureInitialFormState();
+
+      if (isReadOnly) {
+        applyReadOnlyMode();
+      }
     }
 
     function formatProductTitle(brand, model) {
@@ -2017,32 +2522,18 @@
       const countText = document.getElementById('imageCountText');
       const btnAdd = document.getElementById('btnAddImage');
 
-      // If currentImages is empty, check if currentProduct has an imageUrl or device has one
-      if (currentImages.length === 0) {
-        const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
-        const defaultSample = String(brand).toLowerCase() === 'apple'
-          ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
-          : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
-        const fallbackUrl = (currentProduct && currentProduct.imageUrl) ||
-                            (currentDevice && (currentDevice.imageUrl || currentDevice.image)) ||
-                            (currentTradeIn && (currentTradeIn.imageUrl || currentTradeIn.proofOfCollectionUrl)) ||
-                            defaultSample;
-        currentImages.push({
-          id: 'primary-img',
-          imageID: 'primary-img',
-          imageUrl: fallbackUrl,
-          productID: productID
-        });
-      }
-
       // Update count text: min 1, max 5
       const count = currentImages.length;
       countText.textContent = `${count} of 5 photos uploaded (min 1, max 5)`;
 
       // Max 5 images: disable Add button if already 5
       if (btnAdd) {
-        btnAdd.disabled = count >= 5;
-        btnAdd.title = count >= 5 ? 'Maximum 5 images reached' : 'Add product photo';
+        if (isReadOnly) {
+          btnAdd.style.display = 'none';
+        } else {
+          btnAdd.disabled = count >= 5;
+          btnAdd.title = count >= 5 ? 'Maximum 5 images reached' : 'Add product photo';
+        }
       }
 
       // Check empty state
@@ -2056,10 +2547,8 @@
         mainImg.src = currentImages[selectedImageIndex].imageUrl;
         mainImg.onerror = function() {
           this.onerror = null;
-          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
-          this.src = String(brand).toLowerCase() === 'apple'
-            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
-            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
+          this.style.display = 'none';
+          emptyState.style.display = 'flex';
         };
       }
 
@@ -2079,24 +2568,24 @@
         img.alt = `Thumb ${idx + 1}`;
         img.onerror = function() {
           this.onerror = null;
-          const brand = (currentDevice && currentDevice.brand) || (currentProduct && currentProduct.brand) || '';
-          this.src = String(brand).toLowerCase() === 'apple'
-            ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
-            : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
-        };
-
-        const delBtn = document.createElement('button');
-        delBtn.type = 'button';
-        delBtn.className = 'thumb-delete-btn';
-        delBtn.innerHTML = '&times;';
-        delBtn.title = 'Delete image';
-        delBtn.onclick = (e) => {
-          e.stopPropagation();
-          deleteImage(imgObj.imageID || imgObj.id, idx);
+          this.style.opacity = '0.35';
         };
 
         item.appendChild(img);
-        item.appendChild(delBtn);
+
+        if (!isReadOnly) {
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'thumb-delete-btn';
+          delBtn.innerHTML = '&times;';
+          delBtn.title = 'Delete image';
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteImage(imgObj.imageID || imgObj.id, idx);
+          };
+          item.appendChild(delBtn);
+        }
+
         thumbsContainer.insertBefore(item, btnAdd);
       });
     }
@@ -2115,6 +2604,7 @@
     }
 
     function triggerFileInput() {
+      if (isReadOnly) return;
       if (currentImages.length >= 5) {
         showToast('Maximum of 5 photos already uploaded', 'info');
         return;
@@ -2126,67 +2616,50 @@
       }
     }
 
-    async function handleFileSelected(event) {
-      const file = event.target.files && event.target.files[0];
+    let stagedNewUploads = []; // [{ id, file, imageUrl: objectUrl }]
+    let stagedDeletedImages = []; // [{ id, imageID, imageUrl }]
+
+    function handleFileSelected(event) {
+      const input = event.target;
+      const file = input.files && input.files[0];
       if (!file) return;
 
       if (!file.type.startsWith('image/')) {
         showToast('Please select a valid image file', 'error');
+        input.value = '';
         return;
       }
 
       if (currentImages.length >= 5) {
         showToast('Maximum of 5 photos allowed (min 1, max 5)', 'error');
+        input.value = '';
         return;
       }
 
-      const btnAdd = document.getElementById('btnAddImage');
-      if (btnAdd) {
-        btnAdd.disabled = true;
-        btnAdd.innerHTML = '<span style="font-size: 11px;">Uploading...</span>';
-      }
+      const tempId = `staged_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const stagedObj = {
+          id: tempId,
+          imageID: tempId,
+          file: file,
+          imageUrl: dataUrl,
+          isStagedNew: true
+        };
 
-      showToast('Uploading photo to Cloudinary...', 'info');
-
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-
-        let result = null;
-        const candidateBases = getCandidateBaseUrls();
-        for (const base of candidateBases) {
-          try {
-            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images`, {
-              method: 'POST',
-              body: formData
-            });
-            if (res.ok) {
-              result = await res.json();
-              if (result && result.success) break;
-            }
-          } catch (_) {}
-        }
-
-        if (result && result.success && result.image) {
-          currentImages.push(result.image);
-          selectedImageIndex = currentImages.length - 1;
-          renderGallery();
-          showToast('Image uploaded successfully!', 'success');
-        } else {
-          showToast(result?.error || 'Failed to upload photo', 'error');
-        }
-      } catch (err) {
-        console.error('Upload error:', err);
-        showToast('Error uploading photo', 'error');
-      } finally {
-        if (btnAdd) {
-          btnAdd.disabled = currentImages.length >= 5;
-          btnAdd.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-            <span>Add</span>
-          `;
-        }
-      }
+        stagedNewUploads.push(stagedObj);
+        currentImages.push(stagedObj);
+        selectedImageIndex = currentImages.length - 1;
+        renderGallery();
+        updateChangeStatus();
+        showToast('Photo added. Click "Save Changes" to upload.', 'info');
+      };
+      reader.onerror = function() {
+        showToast('Failed to read image file', 'error');
+      };
+      reader.readAsDataURL(file);
+      input.value = '';
     }
 
     let pendingDeleteImageID = null;
@@ -2211,60 +2684,27 @@
       pendingDeleteIndex = null;
     }
 
-    async function executeDeleteImage() {
+    function executeDeleteImage() {
       if (!pendingDeleteImageID && pendingDeleteIndex === null) return;
-      const imageID = pendingDeleteImageID;
       const index = pendingDeleteIndex;
       closeDeletePhotoModal();
 
-      const btnConfirm = document.getElementById('btnConfirmDeletePhoto');
-      if (btnConfirm) {
-        btnConfirm.disabled = true;
-        btnConfirm.textContent = 'Deleting...';
-      }
-
-      try {
-        let deleted = false;
-        const candidateBases = getCandidateBaseUrls();
-        for (const base of candidateBases) {
-          try {
-            const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images/${encodeURIComponent(imageID)}`, {
-              method: 'DELETE'
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.success) {
-                deleted = true;
-                break;
-              }
-            }
-          } catch (_) {}
-        }
-
-        // Fallback: direct Firestore delete
-        if (!deleted && typeof firebase !== 'undefined' && firebase.firestore) {
-          await firebase.firestore().collection('product').doc(productID).collection('images').doc(imageID).delete();
-          deleted = true;
-        }
-
-        if (deleted) {
-          currentImages.splice(index, 1);
-          if (selectedImageIndex >= currentImages.length) {
-            selectedImageIndex = Math.max(0, currentImages.length - 1);
-          }
-          renderGallery();
-          showToast('Photo removed', 'success');
+      if (index >= 0 && index < currentImages.length) {
+        const removed = currentImages[index];
+        if (removed.isStagedNew) {
+          stagedNewUploads = stagedNewUploads.filter(s => s.id !== removed.id);
+          try { URL.revokeObjectURL(removed.imageUrl); } catch (_) {}
         } else {
-          showToast('Failed to delete photo', 'error');
+          stagedDeletedImages.push(removed);
         }
-      } catch (err) {
-        console.error('Delete error:', err);
-        showToast('Error deleting photo', 'error');
-      } finally {
-        if (btnConfirm) {
-          btnConfirm.disabled = false;
-          btnConfirm.textContent = 'Delete Photo';
+
+        currentImages.splice(index, 1);
+        if (selectedImageIndex >= currentImages.length) {
+          selectedImageIndex = Math.max(0, currentImages.length - 1);
         }
+        renderGallery();
+        updateChangeStatus();
+        showToast('Photo removed. Click "Save Changes" to confirm deletion.', 'info');
       }
     }
 
@@ -2289,21 +2729,158 @@
         // Marketplace Visibility is locked (not allowed to change)
         // Maintain existing original status (draft, listed, or hidden)
         const status = originalProductStatus || (isPublicVisibility ? 'listed' : 'draft');
-        const sellingPrice = spStr ? Number(parseFloat(spStr).toFixed(2)) : 0;
 
-        // Validation: Min 1 image required if listingStatus is "listed"
-        if (status === 'listed' && currentImages.length < 1) {
-          showToast('At least 1 product photo is required to publish this listing to the public marketplace (min 1, max 5).', 'error');
+        function restoreSaveBtn() {
           if (btnSave) {
             btnSave.disabled = false;
+            btnSave.classList.remove('disabled-gray');
             btnSave.innerHTML = `
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              Save Changes
+              <span>Save Changes</span>
             `;
           }
+        }
+
+        // 1. Validation: At least 1 image is required
+        if (!currentImages || currentImages.length < 1) {
+          showToast('Cannot save changes: At least 1 product photo is required.', 'error');
+          restoreSaveBtn();
           return;
         }
 
+        // 2. Validation: Listing Title
+        if (!title) {
+          showToast('Cannot save changes: Listing title cannot be empty.', 'error');
+          document.getElementById('listingTitleInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 3. Validation: Brand
+        if (!brand) {
+          showToast('Cannot save changes: Brand cannot be empty.', 'error');
+          document.getElementById('brandInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 4. Validation: Model
+        if (!model) {
+          showToast('Cannot save changes: Model cannot be empty.', 'error');
+          restoreSaveBtn();
+          return;
+        }
+
+        // 5. Validation: Description
+        if (!desc) {
+          showToast('Cannot save changes: Description cannot be empty.', 'error');
+          document.getElementById('descriptionInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 6. Validation: Storage
+        if (!storage) {
+          showToast('Cannot save changes: Storage capacity cannot be empty.', 'error');
+          document.getElementById('storageInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 7. Validation: Color
+        if (!color) {
+          showToast('Cannot save changes: Color cannot be empty.', 'error');
+          document.getElementById('colorInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 8. Validation: RAM
+        if (!ramDigits || Number(ramDigits) <= 0) {
+          showToast('Cannot save changes: RAM size is required (digits only).', 'error');
+          document.getElementById('ramInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // 9. Validation: Selling Price
+        const sellingPrice = spStr ? Number(parseFloat(spStr).toFixed(2)) : 0;
+        if (!spStr || isNaN(sellingPrice) || sellingPrice <= 0) {
+          showToast('Cannot save changes: Selling price must be greater than RM 0.00.', 'error');
+          document.getElementById('sellingPriceInput')?.focus();
+          restoreSaveBtn();
+          return;
+        }
+
+        // A. Process Staged Deletions: Delete from Cloudinary and Firestore
+        if (stagedDeletedImages.length > 0) {
+          if (btnSave) btnSave.textContent = 'Removing deleted photos...';
+          const candidateBases = getCandidateBaseUrls();
+          for (const delImg of stagedDeletedImages) {
+            const delId = delImg.imageID || delImg.id;
+            let delOk = false;
+            for (const base of candidateBases) {
+              try {
+                const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images/${encodeURIComponent(delId)}`, {
+                  method: 'DELETE'
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.success) {
+                    delOk = true;
+                    break;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // Fallback: direct Firestore deletion
+            if (!delOk && typeof firebase !== 'undefined' && firebase.firestore) {
+              try {
+                await firebase.firestore().collection('product').doc(productID).collection('images').doc(delId).delete();
+              } catch (_) {}
+            }
+          }
+          stagedDeletedImages = [];
+        }
+
+        // B. Process Staged Additions: Upload to Cloudinary & Firestore
+        if (stagedNewUploads.length > 0) {
+          if (btnSave) btnSave.textContent = 'Uploading new photos...';
+          const candidateBases = getCandidateBaseUrls();
+          for (const newUp of stagedNewUploads) {
+            const formData = new FormData();
+            formData.append('image', newUp.file);
+
+            let uploadSuccess = false;
+            for (const base of candidateBases) {
+              try {
+                const res = await fetch(`${base}/api/shop/admin/products/${encodeURIComponent(productID)}/images`, {
+                  method: 'POST',
+                  body: formData
+                });
+                if (res.ok) {
+                  const result = await res.json();
+                  if (result && result.success && result.image) {
+                    // Update matching object in currentImages
+                    const matchIdx = currentImages.findIndex(img => img.id === newUp.id);
+                    if (matchIdx !== -1) {
+                      currentImages[matchIdx] = result.image;
+                    }
+                    uploadSuccess = true;
+                    break;
+                  }
+                }
+              } catch (_) {}
+            }
+            try { URL.revokeObjectURL(newUp.imageUrl); } catch (_) {}
+          }
+          stagedNewUploads = [];
+        }
+
+        // C. Save Product Details
+        if (btnSave) btnSave.textContent = 'Saving details...';
+        const primaryImgUrl = (currentImages.length > 0 && currentImages[0].imageUrl) ? currentImages[0].imageUrl : null;
         const payload = {
           listingTitle: title,
           brand,
@@ -2315,6 +2892,7 @@
           sellingPrice,
           listingStatus: status,
           status,
+          imageUrl: primaryImgUrl,
           isPublic: isPublicVisibility,
           marketplaceVisibility: isPublicVisibility ? 'public' : 'hidden'
         };
@@ -2350,6 +2928,9 @@
             marketplaceVisibility: isPublicVisibility ? 'public' : 'hidden',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           };
+          if (primaryImgUrl) {
+            updates.imageUrl = primaryImgUrl;
+          }
           await firebase.firestore().collection('product').doc(productID).update(updates);
 
           if (currentProduct.deviceID) {
@@ -2357,9 +2938,9 @@
               brand,
               model,
               storageCapacity: storage,
-              storage,
+              storage: firebase.firestore.FieldValue.delete(),
               colour: color,
-              color,
+              color: firebase.firestore.FieldValue.delete(),
               ram,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -2368,6 +2949,9 @@
         }
 
         if (saved) {
+          try {
+            sessionStorage.setItem('rebyte_product_images_' + productID, JSON.stringify(currentImages));
+          } catch (_) {}
           initialFormState = getFormSnapshot();
           updateChangeStatus();
           showToast('Listing changes saved successfully!', 'success');
@@ -2417,6 +3001,7 @@
     }
 
     function hasChanges() {
+      if (stagedNewUploads.length > 0 || stagedDeletedImages.length > 0) return true;
       if (!initialFormState) return false;
       const current = getFormSnapshot();
       return (
@@ -2570,6 +3155,9 @@
       text.textContent = msg;
       toastTimer = setTimeout(() => { banner.classList.remove('show'); }, 3000);
     }
+
+    // Instant prefill right away (zero delay)
+    tryImmediatePrefill();
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initEditPage);

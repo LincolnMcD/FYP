@@ -1,9 +1,11 @@
 class ProductModel {
   final String id;
   final String productID;
+  final String listingTitle;
   final String description;
   final double sellingPrice;
   final String imageUrl;
+  final List<String> images;
   final String brand;
   final String model;
   final String storage;
@@ -17,9 +19,11 @@ class ProductModel {
   ProductModel({
     required this.id,
     required this.productID,
+    this.listingTitle = '',
     required this.description,
     required this.sellingPrice,
     required this.imageUrl,
+    this.images = const [],
     required this.brand,
     required this.model,
     required this.storage,
@@ -35,9 +39,15 @@ class ProductModel {
     return ProductModel(
       id: json['id']?.toString() ?? '',
       productID: json['productID']?.toString() ?? json['id']?.toString() ?? '',
+      listingTitle: json['listingTitle']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       sellingPrice: (json['sellingPrice'] is num) ? (json['sellingPrice'] as num).toDouble() : 0.0,
       imageUrl: json['imageUrl']?.toString() ?? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
+      images: (json['images'] is List)
+          ? (json['images'] as List).map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+          : (json['imageUrl'] != null && json['imageUrl'].toString().isNotEmpty
+              ? [json['imageUrl'].toString()]
+              : []),
       brand: json['brand']?.toString() ?? '',
       model: json['model']?.toString() ?? '',
       storage: json['storage']?.toString() ?? '',
@@ -52,12 +62,21 @@ class ProductModel {
 
   /// Formatted title e.g. "iPhone 15 Pro"
   String get displayTitle {
+    if (listingTitle.trim().isNotEmpty) {
+      return listingTitle.trim();
+    }
+    final List<String> parts = [];
     if (model.isNotEmpty) {
       if (brand.isNotEmpty && !model.toLowerCase().startsWith(brand.toLowerCase())) {
-        return '$brand $model';
+        parts.add('$brand $model');
+      } else {
+        parts.add(model);
       }
-      return model;
     }
+    if (storage.isNotEmpty) parts.add(storage);
+    if (color.isNotEmpty && color.toLowerCase() != 'standard') parts.add(color);
+    if (parts.isNotEmpty) return parts.join(' - ');
+
     if (description.isNotEmpty) {
       final dashIndex = description.indexOf(' - ');
       final titlePart = (dashIndex != -1 ? description.substring(0, dashIndex) : description).trim();

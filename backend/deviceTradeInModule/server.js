@@ -869,9 +869,17 @@ router.post("/device/update", async (req, res) => {
             }
             updateData.modelCode = codes.length > 0 ? codes : null;
         }
-        if (storageCapacity !== undefined && storageCapacity !== null) updateData.storageCapacity = storageCapacity;
-        if (colour !== undefined && colour !== null) updateData.colour = colour;
-        else if (color !== undefined && color !== null) updateData.colour = color;
+        if (storageCapacity !== undefined && storageCapacity !== null) {
+            updateData.storageCapacity = storageCapacity;
+            updateData.storage = FieldValue.delete();
+        }
+        if (colour !== undefined && colour !== null) {
+            updateData.colour = colour;
+            updateData.color = FieldValue.delete();
+        } else if (color !== undefined && color !== null) {
+            updateData.colour = color;
+            updateData.color = FieldValue.delete();
+        }
         if (imeiNum !== undefined && imeiNum !== null) updateData.imeiNum = imeiNum;
         if (status !== undefined && status !== null) updateData.status = status;
         if (deviceAge !== undefined && deviceAge !== null) updateData.deviceAge = deviceAge;

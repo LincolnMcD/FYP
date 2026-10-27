@@ -224,7 +224,7 @@ async function delayFollowingTasks(staffID, scheduleDate, cutoffStartTimeStr, mi
 
                 console.log(`[FOLLOWING TASK DELAYED] Staff [${staffID}] Task [${sDoc.id}] delayed by ${minsToAdd}m -> New Time: ${newStart} - ${newEnd}`);
                 // Re-register timers for the shifted following task
-                registerScheduleTimer(sDoc.id);
+                await registerScheduleTimer(sDoc.id);
             }
         }
     } catch (err) {
@@ -242,6 +242,15 @@ async function delayFollowingTasks(staffID, scheduleDate, cutoffStartTimeStr, mi
  */
 // Track schedules currently being processed to avoid duplicate concurrent triggers
 const processingSchedules = new Set();
+let scheduleViolationQueue = Promise.resolve();
+
+function enqueueScheduleViolation(work) {
+    const queuedWork = scheduleViolationQueue.catch(() => {}).then(work);
+    scheduleViolationQueue = queuedWork.catch((err) => {
+        console.error("[SCHEDULE VIOLATION QUEUE ERROR] Delay processing failed:", err);
+    });
+    return queuedWork;
+}
 
 // Serialize automatic absent-task reassignments in arrival order. Each assignment
 // must finish writing its schedule before the next one calculates availability.
@@ -265,7 +274,11 @@ function enqueueDeliveryReassignment(assignmentOptions) {
     return queuedAssignment;
 }
 
-async function handleStartTimeViolation(scheduleID) {
+function handleStartTimeViolation(scheduleID) {
+    return enqueueScheduleViolation(() => processStartTimeViolation(scheduleID));
+}
+
+async function processStartTimeViolation(scheduleID) {
     if (processingSchedules.has(`start_${scheduleID}`)) return;
     processingSchedules.add(`start_${scheduleID}`);
 
@@ -281,6 +294,12 @@ async function handleStartTimeViolation(scheduleID) {
         const schedStatus = String(sData.scheduleStatus || "").toLowerCase();
         // If already started, completed, rejected, or absent, do nothing
         if (schedStatus === "ongoing" || schedStatus === "completed" || schedStatus === "rejected" || schedStatus === "absent" || schedStatus === "cancelled") {
+            return;
+        }
+
+        const scheduledStart = parseScheduleDateTime(sData.scheduleDate, sData.scheduleStartTime);
+        if (scheduledStart && Date.now() < scheduledStart.getTime()) {
+            console.log(`[START TIME CHECK SKIPPED] Schedule [${scheduleID}] was moved to ${sData.scheduleStartTime}; its new start time has not arrived.`);
             return;
         }
 
@@ -383,7 +402,11 @@ async function handleStartTimeViolation(scheduleID) {
  * - staff mistake +1
  * - if 3rd time: scheduleStatus = 'absent', reassign to another staff
  */
-async function handleEndTimeViolation(scheduleID) {
+function handleEndTimeViolation(scheduleID) {
+    return enqueueScheduleViolation(() => processEndTimeViolation(scheduleID));
+}
+
+async function processEndTimeViolation(scheduleID) {
     if (processingSchedules.has(`end_${scheduleID}`)) return;
     processingSchedules.add(`end_${scheduleID}`);
 
@@ -398,7 +421,13 @@ async function handleEndTimeViolation(scheduleID) {
 
         const schedStatus = String(sData.scheduleStatus || "").toLowerCase();
         // If already completed, rejected, or absent, do nothing
-        if (schedStatus === "completed" || schedStatus === "rejected" || schedStatus === "absent" || schedStatus === "cancelled") {
+        if (schedStatus !== "ongoing") {
+            return;
+        }
+
+        const scheduledEnd = parseScheduleDateTime(sData.scheduleDate, sData.scheduleEndTime);
+        if (scheduledEnd && Date.now() < scheduledEnd.getTime()) {
+            console.log(`[END TIME CHECK SKIPPED] Schedule [${scheduleID}] was moved to ${sData.scheduleEndTime}; its new end time has not arrived.`);
             return;
         }
 
@@ -956,11 +985,19 @@ async function initializeScheduleMonitoring() {
 
         console.log(`[SCHEDULE MONITOR] Found ${schedSnap.size} active delivery schedules to monitor.`);
 
-        for (const sDoc of schedSnap.docs) {
+        const activeSchedules = [...schedSnap.docs].sort((a, b) => {
+            const aData = a.data();
+            const bData = b.data();
+            const aKey = `${aData.scheduleDate || ""} ${aData.scheduleStartTime || ""}`;
+            const bKey = `${bData.scheduleDate || ""} ${bData.scheduleStartTime || ""}`;
+            return aKey.localeCompare(bKey);
+        });
+
+        for (const sDoc of activeSchedules) {
             const sData = sDoc.data();
             // Only delivery schedules have orderID and participate in delivery delay monitoring
             if (sData.orderID) {
-                registerScheduleTimer(sDoc.id);
+                await registerScheduleTimer(sDoc.id);
             }
         }
 
@@ -984,8 +1021,16 @@ async function initializeScheduleMonitoring() {
                     .where("scheduleStatus", "in", ["assigned", "ongoing"])
                     .get();
 
+                const activeSchedules = [...activeSnap.docs].sort((a, b) => {
+                    const aData = a.data();
+                    const bData = b.data();
+                    const aKey = `${aData.scheduleDate || ""} ${aData.scheduleStartTime || ""}`;
+                    const bKey = `${bData.scheduleDate || ""} ${bData.scheduleStartTime || ""}`;
+                    return aKey.localeCompare(bKey);
+                });
+
                 const now = Date.now();
-                for (const doc of activeSnap.docs) {
+                for (const doc of activeSchedules) {
                     const data = doc.data();
                     // Skip non-delivery tasks (trade-in inspection/collection)
                     if (!data.orderID) continue;
@@ -998,12 +1043,12 @@ async function initializeScheduleMonitoring() {
                     if (sDate && sStart && sStatus === "assigned") {
                         const startDt = parseScheduleDateTime(sDate, sStart);
                         if (startDt && now >= startDt.getTime()) {
-                            handleStartTimeViolation(doc.id);
+                            await handleStartTimeViolation(doc.id);
                         }
                     } else if (sDate && sEnd && sStatus === "ongoing") {
                         const endDt = parseScheduleDateTime(sDate, sEnd);
                         if (endDt && now >= endDt.getTime()) {
-                            handleEndTimeViolation(doc.id);
+                            await handleEndTimeViolation(doc.id);
                         }
                     }
                 }

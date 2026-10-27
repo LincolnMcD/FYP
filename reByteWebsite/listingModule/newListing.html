@@ -655,6 +655,49 @@
     let selectedPaidIds = new Set();
     let isLoading = true;
 
+    function formatDeviceTitle(brand, model) {
+      const b = String(brand || '').trim();
+      let m = String(model || '').trim();
+      if (!b) return m;
+      if (!m) return b;
+      if (m.toLowerCase().startsWith(b.toLowerCase() + ' ')) {
+        m = m.substring(b.length).trim();
+      } else if (m.toLowerCase() === b.toLowerCase()) {
+        return b;
+      }
+      return `${b} ${m}`;
+    }
+
+    function formatStorageString(val) {
+      if (!val) return '128 GB';
+      const s = String(val).trim();
+      if (!s) return '128 GB';
+      if (/^\d+$/.test(s)) {
+        const num = parseInt(s, 10);
+        return num <= 16 ? `${num} TB` : `${num} GB`;
+      }
+      const match = s.match(/^(\d+)\s*(GB|TB|MB)$/i);
+      if (match) {
+        return `${match[1]} ${match[2].toUpperCase()}`;
+      }
+      return s;
+    }
+
+    function formatSmartListingTitle(brand, model, storage, color) {
+      const smartName = formatDeviceTitle(brand, model);
+      const cleanStorage = formatStorageString(storage);
+      const cleanColor = String(color || '').trim();
+
+      let title = smartName;
+      if (cleanStorage && !title.toLowerCase().includes(cleanStorage.toLowerCase())) {
+        title += ` - ${cleanStorage}`;
+      }
+      if (cleanColor && cleanColor !== 'Standard' && cleanColor !== 'Unknown' && !title.toLowerCase().includes(cleanColor.toLowerCase())) {
+        title += ` - ${cleanColor}`;
+      }
+      return title.trim() || smartName || 'Smartphone';
+    }
+
     async function initNewListingPage() {
       await fetchPaidDevices();
     }
@@ -744,11 +787,12 @@
               const existingPID = existingTrMap[doc.id] || (did ? existingDevMap[did] : null) || null;
               const isAlready = Boolean(existingPID);
 
-              let brand = fq.brand || dev.brand || tr.brand || 'Apple';
-              let model = fq.modelName || dev.model || tr.model || 'Device';
-              let storage = fq.storage || dev.storageCapacity || dev.storage || '128 GB';
-              let color = fq.colour || dev.colour || dev.color || 'Standard';
-              let imei = dev.imeiNum || tr.imei || '';
+              let brand = dev.brand || fq.brand || tr.brand || tr.deviceBrand || 'Apple';
+              let model = dev.model || dev.deviceModel || dev.modelName || fq.modelName || tr.model || tr.deviceModel || 'Smartphone';
+              let storage = formatStorageString(dev.storageCapacity || dev.storage || fq.storage || '128 GB');
+              let color = dev.colour || dev.color || fq.colour || fq.color || 'Standard';
+              let ram = dev.ramCapacity || dev.ram || fq.ram || '4 GB';
+              let imei = dev.imeiNum || dev.imei || tr.imei || '';
 
               let offer = 0;
               if (fq.finalOfferPrice !== undefined && fq.finalOfferPrice !== null && !isNaN(fq.finalOfferPrice)) {
@@ -1141,8 +1185,16 @@
             for (const it of itemsToCreate) {
               maxSeq++;
               const pid = `${prefix}${String(maxSeq).padStart(3, '0')}`;
+              let b = String(it.brand || '').trim();
+              let m = String(it.model || '').trim();
+              let s = formatStorageString(it.storage || '128 GB');
+              let c = String(it.color || '').trim();
+              let ram = String(it.ram || '4 GB').trim();
+              let defaultTitle = formatSmartListingTitle(b, m, s, c);
+
               const pData = {
                 productID: pid,
+                listingTitle: defaultTitle,
                 description: null,
                 sellingPrice: Number(Number(it.sellingPrice).toFixed(2)),
                 listingStatus: 'draft',
@@ -1151,7 +1203,18 @@
                 tradeInRequestID: it.tradeInRequestID || ''
               };
               batch.set(firebase.firestore().collection('product').doc(pid), pData);
-              created.push({ id: pid, ...pData, status: 'Draft', rawStatus: 'draft' });
+              created.push({
+                id: pid,
+                ...pData,
+                brand: b,
+                model: m,
+                storage: s,
+                color: c,
+                ram,
+                category: it.category || 'Smartphones',
+                status: 'Draft',
+                rawStatus: 'draft'
+              });
             }
             await batch.commit();
             result = { success: true, count: created.length, createdProducts: created, products: created };

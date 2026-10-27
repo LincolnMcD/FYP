@@ -105,7 +105,15 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       final model = first['model']?.toString() ?? '';
       modelName = formatDeviceTitle(brand, model);
       if (modelName.isEmpty) modelName = 'Electronic Device';
-      storage = first['storage']?.toString() ?? 'Standard';
+      storage = first['storage']?.toString() ?? first['storageCapacity']?.toString() ?? '';
+      if (storage.isEmpty || storage == 'N/A' || storage == 'null') {
+        final desc = first['description']?.toString() ?? '';
+        final match = RegExp(r'\((\d+\s*(?:GB|TB))\)', caseSensitive: false).firstMatch(desc);
+        if (match != null) {
+          storage = match.group(1)!;
+        }
+      }
+      if (storage.isEmpty || storage == 'null') storage = 'Standard';
       if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard' && !modelName.toLowerCase().contains(storage.toLowerCase())) {
         modelName = '$modelName ($storage)';
       }
@@ -850,13 +858,22 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
     final model = item['model']?.toString() ?? '';
     var name = formatDeviceTitle(brand, model);
     if (name.isEmpty) name = 'Electronic Device';
-    final storage = item['storage']?.toString() ?? 'Standard';
+    String storage = item['storage']?.toString() ?? item['storageCapacity']?.toString() ?? '';
+    if (storage.isEmpty || storage == 'N/A' || storage == 'null') {
+      final desc = item['description']?.toString() ?? '';
+      final match = RegExp(r'\((\d+\s*(?:GB|TB))\)', caseSensitive: false).firstMatch(desc);
+      if (match != null) {
+        storage = match.group(1)!;
+      }
+    }
+    if (storage.isEmpty || storage == 'null') storage = 'Standard';
+
     if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard') {
       name = name.replaceAll(RegExp('\\s*\\(${RegExp.escape(storage)}\\)', caseSensitive: false), '').trim();
     }
     name = name.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
     final condition = item['condition']?.toString() ?? 'Good';
-    final color = item['color']?.toString() ?? '';
+    final color = item['color']?.toString() ?? item['colour']?.toString() ?? '';
     final imageUrl = item['imageUrl']?.toString();
     final productId = item['productID']?.toString();
 

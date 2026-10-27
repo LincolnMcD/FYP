@@ -46,7 +46,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _modelCode = widget.product.modelCode;
     _deviceID = widget.product.deviceID;
     _checkCartStatus();
-    _fetchSpecifications();
+    _fetchFullProductAndSpecs();
+  }
+
+  Future<void> _fetchFullProductAndSpecs() async {
+    // 1. Fetch live product with full images list
+    try {
+      final liveProduct = await ShopService.fetchProductById(_product.productID);
+      if (mounted && liveProduct != null) {
+        setState(() {
+          _product = liveProduct;
+          if (liveProduct.modelCode.isNotEmpty) _modelCode = liveProduct.modelCode;
+          if (liveProduct.deviceID.isNotEmpty) _deviceID = liveProduct.deviceID;
+        });
+      }
+    } catch (_) {}
+
+    // 2. Fetch full specifications
+    await _fetchSpecifications();
   }
 
   Future<void> _fetchSpecifications() async {
@@ -153,6 +170,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     final singleCartItem = CartItemModel(
       productID: _product.productID,
+      listingTitle: _product.listingTitle.isNotEmpty ? _product.listingTitle : _product.displayTitle,
       description: _product.description,
       sellingPrice: _product.sellingPrice,
       imageUrl: _product.imageUrl,
@@ -215,12 +233,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Generate image list (product image + angles/fallbacks)
-    final images = [
-      _product.imageUrl,
-      _product.imageUrl,
-      _product.imageUrl,
-    ];
+    // Generate image list from product.images or fallback to product.imageUrl
+    final images = _product.images.isNotEmpty
+        ? _product.images
+        : (_product.imageUrl.isNotEmpty ? [_product.imageUrl] : <String>[]);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -367,6 +383,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildImageGallery(List<String> images) {
+    final displayImages = images.where((u) => u.trim().isNotEmpty && !u.contains('sample_')).toList();
+    if (displayImages.isEmpty && _product.imageUrl.isNotEmpty && !_product.imageUrl.contains('sample_')) {
+      displayImages.add(_product.imageUrl);
+    }
+    final int safeIndex = (displayImages.isNotEmpty && _selectedImageIndex >= 0 && _selectedImageIndex < displayImages.length)
+        ? _selectedImageIndex
+        : 0;
+    final bool hasMultiple = displayImages.length > 1;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -405,81 +430,95 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
           const SizedBox(height: 12),
 
-          // Main image with left/right arrows
+          // Main image (with left/right arrows only if more than 1 image)
           SizedBox(
             height: 190,
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, size: 18, color: Color(0xFF0F172A)),
-                  onPressed: () {
-                    setState(() {
-                      _selectedImageIndex = (_selectedImageIndex - 1 + images.length) % images.length;
-                    });
-                  },
-                ),
+                if (hasMultiple)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, size: 18, color: Color(0xFF0F172A)),
+                    onPressed: () {
+                      setState(() {
+                        _selectedImageIndex = (safeIndex - 1 + displayImages.length) % displayImages.length;
+                      });
+                    },
+                  ),
                 Expanded(
                   child: Center(
-                    child: Image.network(
-                      images[_selectedImageIndex],
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.smartphone,
-                        size: 110,
-                        color: Colors.grey.shade300,
-                      ),
-                    ),
+                    child: displayImages.isNotEmpty
+                        ? Image.network(
+                            displayImages[safeIndex],
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.smartphone,
+                              size: 110,
+                              color: Colors.grey.shade300,
+                            ),
+                          )
+                        : Icon(
+                            Icons.smartphone,
+                            size: 110,
+                            color: Colors.grey.shade300,
+                          ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios, size: 18, color: Color(0xFF0F172A)),
-                  onPressed: () {
-                    setState(() {
-                      _selectedImageIndex = (_selectedImageIndex + 1) % images.length;
-                    });
-                  },
-                ),
+                if (hasMultiple)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios, size: 18, color: Color(0xFF0F172A)),
+                    onPressed: () {
+                      setState(() {
+                        _selectedImageIndex = (safeIndex + 1) % displayImages.length;
+                      });
+                    },
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
 
-          // Thumbnail Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(images.length, (index) {
-              final isSelected = index == _selectedImageIndex;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedImageIndex = index),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  width: 56,
-                  height: 56,
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected ? const Color(0xFF0C5AD2) : Colors.grey.shade300,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      images[index],
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.phone_android,
-                        size: 28,
-                        color: Colors.grey.shade400,
+          // Thumbnail Row only if more than 1 image
+          if (hasMultiple) ...[
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(displayImages.length, (index) {
+                  final isSelected = index == safeIndex;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedImageIndex = index),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: 50,
+                      height: 50,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF0C5AD2) : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          displayImages[index],
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.phone_android,
+                            size: 24,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            }),
-          ),
+                  );
+                }),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -769,6 +808,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               color: Color(0xFF0F172A),
             ),
           ),
+          if (_product.description.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              _product.description.trim(),
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF475569),
+                height: 1.35,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
 
           // Price

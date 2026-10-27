@@ -158,7 +158,7 @@ class _CartPageState extends State<CartPage> {
   /// Batch purchase selected non-sold items via dedicated Checkout Page
   Future<void> _handleProceedToCheckout() async {
     final selectedPurchasableItems = _cartItems
-        .where((i) => i.isSelected && !i.isSold)
+        .where((i) => i.isSelected && !i.isSold && !i.isHidden)
         .toList();
 
     if (selectedPurchasableItems.isEmpty) {
@@ -196,7 +196,11 @@ class _CartPageState extends State<CartPage> {
   void _toggleSelectAll(bool select) {
     setState(() {
       for (final item in _cartItems) {
-        item.isSelected = select;
+        if (!item.isSold && !item.isHidden) {
+          item.isSelected = select;
+        } else {
+          item.isSelected = false;
+        }
       }
     });
   }
@@ -204,7 +208,7 @@ class _CartPageState extends State<CartPage> {
   double _calculateSubtotal() {
     double sum = 0.0;
     for (final item in _cartItems) {
-      if (item.isSelected && !item.isSold) {
+      if (item.isSelected && !item.isSold && !item.isHidden) {
         sum += item.sellingPrice;
       }
     }
@@ -217,11 +221,12 @@ class _CartPageState extends State<CartPage> {
   }
 
   int get _selectedCount {
-    return _cartItems.where((i) => i.isSelected && !i.isSold).length;
+    return _cartItems.where((i) => i.isSelected && !i.isSold && !i.isHidden).length;
   }
 
   bool get _isAllSelected {
-    return _cartItems.isNotEmpty && _cartItems.every((i) => i.isSelected);
+    final available = _cartItems.where((i) => !i.isSold && !i.isHidden).toList();
+    return available.isNotEmpty && available.every((i) => i.isSelected);
   }
 
   @override
@@ -458,14 +463,16 @@ class _CartPageState extends State<CartPage> {
                     width: 24,
                     height: 24,
                     child: Checkbox(
-                      value: item.isSelected,
+                      value: (!item.isSold && !item.isHidden) && item.isSelected,
                       activeColor: const Color(0xFF0C5AD2),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      onChanged: (val) {
-                        setState(() {
-                          item.isSelected = val ?? false;
-                        });
-                      },
+                      onChanged: (item.isSold || item.isHidden)
+                          ? null
+                          : (val) {
+                              setState(() {
+                                item.isSelected = val ?? false;
+                              });
+                            },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -616,12 +623,12 @@ class _CartPageState extends State<CartPage> {
                 ],
               ),
             ),
-            // Elegant muted translucent overlay with "Sold Out" badge and quick remove
+            // Elegant muted translucent overlay with "Item is purchased by someone" (REMAIN IT)
             if (item.isSold)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.78),
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
@@ -639,12 +646,12 @@ class _CartPageState extends State<CartPage> {
                             Icon(Icons.remove_circle_outline, size: 13, color: Color(0xFFDC2626)),
                             SizedBox(width: 4),
                             Text(
-                              'Sold Out',
+                              'Item is purchased by someone',
                               style: TextStyle(
                                 color: Color(0xFFDC2626),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
-                                letterSpacing: 0.3,
+                                letterSpacing: 0.2,
                               ),
                             ),
                           ],
@@ -660,6 +667,79 @@ class _CartPageState extends State<CartPage> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.grey.shade300),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.delete_outline, size: 15, color: Color(0xFFEF4444)),
+                              SizedBox(width: 4),
+                              Text(
+                                'Remove',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFEF4444),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            // Overlay when item is hidden: "this product being unlisted then one tap remove"
+            else if (item.isHidden)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFFCD34D)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.visibility_off_outlined, size: 13, color: Color(0xFFD97706)),
+                            SizedBox(width: 4),
+                            Text(
+                              'This product being unlisted',
+                              style: TextStyle(
+                                color: Color(0xFFB45309),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => _removeItem(item),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.05),

@@ -173,10 +173,10 @@ class ShopService {
   }
 
   static CartItemModel _copyCartItem(CartItemModel item) => CartItemModel(
-    productID: item.productID, description: item.description, sellingPrice: item.sellingPrice,
-    imageUrl: item.imageUrl, isSold: item.isSold, listingStatus: item.listingStatus,
+    productID: item.productID, listingTitle: item.listingTitle, description: item.description, sellingPrice: item.sellingPrice,
+    imageUrl: item.imageUrl, isSold: item.isSold, isHidden: item.isHidden, listingStatus: item.listingStatus,
     brand: item.brand, model: item.model, storage: item.storage, ram: item.ram,
-    color: item.color, condition: item.condition, isSelected: item.isSelected,
+    color: item.color, condition: item.condition, deviceID: item.deviceID, modelCode: item.modelCode, isSelected: item.isSelected,
   );
 
   static Future<List<CartItemModel>> _fetchCart(String email, String cacheKey) async {

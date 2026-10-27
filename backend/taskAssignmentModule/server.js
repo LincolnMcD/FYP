@@ -424,8 +424,8 @@ router.get("/staff-tasks", async (req, res) => {
                                     const devData = devDoc.data();
                                     brand = brand || devData.brand || "";
                                     model = model || devData.model || "";
-                                    storage = storage || devData.storage || "";
-                                    color = color || devData.color || "";
+                                    storage = storage || devData.storageCapacity || devData.storage || "";
+                                    color = color || devData.colour || devData.color || "";
                                     if (devData.overallConditionScore) {
                                         condition = devData.overallConditionScore >= 90 ? "Excellent" : (devData.overallConditionScore >= 75 ? "Good" : "Fair");
                                     }
@@ -1516,13 +1516,15 @@ router.post("/admin/submit-final-quotation", async (req, res) => {
         };
         batch.set(trRef, trUpdate, { merge: true });
 
-        // 2. Update linked devices record: change status to Inspected
+        // 2. Update linked devices record: replace existing colour attribute, delete extra color attribute
         const deviceID = trData.deviceID;
         if (deviceID) {
             batch.set(db.collection("devices").doc(deviceID), {
                 model: String(modelName).trim(),
                 colour: String(colour).trim(),
+                color: FieldValue.delete(),
                 storageCapacity: `${intStorage} GB`,
+                storage: FieldValue.delete(),
                 ram: `${intRam} GB`,
                 status: "Inspected",
                 deviceStatus: "Inspected",
@@ -2840,8 +2842,21 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             if (p) {
                 let brand = p.brand || "";
                 let model = p.model || "";
-                let storage = p.storage || "";
-                let color = p.color || "";
+                let storage = p.storage || p.storageCapacity || "";
+                let color = p.color || p.colour || "";
+
+                if (p.deviceID) {
+                    try {
+                        const devDoc = await db.collection("devices").doc(p.deviceID).get();
+                        if (devDoc.exists) {
+                            const devData = devDoc.data();
+                            brand = brand || devData.brand || "";
+                            model = model || devData.model || "";
+                            storage = storage || devData.storageCapacity || devData.storage || "";
+                            color = color || devData.colour || devData.color || "";
+                        }
+                    } catch (_) {}
+                }
 
                 if (!model && p.description) {
                     const parenIdx = p.description.indexOf("(");
@@ -3606,16 +3621,32 @@ router.get("/admin/reassign-candidates", async (req, res) => {
                     if (p.brand) deviceBrand = p.brand;
                     if (p.model) deviceModel = p.model;
                     if (p.storage) deviceStorage = p.storage;
+                    if (p.storageCapacity) deviceStorage = p.storageCapacity;
                     if (p.color) deviceColor = p.color;
+                    if (p.colour) deviceColor = p.colour;
                     if (p.imei) deviceImei = p.imei;
                     if (p.serialNumber) deviceImei = p.serialNumber;
+
+                    if (p.deviceID) {
+                        try {
+                            const devDoc = await db.collection("devices").doc(p.deviceID).get();
+                            if (devDoc.exists) {
+                                const devData = devDoc.data();
+                                deviceBrand = deviceBrand || devData.brand || "";
+                                deviceModel = deviceModel || devData.model || "";
+                                deviceStorage = deviceStorage || devData.storageCapacity || devData.storage || "";
+                                deviceColor = deviceColor || devData.colour || devData.color || "";
+                                deviceImei = deviceImei || devData.imeiNum || devData.imei || "";
+                            }
+                        } catch (_) {}
+                    }
 
                     if (!p.model && p.description) {
                         const parenIdx = p.description.indexOf("(");
                         if (parenIdx > -1) {
                             deviceModel = p.description.substring(0, parenIdx).trim();
                             const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
-                            if (!p.storage) deviceStorage = inParen.trim();
+                            if (!deviceStorage) deviceStorage = inParen.trim();
                         } else {
                             deviceModel = p.description.split(" - ")[0].trim();
                         }
