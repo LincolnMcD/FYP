@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../account_management_module/home_page.dart';
 import '../account_management_module/welcome_page.dart';
 import '../account_management_module/services/session_service.dart';
@@ -159,7 +160,7 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class ReByteDrawer extends StatelessWidget {
+class ReByteDrawer extends StatefulWidget {
   final bool isLoggedIn;
   final String? name;
   final String? email;
@@ -181,14 +182,27 @@ class ReByteDrawer extends StatelessWidget {
     this.onSelectTab,
   });
 
+  @override
+  State<ReByteDrawer> createState() => _ReByteDrawerState();
+}
+
+class _ReByteDrawerState extends State<ReByteDrawer> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _navigateToTab(BuildContext context, int targetIndex) {
     Navigator.pop(context); // Close drawer
     // If navigating to another tab or to Trade-In landing page, clear flow session
     TradeInFlowSession.clear();
-    if (onSelectTab != null) {
-      onSelectTab!(targetIndex);
+    if (widget.onSelectTab != null) {
+      widget.onSelectTab!(targetIndex);
     } else {
-      if (targetIndex != 0 && !isLoggedIn) {
+      if (targetIndex != 0 && !widget.isLoggedIn) {
         Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
         return;
       }
@@ -196,9 +210,9 @@ class ReByteDrawer extends StatelessWidget {
         context,
         MaterialPageRoute(
           builder: (context) => HomePage(
-            isLoggedIn: isLoggedIn,
-            email: email,
-            name: name,
+            isLoggedIn: widget.isLoggedIn,
+            email: widget.email,
+            name: widget.name,
           ),
         ),
         (route) => false,
@@ -208,7 +222,9 @@ class ReByteDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveSelectedIndex = (isMyOrdersSelected || isRentalsSelected || isTradeInRequestsSelected) ? -1 : selectedIndex;
+    final effectiveSelectedIndex = (widget.isMyOrdersSelected || widget.isRentalsSelected || widget.isTradeInRequestsSelected)
+        ? -1
+        : widget.selectedIndex;
     return Drawer(
       backgroundColor: const Color(0xFFF8F9FB),
       child: SafeArea(
@@ -218,192 +234,215 @@ class ReByteDrawer extends StatelessWidget {
               color: const Color(0xFFF8F9FB),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
-                child: isLoggedIn ? _buildLoggedInDrawerHeader(context) : _buildLoggedOutDrawerHeader(context),
+                child: widget.isLoggedIn ? _buildLoggedInDrawerHeader(context) : _buildLoggedOutDrawerHeader(context),
               ),
             ),
             Divider(color: Colors.grey.shade200, height: 1),
             Expanded(
-              child: ClipRect(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildDrawerItem(
-                      Icons.home,
-                      'Home',
-                      isSelected: effectiveSelectedIndex == 0,
-                      onTap: () => _navigateToTab(context, 0),
-                    ),
-                    _buildDrawerItem(
-                      Icons.store_outlined,
-                      'Shop',
-                      isSelected: effectiveSelectedIndex == 1,
-                      onTap: () => _navigateToTab(context, 1),
-                    ),
-                    _buildDrawerItem(
-                      Icons.autorenew,
-                      'Trade-In',
-                      isSelected: effectiveSelectedIndex == 2,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _navigateToTab(context, 2);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      Icons.calendar_month_outlined,
-                      'Rentals',
-                      isSelected: effectiveSelectedIndex == 3,
-                      onTap: () => _navigateToTab(context, 3),
-                    ),
-                    _buildDrawerItem(
-                      Icons.compare_arrows,
-                      'Compare Devices',
-                      onTap: () => _navigateToTab(context, 1),
-                    ),
-                    _buildDrawerItem(
-                      Icons.phonelink_setup_rounded,
-                      'Test My Device',
-                      isSelected: effectiveSelectedIndex == 5,
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (!isLoggedIn) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const WelcomePage()),
-                          );
-                          return;
-                        }
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DiagnosticSuitePage(
-                              isLoggedIn: isLoggedIn,
-                              email: email,
-                              name: name,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    if (isLoggedIn) ...[
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                        child: Text(
-                          'ACTIVITY',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF64748B),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+              child: Material(
+                color: const Color(0xFFF8F9FB),
+                child: ClipRect(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      // Triggers rebuild of items so they can recalculate visibility inside viewport
+                      if (notification is ScrollUpdateNotification || notification is OverscrollNotification) {
+                        setState(() {});
+                      }
+                      return false;
+                    },
+                    child: ListView(
+                      controller: _scrollController,
+                      padding: EdgeInsets.zero,
+                      children: [
+                      _buildDrawerItem(
+                        Icons.home,
+                        'Home',
+                        isSelected: effectiveSelectedIndex == 0,
+                        onTap: () => _navigateToTab(context, 0),
                       ),
                       _buildDrawerItem(
-                        Icons.inventory_2_outlined,
-                        'My Orders',
-                        isSelected: isMyOrdersSelected,
+                        Icons.store_outlined,
+                        'Shop',
+                        isSelected: effectiveSelectedIndex == 1,
+                        onTap: () => _navigateToTab(context, 1),
+                      ),
+                      _buildDrawerItem(
+                        Icons.autorenew,
+                        'Trade-In',
+                        isSelected: effectiveSelectedIndex == 2,
                         onTap: () {
                           Navigator.pop(context);
-                          if (isMyOrdersSelected) return;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MyOrdersPage(
-                                email: email ?? 'customer@rebyte.com',
-                                name: name,
-                              ),
-                            ),
-                          );
+                          _navigateToTab(context, 2);
                         },
                       ),
                       _buildDrawerItem(
                         Icons.calendar_month_outlined,
-                        'My Rentals',
-                        isSelected: isRentalsSelected,
-                        onTap: () {
-                          Navigator.pop(context);
-                          if (isRentalsSelected) return;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MyRentalsPage(
-                                email: email ?? 'customer@rebyte.com',
-                                name: name,
-                              ),
-                            ),
-                          );
-                        },
+                        'Rentals',
+                        isSelected: effectiveSelectedIndex == 3,
+                        onTap: () => _navigateToTab(context, 3),
                       ),
                       _buildDrawerItem(
-                        Icons.autorenew_outlined,
-                        'My Trade-In Requests',
-                        isSelected: isTradeInRequestsSelected,
-                        onTap: () {
-                          Navigator.pop(context);
-                          if (isTradeInRequestsSelected) return;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MyTradeInRequestsPage(
-                                email: email ?? 'customer@rebyte.com',
-                                name: name,
-                                isLoggedIn: isLoggedIn,
-                              ),
-                            ),
-                          );
-                        },
+                        Icons.compare_arrows,
+                        'Compare Devices',
+                        onTap: () => _navigateToTab(context, 1),
                       ),
                       _buildDrawerItem(
-                        Icons.shopping_bag_outlined,
-                        'My Cart',
+                        Icons.phonelink_setup_rounded,
+                        'Test My Device',
+                        isSelected: effectiveSelectedIndex == 5,
                         onTap: () {
                           Navigator.pop(context);
+                          if (!widget.isLoggedIn) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const WelcomePage()),
+                            );
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => CartPage(
-                                isLoggedIn: isLoggedIn,
-                                email: email,
-                                name: name,
+                              builder: (context) => DiagnosticSuitePage(
+                                isLoggedIn: widget.isLoggedIn,
+                                email: widget.email,
+                                name: widget.name,
                               ),
                             ),
                           );
                         },
                       ),
-                      _buildDrawerItem(
-                        Icons.notifications_none,
-                        'Notifications',
-                        badge: '3',
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => NotificationPage(
-                                isLoggedIn: isLoggedIn,
-                                email: email,
-                                name: name,
-                              ),
+                      if (widget.isLoggedIn) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                          child: Text(
+                            'ACTIVITY',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF64748B),
+                              letterSpacing: 0.5,
                             ),
-                          );
-                        },
-                      ),
-                    ],
-                  ],
+                          ),
+                        ),
+                        _buildDrawerItem(
+                          Icons.inventory_2_outlined,
+                          'My Orders',
+                          isSelected: widget.isMyOrdersSelected,
+                          onTap: () {
+                            Navigator.pop(context);
+                            if (widget.isMyOrdersSelected) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MyOrdersPage(
+                                  email: widget.email ?? 'customer@rebyte.com',
+                                  name: widget.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          Icons.calendar_month_outlined,
+                          'My Rentals',
+                          isSelected: widget.isRentalsSelected,
+                          onTap: () {
+                            Navigator.pop(context);
+                            if (widget.isRentalsSelected) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MyRentalsPage(
+                                  email: widget.email ?? 'customer@rebyte.com',
+                                  name: widget.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          Icons.autorenew_outlined,
+                          'My Trade-In Requests',
+                          isSelected: widget.isTradeInRequestsSelected,
+                          onTap: () {
+                            Navigator.pop(context);
+                            if (widget.isTradeInRequestsSelected) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MyTradeInRequestsPage(
+                                  email: widget.email ?? 'customer@rebyte.com',
+                                  name: widget.name,
+                                  isLoggedIn: widget.isLoggedIn,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          Icons.shopping_bag_outlined,
+                          'My Cart',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CartPage(
+                                  isLoggedIn: widget.isLoggedIn,
+                                  email: widget.email,
+                                  name: widget.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          Icons.notifications_none,
+                          'Notifications',
+                          badge: '3',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => NotificationPage(
+                                  isLoggedIn: widget.isLoggedIn,
+                                  email: widget.email,
+                                  name: widget.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-            Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk'),
-            if (isLoggedIn)
-              _buildDrawerItem(
-                Icons.logout,
-                'Logout',
-                iconColor: const Color(0xFF475569),
-                onTap: () {
-                  _showLogoutDialog(context);
-                },
+            Material(
+              elevation: 8,
+              shadowColor: Colors.black26,
+              color: const Color(0xFFF8F9FB),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Divider(color: Colors.grey.shade200, height: 1),
+                  _buildDrawerItem(Icons.help_outline, 'Help Desk'),
+                  if (widget.isLoggedIn)
+                    _buildDrawerItem(
+                      Icons.logout,
+                      'Logout',
+                      iconColor: const Color(0xFF475569),
+                      onTap: () {
+                        _showLogoutDialog(context);
+                      },
+                    ),
+                  const SizedBox(height: 16),
+                ],
               ),
-            const SizedBox(height: 16),
+            ),
           ],
         ),
       ),
@@ -471,12 +510,12 @@ class ReByteDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name ?? 'ReByte User',
+                  widget.name ?? 'ReByte User',
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  email ?? 'user@rebyte.com',
+                  widget.email ?? 'user@rebyte.com',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
               ],
@@ -495,36 +534,13 @@ class ReByteDrawer extends StatelessWidget {
     Color? iconColor,
     void Function()? onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: ListTile(
-        leading: Icon(icon, color: isSelected ? Colors.white : (iconColor ?? const Color(0xFF475569)), size: 20),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1E293B),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-        trailing: badge != null
-            ? Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFC53030),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                ),
-              )
-            : null,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        tileColor: isSelected ? const Color(0xFF0C5AD2) : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        onTap: onTap ?? () {},
-      ),
+    return _DrawerItemTile(
+      icon: icon,
+      title: title,
+      isSelected: isSelected,
+      badge: badge,
+      iconColor: iconColor,
+      onTap: onTap,
     );
   }
 
@@ -599,6 +615,117 @@ class ReByteDrawer extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DrawerItemTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final bool isSelected;
+  final String? badge;
+  final Color? iconColor;
+  final VoidCallback? onTap;
+
+  const _DrawerItemTile({
+    required this.icon,
+    required this.title,
+    this.isSelected = false,
+    this.badge,
+    this.iconColor,
+    this.onTap,
+  });
+
+  @override
+  State<_DrawerItemTile> createState() => _DrawerItemTileState();
+}
+
+class _DrawerItemTileState extends State<_DrawerItemTile> {
+  bool _isVisibleInViewport = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isSelected) {
+      // Check visibility after the first layout pass
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DrawerItemTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
+    }
+  }
+
+  void _checkVisibility() {
+    if (!mounted || !widget.isSelected) return;
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+
+    final viewport = RenderAbstractViewport.of(renderObject);
+    if (viewport is! RenderBox) return;
+    final viewportBox = viewport as RenderBox;
+    if (!viewportBox.hasSize) return;
+
+    // Compare the tile's actual position with the visible ListView viewport.
+    // Reveal offsets are target scroll positions, not the tile's screen bounds.
+    final itemTop = viewportBox
+        .globalToLocal(renderObject.localToGlobal(Offset.zero))
+        .dy;
+    final itemBottom = itemTop + renderObject.size.height;
+    final isVisible = itemBottom > 0 && itemTop < viewportBox.size.height;
+
+    if (_isVisibleInViewport != isVisible) {
+      setState(() {
+        _isVisibleInViewport = isVisible;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isSelected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
+    }
+    final showHighlight = widget.isSelected && _isVisibleInViewport;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: ListTile(
+        leading: Icon(
+          widget.icon,
+          color: showHighlight ? Colors.white : (widget.iconColor ?? const Color(0xFF475569)),
+          size: 20,
+        ),
+        title: Text(
+          widget.title,
+          style: TextStyle(
+            color: showHighlight ? Colors.white : const Color(0xFF1E293B),
+            fontSize: 13,
+            fontWeight: showHighlight ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        trailing: widget.badge != null
+            ? Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFC53030),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  widget.badge!,
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                ),
+              )
+            : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        tileColor: showHighlight ? const Color(0xFF0C5AD2) : null,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        onTap: widget.onTap ?? () {},
       ),
     );
   }
