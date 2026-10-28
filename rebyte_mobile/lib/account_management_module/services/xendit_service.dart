@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -26,9 +27,11 @@ class XenditTokenResult {
 
 class XenditService {
   // Public Key for client-side card tokenization
-  static const String publicKey = 'xnd_public_development_OEcRYatDYbvtgO9T1OhKvGW1oXOH61WLqPzHDCk9SXHMP50Vvzm4QYIwlrBRF6Uo';
+  static const String publicKey =
+      'xnd_public_development_OEcRYatDYbvtgO9T1OhKvGW1oXOH61WLqPzHDCk9SXHMP50Vvzm4QYIwlrBRF6Uo';
 
-  static String get _tokenEndpoint => 'https://api.xendit.co/v2/credit_card_tokens';
+  static String get _tokenEndpoint =>
+      'https://api.xendit.co/v2/credit_card_tokens';
 
   static Map<String, String> get _authHeaders {
     final authBase64 = base64Encode(utf8.encode('$publicKey:'));
@@ -60,10 +63,12 @@ class XenditService {
       // and requires card_holder_first_name, card_holder_last_name, and email/phone
       final holder = cardholderName.trim();
       final firstName = holder.isNotEmpty ? holder.split(' ').first : 'ReByte';
-      final lastName = holder.isNotEmpty && holder.contains(' ') 
-          ? holder.split(' ').sublist(1).join(' ') 
+      final lastName = holder.isNotEmpty && holder.contains(' ')
+          ? holder.split(' ').sublist(1).join(' ')
           : 'Customer';
-      final customerEmail = (email != null && email.contains('@')) ? email.trim() : 'customer@rebyte.com';
+      final customerEmail = (email != null && email.contains('@'))
+          ? email.trim()
+          : 'customer@rebyte.com';
 
       final payload = {
         'is_single_use': true,
@@ -90,16 +95,22 @@ class XenditService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        String errorMsg = data['message'] ?? data['error_code'] ?? 'Tokenization failed';
+        String errorMsg =
+            data['message'] ?? data['error_code'] ?? 'Tokenization failed';
         final errCode = data['error_code']?.toString() ?? '';
 
-        if (errCode == 'BRAND_NOT_SUPPORTED_ERROR' || errorMsg.toLowerCase().contains('brand is not supported') || errorMsg.toLowerCase().contains('card brand')) {
+        if (errCode == 'BRAND_NOT_SUPPORTED_ERROR' ||
+            errorMsg.toLowerCase().contains('brand is not supported') ||
+            errorMsg.toLowerCase().contains('card brand')) {
           errorMsg = 'the card is not support by ReByte payment';
-        } else if (data['errors'] is List && (data['errors'] as List).isNotEmpty) {
+        } else if (data['errors'] is List &&
+            (data['errors'] as List).isNotEmpty) {
           final firstErr = data['errors'][0];
           if (firstErr is Map && firstErr['message'] != null) {
             final detail = firstErr['message'].toString();
-            if (detail.contains('must be a credit card') || detail.toLowerCase().contains('credit card') || detail.toLowerCase().contains('checksum')) {
+            if (detail.contains('must be a credit card') ||
+                detail.toLowerCase().contains('credit card') ||
+                detail.toLowerCase().contains('checksum')) {
               errorMsg = 'invalid card number';
             } else {
               errorMsg = detail;
@@ -112,15 +123,20 @@ class XenditService {
       final tokenId = data['id']?.toString();
       final status = data['status']?.toString();
       final authUrl = data['payer_authentication_url']?.toString();
-      final masked = data['masked_card_number']?.toString() ?? '**** **** **** ${cleanCard.substring(cleanCard.length - 4)}';
+      final masked =
+          data['masked_card_number']?.toString() ??
+          '**** **** **** ${cleanCard.substring(cleanCard.length - 4)}';
       final cardInfo = data['card_info'] as Map<String, dynamic>?;
       final metadata = data['metadata'] as Map<String, dynamic>?;
-      final rawBrand = cardInfo?['brand']?.toString() ??
+      final rawBrand =
+          cardInfo?['brand']?.toString() ??
           data['card_brand']?.toString() ??
           metadata?['brand']?.toString();
 
       String? cardBrand;
-      if (rawBrand != null && rawBrand.isNotEmpty && rawBrand.toUpperCase() != 'UNKNOWN') {
+      if (rawBrand != null &&
+          rawBrand.isNotEmpty &&
+          rawBrand.toUpperCase() != 'UNKNOWN') {
         final up = rawBrand.toUpperCase();
         if (up == 'MASTERCARD' || up == 'MASTER') {
           cardBrand = 'Mastercard';
@@ -139,12 +155,18 @@ class XenditService {
       // If bank 3D-Secure authentication is needed
       if (status == 'IN_REVIEW' || (authUrl != null && authUrl.isNotEmpty)) {
         if (!context.mounted) {
-          return XenditTokenResult(success: false, errorMessage: 'Context not mounted for 3DS verification');
+          return XenditTokenResult(
+            success: false,
+            errorMessage: 'Context not mounted for 3DS verification',
+          );
         }
 
         final bool authPassed = await _show3DSModal(context, authUrl!);
         if (!authPassed) {
-          return XenditTokenResult(success: false, errorMessage: 'Card 3DS verification was cancelled or failed');
+          return XenditTokenResult(
+            success: false,
+            errorMessage: 'Card 3DS verification was cancelled or failed',
+          );
         }
       }
 
@@ -162,7 +184,10 @@ class XenditService {
   }
 
   /// Displays 3D-Secure webview dialog for OTP authentication
-  static Future<bool> _show3DSModal(BuildContext context, String authUrl) async {
+  static Future<bool> _show3DSModal(
+    BuildContext context,
+    String authUrl,
+  ) async {
     bool passed = false;
 
     await showDialog(
@@ -171,7 +196,9 @@ class XenditService {
       builder: (ctx) {
         return Dialog(
           insetPadding: const EdgeInsets.all(12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
@@ -180,23 +207,38 @@ class XenditService {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     color: const Color(0xFF0C5AD2),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.lock_outline, color: Colors.white, size: 18),
+                            Icon(
+                              Icons.lock_outline,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Card Ownership Authentication',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                              ),
                             ),
                           ],
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: () => Navigator.pop(ctx),
@@ -235,28 +277,39 @@ class XenditService {
                             strUrl.contains('status=success') ||
                             strUrl.contains('action=success')) {
                           passed = true;
-                          Future.delayed(const Duration(milliseconds: 1000), () {
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          });
+                          Future.delayed(
+                            const Duration(milliseconds: 1000),
+                            () {
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            },
+                          );
                         }
                       },
-                      shouldOverrideUrlLoading: (controller, navigationAction) async {
-                        final uri = navigationAction.request.url?.toString().toLowerCase() ?? '';
-                        if (uri.contains('/return') ||
-                            uri.contains('/verify') ||
-                            uri.contains('status=verified') ||
-                            uri.contains('status=captured') ||
-                            uri.contains('approved=true') ||
-                            uri.contains('status=success') ||
-                            uri.contains('action=success')) {
-                          passed = true;
-                          Future.delayed(const Duration(milliseconds: 800), () {
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          });
-                          return NavigationActionPolicy.ALLOW;
-                        }
-                        return NavigationActionPolicy.ALLOW;
-                      },
+                      shouldOverrideUrlLoading:
+                          (controller, navigationAction) async {
+                            final uri =
+                                navigationAction.request.url
+                                    ?.toString()
+                                    .toLowerCase() ??
+                                '';
+                            if (uri.contains('/return') ||
+                                uri.contains('/verify') ||
+                                uri.contains('status=verified') ||
+                                uri.contains('status=captured') ||
+                                uri.contains('approved=true') ||
+                                uri.contains('status=success') ||
+                                uri.contains('action=success')) {
+                              passed = true;
+                              Future.delayed(
+                                const Duration(milliseconds: 800),
+                                () {
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                },
+                              );
+                              return NavigationActionPolicy.ALLOW;
+                            }
+                            return NavigationActionPolicy.ALLOW;
+                          },
                       onLoadStop: (controller, url) async {
                         final strUrl = url?.toString().toLowerCase() ?? '';
                         if (strUrl.contains('/return') ||
@@ -274,7 +327,8 @@ class XenditService {
                         }
 
                         // Attach cross-frame postMessage listener & DOM text inspector
-                        await controller.evaluateJavascript(source: '''
+                        await controller.evaluateJavascript(
+                          source: '''
                           (function() {
                             if (window.__3dsBridgeActive) return;
                             window.__3dsBridgeActive = true;
@@ -325,7 +379,8 @@ class XenditService {
                               }
                             }, 500);
                           })();
-                        ''');
+                        ''',
+                        );
                       },
                     ),
                   ),
@@ -342,7 +397,10 @@ class XenditService {
 
   // --- Backend API Integration ---
 
-  static Future<bool> checkCardDuplicate(String email, String cardNumber) async {
+  static Future<bool> checkCardDuplicate(
+    String email,
+    String cardNumber,
+  ) async {
     try {
       final res = await http.post(
         Uri.parse('${AuthService.baseUrl}/api/payment/check-duplicate'),
@@ -357,9 +415,13 @@ class XenditService {
     return false;
   }
 
-  static Future<List<Map<String, dynamic>>> fetchSavedCards(String email) async {
+  static Future<List<Map<String, dynamic>>> fetchSavedCards(
+    String email,
+  ) async {
     try {
-      final res = await http.get(Uri.parse('${AuthService.baseUrl}/api/payment/methods?email=$email'));
+      final res = await http.get(
+        Uri.parse('${AuthService.baseUrl}/api/payment/methods?email=$email'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && data['methods'] is List) {
@@ -399,10 +461,16 @@ class XenditService {
       if (res.statusCode == 200 && data['success'] == true) {
         return {'success': true, 'data': data};
       } else {
-        return {'success': false, 'error': data['error'] ?? 'Failed to save payment account'};
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to save payment account',
+        };
       }
     } catch (e) {
-      return {'success': false, 'error': 'Network error while connecting to server'};
+      return {
+        'success': false,
+        'error': 'Network error while connecting to server',
+      };
     }
   }
 
@@ -423,7 +491,9 @@ class XenditService {
   static Future<bool> deleteCard(String email, String paymentId) async {
     try {
       final res = await http.delete(
-        Uri.parse('${AuthService.baseUrl}/api/payment/methods/$paymentId?email=$email'),
+        Uri.parse(
+          '${AuthService.baseUrl}/api/payment/methods/$paymentId?email=$email',
+        ),
       );
       final data = jsonDecode(res.body);
       return res.statusCode == 200 && data['success'] == true;
@@ -453,7 +523,9 @@ class XenditService {
         }),
       );
       final data = jsonDecode(res.body);
-      return data is Map<String, dynamic> ? data : {'success': false, 'error': 'Invalid server response'};
+      return data is Map<String, dynamic>
+          ? data
+          : {'success': false, 'error': 'Invalid server response'};
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }
@@ -463,6 +535,7 @@ class XenditService {
   static Future<Map<String, dynamic>> refundInvoice({
     required String invoiceId,
     String? reason,
+    double? amount,
   }) async {
     try {
       final res = await http.post(
@@ -471,6 +544,7 @@ class XenditService {
         body: jsonEncode({
           'invoiceId': invoiceId,
           'reason': reason ?? 'ITEM_UNAVAILABLE_RACE_CONDITION',
+          if (amount != null && amount > 0) 'amount': amount,
         }),
       );
       final data = jsonDecode(res.body);
@@ -484,7 +558,9 @@ class XenditService {
   static Future<Map<String, dynamic>> getInvoiceStatus(String invoiceId) async {
     try {
       final res = await http.get(
-        Uri.parse('${AuthService.baseUrl}/api/payment/get-invoice?invoiceId=$invoiceId'),
+        Uri.parse(
+          '${AuthService.baseUrl}/api/payment/get-invoice?invoiceId=$invoiceId',
+        ),
         headers: {'Content-Type': 'application/json'},
       );
       final data = jsonDecode(res.body);
@@ -523,13 +599,20 @@ class XenditService {
             children: [
               Container(
                 color: const Color(0xFF0F254B),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.lock_outline, color: Colors.white, size: 18),
+                        const Icon(
+                          Icons.lock_outline,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           title,
@@ -542,22 +625,15 @@ class XenditService {
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      onPressed: () async {
-                        // Before marking cancelled, check if invoice was actually paid in Xendit
-                        if (invoiceId != null && invoiceId.isNotEmpty) {
-                          try {
-                            final check = await getInvoiceStatus(invoiceId);
-                            final invStatus = check['status']?.toString().toUpperCase() ?? '';
-                            if (invStatus == 'PAID' || invStatus == 'SETTLED' || invStatus == 'COMPLETED') {
-                              paymentResult = 'success';
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              return;
-                            }
-                          } catch (_) {}
-                        }
+                      onPressed: () {
+                        // User explicitly clicked close (X), mark as cancelled
                         paymentResult = 'cancelled';
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
@@ -581,38 +657,60 @@ class XenditService {
                         strUrl.contains('status=paid') ||
                         strUrl.contains('status=settled') ||
                         strUrl.contains('status=completed') ||
+                        strUrl.contains('status=active') ||
+                        strUrl.contains('status=linked') ||
+                        strUrl.contains('status=authorized') ||
                         strUrl.contains('action=success')) {
                       paymentResult = 'success';
                       Future.delayed(const Duration(milliseconds: 600), () {
                         if (ctx.mounted) Navigator.pop(ctx);
                       });
                     } else if (strUrl.contains('payment-failure') ||
-                               strUrl.contains('status=failed') ||
-                               strUrl.contains('action=failed') ||
-                               strUrl.contains('error=declined') ||
-                               strUrl.contains('insufficient_balance')) {
+                        strUrl.contains('status=failed') ||
+                        strUrl.contains('action=failed') ||
+                        strUrl.contains('error=declined') ||
+                        strUrl.contains('insufficient_balance')) {
                       paymentResult = 'failed';
-                      if (strUrl.contains('insufficient_balance') || strUrl.contains('insufficient_funds')) {
-                        failReason = 'Selected account has insufficient balance.';
+                      if (strUrl.contains('insufficient_balance') ||
+                          strUrl.contains('insufficient_funds')) {
+                        failReason =
+                            'Selected account has insufficient balance.';
                       } else {
-                        failReason = 'Payment was declined by your bank or card issuer.';
+                        failReason =
+                            'Payment or authorization was declined by your bank or card issuer.';
                       }
                       Future.delayed(const Duration(milliseconds: 600), () {
                         if (ctx.mounted) Navigator.pop(ctx);
                       });
                     }
                   },
+                  initialUserScripts: null,
                   onLoadStop: (controller, url) async {
                     if (cardData != null) {
                       // Extract raw 16-digit card number (fallback to cardNumber if unmasked)
-                      String rawNumber = (cardData['rawCardNumber'] ?? cardData['cardNumber'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-                      final expiry = (cardData['expiryDate'] ?? cardData['expiredDate'] ?? '').toString();
-                      final cvv = (cardData['cvv'] ?? cardData['CVV'] ?? '').toString().trim();
-                      final holderName = (cardData['cardHolderName'] ?? '').toString();
+                      String rawNumber =
+                          (cardData['rawCardNumber'] ??
+                                  cardData['cardNumber'] ??
+                                  '')
+                              .toString()
+                              .replaceAll(RegExp(r'\D'), '');
+                      final expiry =
+                          (cardData['expiryDate'] ??
+                                  cardData['expiredDate'] ??
+                                  '')
+                              .toString();
+                      final cvv = (cardData['cvv'] ?? cardData['CVV'] ?? '')
+                          .toString()
+                          .trim();
+                      final holderName = (cardData['cardHolderName'] ?? '')
+                          .toString();
                       final email = (cardData['email'] ?? '').toString().trim();
-                      
+
                       // Strip +60 or 60 or leading 0 if needed for Malaysian phone input
-                      String phone = (cardData['phone'] ?? cardData['phoneNumber'] ?? '').toString().trim();
+                      String phone =
+                          (cardData['phone'] ?? cardData['phoneNumber'] ?? '')
+                              .toString()
+                              .trim();
                       if (phone.startsWith('+60')) {
                         phone = phone.substring(3);
                       } else if (phone.startsWith('60')) {
@@ -621,7 +719,9 @@ class XenditService {
                         phone = phone.substring(1);
                       }
 
-                      await controller.evaluateJavascript(source: '''
+                      await controller.evaluateJavascript(
+                        source:
+                            '''
                         (function() {
                           function setNativeValue(element, value) {
                             if (!element || !value) return;
@@ -736,30 +836,42 @@ class XenditService {
                           setTimeout(runAll, 1600);
                           setTimeout(runAll, 2800);
                         })();
-                      ''');
+                      ''',
+                      );
                     }
                   },
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
-                    final uri = navigationAction.request.url?.toString().toLowerCase() ?? '';
+                    final uri =
+                        navigationAction.request.url
+                            ?.toString()
+                            .toLowerCase() ??
+                        '';
                     if (uri.contains('payment-success') ||
                         uri.contains('status=paid') ||
                         uri.contains('status=settled') ||
-                        uri.contains('status=completed')) {
+                        uri.contains('status=completed') ||
+                        uri.contains('status=active') ||
+                        uri.contains('status=linked') ||
+                        uri.contains('status=authorized') ||
+                        uri.contains('action=success')) {
                       paymentResult = 'success';
                       Future.delayed(const Duration(milliseconds: 600), () {
                         if (ctx.mounted) Navigator.pop(ctx);
                       });
                       return NavigationActionPolicy.CANCEL;
                     } else if (uri.contains('payment-failure') ||
-                               uri.contains('status=failed') ||
-                               uri.contains('action=failed') ||
-                               uri.contains('error=declined') ||
-                               uri.contains('insufficient_balance')) {
+                        uri.contains('status=failed') ||
+                        uri.contains('action=failed') ||
+                        uri.contains('error=declined') ||
+                        uri.contains('insufficient_balance')) {
                       paymentResult = 'failed';
-                      if (uri.contains('insufficient_balance') || uri.contains('insufficient_funds')) {
-                        failReason = 'Selected account has insufficient balance.';
+                      if (uri.contains('insufficient_balance') ||
+                          uri.contains('insufficient_funds')) {
+                        failReason =
+                            'Selected account has insufficient balance.';
                       } else {
-                        failReason = 'Payment was declined by your bank or card issuer.';
+                        failReason =
+                            'Payment was declined by your bank or card issuer.';
                       }
                       Future.delayed(const Duration(milliseconds: 600), () {
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -776,9 +888,6 @@ class XenditService {
       },
     );
 
-    return {
-      'status': paymentResult,
-      'errorMessage': failReason,
-    };
+    return {'status': paymentResult, 'errorMessage': failReason};
   }
 }

@@ -8,6 +8,7 @@ import 'services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../product_purchase_module/my_orders_page.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
+import '../rental_managment_module/my_rentals_page.dart';
 
 class ProfilePage extends StatelessWidget {
   final String? name;
@@ -174,7 +175,21 @@ class ProfilePage extends StatelessWidget {
             },
           ),
           _buildDivider(),
-          _buildMenuItem(Icons.calendar_today_outlined, 'My Rental'),
+          _buildMenuItem(
+            Icons.calendar_today_outlined,
+            'My Rental',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyRentalsPage(
+                    email: email ?? 'customer@rebyte.com',
+                    name: name,
+                  ),
+                ),
+              );
+            },
+          ),
           _buildDivider(),
           _buildMenuItem(Icons.pending_actions_outlined, 'Pending Payment'),
           _buildDivider(),

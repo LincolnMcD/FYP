@@ -98,6 +98,7 @@ class _LoginPageState extends State<LoginPage> {
         final role = result['role'] ?? 'Customer';
         await SessionService.saveSession(email: _emailController.text.trim(), name: result['name'], role: role, token: result['token'] as String?);
         
+        if (!mounted) return;
         if (role.toString().toLowerCase() == 'staff') {
           Navigator.pushAndRemoveUntil(
             context,
@@ -140,6 +141,7 @@ class _LoginPageState extends State<LoginPage> {
           final role = response['role'] ?? 'Customer';
           await SessionService.saveSession(email: response['email'], name: response['name'], role: role, token: response['token'] as String?);
           
+          if (!mounted) return;
           if (role.toString().toLowerCase() == 'staff') {
             Navigator.pushAndRemoveUntil(
               context,

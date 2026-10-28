@@ -125,8 +125,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       return false;
     }
 
-    // Over packaging status: shipping, delivering, in transit, delivered, completed
-    const overPackaging = ['shipping', 'in transit', 'delivered', 'completed'];
+    // Over packaging status: shipping, delivering, in transit, in progress, delivered, completed
+    const overPackaging = ['shipping', 'in transit', 'in progress', 'in_progress', 'ongoing', 'delivering', 'delivered', 'completed'];
     if (overPackaging.contains(ts) || os == 'delivered' || os == 'completed') {
       return false;
     }
@@ -287,7 +287,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   int _getStepIndex(String taskStatus) {
     final s = taskStatus.toLowerCase().trim();
     if (s == 'delivered' || s == 'completed' || s == 'delivery') return 4;
-    if (s == 'shipping' || s == 'in transit' || s == 'delivering') return 3;
+    if (s == 'shipping' || s == 'in transit' || s == 'delivering' || s == 'in progress' || s == 'in_progress' || s == 'ongoing') return 3;
     if (s == 'packaging' || s == 'packaged' || s == 'packing') return 2;
     return 1; // Confirmed
   }
@@ -297,10 +297,17 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     final dateFormat = DateFormat('MMM dd, yyyy');
     final currentStep = _getStepIndex(_taskStatus);
 
-    final isShipping = _taskStatus.trim().toLowerCase() == 'shipping' || _orderStatus.trim().toLowerCase() == 'shipping';
+    final isShipping = _taskStatus.trim().toLowerCase() == 'shipping' ||
+        _taskStatus.trim().toLowerCase() == 'in progress' ||
+        _taskStatus.trim().toLowerCase() == 'in_progress' ||
+        _taskStatus.trim().toLowerCase() == 'ongoing' ||
+        _orderStatus.trim().toLowerCase() == 'shipping';
     final isDelivering = _taskStatus.trim().toLowerCase() == 'shipping' ||
         _taskStatus.trim().toLowerCase() == 'in transit' ||
         _taskStatus.trim().toLowerCase() == 'delivering' ||
+        _taskStatus.trim().toLowerCase() == 'in progress' ||
+        _taskStatus.trim().toLowerCase() == 'in_progress' ||
+        _taskStatus.trim().toLowerCase() == 'ongoing' ||
         _orderStatus.trim().toLowerCase() == 'shipping' ||
         currentStep == 3;
     String? estimatedArrivalText;
@@ -1199,7 +1206,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       bgColor = const Color(0xFFDCFCE7);
       textColor = const Color(0xFF16A34A);
       icon = Icons.check_circle_outline;
-    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing') {
+    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing' || s == 'in progress' || s == 'in_progress') {
       bgColor = const Color(0xFFE0E7FF);
       textColor = const Color(0xFF4338CA);
       icon = Icons.directions_car_outlined;

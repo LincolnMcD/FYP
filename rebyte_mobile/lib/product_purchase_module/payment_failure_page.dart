@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../account_management_module/home_page.dart';
+import '../rental_managment_module/my_rentals_page.dart';
 import 'cart_page.dart';
 
 class PaymentFailurePage extends StatelessWidget {
@@ -9,6 +10,7 @@ class PaymentFailurePage extends StatelessWidget {
   final String email;
   final String? name;
   final bool isReturnToCart;
+  final bool isReturnToRentals;
 
   const PaymentFailurePage({
     super.key,
@@ -18,7 +20,37 @@ class PaymentFailurePage extends StatelessWidget {
     required this.email,
     this.name,
     this.isReturnToCart = false,
+    this.isReturnToRentals = false,
   });
+
+  void _returnToDestination(BuildContext context, {bool fromBackButton = false}) {
+    if (isReturnToRentals) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MyRentalsPage(email: email, name: name),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    if (isReturnToCart || fromBackButton) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CartPage(
+            isLoggedIn: true,
+            email: email,
+            name: name,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    } else {
+      Navigator.pop(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,33 +65,7 @@ class PaymentFailurePage extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
-          onPressed: () {
-            if (isReturnToCart) {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CartPage(
-                    isLoggedIn: true,
-                    email: email,
-                    name: name,
-                  ),
-                ),
-                (route) => route.isFirst,
-              );
-            } else {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CartPage(
-                    isLoggedIn: true,
-                    email: email,
-                    name: name,
-                  ),
-                ),
-                (route) => route.isFirst,
-              );
-            }
-          },
+          onPressed: () => _returnToDestination(context, fromBackButton: true),
         ),
       ),
       body: SafeArea(
@@ -188,27 +194,22 @@ class PaymentFailurePage extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          if (isReturnToCart) {
-                            // Navigate directly to CartPage
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CartPage(
-                                  isLoggedIn: true,
-                                  email: email,
-                                  name: name,
-                                ),
-                              ),
-                              (route) => route.isFirst,
-                            );
-                          } else {
-                            Navigator.pop(context);
-                          }
-                        },
-                        icon: Icon(isReturnToCart ? Icons.shopping_cart_outlined : Icons.refresh, size: 18, color: Colors.white),
+                        onPressed: () => _returnToDestination(context),
+                        icon: Icon(
+                          isReturnToCart
+                              ? Icons.shopping_cart_outlined
+                              : isReturnToRentals
+                                  ? Icons.home_repair_service_outlined
+                                  : Icons.refresh,
+                          size: 18,
+                          color: Colors.white,
+                        ),
                         label: Text(
-                          isReturnToCart ? 'Return to Cart' : 'Return to Checkout',
+                          isReturnToCart
+                              ? 'Return to Cart'
+                              : isReturnToRentals
+                                  ? 'Return to My Rentals'
+                                  : 'Return to Checkout',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,

@@ -177,6 +177,7 @@ function serializeProduct(doc) {
         color: data.color || "",
         condition: conditionStr,
         sellingPrice: Number(data.sellingPrice || 0),
+        collectedPrice: Number(data.collectedPrice || (data.sellingPrice ? Math.round((Number(data.sellingPrice) / 1.2) * 100) / 100 : 0)),
         rentalPrice: Number(data.rentalPrice || data.monthlyRentalPrice || data.rentPricePerMonth || (data.sellingPrice ? Math.round(Number(data.sellingPrice) * 0.08 * 100) / 100 : (data.collectedPrice ? Math.round(Number(data.collectedPrice) * 0.08 * 100) / 100 : (data.estPrice ? Math.round(Number(data.estPrice) * 0.08 * 100) / 100 : 0)))),
         monthlyRentalPrice: Number(data.monthlyRentalPrice || data.rentalPrice || data.rentPricePerMonth || (data.sellingPrice ? Math.round(Number(data.sellingPrice) * 0.08 * 100) / 100 : (data.collectedPrice ? Math.round(Number(data.collectedPrice) * 0.08 * 100) / 100 : (data.estPrice ? Math.round(Number(data.estPrice) * 0.08 * 100) / 100 : 0)))),
         listingStatus: String(data.listingStatus || data.status || "draft").toLowerCase(),

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import 'models/product_model.dart';
-import 'models/cart_item_model.dart';
-import 'checkout_page.dart';
+import 'rental_checkout_page.dart';
 import '../account_management_module/welcome_page.dart';
 
 class SelectRentalDurationPage extends StatefulWidget {
@@ -28,103 +27,87 @@ class SelectRentalDurationPage extends StatefulWidget {
 class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
   // Preset months: 3, 12, 24
   int _selectedPresetMonths = 3;
-
-  late DateTime _startDate;
-  late DateTime _endDate;
+  int _customMonths = 3;
+  final TextEditingController _customMonthsController = TextEditingController(text: '3');
+  String? _durationValidationError;
+  bool _isCreatingRental = false;
 
   @override
   void initState() {
     super.initState();
-    _startDate = DateTime.now();
-    _endDate = _addMonths(_startDate, 3);
+    _customMonthsController.text = '3';
   }
 
-  DateTime _addMonths(DateTime date, int months) {
-    var year = date.year;
-    var month = date.month + months;
-    while (month > 12) {
-      year++;
-      month -= 12;
-    }
-    final day = date.day;
-    final daysInTargetMonth = DateUtils.getDaysInMonth(year, month);
-    return DateTime(year, month, day > daysInTargetMonth ? daysInTargetMonth : day);
-  }
-
-  int _calculateMonthsDifference(DateTime start, DateTime end) {
-    if (end.isBefore(start)) return 1;
-    final diffDays = end.difference(start).inDays;
-    final calculated = (diffDays / 30.0).round();
-    return calculated < 1 ? 1 : calculated;
+  @override
+  void dispose() {
+    _customMonthsController.dispose();
+    super.dispose();
   }
 
   void _onPresetSelected(int months) {
     setState(() {
       _selectedPresetMonths = months;
-      _endDate = _addMonths(_startDate, months);
+      _customMonths = months;
+      _customMonthsController.text = months.toString();
+      _durationValidationError = null;
     });
   }
 
-  Future<void> _pickStartDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0C5AD2),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF0F172A),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        _startDate = picked;
-        if (_selectedPresetMonths > 0) {
-          _endDate = _addMonths(_startDate, _selectedPresetMonths);
-        } else if (_endDate.isBefore(_startDate)) {
-          _endDate = _addMonths(_startDate, 1);
+  void _onCustomMonthsChanged(String value) {
+    setState(() {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        _durationValidationError = 'Please enter rental duration.';
+        return;
+      }
+      final parsed = int.tryParse(trimmed);
+      if (parsed == null || parsed < 1) {
+        _durationValidationError = 'Duration must be at least 1 month.';
+      } else if (parsed > 60) {
+        _durationValidationError = 'Duration cannot exceed 5 years (60 months).';
+      } else {
+        _durationValidationError = null;
+        _customMonths = parsed;
+        // Check if matches one of presets (3, 12, 24)
+        if (parsed == 3 || parsed == 12 || parsed == 24) {
+          _selectedPresetMonths = parsed;
+        } else {
+          _selectedPresetMonths = 0; // custom value
         }
-      });
-    }
+      }
+    });
   }
 
-  Future<void> _pickEndDate() async {
-    final firstAllowed = _startDate.add(const Duration(days: 1));
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _endDate.isAfter(firstAllowed) ? _endDate : firstAllowed,
-      firstDate: firstAllowed,
-      lastDate: DateTime(_startDate.year + 5),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0C5AD2),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF0F172A),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
+  void _incrementMonths() {
+    final current = _effectiveDurationMonths;
+    if (current >= 60) return;
+    final next = current + 1;
+    setState(() {
+      _customMonths = next;
+      _customMonthsController.text = next.toString();
+      _durationValidationError = null;
+      if (next == 3 || next == 12 || next == 24) {
+        _selectedPresetMonths = next;
+      } else {
+        _selectedPresetMonths = 0;
+      }
+    });
+  }
 
-    if (picked != null) {
-      setState(() {
-        _endDate = picked;
-        _selectedPresetMonths = 0; // custom duration
-      });
-    }
+  void _decrementMonths() {
+    final current = _effectiveDurationMonths;
+    if (current <= 1) return;
+    final next = current - 1;
+    setState(() {
+      _customMonths = next;
+      _customMonthsController.text = next.toString();
+      _durationValidationError = null;
+      if (next == 3 || next == 12 || next == 24) {
+        _selectedPresetMonths = next;
+      } else {
+        _selectedPresetMonths = 0;
+      }
+    });
   }
 
   double get _baseMonthlyRate {
@@ -138,8 +121,8 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
   }
 
   double get _discountRate {
-    if (_selectedPresetMonths == 12) return 0.10;
-    if (_selectedPresetMonths == 24) return 0.20;
+    if (_effectiveDurationMonths >= 24) return 0.20;
+    if (_effectiveDurationMonths >= 12) return 0.10;
     return 0.0;
   }
 
@@ -151,25 +134,42 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
     if (_selectedPresetMonths > 0) {
       return _selectedPresetMonths;
     }
-    return _calculateMonthsDifference(_startDate, _endDate);
+    return _customMonths < 1 ? 1 : (_customMonths > 60 ? 60 : _customMonths);
   }
 
   double get _rentalFee {
     return _effectiveMonthlyRate * _effectiveDurationMonths;
   }
 
+  /// Deposit amount: ceil(collectedPrice * 0.1)
+  /// fallback: ceil((sellingPrice / 1.2) * 0.1), or derived from rentalPrice (where rentalPrice = collectedPrice * 0.05)
   double get _refundableDeposit {
-    if (widget.product.sellingPrice > 0) {
-      return widget.product.sellingPrice * 0.20;
+    double baseCollected = 0.0;
+    if (widget.product.collectedPrice > 0) {
+      baseCollected = widget.product.collectedPrice;
+    } else if (widget.product.sellingPrice > 0) {
+      baseCollected = widget.product.sellingPrice / 1.2;
+    } else if (widget.product.rentalPrice > 0) {
+      // Since monthly rental fee is collectedPrice * 0.05, collectedPrice = rentalPrice / 0.05
+      baseCollected = widget.product.rentalPrice / 0.05;
     }
-    return 200.0;
+    if (baseCollected > 0) {
+      return (baseCollected * 0.1).ceilToDouble();
+    }
+    return 35.0;
   }
 
-  double get _estimatedTotalFee {
+  /// Total estimate for the whole rental spend (All months rental fee + refundable security deposit)
+  double get _totalEstimatedRentalSpend {
     return _rentalFee + _refundableDeposit;
   }
 
-  void _proceedToCheckout() {
+  /// Amount currently needed to pay today (First month rental fee + refundable security deposit)
+  double get _currentlyDueAmount {
+    return _effectiveMonthlyRate + _refundableDeposit;
+  }
+
+  Future<void> _handleContinueToRent() async {
     if (!widget.isLoggedIn || widget.email == null || widget.email!.isEmpty) {
       Navigator.push(
         context,
@@ -178,32 +178,49 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
       return;
     }
 
-    final durationText = '$_effectiveDurationMonths Month${_effectiveDurationMonths > 1 ? "s" : ""}';
-    final rentalItem = CartItemModel(
-      productID: widget.product.productID,
-      listingTitle: '${widget.product.displayTitle} ($durationText Rental)',
-      description: 'Rental Duration: $durationText | Deposit: RM ${_refundableDeposit.toStringAsFixed(2)}',
-      sellingPrice: _estimatedTotalFee,
-      imageUrl: widget.product.imageUrl,
-      brand: widget.product.brand,
-      model: widget.product.model,
-      storage: widget.product.storage,
-      ram: widget.product.ram,
-      color: widget.product.color,
-      condition: widget.product.condition,
-      deviceID: widget.product.deviceID,
-      modelCode: widget.product.modelCode,
-      listingStatus: 'rent',
-    );
+    final parsed = int.tryParse(_customMonthsController.text.trim());
+    if (parsed == null || parsed < 1) {
+      setState(() {
+        _durationValidationError = 'Duration must be at least 1 month.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rental duration must be at least 1 month.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
 
+    if (parsed > 60) {
+      setState(() {
+        _durationValidationError = 'Duration cannot exceed 5 years (60 months).';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Duration cannot exceed 5 years (60 months).'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    // Navigate to RentalCheckoutPage (Checkout)
+    // Rental record & product status will be created upon successful payment
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CheckoutPage(
+        builder: (context) => RentalCheckoutPage(
+          product: widget.product,
           email: widget.email!,
           name: widget.name,
-          items: [rentalItem],
-          onCartUpdated: widget.onRentalCompleted,
+          durationMonths: _effectiveDurationMonths,
+          monthlyRentalFee: _effectiveMonthlyRate,
+          depositAmount: _refundableDeposit,
+          onRentalCompleted: () {
+            widget.onRentalCompleted?.call();
+            Navigator.pop(context, true);
+          },
         ),
       ),
     );
@@ -211,8 +228,6 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -281,19 +296,19 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
               ),
               const SizedBox(height: 20),
 
-              // 1. Quick Select Card
+              // 1. Quick Select Presets Card
               _buildQuickSelectCard(),
               const SizedBox(height: 16),
 
-              // 2. Custom Dates Card
-              _buildCustomDatesCard(dateFormat),
+              // 2. Custom Month Input Card
+              _buildCustomMonthCard(),
               const SizedBox(height: 16),
 
               // 3. Rental Summary & Details Card
               _buildRentalDetailsCard(),
               const SizedBox(height: 24),
 
-              // Estimated Total & Continue to Checkout
+              // Estimated Total & Continue to Rent
               _buildCheckoutBottomSection(),
               const SizedBox(height: 24),
             ],
@@ -322,13 +337,24 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                'Quick Select',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Icon(Icons.flash_on_rounded, size: 20, color: Color(0xFF0C5AD2)),
+            ],
+          ),
+          const SizedBox(height: 4),
           const Text(
-            'Quick Select',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
+            'Select a recommended plan or type your months below.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 14),
           Row(
@@ -344,7 +370,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
               Expanded(
                 child: _buildPresetOption(
                   months: 12,
-                  badgeText: '-10% rate',
+                  badgeText: '10% OFF',
                   isSelected: _selectedPresetMonths == 12,
                 ),
               ),
@@ -352,7 +378,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
               Expanded(
                 child: _buildPresetOption(
                   months: 24,
-                  badgeText: '-20% rate',
+                  badgeText: '20% OFF',
                   isSelected: _selectedPresetMonths == 24,
                 ),
               ),
@@ -445,14 +471,16 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
     );
   }
 
-  Widget _buildCustomDatesCard(DateFormat dateFormat) {
+  Widget _buildCustomMonthCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: _durationValidationError != null ? const Color(0xFFEF4444) : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -468,82 +496,129 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                'Custom Dates',
+                'Custom Month Duration',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF0F172A),
                 ),
               ),
-              Icon(Icons.calendar_today_outlined, size: 20, color: Color(0xFF0F172A)),
+              Icon(Icons.edit_calendar_outlined, size: 20, color: Color(0xFF64748B)),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Start Date Field
+          const SizedBox(height: 4),
           const Text(
-            'Start Date',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: _pickStartDate,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Text(
-                dateFormat.format(_startDate),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ),
+            'Enter any custom number of months (min 1 month, max 60 months / 5 years).',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 14),
 
-          // End Date Field
-          const Text(
-            'End Date',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: _pickEndDate,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Text(
-                dateFormat.format(_endDate),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
+          // Stepper & Text Field Row
+          Row(
+            children: [
+              // Decrement Button
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.remove, size: 20, color: Color(0xFF0F172A)),
+                  onPressed: _effectiveDurationMonths > 1 ? _decrementMonths : null,
+                  disabledColor: Colors.grey.shade400,
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+
+              // Number Input
+              Expanded(
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _durationValidationError != null ? const Color(0xFFEF4444) : const Color(0xFF0C5AD2),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 60,
+                        child: TextField(
+                          controller: _customMonthsController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(3),
+                          ],
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: _onCustomMonthsChanged,
+                        ),
+                      ),
+                      const Text(
+                        'Months',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Increment Button
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.add, size: 20, color: Color(0xFF0F172A)),
+                  onPressed: _effectiveDurationMonths < 60 ? _incrementMonths : null,
+                  disabledColor: Colors.grey.shade400,
+                ),
+              ),
+            ],
           ),
+
+          // Duration Validation Error Banner
+          if (_durationValidationError != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.error_outline, size: 14, color: Color(0xFFDC2626)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _durationValidationError!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -624,10 +699,63 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 14),
 
-          // Monthly Rate
-          _buildDetailRow(
-            'Monthly Rate',
-            'RM${_effectiveMonthlyRate.toStringAsFixed(2)}',
+          // Monthly Rate (showing original crossed out if discounted)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Monthly Rate',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  if (_discountRate > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${(_discountRate * 100).toInt()}% OFF',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF16A34A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              Row(
+                children: [
+                  if (_discountRate > 0) ...[
+                    Text(
+                      'RM${_baseMonthlyRate.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        decoration: TextDecoration.lineThrough,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    'RM${_effectiveMonthlyRate.toStringAsFixed(2)}/mth',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: _discountRate > 0 ? const Color(0xFF16A34A) : const Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 10),
 
@@ -640,13 +768,13 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 12),
 
-          // Rental Fee
+          // Total Rental Fee for the duration
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Rental Fee',
-                style: TextStyle(
+              Text(
+                'Total Rental Fee ($_effectiveDurationMonths mth)',
+                style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF475569),
@@ -710,6 +838,77 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
           ),
           const SizedBox(height: 14),
 
+          // Highlight Box: Total Whole Rental Spend vs Currently Need to Pay
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Estimate for Whole Spend',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    Text(
+                      'RM${_totalEstimatedRentalSpend.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Currently Need to Pay',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0C5AD2),
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          '(Deposit + 1st month rental)',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'RM${_currentlyDueAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0C5AD2),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
           // Informational Notice
           Container(
             padding: const EdgeInsets.all(12),
@@ -764,6 +963,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
   }
 
   Widget _buildCheckoutBottomSection() {
+    final hasError = _durationValidationError != null || _isCreatingRental;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -781,19 +981,56 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
       ),
       child: Column(
         children: [
+          // Total Whole Spend summary line
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Estimated Total Fee',
+                'Total Whole Rental Spend',
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                   color: Color(0xFF64748B),
                 ),
               ),
               Text(
-                'RM${_estimatedTotalFee.toStringAsFixed(2)}',
+                'RM${_totalEstimatedRentalSpend.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Currently Need to Pay summary line
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Currently Need to Pay',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    'Deposit + 1st month',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                'RM${_currentlyDueAmount.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -807,29 +1044,39 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _proceedToCheckout,
+              onPressed: hasError ? null : _handleContinueToRent,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C5AD2),
+                disabledBackgroundColor: const Color(0xFF94A3B8),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Text(
-                    'Continue to Checkout',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              child: _isCreatingRental
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Text(
+                          'Continue to Rent',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward, size: 18, color: Colors.white),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward, size: 18, color: Colors.white),
-                ],
-              ),
             ),
           ),
         ],

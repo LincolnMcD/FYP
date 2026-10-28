@@ -16,6 +16,7 @@ class ProductModel {
   final String deviceID;
   final String modelCode;
   final double rentalPrice;
+  final double collectedPrice;
 
   ProductModel({
     required this.id,
@@ -35,6 +36,7 @@ class ProductModel {
     this.deviceID = '',
     this.modelCode = '',
     this.rentalPrice = 0.0,
+    this.collectedPrice = 0.0,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -52,6 +54,7 @@ class ProductModel {
       description: json['description']?.toString() ?? '',
       sellingPrice: sp,
       rentalPrice: rp,
+      collectedPrice: cp,
       imageUrl: json['imageUrl']?.toString() ?? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg',
       images: (json['images'] is List)
           ? (json['images'] as List).map((e) => e.toString()).where((e) => e.isNotEmpty).toList()

@@ -502,12 +502,41 @@ router.post("/refund-invoice", async (req, res) => {
         const validReasons = ["FRAUDULENT", "DUPLICATE", "REQUESTED_BY_CUSTOMER", "CANCELLATION", "OTHERS"];
         const xenditReason = validReasons.includes(reason) ? reason : "CANCELLATION";
 
-        // Try refunding completed invoice
+        // Fetch invoice details first to determine payment amount and payment channel
+        let invoiceAmount = req.body.amount ? Number(req.body.amount) : null;
+        const isSessionId = String(invoiceId).startsWith("ps-");
+
+        if (!isSessionId) {
+            try {
+                const invRes = await axios.get(`https://api.xendit.co/v2/invoices/${invoiceId}`, {
+                    headers: getXenditAuthHeader()
+                });
+                if (invRes.data && (invRes.data.amount || invRes.data.paid_amount)) {
+                    invoiceAmount = Number(invRes.data.paid_amount || invRes.data.amount);
+                }
+            } catch (fetchInvErr) {
+                console.warn("Could not pre-fetch invoice details for refund:", fetchInvErr.message);
+            }
+        }
+
+        // Try refunding completed invoice (amount is required by Xendit for CARD type payments)
         try {
-            const refundRes = await axios.post("https://api.xendit.co/refunds", {
+            if (isSessionId) {
+                return res.json({
+                    success: true,
+                    action: "session_cancelled",
+                    message: "Payment session cancelled"
+                });
+            }
+            const refundPayload = {
                 invoice_id: invoiceId,
                 reason: xenditReason
-            }, {
+            };
+            if (invoiceAmount && !isNaN(invoiceAmount) && invoiceAmount > 0) {
+                refundPayload.amount = invoiceAmount;
+            }
+
+            const refundRes = await axios.post("https://api.xendit.co/refunds", refundPayload, {
                 headers: getXenditAuthHeader()
             });
 
@@ -517,6 +546,7 @@ router.post("/refund-invoice", async (req, res) => {
                 refund: refundRes.data
             });
         } catch (refundErr) {
+            console.error("Xendit Refund API Error:", refundErr.response?.data || refundErr.message);
             // If refund fails because invoice is not yet paid or still pending, expire it
             try {
                 await axios.post(`https://api.xendit.co/invoices/${invoiceId}/expire!`, {}, {
@@ -548,7 +578,41 @@ router.get("/get-invoice", async (req, res) => {
             return res.status(400).json({ success: false, error: "invoiceId is required" });
         }
 
-        const response = await axios.get(`https://api.xendit.co/v2/invoices/${invoiceId}`, {
+        const trimmedId = String(invoiceId).trim();
+        if (trimmedId.startsWith("ps-")) {
+            // It's a payment session ID (Pay & Save)
+            const sessionRes = await axios.get(`https://api.xendit.co/sessions/${trimmedId}`, {
+                headers: getXenditAuthHeader()
+            });
+            const sData = sessionRes.data;
+            const liveStatus = (sData.status === "COMPLETED" || sData.status === "PAID" || sData.status === "ACTIVE") ? "PAID" : (sData.status || "PENDING");
+            return res.json({
+                success: true,
+                session: sData,
+                status: liveStatus,
+                isSession: true
+            });
+        }
+
+        if (trimmedId.startsWith("repl_")) {
+            // It's a recurring plan ID
+            const planRes = await axios.get(`https://api.xendit.co/recurring/plans/${trimmedId}`, {
+                headers: {
+                    ...getXenditAuthHeader(),
+                    "api-version": "2022-04-10"
+                }
+            });
+            const pData = planRes.data;
+            const planStatus = pData.status || "REQUIRES_ACTION";
+            return res.json({
+                success: true,
+                plan: pData,
+                status: planStatus,
+                isPlan: true
+            });
+        }
+
+        const response = await axios.get(`https://api.xendit.co/v2/invoices/${trimmedId}`, {
             headers: getXenditAuthHeader()
         });
 
@@ -605,7 +669,20 @@ router.get("/transactions", async (req, res) => {
         const targetCustIds = [customerID].filter(Boolean);
         const targetEmails = [email, userEmail].filter(Boolean);
 
-        // 1. Gather all user's orders to track back orderID
+        // 1. Gather all user's payment account IDs
+        const userPaymentAccountIds = new Set();
+        try {
+            for (const cId of targetCustIds) {
+                const snap = await db.collection("paymentAccount").where("customerID", "==", cId).get();
+                snap.forEach(d => userPaymentAccountIds.add(d.id));
+            }
+            for (const em of targetEmails) {
+                const snap = await db.collection("paymentAccount").where("customerID", "==", em).get();
+                snap.forEach(d => userPaymentAccountIds.add(d.id));
+            }
+        } catch (_) {}
+
+        // 2. Gather all user's orders to track back orderID
         const userOrdersMap = new Map();
         for (const cId of targetCustIds) {
             const snap = await db.collection("order").where("customerID", "==", cId).get();
@@ -622,7 +699,7 @@ router.get("/transactions", async (req, res) => {
             });
         }
 
-        // 2. Gather all user's trade-in requests to track back tradeInRequestID
+        // 3. Gather all user's trade-in requests to track back tradeInRequestID
         const userTradeInsMap = new Map();
         for (const em of targetEmails) {
             const snap = await db.collection("tradeInRequests").where("userEmail", "==", em).get();
@@ -639,22 +716,34 @@ router.get("/transactions", async (req, res) => {
             });
         }
 
-        // 3. Gather rentals if rental collection exists
+        // 4. Gather user's rentals (matching by customerID or email)
         const userRentalsMap = new Map();
         try {
-            for (const em of targetEmails) {
-                const snap = await db.collection("rental").where("userEmail", "==", em).get();
+            for (const cId of targetCustIds) {
+                const snap = await db.collection("rental").where("customerID", "==", cId).get();
                 snap.forEach(d => {
+                    userRentalsMap.set(d.id, d.data());
+                    if (d.data().rentalID) userRentalsMap.set(d.data().rentalID, d.data());
+                });
+            }
+            for (const em of targetEmails) {
+                const snap = await db.collection("rental").where("email", "==", em).get();
+                snap.forEach(d => {
+                    userRentalsMap.set(d.id, d.data());
+                    if (d.data().rentalID) userRentalsMap.set(d.data().rentalID, d.data());
+                });
+                const snap2 = await db.collection("rental").where("userEmail", "==", em).get();
+                snap2.forEach(d => {
                     userRentalsMap.set(d.id, d.data());
                     if (d.data().rentalID) userRentalsMap.set(d.data().rentalID, d.data());
                 });
             }
         } catch (_) {}
 
-        // 4. Query transaction collection from Firestore
+        // 5. Query transaction collection from Firestore
         const tranSnap = await db.collection("transaction").get();
 
-        // 5. Caches for product, devices, paymentAccount to avoid duplicate queries
+        // 6. Caches for product, devices, paymentAccount to avoid duplicate queries
         const productCache = new Map();
         const deviceCache = new Map();
         const paymentAccountCache = new Map();
@@ -667,18 +756,58 @@ router.get("/transactions", async (req, res) => {
             let matchedType = null;
             let parentData = null;
 
+            // Direct check on transaction ownership:
+            // (a) By matching orderID belonging to user
             if (t.orderID && userOrdersMap.has(t.orderID)) {
                 matchedType = "purchase";
                 parentData = userOrdersMap.get(t.orderID);
-            } else if (t.tradeInRequestID && userTradeInsMap.has(t.tradeInRequestID)) {
+            } 
+            // (b) By matching tradeInRequestID belonging to user
+            else if (t.tradeInRequestID && userTradeInsMap.has(t.tradeInRequestID)) {
                 matchedType = "trade-in";
                 parentData = userTradeInsMap.get(t.tradeInRequestID);
-            } else if (t.rentalID && userRentalsMap.has(t.rentalID)) {
+            } 
+            // (c) By matching rentalID belonging to user
+            else if (t.rentalID && userRentalsMap.has(t.rentalID)) {
                 matchedType = "rental";
                 parentData = userRentalsMap.get(t.rentalID);
             }
+            // (d) By direct paymentAccountID ownership (transaction -> paymentAccount -> user)
+            else if (t.paymentAccountID && userPaymentAccountIds.has(t.paymentAccountID)) {
+                const rawTxType = String(t.transactionType || "").toLowerCase();
+                if (rawTxType.includes("rent")) {
+                    matchedType = "rental";
+                    if (t.rentalID && userRentalsMap.has(t.rentalID)) {
+                        parentData = userRentalsMap.get(t.rentalID);
+                    }
+                } else if (rawTxType.includes("trade") || rawTxType.includes("payout")) {
+                    matchedType = "trade-in";
+                    if (t.tradeInRequestID && userTradeInsMap.has(t.tradeInRequestID)) {
+                        parentData = userTradeInsMap.get(t.tradeInRequestID);
+                    }
+                } else {
+                    matchedType = "purchase";
+                    if (t.orderID && userOrdersMap.has(t.orderID)) {
+                        parentData = userOrdersMap.get(t.orderID);
+                    }
+                }
+            }
+            // (e) By direct customerID on transaction
+            else if (t.customerID && targetCustIds.includes(t.customerID)) {
+                const rawTxType = String(t.transactionType || "").toLowerCase();
+                if (rawTxType.includes("rent")) {
+                    matchedType = "rental";
+                    if (t.rentalID && userRentalsMap.has(t.rentalID)) {
+                        parentData = userRentalsMap.get(t.rentalID);
+                    }
+                } else if (rawTxType.includes("trade") || rawTxType.includes("payout")) {
+                    matchedType = "trade-in";
+                } else {
+                    matchedType = "purchase";
+                }
+            }
 
-            // If not owned by this user, skip
+            // If not owned by this user, skip!
             if (!matchedType) continue;
 
             const rawAmount = Number(t.transactionAmount || 0);
@@ -844,14 +973,58 @@ router.get("/transactions", async (req, res) => {
                 });
                 title = itemName;
             } else if (matchedType === "rental") {
-                title = "Device Rental";
+                let itemName = "Device Rental";
+                let itemImei = "";
+                let itemDeviceId = "";
+                let itemImageUrl = "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg";
+                let itemStorage = "";
+                let itemColor = "";
+
+                const rProdId = parentData?.productID || t.productID || "";
+                if (rProdId) {
+                    if (!productCache.has(rProdId)) {
+                        try {
+                            const pSnap = await db.collection("product").doc(rProdId).get();
+                            productCache.set(rProdId, pSnap.exists ? pSnap.data() : null);
+                        } catch (_) {
+                            productCache.set(rProdId, null);
+                        }
+                    }
+                    const pData = productCache.get(rProdId);
+                    if (pData) {
+                        itemName = pData.description ? pData.description.split(" - ")[0] : (pData.productName || "Device Rental");
+                        if (pData.imageUrl) itemImageUrl = pData.imageUrl;
+                        itemDeviceId = pData.deviceID || "";
+
+                        if (pData.deviceID) {
+                            if (!deviceCache.has(pData.deviceID)) {
+                                try {
+                                    const dSnap = await db.collection("devices").doc(pData.deviceID).get();
+                                    deviceCache.set(pData.deviceID, dSnap.exists ? dSnap.data() : null);
+                                } catch (_) {
+                                    deviceCache.set(pData.deviceID, null);
+                                }
+                            }
+                            const dData = deviceCache.get(pData.deviceID);
+                            if (dData) {
+                                itemName = (formatDeviceTitle(dData.brand, dData.model) ? `${formatDeviceTitle(dData.brand, dData.model)} (Rental)` : "") || itemName;
+                                itemImei = dData.imeiNum || "";
+                                itemDeviceId = dData.deviceID || pData.deviceID || "";
+                                itemStorage = dData.storage || dData.storageCapacity || "";
+                                itemColor = dData.color || dData.colour || "";
+                            }
+                        }
+                    }
+                }
+
+                title = itemName;
                 relatedItems.push({
-                    name: "Device Rental",
-                    imei: "",
-                    deviceID: "",
-                    imageUrl: "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg",
-                    storage: "",
-                    color: ""
+                    name: itemName,
+                    imei: itemImei,
+                    deviceID: itemDeviceId,
+                    imageUrl: itemImageUrl,
+                    storage: itemStorage,
+                    color: itemColor
                 });
             }
 

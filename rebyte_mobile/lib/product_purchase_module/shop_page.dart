@@ -4,7 +4,9 @@ import 'models/product_model.dart';
 import 'services/shop_service.dart';
 import 'product_detail_page.dart';
 import 'select_rental_duration_page.dart';
+import 'payment_required_page.dart';
 import '../../account_management_module/welcome_page.dart';
+import '../../account_management_module/services/xendit_service.dart';
 import '../device_tradein_module/data/phone_brands_data.dart';
 
 enum PriceSortOption {
@@ -784,7 +786,7 @@ class ShopPageState extends State<ShopPage> {
                           children: [
                             Text(
                               widget.isRentalMode
-                                  ? 'RM ${(product.rentalPrice > 0 ? product.rentalPrice : (product.sellingPrice * 0.08)).toStringAsFixed(2)} / mo'
+                                  ? 'RM ${(product.rentalPrice > 0 ? product.rentalPrice : (product.sellingPrice * 0.08)).toStringAsFixed(2)} / mth'
                                   : 'RM ${product.sellingPrice.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 16,
@@ -800,8 +802,35 @@ class ShopPageState extends State<ShopPage> {
                           ],
                         ),
                         InkWell(
-                          onTap: () {
+                          onTap: () async {
                             if (widget.isRentalMode) {
+                              if (!widget.isLoggedIn || widget.email == null || widget.email!.isEmpty) {
+                                final loggedIn = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const WelcomePage()),
+                                );
+                                if (loggedIn != true) return;
+                              }
+
+                              // Check if customer has linked payment accounts (cards)
+                              try {
+                                final savedCards = await XenditService.fetchSavedCards(widget.email!);
+                                if (savedCards.isEmpty) {
+                                  if (!context.mounted) return;
+                                  final linked = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PaymentRequiredPage(
+                                        email: widget.email!,
+                                        onPaymentAccountLinked: () {},
+                                      ),
+                                    ),
+                                  );
+                                  if (linked != true) return;
+                                }
+                              } catch (_) {}
+
+                              if (!context.mounted) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(

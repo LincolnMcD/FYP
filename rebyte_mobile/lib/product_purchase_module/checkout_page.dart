@@ -408,6 +408,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           final refundRes = await XenditService.refundInvoice(
             invoiceId: invoiceId,
             reason: 'CANCELLATION',
+            amount: totalAmount,
           );
 
           // 4. Create a Refund transaction record with status: 'Success'

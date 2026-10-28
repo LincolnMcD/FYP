@@ -5,7 +5,9 @@ import 'services/shop_service.dart';
 import 'checkout_page.dart';
 import 'cart_page.dart';
 import 'select_rental_duration_page.dart';
+import 'payment_required_page.dart';
 import '../../account_management_module/welcome_page.dart';
+import '../../account_management_module/services/xendit_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final ProductModel product;
@@ -243,6 +245,53 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
     );
     _checkCartStatus();
+  }
+
+  Future<void> _handleStartRental() async {
+    if (!widget.isLoggedIn || widget.email == null || widget.email!.isEmpty) {
+      final loggedIn = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const WelcomePage()),
+      );
+      if (loggedIn != true) return;
+    }
+
+    // Check if customer has linked payment accounts (cards)
+    try {
+      final savedCards = await XenditService.fetchSavedCards(widget.email!);
+      if (savedCards.isEmpty) {
+        if (!mounted) return;
+        final linked = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaymentRequiredPage(
+              email: widget.email!,
+              onPaymentAccountLinked: () {},
+            ),
+          ),
+        );
+        if (linked != true) return;
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    final rented = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SelectRentalDurationPage(
+          product: _product,
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
+          onRentalCompleted: widget.onCartUpdated,
+        ),
+      ),
+    );
+
+    if (rented == true && mounted) {
+      widget.onCartUpdated?.call();
+      Navigator.pop(context, true);
+    }
   }
 
   @override
@@ -853,7 +902,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ),
                 const SizedBox(width: 6),
                 const Text(
-                  '/ month',
+                  '/ mth',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -933,20 +982,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => SelectRentalDurationPage(
-                        product: _product,
-                        isLoggedIn: widget.isLoggedIn,
-                        email: widget.email,
-                        name: widget.name,
-                        onRentalCompleted: widget.onCartUpdated,
-                      ),
-                    ),
-                  );
-                },
+                onPressed: _handleStartRental,
                 icon: const Icon(Icons.calendar_month_outlined, size: 20, color: Colors.white),
                 label: const Text(
                   'Make a Rental',
@@ -1041,23 +1077,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ],
           const SizedBox(height: 14),
 
-          // Compare device row
-          InkWell(
-            onTap: () {
-              _showTopToast('Device comparison feature coming soon.');
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.compare_arrows, size: 16, color: Color(0xFF64748B)),
-                SizedBox(width: 6),
-                Text(
-                  'Compare',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                ),
-              ],
+          // Compare device row (only for regular purchase products)
+          if (!_isRentalDevice) ...[
+            InkWell(
+              onTap: () {
+                _showTopToast('Device comparison feature coming soon.');
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.compare_arrows, size: 16, color: Color(0xFF64748B)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Compare',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

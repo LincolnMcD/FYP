@@ -7,11 +7,13 @@ import 'models/selected_payment_method.dart';
 class SelectPaymentMethodPage extends StatefulWidget {
   final String email;
   final SelectedPaymentMethod? currentlySelected;
+  final bool cardsOnlyMode;
 
   const SelectPaymentMethodPage({
     super.key,
     required this.email,
     this.currentlySelected,
+    this.cardsOnlyMode = false,
   });
 
   @override
@@ -201,19 +203,21 @@ class _SelectPaymentMethodPageState extends State<SelectPaymentMethodPage> {
                     ),
                   ),
 
-                const SizedBox(height: 24),
+                if (!widget.cardsOnlyMode) ...[
+                  const SizedBox(height: 24),
 
-                // E-WALLETS SECTION
-                _buildSectionTitle('E-WALLETS'),
-                const SizedBox(height: 10),
-                _buildEWalletItem(),
+                  // E-WALLETS SECTION
+                  _buildSectionTitle('E-WALLETS'),
+                  const SizedBox(height: 10),
+                  _buildEWalletItem(),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // ONLINE BANKING (FPX) SECTION
-                _buildSectionTitle('ONLINE BANKING (FPX)'),
-                const SizedBox(height: 10),
-                _buildFpxMethodItem(),
+                  // ONLINE BANKING (FPX) SECTION
+                  _buildSectionTitle('ONLINE BANKING (FPX)'),
+                  const SizedBox(height: 10),
+                  _buildFpxMethodItem(),
+                ],
 
                 const SizedBox(height: 20),
 

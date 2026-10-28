@@ -74,8 +74,9 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       return 'Self Pickup';
     }
 
-    // 2. Shipping = order.status delivering and task.status is shipping
-    if ((os == 'delivering' || os == 'shipping') && (ts == 'shipping' || ts == 'delivering' || ts == 'ongoing')) {
+    // 2. Shipping = order.status delivering and task.status is shipping / in progress / ongoing
+    if ((os == 'delivering' || os == 'shipping') &&
+        (ts == 'shipping' || ts == 'delivering' || ts == 'ongoing' || ts == 'in progress' || ts == 'in_progress')) {
       return 'Shipping';
     }
 
@@ -90,8 +91,8 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       return 'Unassigned';
     }
 
-    // Fallback: if order.status is delivering but taskStatus is shipping/delivering
-    if (ts == 'shipping' || ts == 'delivering') return 'Shipping';
+    // Fallback: if order.status is delivering but taskStatus is shipping/delivering/in progress
+    if (ts == 'shipping' || ts == 'delivering' || ts == 'ongoing' || ts == 'in progress' || ts == 'in_progress') return 'Shipping';
     if (ts == 'packaging') return 'Packaging';
     if (os == 'delivering') return 'Packaging';
 
@@ -136,7 +137,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
     // Required priority: Self pickup -> shipping -> packaging -> unassigned
     final s = effectiveStatus.toLowerCase().trim();
     if (s == 'self pickup' || s == 'self-pickup') return 1;
-    if (s == 'shipping' || s == 'delivering' || s == 'ongoing') return 2;
+    if (s == 'shipping' || s == 'delivering' || s == 'ongoing' || s == 'in progress' || s == 'in_progress') return 2;
     if (s == 'packaging' || s == 'packaged' || s == 'processing') return 3;
     if (s == 'unassigned' || s == 'pending' || s == 'rejected') return 4;
     return 5;
@@ -485,7 +486,11 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
 
     final failReason = order['failReason']?.toString() ?? '';
     final isPast = !_isActiveOrder(order);
-    final isShipping = taskStatus.trim().toLowerCase() == 'shipping' || status.trim().toLowerCase() == 'shipping';
+    final isShipping = taskStatus.trim().toLowerCase() == 'shipping' ||
+        taskStatus.trim().toLowerCase() == 'in progress' ||
+        taskStatus.trim().toLowerCase() == 'in_progress' ||
+        taskStatus.trim().toLowerCase() == 'ongoing' ||
+        status.trim().toLowerCase() == 'shipping';
     final effectiveStatus = _getEffectiveStatus(order);
 
     // Format estimated arrival display
@@ -668,7 +673,7 @@ class _MyOrdersPageState extends State<MyOrdersPage> with SingleTickerProviderSt
       bgColor = const Color(0xFFFEF3C7);
       textColor = const Color(0xFFB45309);
       icon = Icons.storefront_outlined;
-    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing') {
+    } else if (s == 'shipping' || s == 'delivering' || s == 'ongoing' || s == 'in progress' || s == 'in_progress') {
       bgColor = const Color(0xFFE0E7FF);
       textColor = const Color(0xFF4338CA);
       icon = Icons.directions_car_outlined;

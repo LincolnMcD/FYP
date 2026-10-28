@@ -8,6 +8,7 @@ import '../product_purchase_module/cart_page.dart';
 import '../product_purchase_module/notification_page.dart';
 import '../product_purchase_module/my_orders_page.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
+import '../rental_managment_module/my_rentals_page.dart';
 
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -164,6 +165,7 @@ class ReByteDrawer extends StatelessWidget {
   final String? email;
   final int selectedIndex;
   final bool isMyOrdersSelected;
+  final bool isRentalsSelected;
   final bool isTradeInRequestsSelected;
   final void Function(int index)? onSelectTab;
 
@@ -174,6 +176,7 @@ class ReByteDrawer extends StatelessWidget {
     this.email,
     this.selectedIndex = -1,
     this.isMyOrdersSelected = false,
+    this.isRentalsSelected = false,
     this.isTradeInRequestsSelected = false,
     this.onSelectTab,
   });
@@ -205,7 +208,7 @@ class ReByteDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveSelectedIndex = (isMyOrdersSelected || isTradeInRequestsSelected) ? -1 : selectedIndex;
+    final effectiveSelectedIndex = (isMyOrdersSelected || isRentalsSelected || isTradeInRequestsSelected) ? -1 : selectedIndex;
     return Drawer(
       backgroundColor: const Color(0xFFF8F9FB),
       child: SafeArea(
@@ -259,7 +262,7 @@ class ReByteDrawer extends StatelessWidget {
                     _buildDrawerItem(
                       Icons.phonelink_setup_rounded,
                       'Test My Device',
-                      isSelected: selectedIndex == 5,
+                      isSelected: effectiveSelectedIndex == 5,
                       onTap: () {
                         Navigator.pop(context);
                         if (!isLoggedIn) {
@@ -305,6 +308,24 @@ class ReByteDrawer extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (context) => MyOrdersPage(
+                                email: email ?? 'customer@rebyte.com',
+                                name: name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildDrawerItem(
+                        Icons.calendar_month_outlined,
+                        'My Rentals',
+                        isSelected: isRentalsSelected,
+                        onTap: () {
+                          Navigator.pop(context);
+                          if (isRentalsSelected) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MyRentalsPage(
                                 email: email ?? 'customer@rebyte.com',
                                 name: name,
                               ),

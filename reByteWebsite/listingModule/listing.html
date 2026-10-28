@@ -2433,7 +2433,7 @@
         } else if (activeTab === 'rented') {
           priceColumnsHtml = `
             <td>
-              <span class="price-text">RM ${rntPrice.toFixed(2)} / mo</span>
+              <span class="price-text">RM ${rntPrice.toFixed(2)} / mth</span>
             </td>
           `;
           const isItemLocked = stLower === 'lock' || stLower === 'locked';
@@ -2666,7 +2666,7 @@
               ${item.status === 'Draft'
                 ? `<span style="font-size: 14px; font-weight: 600; color: #64748b;">Collected: RM ${(Number(item.collectedPrice || 0)).toFixed(2)} &nbsp;&bull;&nbsp; </span><span style="color: #0c5ad2;">Suggested: RM ${(Number(item.suggestedPrice || 0)).toFixed(2)}</span>`
                 : (item.status === 'Rented'
-                  ? `RM ${(Number(item.rentalPrice || 0)).toFixed(2)} <span style="font-size: 13px; font-weight: 500; color: #64748b;">/ month</span>`
+                  ? `RM ${(Number(item.rentalPrice || 0)).toFixed(2)} <span style="font-size: 13px; font-weight: 500; color: #64748b;">/ mth</span>`
                   : `RM ${(Number(item.listedPrice || item.sellingPrice || item.estPrice || 0)).toFixed(2)}`
                 )
               }

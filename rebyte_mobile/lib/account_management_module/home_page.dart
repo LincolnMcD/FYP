@@ -19,6 +19,7 @@ import '../product_purchase_module/notification_page.dart';
 import '../product_purchase_module/my_orders_page.dart';
 import '../product_purchase_module/services/shop_service.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
+import '../rental_managment_module/my_rentals_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -503,6 +504,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                           context,
                           MaterialPageRoute(
                             builder: (context) => MyOrdersPage(
+                              email: _email ?? 'customer@rebyte.com',
+                              name: _name,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDrawerItem(
+                      Icons.calendar_month_outlined,
+                      'My Rentals',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MyRentalsPage(
                               email: _email ?? 'customer@rebyte.com',
                               name: _name,
                             ),

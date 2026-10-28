@@ -5,6 +5,7 @@ import '../account_management_module/models/address_model.dart';
 import '../account_management_module/models/payment_account_model.dart';
 import '../account_management_module/home_page.dart';
 import 'order_details_page.dart';
+import '../rental_managment_module/my_rentals_page.dart';
 
 class PaymentSuccessPage extends StatelessWidget {
   final String orderNumber;
@@ -16,6 +17,7 @@ class PaymentSuccessPage extends StatelessWidget {
   final List<CartItemModel> items;
   final AddressModel? deliveryAddress;
   final PaymentAccountModel? paymentAccount;
+  final bool isRental;
 
   const PaymentSuccessPage({
     super.key,
@@ -28,11 +30,13 @@ class PaymentSuccessPage extends StatelessWidget {
     required this.items,
     this.deliveryAddress,
     this.paymentAccount,
+    this.isRental = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy,\nhh:mm a');
+    final bool effectiveIsRental = isRental || orderNumber.toUpperCase().contains('REN');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -42,19 +46,32 @@ class PaymentSuccessPage extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
           onPressed: () {
-            // Back to product page (Shop tab)
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(
-                  isLoggedIn: true,
-                  email: email,
-                  name: name,
-                  initialIndex: 1, // Shop tab
+            if (effectiveIsRental) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyRentalsPage(
+                    email: email,
+                    name: name,
+                  ),
                 ),
-              ),
-              (route) => false,
-            );
+                (route) => false,
+              );
+            } else {
+              // Back to product page (Shop tab)
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HomePage(
+                    isLoggedIn: true,
+                    email: email,
+                    name: name,
+                    initialIndex: 1, // Shop tab
+                  ),
+                ),
+                (route) => false,
+              );
+            }
           },
         ),
       ),
@@ -98,9 +115,10 @@ class PaymentSuccessPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text(
-                      'Payment Successful',
-                      style: TextStyle(
+                    Text(
+                      effectiveIsRental ? 'Rental Payment Successful' : 'Payment Successful',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF0F172A),
@@ -229,64 +247,83 @@ class PaymentSuccessPage extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                            child: Divider(color: Color(0xFFF1F5F9), height: 1),
-                          ),
-                          // Receipt sent to with email on next line
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Receipt sent to',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF64748B),
+                          if (!effectiveIsRental) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                              child: Divider(color: Color(0xFFF1F5F9), height: 1),
+                            ),
+                            // Receipt sent to with email on next line
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Receipt sent to',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                email,
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF0F172A),
+                                const SizedBox(height: 4),
+                                Text(
+                                  email,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0F172A),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    // Action buttons: Track Delivery & Continue Shopping
+                    // Action buttons: Track Delivery / View My Rentals & Continue Shopping
                     Row(
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              // Open Order Details Page
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => OrderDetailsPage(
-                                    orderNumber: orderNumber,
-                                    amountPaid: amountPaid,
-                                    email: email,
-                                    name: name,
-                                    paidAt: paidAt,
-                                    items: items,
-                                    deliveryAddress: deliveryAddress,
-                                    paymentTitle: paymentTitle,
+                              if (effectiveIsRental) {
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => MyRentalsPage(
+                                      email: email,
+                                      name: name,
+                                    ),
                                   ),
-                                ),
-                              );
+                                  (route) => false,
+                                );
+                              } else {
+                                // Open Order Details Page
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => OrderDetailsPage(
+                                      orderNumber: orderNumber,
+                                      amountPaid: amountPaid,
+                                      email: email,
+                                      name: name,
+                                      paidAt: paidAt,
+                                      items: items,
+                                      deliveryAddress: deliveryAddress,
+                                      paymentTitle: paymentTitle,
+                                    ),
+                                  ),
+                                );
+                              }
                             },
-                            icon: const Icon(Icons.local_shipping_outlined, size: 18, color: Colors.white),
-                            label: const Text(
-                              'Track Delivery',
-                              style: TextStyle(
+                            icon: Icon(
+                              effectiveIsRental ? Icons.calendar_month_outlined : Icons.local_shipping_outlined,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                            label: Text(
+                              effectiveIsRental ? 'View My Rentals' : 'Track Delivery',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -306,7 +343,7 @@ class PaymentSuccessPage extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
-                              // Continue Shopping -> Back to Product Page (Shop Tab)
+                              // Continue Shopping -> Back to Product Page (Shop Tab or Home)
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
@@ -314,7 +351,7 @@ class PaymentSuccessPage extends StatelessWidget {
                                     isLoggedIn: true,
                                     email: email,
                                     name: name,
-                                    initialIndex: 1, // Shop Tab
+                                    initialIndex: effectiveIsRental ? 3 : 1, // Rental tab or Shop tab
                                   ),
                                 ),
                                 (route) => false,
@@ -327,9 +364,9 @@ class PaymentSuccessPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text(
-                              'Continue Shopping',
-                              style: TextStyle(
+                            child: Text(
+                              effectiveIsRental ? 'Back to Shop' : 'Continue Shopping',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF0F172A),
