@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/rental_service.dart';
+import 'rental_device_detail_page.dart';
+import 'rental_payment_confirmation_page.dart';
+import 'rental_renew_page.dart';
 import '../../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../account_management_module/home_page.dart';
@@ -97,6 +100,27 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
     return 'completed';
   }
 
+  /// Calculates total rental contract remaining days (from today until endDate)
+  int _calculateTotalRentalRemainingDays(Map<String, dynamic> rental) {
+    final endStr = rental['endDate']?.toString();
+    if (endStr != null && endStr.isNotEmpty) {
+      try {
+        final end = DateTime.parse(endStr);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final endDate = DateTime(end.year, end.month, end.day);
+        final diff = endDate.difference(today).inDays;
+        return diff < 0 ? 0 : diff;
+      } catch (_) {}
+    }
+    return 0;
+  }
+
+  /// Calculates remaining days until the rental pay until date (rentalExpiryDate)
+  int _calculateDaysUntilPayDate(Map<String, dynamic> rental) {
+    return _calculateDaysRemainingOrLate(rental);
+  }
+
   int _calculateDaysRemainingOrLate(Map<String, dynamic> rental) {
     final expiryStr = rental['rentalExpiryDate']?.toString();
     if (expiryStr != null && expiryStr.isNotEmpty) {
@@ -121,90 +145,6 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
     }
   }
 
-  void _showTestRecurringDialog(String rentalID) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.science_outlined, color: Color(0xFF0C5AD2)),
-            SizedBox(width: 8),
-            Text('Test Recurring Cycle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Select a simulated recurring payment outcome for rental $rentalID:',
-                style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
-            const SizedBox(height: 14),
-            const Text(
-              '• Success: Deducts monthly fee, records success transaction, extends rental expiry by 1 month, stays in Active tab.\n\n'
-              '• Unsuccess: Simulates declined bank payment, records failed transaction, marks rental as Overdue (moves to Overdue tab with Buyout Now button).',
-              style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              setState(() => _isLoading = true);
-              final res = await RentalService.testRecurringCharge(
-                rentalID: rentalID,
-                forceFailure: true,
-                failureReason: 'Card issuer declined recurring cycle (Simulated Test)',
-              );
-              await _loadRentals();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(res['message'] ?? 'Simulated Recurring Payment Failed! Moved to Overdue tab.'),
-                    backgroundColor: const Color(0xFFDC2626),
-                  ),
-                );
-              }
-            },
-            child: const Text('Test Unsuccess (Fail)', style: TextStyle(color: Colors.white)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              setState(() => _isLoading = true);
-              final res = await RentalService.testRecurringCharge(
-                rentalID: rentalID,
-                forceFailure: false,
-              );
-              await _loadRentals();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(res['message'] ?? 'Simulated Recurring Payment Succeeded! Expiry extended.'),
-                    backgroundColor: const Color(0xFF059669),
-                  ),
-                );
-              }
-            },
-            child: const Text('Test Success', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +166,7 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
         isRentalsSelected: true,
       ),
       bottomNavigationBar: const ReByteBottomNavBar(
-        selectedIndex: 3,
+        selectedIndex: -1,
       ),
       body: SafeArea(
         child: Column(
@@ -431,26 +371,82 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
     // Period formatting
     final startFormatted = _formatDate(rental['startDate']);
     final endFormatted = _formatDate(rental['endDate']);
-    final periodText = '$startFormatted - $endFormatted';
+    final periodText = startFormatted.isNotEmpty && endFormatted.isNotEmpty
+        ? '$startFormatted - $endFormatted'
+        : (startFormatted.isNotEmpty ? startFormatted : '—');
+
+    // Rental Pay Until formatting
+    final payUntilFormatted = _formatDate(rental['rentalExpiryDate']);
+    final payUntilText = payUntilFormatted.isNotEmpty ? payUntilFormatted : '—';
+
+    // Monthly rental fee
+    final monthlyFee = rental['monthlyRentalFee'] != null
+        ? 'RM ${rental['monthlyRentalFee']}/mth'
+        : '';
 
     // Days calculation
-    final daysRemaining = _calculateDaysRemainingOrLate(rental);
+    final totalRentalDaysRemaining = _calculateTotalRentalRemainingDays(rental);
+    final daysRemaining = _calculateDaysUntilPayDate(rental);
     final isOverdue = category == 'overdue' || daysRemaining < 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: isOverdue ? const Color(0xFFF5F3FF) : const Color(0xFFEFF4FF),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isOverdue ? const Color(0xFFDDD6FE) : const Color(0xFFDBEAFE),
-          width: 1,
+    // Check if fully paid: endDate <= rentalExpiryDate
+    bool isFullyPaid = false;
+    final endStr = rental['endDate']?.toString();
+    final expiryStr = rental['rentalExpiryDate']?.toString();
+    if (endStr != null && endStr.isNotEmpty && expiryStr != null && expiryStr.isNotEmpty) {
+      try {
+        final end = DateTime.parse(endStr);
+        final expiry = DateTime.parse(expiryStr);
+        final endD = DateTime(end.year, end.month, end.day);
+        final expD = DateTime(expiry.year, expiry.month, expiry.day);
+        if (expD.isAtSameMomentAs(endD) || expD.isAfter(endD)) {
+          isFullyPaid = true;
+        }
+      } catch (_) {}
+    }
+
+    void navigateToDetail() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RentalDeviceDetailPage(
+            rental: rental,
+            email: widget.email,
+            name: widget.name,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top section with Status Tag and Phone Image
+      );
+    }
+
+    void navigateToPayConfirmation() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RentalPaymentConfirmationPage(
+            rental: rental,
+            email: widget.email,
+            name: widget.name,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: navigateToDetail,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: isOverdue ? const Color(0xFFF5F3FF) : const Color(0xFFEFF4FF),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isOverdue ? const Color(0xFFDDD6FE) : const Color(0xFFDBEAFE),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top section with Status Tag and Phone Image
           Stack(
             children: [
               // Phone Image inside rounded upper area
@@ -491,14 +487,41 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
+                // Title & Monthly Fee Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    if (monthlyFee.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Text(
+                          monthlyFee,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF003F9E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 // Rental ID
@@ -512,7 +535,7 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                 ),
                 const SizedBox(height: 16),
 
-                // Grey Summary Box (PERIOD & REMAINING / LATE BY)
+                // Grey Summary Box (PERIOD & RENTAL PAY UNTIL with their remaining days)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -521,56 +544,125 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFF1F5F9)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Column(
                     children: [
-                      // PERIOD
-                      Column(
+                      // Row 1: PERIOD & Total Remaining Rental Period (current date until endDate)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'PERIOD',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF64748B),
-                              letterSpacing: 0.5,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PERIOD',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF64748B),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  periodText,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            periodText,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E293B),
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                totalRentalDaysRemaining < 0 ? 'PERIOD ENDED' : 'REMAINING',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF64748B),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                totalRentalDaysRemaining < 0
+                                    ? 'Ended'
+                                    : '$totalRentalDaysRemaining Days',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
 
-                      // REMAINING or LATE BY
-                      Column(
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      ),
+
+                      // Row 2: RENTAL PAY UNTIL & Remaining Period (current day until rental pay until date)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            isOverdue ? 'LATE BY' : 'REMAINING',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                              color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF64748B),
-                              letterSpacing: 0.5,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'RENTAL PAY UNTIL',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF64748B),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  payUntilText,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isOverdue ? '${daysRemaining.abs()} Days' : '$daysRemaining Days',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F172A),
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                isOverdue ? 'LATE BY' : 'REMAINING',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF64748B),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isOverdue ? '${daysRemaining.abs()} Days' : '$daysRemaining Days',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -582,26 +674,32 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
 
                 // Action Buttons
                 if (category == 'active') ...[
-                  // Pay Rental Button (Full width blue)
+                  // Pay Rental Button (Disabled with gray overlay when endDate == rentalExpiryDate)
                   SizedBox(
                     width: double.infinity,
                     height: 46,
                     child: ElevatedButton.icon(
-                      onPressed: () => _showTestRecurringDialog(rentalID),
+                      onPressed: isFullyPaid ? null : navigateToPayConfirmation,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0C5AD2),
+                        disabledBackgroundColor: const Color(0xFFCBD5E1),
+                        disabledForegroundColor: const Color(0xFF94A3B8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         elevation: 0,
                       ),
-                      icon: const Icon(Icons.payments_outlined, color: Colors.white, size: 18),
-                      label: const Text(
-                        'Pay Rental (Test Recurring)',
+                      icon: Icon(
+                        Icons.payments_outlined,
+                        color: isFullyPaid ? const Color(0xFF94A3B8) : Colors.white,
+                        size: 18,
+                      ),
+                      label: Text(
+                        isFullyPaid ? 'Rental Fully Paid' : 'Pay Rental',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: isFullyPaid ? const Color(0xFF94A3B8) : Colors.white,
                         ),
                       ),
                     ),
@@ -612,10 +710,20 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Renew feature for $rentalID coming soon.')),
+                          onPressed: () async {
+                            final updated = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RentalRenewPage(
+                                  rental: rental,
+                                  email: widget.email,
+                                  name: widget.name,
+                                ),
+                              ),
                             );
+                            if (updated == true && mounted) {
+                              _loadRentals();
+                            }
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -696,10 +804,20 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Renew feature for $rentalID coming soon.')),
+                          onPressed: () async {
+                            final updated = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => RentalRenewPage(
+                                  rental: rental,
+                                  email: widget.email,
+                                  name: widget.name,
+                                ),
+                              ),
                             );
+                            if (updated == true && mounted) {
+                              _loadRentals();
+                            }
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -789,7 +907,8 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildStatusPill(bool isOverdue, String category) {

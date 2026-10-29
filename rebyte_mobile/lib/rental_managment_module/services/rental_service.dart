@@ -210,6 +210,7 @@ class RentalService {
     required String rentalID,
     required bool forceFailure,
     String? failureReason,
+    int monthsToPay = 1,
   }) async {
     try {
       final res = await http
@@ -222,12 +223,36 @@ class RentalService {
               'rentalID': rentalID,
               'forceFailure': forceFailure,
               if (failureReason != null) 'failureReason': failureReason,
+              'monthsToPay': monthsToPay,
             }),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
       return jsonDecode(res.body);
     } catch (e) {
       return {'success': false, 'message': 'Network error testing charge: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> renewRental({
+    required String rentalID,
+    required String newEndDate,
+    required int additionalMonths,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${AuthService.baseUrl}/api/rental/renew-rental'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'rentalID': rentalID,
+              'newEndDate': newEndDate,
+              'additionalMonths': additionalMonths,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error renewing rental: $e'};
     }
   }
 

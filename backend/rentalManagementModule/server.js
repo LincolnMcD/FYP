@@ -750,12 +750,16 @@ async function generateTransactionID() {
 /**
  * Common handler for a successful recurring rental cycle:
  * Creates transaction record in 'transaction' collection,
- * advances rentalExpiryDate by 1 month, sets status to 'renting'.
+ * advances rentalExpiryDate by monthsToPay (default 1), sets status to 'renting'.
+ * deductCycles: boolean - only TRUE when customer manually pays rental in advance via 'Pay Rental'.
+ * Normal scheduled recurring charges executed by Xendit must NOT deduct cycles.
  */
-async function processSuccessfulRentalCycle(rentalDoc, cycleData = {}, gatewayTxId = "") {
+async function processSuccessfulRentalCycle(rentalDoc, cycleData = {}, gatewayTxId = "", monthsToPay = 1, deductCycles = false) {
     const rentalData = rentalDoc.data() || {};
     const rentalID = rentalData.rentalID || rentalDoc.id;
-    const monthlyFee = Number(cycleData.amount || rentalData.monthlyRentalFee || 75);
+    const countMonths = Math.max(1, parseInt(monthsToPay, 10) || 1);
+    const monthlyFee = Number(rentalData.monthlyRentalFee || 75);
+    const chargeAmount = Number(cycleData.amount || (monthlyFee * countMonths));
     const now = new Date();
 
     // Check if a transaction for this gatewayTxId or cycle was already created
@@ -770,45 +774,234 @@ async function processSuccessfulRentalCycle(rentalDoc, cycleData = {}, gatewayTx
         }
     }
 
-    // 1. Calculate new expiry date (+1 month from current rentalExpiryDate or now)
+    // 1. Calculate new expiry date (+countMonths from current rentalExpiryDate or now)
     let currentExpiry = now;
     if (rentalData.rentalExpiryDate) {
         const parsed = new Date(rentalData.rentalExpiryDate);
         if (!isNaN(parsed.getTime())) currentExpiry = parsed;
     }
-    const newExpiry = new Date(currentExpiry.getFullYear(), currentExpiry.getMonth() + 1, currentExpiry.getDate());
+    const newExpiry = new Date(currentExpiry.getFullYear(), currentExpiry.getMonth() + countMonths, currentExpiry.getDate());
+    
+    // Clamp to endDate if endDate is present
+    if (rentalData.endDate) {
+        const parsedEnd = new Date(rentalData.endDate);
+        if (!isNaN(parsedEnd.getTime()) && newExpiry > parsedEnd) {
+            newExpiry.setTime(parsedEnd.getTime());
+        }
+    }
     const newExpiryStr = formatDateToYMD(newExpiry);
 
     // 2. Generate standard transactionID
     const transactionID = await generateTransactionID();
 
+    const paymentAccountID = cycleData.paymentAccountID || rentalData.paymentAccountID || "";
+
     const transactionData = {
         transactionID,
         transactionType: "Rental",
         transactionStatus: "Success",
-        transactionAmount: monthlyFee,
+        transactionAmount: chargeAmount,
         transactionDate: FieldValue.serverTimestamp(),
         rentalID,
         customerID: rentalData.customerID || "",
-        paymentAccountID: rentalData.paymentAccountID || "",
+        paymentAccountID: paymentAccountID,
         gatewayTransactionID: gatewayTxId || cycleData.id || `xendit_rec_${Date.now()}`,
         recurringCycleID: cycleData.id || "",
+        monthsPaid: countMonths,
         createdAt: now.toISOString()
     };
 
     await db.collection("transaction").doc(transactionID).set(transactionData);
 
-    // 3. Update rental document
-    await rentalDoc.ref.update({
+    let effectiveExpiryStr = newExpiryStr;
+
+    // 3. Update Xendit recurring plan cycles (ONLY when deductCycles is true, e.g. manual pay rental)
+    let cyclesDeducted = 0;
+    let remainingCyclesCount = null;
+    const planId = rentalData.recurringPlanID;
+
+    if (deductCycles && planId && !String(planId).startsWith("rec_plan_")) {
+        try {
+            // Determine effective API version (2026-01-01 preferred for newer plans, fallback to 2022-04-10)
+            const candidateVersions = [
+                rentalData.recurringApiVersion,
+                "2026-01-01",
+                "2022-04-10"
+            ].filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx);
+
+            let planData = null;
+            let effectiveApiVersion = "2026-01-01";
+
+            for (const v of candidateVersions) {
+                try {
+                    const pRes = await axios.get(`https://api.xendit.co/recurring/plans/${planId}`, {
+                        headers: {
+                            ...getXenditAuthHeader(),
+                            "api-version": v
+                        }
+                    });
+                    if (pRes.data && pRes.data.id) {
+                        planData = pRes.data;
+                        effectiveApiVersion = v;
+                        break;
+                    }
+                } catch (pErr) {
+                    // Try next version
+                }
+            }
+
+            console.log(`[Xendit Plan] Retrieved plan ${planId} with api-version ${effectiveApiVersion}. Status: ${planData?.status}, current total_recurrence: ${planData?.schedule?.total_recurrence}`);
+
+            console.log(`[Xendit Plan] Need to cancel ${countMonths} upcoming cycle(s) sequentially for plan ${planId}...`);
+
+            effectiveExpiryStr = newExpiryStr;
+
+            // Xendit generates upcoming cycles dynamically (typically 1 upcoming cycle at a time).
+            // When Cycle N is cancelled, Xendit immediately spawns Cycle N+1.
+            // Therefore, we loop countMonths times, re-fetching the active SCHEDULED cycle in each iteration and cancelling it!
+            let lastCancelledTimestamp = null;
+            for (let i = 0; i < countMonths; i++) {
+                try {
+                    const cyclesRes = await axios.get(`https://api.xendit.co/recurring/plans/${planId}/cycles`, {
+                        headers: {
+                            ...getXenditAuthHeader(),
+                            "api-version": effectiveApiVersion
+                        }
+                    });
+                    const cyclesList = Array.isArray(cyclesRes.data?.data) ? cyclesRes.data.data : (Array.isArray(cyclesRes.data) ? cyclesRes.data : []);
+                    const currentScheduled = cyclesList.find(c => {
+                        const s = String(c.status || "").toUpperCase();
+                        return s === "SCHEDULED" || s === "CREATED" || s === "PENDING";
+                    });
+
+                    if (currentScheduled && currentScheduled.id) {
+                        lastCancelledTimestamp = currentScheduled.scheduled_timestamp || lastCancelledTimestamp;
+                        const cancelRes = await axios.post(
+                            `https://api.xendit.co/recurring/plans/${planId}/cycles/${currentScheduled.id}/cancel`,
+                            {},
+                            {
+                                headers: {
+                                    ...getXenditAuthHeader(),
+                                    "api-version": effectiveApiVersion,
+                                    "Content-Type": "application/json"
+                                }
+                            }
+                        );
+                        cyclesDeducted++;
+                        console.log(`[Xendit Cycle] Successfully cancelled cycle #${currentScheduled.cycle_number} (ID: ${currentScheduled.id}, Month ${i + 1}/${countMonths}). Status: ${cancelRes.data?.status || 'CANCELLED'}`);
+                    } else {
+                        console.log(`[Xendit Cycle] No more scheduled cycles found to cancel at step ${i + 1}/${countMonths}.`);
+                        break;
+                    }
+                } catch (cycleErr) {
+                    console.warn(`[Xendit Cycle Warning] Could not cancel cycle at step ${i + 1}/${countMonths}:`, cycleErr.response?.data || cycleErr.message);
+                    break;
+                }
+            }
+
+            // Determine remaining contract cycles from durationMonths
+            const contractDuration = parseInt(rentalData.durationMonths, 10) || 0;
+            const previousRemaining = (rentalData.remainingCycles !== undefined && rentalData.remainingCycles !== null)
+                ? parseInt(rentalData.remainingCycles, 10)
+                : Math.max(0, contractDuration - 1);
+            remainingCyclesCount = Math.max(0, previousRemaining - countMonths);
+
+            // Sync rentalExpiryDate with the latest cycle billing date from Xendit
+            // EXCEPT when the final payment has been made (remainingCyclesCount === 0),
+            // where the rentalExpiryDate MUST reach the agreement's full endDate!
+            if (remainingCyclesCount === 0 && rentalData.endDate) {
+                effectiveExpiryStr = rentalData.endDate;
+                console.log(`[Rental Expiry] Final rental payment completed. Setting rentalExpiryDate to full endDate: ${effectiveExpiryStr}`);
+            } else {
+                try {
+                    const refreshedRes = await axios.get(`https://api.xendit.co/recurring/plans/${planId}/cycles`, {
+                        headers: {
+                            ...getXenditAuthHeader(),
+                            "api-version": effectiveApiVersion
+                        }
+                    });
+                    const refreshedCycles = Array.isArray(refreshedRes.data?.data) ? refreshedRes.data.data : (Array.isArray(refreshedRes.data) ? refreshedRes.data : []);
+                    
+                    // First check for the newly spawned upcoming SCHEDULED cycle
+                    const nextActiveCycle = refreshedCycles.find(c => {
+                        const s = String(c.status || "").toUpperCase();
+                        return s === "SCHEDULED" || s === "CREATED" || s === "PENDING";
+                    });
+
+                    const cycleTimestamp = nextActiveCycle?.scheduled_timestamp || lastCancelledTimestamp;
+                    if (cycleTimestamp) {
+                        const cycleDate = new Date(cycleTimestamp);
+                        if (!isNaN(cycleDate.getTime())) {
+                            effectiveExpiryStr = formatDateToYMD(cycleDate);
+                            console.log(`[Rental Expiry] Synchronized rentalExpiryDate with Xendit cycle billing date: ${effectiveExpiryStr} (from ${cycleTimestamp})`);
+                        }
+                    }
+                } catch (syncErr) {
+                    console.warn(`[Rental Expiry Warning] Could not sync with Xendit cycle date:`, syncErr.message);
+                }
+            }
+
+            // Check if contract has fully ended (newExpiry >= endDate OR remainingCyclesCount === 0)
+            const hasContractEnded = rentalData.endDate ? (newExpiry >= new Date(rentalData.endDate)) : false;
+
+            // CRITICAL: NEVER deactivate the plan while remainingCyclesCount > 0!
+            // Because Xendit only generates 1 upcoming cycle at a time (scheduledCycles.length === 1),
+            // checking remainingCyclesCount === 0 against scheduledCycles caused premature plan deactivation!
+            if (hasContractEnded && remainingCyclesCount === 0) {
+                try {
+                    await axios.post(
+                        `https://api.xendit.co/recurring/plans/${planId}/deactivate`,
+                        {},
+                        {
+                            headers: {
+                                ...getXenditAuthHeader(),
+                                "api-version": effectiveApiVersion,
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+                    console.log(`[Xendit Plan] All recurring cycles fulfilled. Deactivated plan ${planId}`);
+                } catch (deactErr) {
+                    console.warn(`[Xendit Plan Warning] Could not deactivate plan ${planId}:`, deactErr.response?.data || deactErr.message);
+                }
+            } else {
+                console.log(`[Xendit Plan] Plan ${planId} remains ACTIVE with ${remainingCyclesCount} contract cycle(s) left.`);
+            }
+        } catch (planErr) {
+            console.warn(`[Xendit Recurring Update Warning]:`, planErr.response?.data || planErr.message);
+        }
+    }
+
+    // 4. Update rental document
+    // If all remaining cycles have been paid/fulfilled or the rental has reached/passed endDate, clamp rentalExpiryDate to endDate
+    if (rentalData.endDate) {
+        const parsedEndDate = new Date(rentalData.endDate);
+        const parsedEffective = new Date(effectiveExpiryStr);
+        if (!isNaN(parsedEndDate.getTime()) && (remainingCyclesCount === 0 || parsedEffective >= parsedEndDate)) {
+            effectiveExpiryStr = rentalData.endDate;
+        }
+    }
+
+    const rentalUpdates = {
         rentalStatus: "renting",
-        rentalExpiryDate: newExpiryStr,
-        recurringStatus: "active",
+        rentalExpiryDate: effectiveExpiryStr,
         lastRecurringSuccess: now.toISOString(),
         lastRecurringCycleID: cycleData.id || "",
         updatedAt: now.toISOString()
-    });
+    };
+    if (cyclesDeducted > 0) {
+        rentalUpdates.cyclesDeducted = FieldValue.increment(cyclesDeducted);
+    }
+    if (remainingCyclesCount !== null) {
+        rentalUpdates.remainingCycles = remainingCyclesCount;
+        if (remainingCyclesCount === 0) {
+            rentalUpdates.recurringStatus = "completed";
+        }
+    }
 
-    console.log(`[Recurring Cycle SUCCESS] Rental ${rentalID} extended to ${newExpiryStr}. Transaction: ${transactionID}`);
+    await rentalDoc.ref.update(rentalUpdates);
+
+    console.log(`[Recurring Cycle SUCCESS] Rental ${rentalID} extended to ${effectiveExpiryStr} (${countMonths} month(s), deducted ${cyclesDeducted} Xendit cycles). Transaction: ${transactionID}`);
     return transactionData;
 }
 
@@ -1276,7 +1469,7 @@ router.post("/sync-plan-status", async (req, res) => {
  */
 router.post("/test-recurring-charge", async (req, res) => {
     try {
-        const { rentalID, forceFailure, failureReason } = req.body;
+        const { rentalID, forceFailure, failureReason, monthsToPay } = req.body;
         if (!rentalID) return res.status(400).json({ error: "rentalID is required" });
 
         // 1. Locate rental document
@@ -1293,12 +1486,14 @@ router.post("/test-recurring-charge", async (req, res) => {
 
         const rentalData = docSnap.data();
         const planId = rentalData.recurringPlanID;
+        const countMonths = Math.max(1, parseInt(monthsToPay, 10) || 1);
         const monthlyFee = Number(rentalData.monthlyRentalFee || 75);
+        const totalCharge = Math.round(monthlyFee * countMonths * 100) / 100;
 
         // 2. If forceFailure is requested:
         if (forceFailure) {
             const reason = failureReason || "Card issuer declined recurring cycle (Simulated Test).";
-            const txn = await processFailedRentalCycle(docSnap, { amount: monthlyFee }, reason);
+            const txn = await processFailedRentalCycle(docSnap, { amount: totalCharge }, reason);
 
             return res.json({
                 success: false,
@@ -1329,7 +1524,7 @@ router.post("/test-recurring-charge", async (req, res) => {
                 if (targetCycle && targetCycle.id) {
                     console.log(`[Xendit Cycle Signal] Sending simulate request for cycle ${targetCycle.id}...`);
                     const simRes = await axios.post(`https://api.xendit.co/recurring/plans/${planId}/cycles/${targetCycle.id}/simulate`, {
-                        amount: monthlyFee
+                        amount: totalCharge
                     }, {
                         headers: {
                             ...getXenditAuthHeader(),
@@ -1348,7 +1543,7 @@ router.post("/test-recurring-charge", async (req, res) => {
 
         // Process successful rental cycle in database
         const actionId = xenditCycleResult?.attempt_details?.[0]?.action_id || xenditCycleResult?.id || "";
-        const txn = await processSuccessfulRentalCycle(docSnap, xenditCycleResult || { amount: monthlyFee }, actionId);
+        const txn = await processSuccessfulRentalCycle(docSnap, xenditCycleResult || { amount: totalCharge }, actionId, countMonths);
 
         // Fetch refreshed expiry date
         const updatedSnap = await rentalRef.get();
@@ -1361,12 +1556,70 @@ router.post("/test-recurring-charge", async (req, res) => {
             rentalStatus: "renting",
             newRentalExpiryDate: updatedData.rentalExpiryDate,
             transactionID: txn.transactionID,
+            monthsPaid: countMonths,
             xenditCycleResult,
             transaction: txn
         });
     } catch (e) {
         console.error("Error executing recurring test:", e);
         return res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /rental/complete-rental-payment or /api/rental/complete-rental-payment
+ * Called when a rental recurring payment invoice succeeds via Xendit.
+ * Records the transaction with rentalID, extends rentalExpiryDate,
+ * and updates/deducts corresponding cycles from the Xendit recurring plan.
+ * Body: { rentalID, invoiceID, monthsToPay, amountPaid, paymentAccountID }
+ */
+router.post("/complete-rental-payment", async (req, res) => {
+    try {
+        const { rentalID, invoiceID, monthsToPay, amountPaid, paymentAccountID } = req.body;
+        if (!rentalID) return res.status(400).json({ success: false, error: "rentalID is required" });
+
+        // Locate rental document
+        let rentalRef = db.collection("rental").doc(rentalID);
+        let docSnap = await rentalRef.get();
+        if (!docSnap.exists) {
+            const querySnap = await db.collection("rental").where("rentalID", "==", rentalID).limit(1).get();
+            if (querySnap.empty) {
+                return res.status(404).json({ success: false, error: "Rental record not found" });
+            }
+            docSnap = querySnap.docs[0];
+            rentalRef = docSnap.ref;
+        }
+
+        const rentalData = docSnap.data();
+        const countMonths = Math.max(1, parseInt(monthsToPay, 10) || 1);
+        const monthlyFee = Number(rentalData.monthlyRentalFee || 75);
+        const totalCharge = Number(amountPaid) || Math.round(monthlyFee * countMonths * 100) / 100;
+
+        // Process successful cycle (creates transaction with rentalID, updates expiryDate, and deducts Xendit plan cycles)
+        const gatewayTxId = invoiceID || `xendit_inv_${Date.now()}`;
+        const txn = await processSuccessfulRentalCycle(
+            docSnap,
+            { amount: totalCharge, paymentAccountID: paymentAccountID || rentalData.paymentAccountID || "" },
+            gatewayTxId,
+            countMonths,
+            true // deductCycles: true because customer manually paid advance rental
+        );
+
+        const updatedSnap = await rentalRef.get();
+        const updatedData = updatedSnap.data();
+
+        return res.json({
+            success: true,
+            status: "success",
+            message: `Rental payment recorded successfully. Transaction ${txn.transactionID} created. Expiry date updated to ${updatedData.rentalExpiryDate}.`,
+            transactionID: txn.transactionID,
+            rentalExpiryDate: updatedData.rentalExpiryDate,
+            monthsPaid: countMonths,
+            transaction: txn
+        });
+    } catch (e) {
+        console.error("Error completing rental payment:", e);
+        return res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -1506,6 +1759,241 @@ router.post("/cancel-rental", async (req, res) => {
     } catch (err) {
         console.error("Error cancelling rental:", err);
         return res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /rental/renew-rental or /api/rental/renew-rental
+ * Extends the rental agreement's endDate and increases the Xendit subscription cycle recurrence.
+ * Body: { rentalID, newEndDate, additionalMonths }
+ */
+router.post("/renew-rental", async (req, res) => {
+    try {
+        const { rentalID, newEndDate, additionalMonths } = req.body;
+        if (!rentalID || !newEndDate) {
+            return res.status(400).json({ success: false, error: "rentalID and newEndDate are required." });
+        }
+
+        const addMonths = parseInt(additionalMonths, 10) || 0;
+        if (addMonths <= 0) {
+            return res.status(400).json({ success: false, error: "New end date must extend the rental by at least 1 month." });
+        }
+
+        let rentalRef = db.collection("rental").doc(rentalID);
+        let docSnap = await rentalRef.get();
+        if (!docSnap.exists) {
+            const querySnap = await db.collection("rental").where("rentalID", "==", rentalID).limit(1).get();
+            if (querySnap.empty) {
+                return res.status(404).json({ success: false, error: "Rental record not found." });
+            }
+            docSnap = querySnap.docs[0];
+            rentalRef = docSnap.ref;
+        }
+
+        const rentalData = docSnap.data();
+
+        // Validate newEndDate > current endDate
+        const currentEnd = rentalData.endDate ? new Date(rentalData.endDate) : new Date();
+        const targetEnd = new Date(newEndDate);
+        if (targetEnd <= currentEnd) {
+            return res.status(400).json({ success: false, error: "New end date must be strictly after the current end date." });
+        }
+
+        // Validate lastExpired (rentalExpiryDate) to newEndDate cannot exceed 5 years (60 months)
+        const expiryDate = rentalData.rentalExpiryDate ? new Date(rentalData.rentalExpiryDate) : new Date();
+        const diffYears = (targetEnd.getFullYear() - expiryDate.getFullYear()) + (targetEnd.getMonth() - expiryDate.getMonth()) / 12;
+        if (diffYears > 5.0) {
+            return res.status(400).json({ success: false, error: "Rental duration from rental expiry date cannot exceed 5 years." });
+        }
+
+        const planId = rentalData.recurringPlanID;
+        let updatedXenditRecurrence = null;
+        let newPlanID = null;
+        let effectiveApiVersion = "2026-01-01";
+        let resolvedPaymentTokenID = rentalData.paymentTokenID || "";
+        let resolvedPaymentMethodID = rentalData.paymentMethodID || "";
+
+        // If recurring plan exists, check its status
+        if (planId && !String(planId).startsWith("rec_plan_")) {
+            const candidateVersions = [
+                rentalData.recurringApiVersion,
+                "2026-01-01",
+                "2022-04-10"
+            ].filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx);
+
+            let planData = null;
+
+            for (const v of candidateVersions) {
+                try {
+                    const pRes = await axios.get(`https://api.xendit.co/recurring/plans/${planId}`, {
+                        headers: {
+                            ...getXenditAuthHeader(),
+                            "api-version": v
+                        }
+                    });
+                    if (pRes.data && pRes.data.id) {
+                        planData = pRes.data;
+                        effectiveApiVersion = v;
+                        break;
+                    }
+                } catch (_) {}
+            }
+
+            const planStatus = String(planData?.status || "").toUpperCase();
+            const isPlanInactive = planStatus === "INACTIVE" || planStatus === "DEACTIVATED" || planStatus === "COMPLETED";
+
+            if (isPlanInactive) {
+                // The previous plan is inactive because the customer had fully paid the rental.
+                // Open a new Xendit subscription plan to link it again.
+                // Anchor date = rentalExpiryDate (no +1 month).
+                // Cycle number (total_recurrence) = customer selected increase month (addMonths).
+                console.log(`[Xendit Renew] Previous plan ${planId} is ${planStatus}. Creating new subscription plan for ${addMonths} month(s)...`);
+
+                const baseExpiry = rentalData.rentalExpiryDate ? new Date(rentalData.rentalExpiryDate) : new Date();
+                const anchorDate = baseExpiry;
+
+                // Generate fresh unique reference ID
+                const xenditSuffix = generateReferenceSuffix();
+                resolvedPaymentTokenID = rentalData.paymentTokenID || planData?.payment_tokens?.[0]?.payment_token_id || "";
+                resolvedPaymentMethodID = rentalData.paymentMethodID || planData?.payment_methods?.[0]?.payment_method_id || "";
+                const customerID = rentalData.xenditCustomerID || planData?.customer_id;
+
+                if ((resolvedPaymentTokenID || resolvedPaymentMethodID) && customerID) {
+                    try {
+                        const targetApiVersion = resolvedPaymentTokenID ? "2026-01-01" : "2022-04-10";
+                        let newPlanPayload = {};
+
+                        if (resolvedPaymentTokenID) {
+                            // Schema for api-version 2026-01-01 (tokens)
+                            newPlanPayload = {
+                                reference_id: `plan_${rentalID}_renew_${xenditSuffix}`,
+                                customer_id: customerID,
+                                currency: "MYR",
+                                amount: Number(rentalData.monthlyRentalFee || 0),
+                                payment_tokens: [{ payment_token_id: resolvedPaymentTokenID, rank: 1 }],
+                                schedule: {
+                                    interval: "MONTH",
+                                    interval_count: 1,
+                                    anchor_date: anchorDate.toISOString(),
+                                    total_recurrence: addMonths,
+                                    retry_interval: "DAY",
+                                    retry_interval_count: 5,
+                                    total_retry: 7,
+                                    failed_attempt_notifications: [1, 3, 5]
+                                },
+                                immediate_payment: false,
+                                failed_cycle_action: "RESUME",
+                                notification_channels: ["EMAIL"],
+                                locale: "en",
+                                payment_link_for_failed_attempt: true,
+                                description: `Monthly Rental Renewal for ${rentalData.productID || rentalID} (+${addMonths} Months)`
+                            };
+                        } else {
+                            // Schema for api-version 2022-04-10 (payment_methods)
+                            newPlanPayload = {
+                                reference_id: `plan_${rentalID}_renew_${xenditSuffix}`,
+                                customer_id: customerID,
+                                recurring_action: "PAYMENT",
+                                currency: "MYR",
+                                amount: Number(rentalData.monthlyRentalFee || 0),
+                                payment_methods: [{ payment_method_id: resolvedPaymentMethodID, rank: 1 }],
+                                schedule: {
+                                    reference_id: `sched_${rentalID}_renew_${xenditSuffix}`,
+                                    interval: "MONTH",
+                                    interval_count: 1,
+                                    anchor_date: anchorDate.toISOString(),
+                                    total_recurrence: addMonths,
+                                    retry_interval: "DAY",
+                                    retry_interval_count: 1,
+                                    total_retry: 3,
+                                    failed_attempt_notifications: []
+                                },
+                                failed_cycle_action: "RESUME",
+                                description: `Monthly Rental Renewal for ${rentalData.productID || rentalID} (+${addMonths} Months)`
+                            };
+                        }
+
+                        const createPlanRes = await axios.post("https://api.xendit.co/recurring/plans", newPlanPayload, {
+                            headers: { ...getXenditAuthHeader(), "api-version": targetApiVersion }
+                        });
+
+                        newPlanID = createPlanRes.data?.id;
+                        effectiveApiVersion = targetApiVersion;
+                        updatedXenditRecurrence = addMonths;
+                        console.log(`[Xendit Renew] Successfully created new active subscription plan ${newPlanID} with anchor date ${anchorDate.toISOString()} and ${addMonths} cycle(s).`);
+                    } catch (createErr) {
+                        console.warn(`[Xendit Renew Error] Could not create new recurring plan for inactive subscription:`, createErr.response?.data || createErr.message);
+                    }
+                } else {
+                    console.warn(`[Xendit Renew Warning] Missing paymentTokenID/paymentMethodID (${resolvedPaymentTokenID || resolvedPaymentMethodID}) or customerID (${customerID}) to recreate plan.`);
+                }
+            } else if (planData && planData.schedule) {
+                // Plan is still active: increase total_recurrence by addMonths
+                const currentRecurrence = Number(planData.schedule.total_recurrence ?? 0);
+                const newRecurrence = currentRecurrence + addMonths;
+
+                try {
+                    const patchRes = await axios.patch(
+                        `https://api.xendit.co/recurring/plans/${planId}`,
+                        {
+                            schedule: {
+                                total_recurrence: newRecurrence
+                            }
+                        },
+                        {
+                            headers: {
+                                ...getXenditAuthHeader(),
+                                "api-version": effectiveApiVersion,
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+                    updatedXenditRecurrence = patchRes.data?.schedule?.total_recurrence ?? newRecurrence;
+                    console.log(`[Xendit Renew] Successfully increased plan ${planId} total_recurrence from ${currentRecurrence} to ${updatedXenditRecurrence}`);
+                } catch (patchErr) {
+                    console.warn(`[Xendit Renew Warning] Could not update plan total_recurrence:`, patchErr.response?.data || patchErr.message);
+                }
+            }
+        }
+
+        // Update Firestore rental document
+        const currentDuration = parseInt(rentalData.durationMonths, 10) || 0;
+        const currentRemaining = (rentalData.remainingCycles !== undefined && rentalData.remainingCycles !== null)
+            ? parseInt(rentalData.remainingCycles, 10)
+            : Math.max(0, currentDuration - 1);
+
+        const updatePayload = {
+            endDate: newEndDate,
+            durationMonths: currentDuration + addMonths,
+            remainingCycles: currentRemaining + addMonths,
+            recurringStatus: "active",
+            lastRenewedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        if (newPlanID) {
+            updatePayload.recurringPlanID = newPlanID;
+            updatePayload.recurringApiVersion = effectiveApiVersion || "2026-01-01";
+            if (resolvedPaymentTokenID) updatePayload.paymentTokenID = resolvedPaymentTokenID;
+            if (resolvedPaymentMethodID) updatePayload.paymentMethodID = resolvedPaymentMethodID;
+        }
+
+        await rentalRef.update(updatePayload);
+
+        console.log(`[Rental Renew SUCCESS] Rental ${rentalID} extended to ${newEndDate} (+${addMonths} month(s)).`);
+        return res.json({
+            success: true,
+            message: `Rental agreement successfully renewed until ${newEndDate}.`,
+            rentalID,
+            newEndDate,
+            addedMonths: addMonths,
+            newDurationMonths: currentDuration + addMonths,
+            newRemainingCycles: currentRemaining + addMonths,
+            updatedXenditRecurrence
+        });
+    } catch (err) {
+        console.error("Error renewing rental:", err);
+        return res.status(500).json({ success: false, error: err.message || "Failed to renew rental." });
     }
 });
 

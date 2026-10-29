@@ -2913,7 +2913,16 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         const fulfillmentType = ordData.fulfillmentType || ordData.deliveryOption || "Delivery";
         const rejectionReason = taskData.rejectionReason || schedData.rejectionReason || "";
 
-        const displayStatus = computeDisplayStatus(orderStatus, taskStatus, fulfillmentType, ordData.cancelledBy, rejectionReason, staffID);
+        const hasNoAddress = !ordData.addressID || (typeof ordData.addressID === "string" && !ordData.addressID.trim());
+        const oStatusLower = String(orderStatus || "").trim().toLowerCase();
+        const isCancelledOrPendingNoAddress = hasNoAddress && (oStatusLower === "cancelled" || oStatusLower === "pending");
+
+        let displayStatus = computeDisplayStatus(orderStatus, taskStatus, fulfillmentType, ordData.cancelledBy, rejectionReason, staffID);
+        let statusBadge = displayStatus;
+        if (isCancelledOrPendingNoAddress) {
+            displayStatus = "Terminated";
+            statusBadge = "Cancelled";
+        }
         const deliveryAddress = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ");
 
         taskList.push({
@@ -2936,6 +2945,8 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             taskStatus,
             fulfillmentType,
             displayStatus,
+            statusBadge,
+            isTerminatedNoAddress: Boolean(isCancelledOrPendingNoAddress),
             taskType: "Deliver",
             totalAmount: ordData.totalAmount || ordData.subtotal || 0,
             rejectionReason,

@@ -2012,14 +2012,62 @@
       totalPages: 1
     };
 
-    // Load Tasks from Backend API (with server-side pagination & filtering)
-    async function loadTasks(forceRefresh = false) {
-      let data = null;
+    let resolvedApiBase = null;
+    const taskDataCache = new Map();
+    const TAB_CACHE_TTL = 30000; // 30s client tab cache for instant switching
+
+    // Helper to get active working backend API URL without repeated candidate trial timeouts
+    async function getWorkingApiBase() {
+      if (resolvedApiBase) return resolvedApiBase;
       const candidates = [
         API_BASE,
         'http://localhost:3000',
         'http://127.0.0.1:3000'
       ].filter((v, i, arr) => arr.indexOf(v) === i);
+
+      for (const base of candidates) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 1200);
+          const res = await fetch(`${base}/api/task-assignment/admin/tasks?limit=1`, { signal: controller.signal });
+          clearTimeout(timer);
+          if (res.ok) {
+            resolvedApiBase = base;
+            return resolvedApiBase;
+          }
+        } catch (_) {}
+      }
+      return API_BASE;
+    }
+
+    // Load Tasks from Backend API (with server-side pagination & filtering + client instant cache)
+    async function loadTasks(forceRefresh = false) {
+      const cacheKey = `${activeTab}_${currentPage}_${PAGE_SIZE}_${searchQuery}_${sortAsc ? 'asc' : 'desc'}_${selectedTypeFilter}`;
+
+      // Instant rendering from client tab cache if valid and not a forced reload
+      if (!forceRefresh && taskDataCache.has(cacheKey)) {
+        const cached = taskDataCache.get(cacheKey);
+        if (Date.now() - cached.timestamp < TAB_CACHE_TTL) {
+          allTasks = cached.data.tasks || [];
+          if (cached.data.pagination) {
+            serverPagination = cached.data.pagination;
+            currentPage = cached.data.pagination.page;
+          }
+          updateCounts(cached.data.counts || {});
+          renderTable();
+          // Still fetch freshly in background if older than 5 seconds to keep counts and states fresh
+          if (Date.now() - cached.timestamp > 5000) {
+            loadTasksBackground(cacheKey);
+          }
+          return;
+        }
+      }
+
+      // Show light loading indicator on table body if currently empty
+      const tbody = document.getElementById('taskTableBody');
+      if (tbody && (!allTasks || allTasks.length === 0)) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 36px; color: #64748b; font-size: 14px;">Loading task records...</td></tr>`;
+      }
 
       const params = {
         tab: activeTab,
@@ -2033,9 +2081,19 @@
       if (forceRefresh) {
         params.refresh = 'true';
         params._t = Date.now();
+        taskDataCache.clear();
       }
 
       const queryParams = new URLSearchParams(params);
+      let data = null;
+
+      const baseToUse = resolvedApiBase || await getWorkingApiBase();
+      const candidates = [
+        baseToUse,
+        API_BASE,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+      ].filter((v, i, arr) => arr.indexOf(v) === i);
 
       for (const base of candidates) {
         try {
@@ -2043,6 +2101,7 @@
           if (res.ok) {
             data = await res.json();
             if (data.success && Array.isArray(data.tasks)) {
+              resolvedApiBase = base;
               break;
             }
           }
@@ -2052,6 +2111,7 @@
       }
 
       if (data && data.success && Array.isArray(data.tasks)) {
+        taskDataCache.set(cacheKey, { data, timestamp: Date.now() });
         allTasks = data.tasks;
         if (data.pagination) {
           serverPagination = data.pagination;
@@ -2070,6 +2130,39 @@
           if (desc) desc.textContent = 'Failed to connect to the backend server at port 3000. Please ensure the server is running.';
         }
       }
+    }
+
+    // Silent background refresh for seamless responsiveness
+    async function loadTasksBackground(cacheKey) {
+      try {
+        const base = resolvedApiBase || API_BASE;
+        const params = new URLSearchParams({
+          tab: activeTab,
+          page: currentPage,
+          limit: PAGE_SIZE,
+          search: searchQuery,
+          sort: sortAsc ? 'asc' : 'desc',
+          type: selectedTypeFilter
+        });
+        const res = await fetch(`${base}/api/task-assignment/admin/tasks?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.tasks)) {
+            taskDataCache.set(cacheKey, { data, timestamp: Date.now() });
+            // Only re-render if active tab hasn't switched away
+            const currentKey = `${activeTab}_${currentPage}_${PAGE_SIZE}_${searchQuery}_${sortAsc ? 'asc' : 'desc'}_${selectedTypeFilter}`;
+            if (currentKey === cacheKey) {
+              allTasks = data.tasks;
+              if (data.pagination) {
+                serverPagination = data.pagination;
+                currentPage = data.pagination.page;
+              }
+              updateCounts(data.counts || {});
+              renderTable();
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     // Load Available Staff for Reassign Modal
@@ -2196,8 +2289,10 @@
 
         // Column 5: Status (Single dot provided by .status-pill::before)
         const tdStatus = document.createElement('td');
-        let displayStatusText = task.displayStatus || 'Unassigned';
-        if ((task.status || task.requestStatus || '').toLowerCase() === 'accepted') {
+        let displayStatusText = task.statusBadge || task.displayStatus || 'Unassigned';
+        if (task.isTerminatedNoAddress) {
+          displayStatusText = 'Cancelled';
+        } else if ((task.status || task.requestStatus || '').toLowerCase() === 'accepted') {
           displayStatusText = 'Accepted';
         } else if ((task.status || task.requestStatus || '').toLowerCase() === 'rejected') {
           displayStatusText = 'Rejected';
@@ -2365,29 +2460,36 @@
           btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
         }
       } else {
-        // Terminated tab: collect task only has View Quotation button
-        const rawTrStatus = String(task.status || task.requestStatus || '').toLowerCase();
-        const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
-        const isCollect = rawTaskType.includes('collect');
-        if (isCollect) {
-          btns += `
-            <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
-          `;
-        } else {
-          const isTradeInTask = Boolean(task.tradeInRequestID || rawTaskType.includes('inspect'));
-          if (task.finalQuotation) {
-            btns += `
-              <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
-            `;
-          }
-          if (!isTradeInTask && rawTrStatus !== 'declined' && rawTrStatus !== 'rejected') {
-            btns += `
-              <button type="button" class="btn-act btn-picked" onclick="promptMarkPicked('${task.orderID}')">Picked</button>
-            `;
-          }
+        // Terminated tab
+        if (task.isTerminatedNoAddress) {
+          // Requirement: For cancelled/pending order without address ID moved to terminated tab: detail BUTTON ONLY
           btns += `
             <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
           `;
+        } else {
+          const rawTrStatus = String(task.status || task.requestStatus || '').toLowerCase();
+          const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
+          const isCollect = rawTaskType.includes('collect');
+          if (isCollect) {
+            btns += `
+              <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+            `;
+          } else {
+            const isTradeInTask = Boolean(task.tradeInRequestID || rawTaskType.includes('inspect'));
+            if (task.finalQuotation) {
+              btns += `
+                <button type="button" class="btn-act btn-quotation" onclick="openQuotationModal('${task.orderID}', true)">View Quotation</button>
+              `;
+            }
+            if (!isTradeInTask && rawTrStatus !== 'declined' && rawTrStatus !== 'rejected') {
+              btns += `
+                <button type="button" class="btn-act btn-picked" onclick="promptMarkPicked('${task.orderID}')">Picked</button>
+              `;
+            }
+            btns += `
+              <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+            `;
+          }
         }
       }
 
@@ -2421,7 +2523,20 @@
       if (!task) return;
 
       document.getElementById('modalTaskTitle').textContent = `Task #${task.taskID}`;
-      const statusPillClass = `status-${(task.displayStatus || 'unassigned').toLowerCase()}`;
+      let modalStatusText = task.statusBadge || task.displayStatus || 'Unassigned';
+      if (task.isTerminatedNoAddress) {
+        modalStatusText = 'Cancelled';
+      } else if ((task.status || task.requestStatus || '').toLowerCase() === 'accepted') {
+        modalStatusText = 'Accepted';
+      } else if ((task.status || task.requestStatus || '').toLowerCase() === 'rejected') {
+        modalStatusText = 'Rejected';
+      } else if ((task.status || task.requestStatus || '').toLowerCase() === 'declined') {
+        modalStatusText = 'Declined';
+      } else if ((modalStatusText.toLowerCase() === 'inspecting' || modalStatusText.toLowerCase() === 'inspected') &&
+          ((task.requestStatus || '').toLowerCase() === 'inspected' || modalStatusText.toLowerCase() === 'inspected' || Boolean(task.finalQuotation))) {
+        modalStatusText = 'Inspected';
+      }
+      const statusPillClass = `status-${modalStatusText.toLowerCase()}`;
 
       let podHtml = '';
       if (task.proofOfDeliveryUrl) {
@@ -2522,7 +2637,7 @@
               </div>
             </div>
             <div style="text-align: right;">
-              <span class="status-pill ${statusPillClass}">${escapeHtml(task.displayStatus)}</span>
+              <span class="status-pill ${statusPillClass}">${escapeHtml(modalStatusText)}</span>
               ${((task.displayStatus || '').toLowerCase() === 'completed' && (Boolean(task.pickedAt) || String(task.fulfillmentType || '').toLowerCase().includes('pickup') || String(task.fulfillmentType || '').toLowerCase().includes('self')))
                 ? `<div style="margin-top: 5px;"><span class="sublabel-badge">Self Pickup</span></div>`
                 : ''}
