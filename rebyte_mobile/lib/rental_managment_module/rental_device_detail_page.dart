@@ -4,6 +4,9 @@ import '../../widgets/rebyte_app_bar.dart';
 import '../../widgets/rebyte_bottom_nav_bar.dart';
 import 'rental_payment_confirmation_page.dart';
 import 'rental_renew_page.dart';
+import 'rental_return_page.dart';
+import 'rental_missing_payment_page.dart';
+import 'rental_buyout_confirmation_page.dart';
 
 class RentalDeviceDetailPage extends StatefulWidget {
   final Map<String, dynamic> rental;
@@ -86,12 +89,18 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
       imageUrl = product['images'][0].toString();
     }
 
+    // Status check
+    final rentalStatus = (rental['rentalStatus'] ?? '').toString().toLowerCase().trim();
+    final isReturning = rentalStatus == 'returning';
+
     // Days remaining
     final daysRemaining = _calculateDaysRemaining(rental['rentalExpiryDate'] ?? rental['endDate']);
-    final isOverdue = daysRemaining < 0;
-    final statusText = isOverdue
-        ? 'OVERDUE - ${daysRemaining.abs()} DAYS LATE'
-        : 'ACTIVE - $daysRemaining DAYS REMAINING';
+    final isOverdue = !isReturning && daysRemaining < 0;
+    final statusText = isReturning
+        ? 'RETURNING'
+        : (isOverdue
+            ? 'OVERDUE - ${daysRemaining.abs()} DAYS LATE'
+            : 'ACTIVE - $daysRemaining DAYS REMAINING');
 
     // Agreement Details
     final agreementId = rental['rentalID']?.toString() ?? 'RNT-8492-LNS';
@@ -118,9 +127,11 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
     final startDate = _formatDate(rental['startDate']);
     final endDate = _formatDate(rental['endDate']);
 
-    final monthlyFee = rental['monthlyRentalFee'] != null
-        ? 'RM ${rental['monthlyRentalFee']}/mth'
-        : '';
+    final rawFee = rental['monthlyRentalFee'];
+    final feeNum = (rawFee is num) ? rawFee.toDouble() : double.tryParse(rawFee?.toString() ?? '');
+    final monthlyFee = feeNum != null
+        ? 'RM ${feeNum.toStringAsFixed(2)}/mth'
+        : (rawFee != null ? 'RM $rawFee/mth' : '');
 
     return Scaffold(
       key: _scaffoldKey,
@@ -221,16 +232,22 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: isOverdue ? const Color(0xFFFFECE6) : const Color(0xFF5CE3D9),
+                                color: isReturning
+                                    ? const Color(0xFFEFF6FF)
+                                    : (isOverdue ? const Color(0xFFFFECE6) : const Color(0xFF5CE3D9)),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    isOverdue ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                                    isReturning
+                                        ? Icons.keyboard_return
+                                        : (isOverdue ? Icons.warning_amber_rounded : Icons.check_circle_outline),
                                     size: 13,
-                                    color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F766E),
+                                    color: isReturning
+                                        ? const Color(0xFF1D4ED8)
+                                        : (isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F766E)),
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
@@ -238,7 +255,9 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
                                     style: TextStyle(
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w800,
-                                      color: isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F766E),
+                                      color: isReturning
+                                          ? const Color(0xFF1D4ED8)
+                                          : (isOverdue ? const Color(0xFFEA580C) : const Color(0xFF0F766E)),
                                       letterSpacing: 0.3,
                                     ),
                                   ),
@@ -337,168 +356,247 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
 
                     const SizedBox(height: 14),
 
-                    // 2x2 Action Grid:
-                    // Row 1: Renew Rental | Buyout Device
-                    Row(
-                      children: [
-                        // Renew Rental
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final nav = Navigator.of(context);
-                              final updated = await nav.push(
-                                MaterialPageRoute(
-                                  builder: (context) => RentalRenewPage(
-                                    rental: widget.rental,
-                                    email: widget.email,
-                                    name: widget.name,
+                    // Actions section:
+                    // If returning, show return buffer banner instead of action grid buttons
+                    if (isReturning) ...[
+                      Builder(
+                        builder: (context) {
+                          String startReturnStr = endDate.isNotEmpty ? endDate : 'today';
+                          String bufferReturnStr = '';
+                          try {
+                            DateTime? baseDt;
+                            if (rental['endDate'] != null) {
+                              baseDt = DateTime.tryParse(rental['endDate'].toString());
+                            }
+                            baseDt ??= DateTime.now();
+                            final bufferDt = baseDt.add(const Duration(days: 3));
+                            bufferReturnStr = DateFormat('MMM dd, yyyy').format(bufferDt);
+                            if (rental['endDate'] != null) {
+                              startReturnStr = DateFormat('MMM dd, yyyy').format(baseDt);
+                            }
+                          } catch (_) {
+                            bufferReturnStr = 'within 3 days';
+                          }
+
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Please return between $startReturnStr to $bufferReturnStr',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1E40AF),
+                                      height: 1.35,
+                                    ),
                                   ),
                                 ),
-                              );
-                              if (updated == true && mounted) {
-                                nav.pop(true);
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF003F9E),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.sync, color: Colors.white, size: 20),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Renew Rental',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ] else ...[
+                      // 2x2 Action Grid:
+                      // Row 1: Renew Rental | Buyout Device
+                      Row(
+                        children: [
+                          // Renew Rental
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final nav = Navigator.of(context);
+                                final updated = await nav.push(
+                                  MaterialPageRoute(
+                                    builder: (context) => RentalRenewPage(
+                                      rental: widget.rental,
+                                      email: widget.email,
+                                      name: widget.name,
                                     ),
                                   ),
-                                ],
+                                );
+                                if (updated == true && mounted) {
+                                  nav.pop(true);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF003F9E),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.sync, color: Colors.white, size: 20),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Renew Rental',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
+                          const SizedBox(width: 14),
 
-                        // Buyout Device
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Buyout device for $agreementId coming soon.')),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.shopping_cart_outlined, color: Color(0xFF0C5AD2), size: 20),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Buyout Device',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0C5AD2),
+                          // Buyout Device
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final updated = await Navigator.of(context).push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) => RentalBuyoutConfirmationPage(
+                                      rental: widget.rental,
+                                      email: widget.email,
+                                      name: widget.name,
                                     ),
                                   ),
-                                ],
+                                );
+                                if (updated == true && mounted) {
+                                  Navigator.of(context).pop(true);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.shopping_cart_outlined, color: Color(0xFF0C5AD2), size: 20),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Buyout Device',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0C5AD2),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
 
-                    const SizedBox(height: 14),
+                      const SizedBox(height: 14),
 
-                    // Row 2: Return Device | Report Missing
-                    Row(
-                      children: [
-                        // Return Device
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Return request initiated for $agreementId.')),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.keyboard_return, color: Color(0xFF0F172A), size: 20),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Return Device',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F172A),
+                      // Row 2: Return Device | Report Missing
+                      Row(
+                        children: [
+                          // Return Device
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final nav = Navigator.of(context);
+                                final updated = await nav.push(
+                                  MaterialPageRoute(
+                                    builder: (context) => RentalReturnPage(
+                                      rental: widget.rental,
+                                      email: widget.email,
+                                      name: widget.name ?? 'Customer',
                                     ),
                                   ),
-                                ],
+                                );
+                                if (updated == true && mounted) {
+                                  nav.pop(true);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.keyboard_return, color: Color(0xFF0F172A), size: 20),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Return Device',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
+                          const SizedBox(width: 14),
 
-                        // Report Missing (Light red container)
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Report missing for $agreementId initiated.')),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFE4E6),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error_outline, color: Color(0xFFBE123C), size: 20),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Report Missing',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF9F1239),
+                          // Report Missing
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RentalMissingPaymentPage(
+                                      rental: widget.rental,
+                                      email: widget.email,
+                                      name: widget.name,
                                     ),
                                   ),
-                                ],
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFE4E6),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.error_outline, color: Color(0xFFBE123C), size: 20),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Report Missing',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF9F1239),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
 
                     const SizedBox(height: 24),
 

@@ -775,7 +775,7 @@ router.get("/transactions", async (req, res) => {
             // (d) By direct paymentAccountID ownership (transaction -> paymentAccount -> user)
             else if (t.paymentAccountID && userPaymentAccountIds.has(t.paymentAccountID)) {
                 const rawTxType = String(t.transactionType || "").toLowerCase();
-                if (rawTxType.includes("rent")) {
+                if (rawTxType.includes("rent") || rawTxType.includes("deposit")) {
                     matchedType = "rental";
                     if (t.rentalID && userRentalsMap.has(t.rentalID)) {
                         parentData = userRentalsMap.get(t.rentalID);
@@ -795,7 +795,7 @@ router.get("/transactions", async (req, res) => {
             // (e) By direct customerID on transaction
             else if (t.customerID && targetCustIds.includes(t.customerID)) {
                 const rawTxType = String(t.transactionType || "").toLowerCase();
-                if (rawTxType.includes("rent")) {
+                if (rawTxType.includes("rent") || rawTxType.includes("deposit")) {
                     matchedType = "rental";
                     if (t.rentalID && userRentalsMap.has(t.rentalID)) {
                         parentData = userRentalsMap.get(t.rentalID);

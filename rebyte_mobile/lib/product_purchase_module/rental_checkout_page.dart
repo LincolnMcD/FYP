@@ -270,7 +270,7 @@ class _RentalCheckoutPageState extends State<RentalCheckoutPage> {
 
       // Create a failed transaction record
       ShopService.createTransaction(
-        transactionType: 'Rental',
+        transactionType: 'Deposit',
         transactionStatus: 'Fail',
         transactionAmount: totalAmount,
         gatewayTransactionID: invoiceId,
@@ -412,9 +412,9 @@ class _RentalCheckoutPageState extends State<RentalCheckoutPage> {
         }
 
         // ONLY GO TO payment success page when payment successful AND authorization success!
-        // Create Transaction record linked with rentalID (Success)
+        // Create Transaction record linked with rentalID (Success with 'Deposit' type)
         ShopService.createTransaction(
-          transactionType: 'Rental',
+          transactionType: 'Deposit',
           transactionStatus: 'Success',
           transactionAmount: totalAmount,
           gatewayTransactionID: invoiceId,
@@ -443,22 +443,24 @@ class _RentalCheckoutPageState extends State<RentalCheckoutPage> {
         );
 
         // Navigate to PaymentSuccessPage with rentalID
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PaymentSuccessPage(
-              orderNumber: finalRentalID,
-              amountPaid: totalAmount,
-              email: widget.email,
-              name: widget.name,
-              paymentTitle: _selectedPayment?.title ?? 'Card',
-              paidAt: DateTime.now(),
-              items: [rentalCartItem],
-              deliveryAddress: _selectedAddress,
-              isRental: true,
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PaymentSuccessPage(
+                orderNumber: finalRentalID,
+                amountPaid: totalAmount,
+                email: widget.email,
+                name: widget.name,
+                paymentTitle: _selectedPayment?.title ?? 'Card',
+                paidAt: DateTime.now(),
+                items: [rentalCartItem],
+                deliveryAddress: _selectedAddress,
+                isRental: true,
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
         // Failed to write rental record despite payment success: trigger refund
         if (invoiceId != null && invoiceId.isNotEmpty) {

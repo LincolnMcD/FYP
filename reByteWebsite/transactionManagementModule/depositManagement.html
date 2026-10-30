@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rental Deposit Management - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --primary: #082f72;
+      --primary-light: #eff6ff;
+      --navy: #10264b;
+      --border-color: #e2e8f0;
+      --bg-page: #f8fafc;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-page);
+      color: var(--text-main);
+      display: flex;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Left Sidebar - Consistent with Listing & Customer Management */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+
+    .brand img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+    }
+
+    .brand span {
+      color: #10264b;
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+
+    .nav-item svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+
+    .nav-item:hover {
+      background: #f1f4f9;
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: var(--navy);
+      font-weight: 600;
+      box-shadow: none;
+    }
+    .nav-item.active svg {
+      color: #fff;
+    }
+
+    .sidebar-footer {
+      padding: 16px 20px 24px;
+      border-top: 1px solid #eef2f7;
+    }
+
+    /* Main Content Area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .content {
+      padding: 30px 40px 48px;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    /* Back Link & Title */
+    .back-btn {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 20px -8px;
+      transition: color 0.15s ease;
+      background: transparent;
+      border: none;
+    }
+    .back-btn:hover {
+      color: #10264b;
+      background: transparent;
+    }
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .page-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .page-subtitle {
+      font-size: 14.5px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    /* KPI Summary Cards Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .kpi-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 22px 24px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+    }
+
+    .kpi-info {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      line-height: 1.1;
+    }
+
+    .kpi-card.active-card .kpi-value {
+      color: #082f72;
+    }
+    .kpi-card.pending-card .kpi-value {
+      color: #b91c1c;
+    }
+    .kpi-card.returned-card .kpi-value {
+      color: #047857;
+    }
+
+    .kpi-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .kpi-card.active-card .kpi-icon-wrap {
+      background: #eff6ff;
+      color: #1e40af;
+    }
+    .kpi-card.pending-card .kpi-icon-wrap {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .kpi-card.returned-card .kpi-icon-wrap {
+      background: #ecfdf5;
+      color: #047857;
+    }
+    .kpi-icon-wrap svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pill-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill-tab {
+      padding: 8px 18px;
+      border-radius: 9999px;
+      border: 1px solid #d8dee8;
+      background: #ffffff;
+      color: #4b5565;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pill-tab:hover {
+      border-color: #082f72;
+      color: #082f72;
+    }
+    .pill-tab.active {
+      background: #082f72;
+      color: #ffffff;
+      border-color: #082f72;
+    }
+
+    /* Table Card */
+    .table-card {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid #e5e9f2;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 880px;
+    }
+
+    th {
+      height: 52px;
+      padding: 0 20px;
+      text-align: left;
+      color: #555b68;
+      font-size: 11.5px;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      border-bottom: 1px solid #cfd4df;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    th:first-child, td:first-child { padding-left: 28px; }
+    th:last-child, td:last-child { padding-right: 28px; }
+
+    /* Columns Proportions: ID, CUSTOMER, DEVICE, DEPOSIT AMOUNT(RM), STATUS, ACTION */
+    th:nth-child(1), td:nth-child(1) { width: 18%; } /* ID */
+    th:nth-child(2), td:nth-child(2) { width: 22%; } /* CUSTOMER */
+    th:nth-child(3), td:nth-child(3) { width: 24%; } /* DEVICE */
+    th:nth-child(4), td:nth-child(4) { width: 16%; text-align: right; padding-right: 32px; } /* DEPOSIT AMOUNT Header & Cell */
+    th:nth-child(5), td:nth-child(5) { width: 20%; padding-left: 24px; } /* STATUS & ACTION */
+
+    td {
+      height: 72px;
+      padding: 0 20px;
+      color: #475569;
+      font-size: 14px;
+      border-bottom: 1px solid #e9ebf0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody tr.returned-deposit-row { cursor: pointer; }
+    tbody tr.returned-deposit-row:focus-visible { outline: 2px solid #0c5ad2; outline-offset: -2px; }
+
+    .rental-id-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      color: #0b4fb3;
+      letter-spacing: -0.2px;
+    }
+
+    .customer-name {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .device-name {
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .deposit-val {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-weight: 500;
+      color: #10264b;
+      font-size: 14.5px;
+      letter-spacing: -0.1px;
+    }
+
+    /* Status Pills matching design:
+       - Active: Light Blue pill with dot (• Active)
+       - Pending Return: Light Yellow pill with warning icon / dot (⚠ Pending Return)
+       - Returned: Light Purple/Gray pill with check icon (✓ Returned)
+    */
+    .status-cell-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .dep-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .dep-badge.badge-active {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #dbeafe;
+    }
+    .dep-badge.badge-active .dep-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #1d4ed8;
+    }
+
+    .dep-badge.badge-pending {
+      background: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fef3c7;
+    }
+    .dep-badge.badge-pending .dep-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #f59e0b;
+    }
+
+    .dep-badge.badge-returned {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+
+    .dep-badge.badge-forfeited {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .btn-return-action {
+      background: #082f72;
+      color: #ffffff;
+      border: none;
+      padding: 7px 18px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-return-action:hover {
+      background: #0b4fb3;
+      transform: translateY(-1px);
+    }
+    .btn-return-action:active {
+      transform: translateY(0);
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: none;
+      padding: 56px 20px;
+      text-align: center;
+      color: #64748b;
+    }
+    .empty-state svg {
+      width: 44px;
+      height: 44px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .empty-state h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .empty-state p {
+      margin: 0;
+      font-size: 13.5px;
+    }
+
+    /* Footer Pagination */
+    .card-footer {
+      min-height: 64px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-top: 1px solid #e9ebf0;
+      color: #5d6472;
+      font-size: 13.5px;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-btn {
+      min-width: 34px;
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid #cbd1df;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #52596a;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .page-btn:hover:not(:disabled) {
+      border-color: #0b4fb3;
+      color: #0b4fb3;
+    }
+    .page-btn.current {
+      background: #082f72;
+      border-color: #082f72;
+      color: #ffffff;
+    }
+    .page-btn:disabled {
+      color: #cbd5e1;
+      border-color: #e2e8f0;
+      cursor: not-allowed;
+    }
+
+    /* Confirmation Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 28px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+      border: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+        </svg>Dashboard
+      </a>
+      <a href="../listingModule/listing.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+          <path d="M3 6h18"></path>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>Listing
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/>
+        </svg>System Config
+      </a>
+      <!-- Active Finance Navigation -->
+      <a href="index.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path>
+        </svg>Analytics
+      </a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+          <path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path>
+        </svg>Task Assignment
+      </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+          <path d="m9 16 2 2 4-4"></path>
+        </svg>Leave Management
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M20 8v6M17 11h6"></path>
+        </svg>Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main View -->
+  <main class="main">
+    <!-- Admin Header with page title Finance -->
+    <header class="admin-header" data-admin-header data-page-title="Finance"></header>
+
+    <section class="content">
+      <!-- Back Link to Transactions List -->
+      <a href="index.html" class="back-btn" title="Back to Transactions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </a>
+
+      <!-- Page Titles -->
+      <h1 class="page-title">Rental Deposit Management</h1>
+      <p class="page-subtitle">Manage security deposits, processing, and deductions.</p>
+
+      <!-- Top 3 KPI Metric Cards calculated dynamically from rental records -->
+      <div class="kpi-grid">
+        <!-- 1. Active Deposits -->
+        <div class="kpi-card active-card">
+          <div class="kpi-info">
+            <span class="kpi-label">ACTIVE DEPOSITS</span>
+            <div class="kpi-value" id="kpiActiveDeposits">RM 0.00</div>
+          </div>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2l9 5H3l9-5z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 2. Pending Return -->
+        <div class="kpi-card pending-card">
+          <div class="kpi-info">
+            <span class="kpi-label">PENDING RETURN</span>
+            <div class="kpi-value" id="kpiPendingReturn">RM 0.00</div>
+          </div>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 3. Returned (This Month) -->
+        <div class="kpi-card returned-card">
+          <div class="kpi-info">
+            <span class="kpi-label">RETURNED (THIS MONTH)</span>
+            <div class="kpi-value" id="kpiReturnedMonth">RM 0.00</div>
+          </div>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="filter-bar">
+        <div class="pill-tabs" role="tablist">
+          <button type="button" class="pill-tab active" data-status="all">All</button>
+          <button type="button" class="pill-tab" data-status="active">Active</button>
+          <button type="button" class="pill-tab" data-status="pending">Pending</button>
+          <button type="button" class="pill-tab" data-status="returned">Returned</button>
+          <button type="button" class="pill-tab" data-status="forfeited">Forfeited</button>
+        </div>
+      </div>
+
+      <!-- Rental Deposits Table Card -->
+      <section class="table-card" aria-label="Deposit table">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>CUSTOMER</th>
+                <th>DEVICE</th>
+                <th>DEPOSIT AMOUNT(RM)</th>
+                <th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="depositRows">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+
+          <div class="empty-state" id="emptyState">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            <h3>No Deposit Records Found</h3>
+            <p>No rental deposits match the current status filter.</p>
+          </div>
+        </div>
+
+        <!-- Footer Pagination -->
+        <footer class="card-footer">
+          <span id="resultCount">Showing 0 entries</span>
+          <div class="pagination" id="depPagination" aria-label="Pagination"></div>
+        </footer>
+      </section>
+    </section>
+  </main>
+
+  <!-- Return Deposit Confirmation Modal -->
+  <div class="modal-backdrop" id="confirmReturnModal" hidden>
+    <div class="modal-card">
+      <h2 style="margin: 0 0 8px; font-size: 20px; font-weight: 700; color: #10264b;">Process Deposit Return</h2>
+      <p style="margin: 0 0 20px; font-size: 13.5px; color: #64748b; line-height: 1.5;" id="confirmModalText">
+        Are you sure you want to mark this rental deposit as returned to the customer?
+      </p>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" id="btnCancelReturn" style="background: #f1f5f9; color: #475569; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 600; cursor: pointer;">Cancel</button>
+        <button type="button" id="btnConfirmReturn" style="background: #082f72; color: #ffffff; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer;">Confirm Return</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../adminModule/adminHeader.js"></script>
+  <script>
+    (function() {
+      let currentStatus = 'all';
+      let currentPage = 1;
+      const limit = 10;
+      let selectedRentalForReturn = null;
+
+      const tbody = document.getElementById('depositRows');
+      const emptyState = document.getElementById('emptyState');
+      const resultCount = document.getElementById('resultCount');
+      const paginationEl = document.getElementById('depPagination');
+
+      const kpiActive = document.getElementById('kpiActiveDeposits');
+      const kpiPending = document.getElementById('kpiPendingReturn');
+      const kpiReturned = document.getElementById('kpiReturnedMonth');
+
+      const confirmModal = document.getElementById('confirmReturnModal');
+      const confirmModalText = document.getElementById('confirmModalText');
+      const btnCancelReturn = document.getElementById('btnCancelReturn');
+      const btnConfirmReturn = document.getElementById('btnConfirmReturn');
+
+      // Filter tabs click
+      document.querySelectorAll('.pill-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.pill-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentStatus = tab.dataset.status || 'all';
+          currentPage = 1;
+          loadDeposits();
+        });
+      });
+
+      // API fetch resolver
+      const API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000', window.location.origin];
+      async function apiFetch(pathAndQuery, options = {}) {
+        let lastErr = null;
+        for (const base of API_BASES) {
+          try {
+            const url = `${base.replace(/\/$/, '')}${pathAndQuery}`;
+            const res = await fetch(url, options);
+            if (res.ok) return await res.json();
+            else if (res.status !== 404) throw new Error(`HTTP ${res.status}`);
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr || new Error('Endpoint not found');
+      }
+
+      function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function formatMoney(num) {
+        const val = Number(num || 0);
+        return 'RM ' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      async function loadDeposits() {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color: #64748b;">Loading rental deposits...</td></tr>`;
+        emptyState.style.display = 'none';
+
+        try {
+          const params = new URLSearchParams({
+            status: currentStatus,
+            page: currentPage,
+            limit: limit
+          });
+
+          const data = await apiFetch(`/api/transaction-management/rental-deposits?${params.toString()}`);
+          if (!data || !data.success) {
+            throw new Error((data && data.error) || 'Failed to load deposits');
+          }
+
+          // Update Top 3 KPI blocks
+          if (data.metrics) {
+            kpiActive.textContent = formatMoney(data.metrics.activeDeposits);
+            kpiPending.textContent = formatMoney(data.metrics.pendingReturn);
+            kpiReturned.textContent = formatMoney(data.metrics.returnedThisMonth);
+          }
+
+          renderDeposits(data.deposits || []);
+          renderPagination(data.total || 0, data.page || 1, data.totalPages || 1);
+        } catch (err) {
+          console.error('Failed to load deposits:', err);
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color: #dc2626;">Error loading deposit records: ${escapeHtml(err.message)}</td></tr>`;
+          resultCount.textContent = 'Showing 0 entries';
+          paginationEl.innerHTML = '';
+        }
+      }
+
+      function renderDeposits(list) {
+        if (!list || list.length === 0) {
+          tbody.innerHTML = '';
+          emptyState.style.display = 'block';
+          resultCount.textContent = 'Showing 0 entries';
+          return;
+        }
+
+        emptyState.style.display = 'none';
+        tbody.innerHTML = list.map(item => {
+          let badgeHtml = '';
+          let actionBtnHtml = '';
+
+          if (item.status === 'Active') {
+            badgeHtml = `<span class="dep-badge badge-active"><span class="dep-dot"></span>Active</span>`;
+          } else if (item.status === 'Pending') {
+            badgeHtml = `<span class="dep-badge badge-pending"><span class="dep-dot"></span>Pending</span>`;
+            actionBtnHtml = `<button type="button" class="btn-return-action" data-rental-id="${escapeHtml(item.rentalID)}" data-amount="${escapeHtml(item.formattedDeposit)}">Return</button>`;
+          } else if (item.status === 'Returned') {
+            badgeHtml = `<span class="dep-badge badge-returned">✓ Returned</span>`;
+          } else if (item.status === 'Forfeited') {
+            badgeHtml = `<span class="dep-badge badge-forfeited">Forfeited</span>`;
+          }
+
+          return `
+            <tr class="${item.status === 'Returned' ? 'returned-deposit-row' : ''}" ${item.status === 'Returned' ? `data-rental-id="${escapeHtml(item.rentalID)}" tabindex="0" role="link" title="View return assessment"` : ''}>
+              <td class="rental-id-cell">#${escapeHtml(item.rentalID)}</td>
+              <td><span class="customer-name">${escapeHtml(item.customer)}</span></td>
+              <td><span class="device-name">${escapeHtml(item.device)}</span></td>
+              <td><span class="deposit-val">${escapeHtml(item.formattedDeposit)}</span></td>
+              <td>
+                <div class="status-cell-wrap">
+                  ${badgeHtml}
+                  ${actionBtnHtml}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.querySelectorAll('.returned-deposit-row').forEach(row => {
+          const openSavedAssessment = () => {
+            const rId = row.dataset.rentalId;
+            if (rId) window.location.href = `returnAssessment.html?rentalID=${encodeURIComponent(rId)}&view=readonly`;
+          };
+          row.addEventListener('click', openSavedAssessment);
+          row.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              openSavedAssessment();
+            }
+          });
+        });
+
+        // Attach action handlers for Return buttons -> navigate to Return Assessment page
+        document.querySelectorAll('.btn-return-action').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const rId = e.currentTarget.dataset.rentalId;
+            window.location.href = `returnAssessment.html?rentalID=${encodeURIComponent(rId)}`;
+          });
+        });
+      }
+
+      function renderPagination(total, page, totalPages) {
+        if (total === 0) {
+          resultCount.textContent = 'Showing 0 entries';
+          paginationEl.innerHTML = '';
+          return;
+        }
+
+        const start = (page - 1) * limit + 1;
+        const end = Math.min(page * limit, total);
+        resultCount.textContent = `Showing ${start}-${end} of ${total}`;
+
+        if (totalPages <= 1) {
+          paginationEl.innerHTML = '';
+          return;
+        }
+
+        let html = '';
+        html += `<button class="page-btn" ${page <= 1 ? 'disabled' : ''} data-page="${page - 1}">&lt;</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+          if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+            html += `<button class="page-btn ${i === page ? 'current' : ''}" data-page="${i}">${i}</button>`;
+          } else if (i === page - 2 || i === page + 2) {
+            html += `<span style="padding: 0 4px; color: #94a3b8;">...</span>`;
+          }
+        }
+        html += `<button class="page-btn" ${page >= totalPages ? 'disabled' : ''} data-page="${page + 1}">&gt;</button>`;
+        paginationEl.innerHTML = html;
+
+        paginationEl.querySelectorAll('.page-btn[data-page]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const targetPage = parseInt(btn.dataset.page, 10);
+            if (!isNaN(targetPage) && targetPage !== currentPage) {
+              currentPage = targetPage;
+              loadDeposits();
+            }
+          });
+        });
+      }
+
+      // Modal action buttons
+      btnCancelReturn.addEventListener('click', () => {
+        confirmModal.hidden = true;
+        selectedRentalForReturn = null;
+      });
+
+      btnConfirmReturn.addEventListener('click', async () => {
+        if (!selectedRentalForReturn) return;
+        btnConfirmReturn.disabled = true;
+        btnConfirmReturn.textContent = 'Processing...';
+
+        try {
+          const res = await apiFetch('/api/transaction-management/rental-deposits/return', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rentalID: selectedRentalForReturn })
+          });
+          confirmModal.hidden = true;
+          selectedRentalForReturn = null;
+          loadDeposits();
+        } catch (err) {
+          alert('Failed to update deposit: ' + err.message);
+        } finally {
+          btnConfirmReturn.disabled = false;
+          btnConfirmReturn.textContent = 'Confirm Return';
+        }
+      });
+
+      // Initial load
+      loadDeposits();
+    })();
+  </script>
+</body>
+</html>
+

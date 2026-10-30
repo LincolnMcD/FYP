@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finance - Transaction Records - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0c5ad2;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --muted: #717b8e;
+      --primary-navy: #082f72;
+      --active-navy: #082f72;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 20;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active {
+      color: #fff;
+      background: var(--navy);
+      font-weight: 600;
+    }
+    .nav-item.active svg { color: #fff; }
+
+    /* Main Container */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .content {
+      padding: 28px 40px 48px;
+    }
+
+    /* Back Button */
+    .back {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 18px -8px;
+      transition: color 0.15s ease;
+    }
+    .back:hover { color: #10264b; }
+    .back svg { width: 20px; height: 20px; }
+
+    /* Page Header */
+    .page-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .page-title-area h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      font-weight: 800;
+      color: #161a20;
+      letter-spacing: -0.5px;
+    }
+    .page-title-area p {
+      margin: 0;
+      font-size: 14.5px;
+      color: #5d6472;
+    }
+
+    /* Manage Deposit Button */
+    .btn-manage-deposit {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 42px;
+      padding: 0 22px;
+      background: #082f72;
+      color: #ffffff;
+      border: none;
+      border-radius: 22px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 6px rgba(8, 47, 114, 0.25);
+    }
+    .btn-manage-deposit:hover {
+      background: #0b4fb3;
+      box-shadow: 0 4px 10px rgba(8, 47, 114, 0.35);
+    }
+
+    /* Filter Controls Row (Pills on Left, Search on Right) */
+    .filter-controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .pill-tabs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pill-tab {
+      height: 38px;
+      padding: 0 18px;
+      border-radius: 20px;
+      border: 1px solid #d4d9e5;
+      background: #ffffff;
+      color: #4e5564;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .pill-tab:hover {
+      background: #f1f4f9;
+      border-color: #cbd2e0;
+    }
+    .pill-tab.active {
+      background: #082f72;
+      color: #ffffff;
+      border-color: #082f72;
+      box-shadow: 0 2px 5px rgba(8, 47, 114, 0.2);
+    }
+
+    .search-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 42px;
+      width: min(360px, 40vw);
+      padding: 0 16px;
+      border: 1px solid #c9cddd;
+      border-radius: 22px;
+      background: #fafaff;
+      color: #7d8493;
+      transition: all 0.15s ease;
+    }
+    .search-wrap:focus-within {
+      border-color: #0b4fb3;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(11, 79, 179, 0.12);
+    }
+    .search-wrap svg { width: 17px; height: 17px; flex-shrink: 0; }
+    .search-wrap input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 13.5px;
+    }
+
+    /* Deposit Mention Info Banner */
+    .deposit-info-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      color: #1e40af;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+    .deposit-info-banner svg { width: 20px; height: 20px; flex-shrink: 0; color: #2563eb; }
+
+    /* Transactions Table Card */
+    .table-card {
+      background: #ffffff;
+      border: 1px solid #edf0f4;
+      border-radius: 18px;
+      box-shadow: 0 5px 18px rgba(26, 43, 69, 0.05);
+      overflow: hidden;
+    }
+    .table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 950px;
+    }
+    th {
+      height: 52px;
+      padding: 0 16px;
+      text-align: left;
+      color: #555b68;
+      font-size: 11.5px;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      border-bottom: 1px solid #cfd4df;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    th:first-child, td:first-child { padding-left: 24px; }
+    th:last-child, td:last-child { padding-right: 24px; }
+
+    /* Balanced equal column distribution across all 7 columns */
+    th:nth-child(1), td:nth-child(1) { width: 17%; } /* TRANSACTION ID */
+    th:nth-child(2), td:nth-child(2) { width: 11%; } /* TYPE */
+    th:nth-child(3), td:nth-child(3) { width: 16%; } /* RELATED ID */
+    th:nth-child(4), td:nth-child(4) { width: 18%; } /* CUSTOMER */
+    th:nth-child(5), td:nth-child(5) { width: 14%; } /* DATE/TIME */
+    th:nth-child(6), td:nth-child(6) { width: 11%; } /* METHOD */
+    th:nth-child(7), td:nth-child(7) { width: 13%; text-align: right; padding-right: 28px; } /* AMOUNT (RM) Header & Cell */
+
+    td {
+      height: 72px;
+      padding: 0 16px;
+      color: #475569;
+      font-size: 13.5px;
+      border-bottom: 1px solid #e9ebf0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+
+    .txn-id-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-weight: 700;
+      color: #0b4fb3;
+      letter-spacing: -0.2px;
+    }
+
+    /* Type Pill Badges (matching Task Assignment type pills) */
+    .type-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      line-height: 1;
+    }
+    .type-pill.type-purchase {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+    .type-pill.type-rental {
+      background: #f3e8ff;
+      color: #6b21a8;
+      border: 1px solid #e9d5ff;
+    }
+    .type-pill.type-trade-in {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+    .type-pill.type-deposit {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+    .type-pill.type-refund {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    /* Reference ID Cell */
+    .ref-id-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .ref-id-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .ref-id-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .cust-cell {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+    .cust-name {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .cust-email {
+      font-size: 12px;
+      color: #64748b;
+    }
+    .datetime-cell {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+    .date-text {
+      color: #1e293b;
+      font-weight: 500;
+    }
+    .time-text {
+      font-size: 12px;
+      color: #64748b;
+    }
+    .amount-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-weight: 700;
+      font-size: 14.5px;
+      text-align: right;
+    }
+    .amount-positive { color: #16a34a; }
+    .amount-negative { color: #dc2626; }
+
+    .method-cell {
+      font-weight: 500;
+      color: #334155;
+    }
+    .status-success .status-dot { background: #16a34a; }
+    .status-pending { color: #d97706; }
+    .status-pending .status-dot { background: #d97706; }
+    .status-failed { color: #dc2626; }
+    .status-failed .status-dot { background: #dc2626; }
+
+    /* Empty state */
+    .empty-state {
+      display: none;
+      padding: 56px 20px;
+      text-align: center;
+      color: #64748b;
+    }
+    .empty-state svg {
+      width: 44px;
+      height: 44px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .empty-state h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .empty-state p {
+      margin: 0;
+      font-size: 13.5px;
+    }
+
+    /* Footer Pagination */
+    .card-footer {
+      min-height: 64px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-top: 1px solid #e9ebf0;
+      color: #5d6472;
+      font-size: 13.5px;
+    }
+    .pagination {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .page-btn {
+      min-width: 34px;
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid #cbd1df;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #52596a;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .page-btn:hover:not(:disabled) {
+      border-color: #0b4fb3;
+      color: #0b4fb3;
+    }
+    .page-btn.current {
+      background: #082f72;
+      border-color: #082f72;
+      color: #ffffff;
+    }
+    .page-btn:disabled {
+      color: #cbd5e1;
+      border-color: #e2e8f0;
+      cursor: default;
+    }
+
+    /* Modal for Manage Deposit coming soon */
+    .modal-backdrop[hidden] { display: none !important; }
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 2000;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+      opacity: 0; visibility: hidden; transition: all 0.2s ease;
+    }
+    .modal-backdrop.show { opacity: 1; visibility: visible; }
+    .modal-card {
+      width: min(100%, 460px); background: #fff; border-radius: 18px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+      padding: 24px 28px; text-align: left;
+    }
+
+    @media (max-width: 900px) {
+      .content { padding: 24px 20px 36px; }
+      .search-wrap { width: 100%; }
+    }
+    @media (max-width: 650px) {
+      body { display: block; }
+      .sidebar { width: 100%; height: auto; position: static; }
+      .nav-list { display: flex; overflow-x: auto; padding: 10px; }
+      .nav-list .nav-item:not(.active) { display: none; }
+      .content { padding: 18px 12px; }
+      .filter-controls-row { flex-direction: column; align-items: stretch; }
+      .card-footer { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar (Identical to Customer Management and Admin Dashboard) -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>Dashboard
+      </a>
+      <a href="../listingModule/listing.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+          <path d="M3 6h18"></path>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>Listing
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/>
+        </svg>System Config
+      </a>
+      <!-- Active Finance tab -->
+      <a href="index.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3v18h18"></path>
+          <path d="m19 9-5 5-4-4-5 5"></path>
+        </svg>Analytics
+      </a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+          <path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path>
+        </svg>Task Assignment
+      </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+          <path d="m9 16 2 2 4-4"></path>
+        </svg>Leave Management
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M20 8v6M17 11h6"></path>
+        </svg>Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main View -->
+  <main class="main">
+    <!-- Admin Header with page title Finance -->
+    <header class="admin-header" data-admin-header data-page-title="Finance"></header>
+
+    <section class="content">
+      <!-- Back Arrow to Dashboard -->
+      <a class="back" href="../adminModule/adminDashboard.html" aria-label="Back to dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m15 18-6-6 6-6"></path>
+          <path d="M9 12h12"></path>
+        </svg>
+      </a>
+
+      <!-- Page Title & Action Row -->
+      <div class="page-header-row">
+        <div class="page-title-area">
+          <h1>Transaction Records</h1>
+          <p>Manage and audit all financial activities across the platform.</p>
+        </div>
+        <button type="button" class="btn-manage-deposit" id="btnManageDeposit">Manage Deposit</button>
+      </div>
+
+      <!-- Filter Controls: Categorized Pill Tabs + Search -->
+      <div class="filter-controls-row">
+        <div class="pill-tabs" role="tablist" aria-label="Transaction Categories">
+          <button type="button" class="pill-tab active" data-category="all" role="tab" aria-selected="true">All</button>
+          <button type="button" class="pill-tab" data-category="purchase" role="tab" aria-selected="false">Purchase</button>
+          <button type="button" class="pill-tab" data-category="rental" role="tab" aria-selected="false">Rental</button>
+          <button type="button" class="pill-tab" data-category="trade-in" role="tab" aria-selected="false">Trade-In</button>
+          <button type="button" class="pill-tab" data-category="deposit" role="tab" aria-selected="false" title="Deposit + 1st month rental fee">Deposit</button>
+          <button type="button" class="pill-tab" data-category="refund" role="tab" aria-selected="false">Refund</button>
+        </div>
+
+        <label class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+          <input type="search" id="txSearch" placeholder="Search Transaction ID, Order, Rental, Trade-in, or Customer..." aria-label="Search transactions">
+        </label>
+      </div>
+
+      <!-- Deposit Clarification Notice (Displayed when Deposit tab is selected) -->
+      <div class="deposit-info-banner" id="depositInfoBanner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span><strong>Deposit Category:</strong> Includes the initial rental checkout transaction covering both the <strong>refundable security deposit</strong> and the <strong>first month monthly rental fee</strong>.</span>
+      </div>
+
+      <!-- Transactions Card with Table -->
+      <section class="table-card" aria-label="Transaction table">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>TRANSACTION ID</th>
+                <th>TYPE</th>
+                <th>RELATED ID</th>
+                <th>CUSTOMER</th>
+                <th>DATE/TIME</th>
+                <th>METHOD</th>
+                <th>AMOUNT (RM)</th>
+              </tr>
+            </thead>
+            <tbody id="transactionRows">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+
+          <div class="empty-state" id="emptyState">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            <h3>No Transactions Found</h3>
+            <p>No transaction records match the selected category or search filter.</p>
+          </div>
+        </div>
+
+        <!-- Footer Pagination -->
+        <footer class="card-footer">
+          <span id="resultCount">Showing 0 entries</span>
+          <div class="pagination" id="txPagination" aria-label="Pagination"></div>
+        </footer>
+      </section>
+    </section>
+  </main>
+
+  <!-- Manage Deposit Modal -->
+  <div class="modal-backdrop" id="depositModal" hidden>
+    <div class="modal-card">
+      <h2 style="margin: 0 0 8px; font-size: 20px; font-weight: 700; color: #10264b;">Deposit Management</h2>
+      <p style="margin: 0 0 20px; font-size: 13.5px; color: #64748b; line-height: 1.5;">
+        Security deposits for active rentals are securely held until completion or safe device return.
+      </p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13.5px;">
+          <span style="color: #64748b;">Deposit Category:</span>
+          <span style="font-weight: 700; color: #082f72;">Security Deposit + 1st Month Rental</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 13.5px;">
+          <span style="color: #64748b;">Policy:</span>
+          <span style="font-weight: 600; color: #16a34a;">Refundable upon device return</span>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" id="btnCloseDepositModal" style="height: 38px; padding: 0 18px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #475569; font-weight: 600; cursor: pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../adminModule/adminHeader.js"></script>
+  <script>
+    (function() {
+      let currentCategory = 'all';
+      let currentSearch = '';
+      let currentPage = 1;
+      const limit = 10;
+
+      const tbody = document.getElementById('transactionRows');
+      const emptyState = document.getElementById('emptyState');
+      const resultCount = document.getElementById('resultCount');
+      const paginationEl = document.getElementById('txPagination');
+      const searchInput = document.getElementById('txSearch');
+      const depositBanner = document.getElementById('depositInfoBanner');
+      const depositModal = document.getElementById('depositModal');
+      const btnManageDeposit = document.getElementById('btnManageDeposit');
+      const btnCloseDepositModal = document.getElementById('btnCloseDepositModal');
+
+      // Setup pill tabs
+      document.querySelectorAll('.pill-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.pill-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentCategory = tab.dataset.category || 'all';
+          currentPage = 1;
+
+          // Toggle deposit explanation banner
+          if (currentCategory === 'deposit') {
+            depositBanner.style.display = 'flex';
+          } else {
+            depositBanner.style.display = 'none';
+          }
+
+          loadTransactions();
+        });
+      });
+
+      // Search debounce
+      let searchTimeout;
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          currentSearch = e.target.value.trim();
+          currentPage = 1;
+          loadTransactions();
+        }, 300);
+      });
+
+      // Manage deposit navigation
+      btnManageDeposit.addEventListener('click', () => {
+        window.location.href = 'depositManagement.html';
+      });
+      btnCloseDepositModal.addEventListener('click', () => {
+        depositModal.classList.remove('show');
+        setTimeout(() => depositModal.hidden = true, 200);
+      });
+      depositModal.addEventListener('click', (e) => {
+        if (e.target === depositModal) {
+          depositModal.classList.remove('show');
+          setTimeout(() => depositModal.hidden = true, 200);
+        }
+      });
+
+      // Format Date/Time
+      function formatDateTime(isoStr) {
+        if (!isoStr) return { date: '—', time: '—' };
+        try {
+          const d = new Date(isoStr);
+          if (isNaN(d.getTime())) return { date: String(isoStr), time: '' };
+          const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          return { date, time };
+        } catch (_) {
+          return { date: String(isoStr), time: '' };
+        }
+      }
+
+      const API_BASES = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        window.location.origin
+      ];
+
+      async function apiFetch(pathAndQuery) {
+        let lastErr = null;
+        for (const base of API_BASES) {
+          try {
+            const url = `${base.replace(/\/$/, '')}${pathAndQuery}`;
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (res.ok) {
+              return await res.json();
+            } else if (res.status !== 404) {
+              throw new Error(`HTTP ${res.status}`);
+            }
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr || new Error('HTTP 404: Endpoint not found');
+      }
+
+      async function loadTransactions() {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 40px; color: #64748b;">Loading transactions...</td></tr>`;
+        emptyState.style.display = 'none';
+
+        try {
+          const params = new URLSearchParams({
+            category: currentCategory,
+            search: currentSearch,
+            page: currentPage,
+            limit: limit
+          });
+
+          // Fetch from transactionManagementModule endpoint across API bases
+          const data = await apiFetch(`/api/transaction-management/transactions?${params.toString()}`);
+
+          if (!data || !data.success) {
+            throw new Error((data && data.error) || 'Failed to load transactions');
+          }
+
+          renderTransactions(data.transactions || []);
+          renderPagination(data.total || 0, data.page || 1, data.totalPages || 1);
+        } catch (err) {
+          console.error('Failed to load transactions:', err);
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 40px; color: #dc2626;">Error loading transaction records: ${escapeHtml(err.message)}</td></tr>`;
+          resultCount.textContent = 'Showing 0 entries';
+          paginationEl.innerHTML = '';
+        }
+      }
+
+      function renderTransactions(list) {
+        if (!list || list.length === 0) {
+          tbody.innerHTML = '';
+          emptyState.style.display = 'block';
+          resultCount.textContent = 'Showing 0 entries';
+          return;
+        }
+
+        emptyState.style.display = 'none';
+        tbody.innerHTML = list.map(item => {
+          const dt = formatDateTime(item.dateTime);
+          const amountClass = item.isNegative ? 'amount-negative' : 'amount-positive';
+
+          // Type pill class matching Task Assignment design
+          const typeLower = String(item.category || item.type || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+          let pillColorClass = 'type-purchase';
+          if (typeLower.includes('rent')) pillColorClass = 'type-rental';
+          else if (typeLower.includes('trade') || typeLower.includes('payout')) pillColorClass = 'type-trade-in';
+          else if (typeLower.includes('deposit')) pillColorClass = 'type-deposit';
+          else if (typeLower.includes('refund')) pillColorClass = 'type-refund';
+          else pillColorClass = 'type-purchase';
+
+          // Resolve Related ID:
+          // Purchase -> orderID
+          // Rental / Deposit -> rentalID
+          // Trade-in -> tradeInRequestID
+          // Refund / All -> whichever ID exists
+          let refLabel = '—';
+          let refVal = '';
+          if (item.category === 'purchase' || item.type === 'Purchase') {
+            refLabel = 'Order ID';
+            refVal = item.orderID ? (item.orderID.startsWith('#') ? item.orderID : '#' + item.orderID) : '—';
+          } else if (item.category === 'rental' || item.category === 'deposit' || item.type === 'Rental' || item.type === 'Deposit') {
+            refLabel = 'Rental ID';
+            refVal = item.rentalID ? (item.rentalID.startsWith('#') ? item.rentalID : '#' + item.rentalID) : '—';
+          } else if (item.category === 'trade-in' || item.type === 'Trade-In') {
+            refLabel = 'Trade-in ID';
+            refVal = item.tradeInRequestID ? (item.tradeInRequestID.startsWith('#') ? item.tradeInRequestID : '#' + item.tradeInRequestID) : '—';
+          } else {
+            // Refund or Mixed
+            if (item.orderID) {
+              refLabel = 'Order ID';
+              refVal = item.orderID.startsWith('#') ? item.orderID : '#' + item.orderID;
+            } else if (item.rentalID) {
+              refLabel = 'Rental ID';
+              refVal = item.rentalID.startsWith('#') ? item.rentalID : '#' + item.rentalID;
+            } else if (item.tradeInRequestID) {
+              refLabel = 'Trade-in ID';
+              refVal = item.tradeInRequestID.startsWith('#') ? item.tradeInRequestID : '#' + item.tradeInRequestID;
+            } else {
+              refLabel = 'Reference';
+              refVal = '—';
+            }
+          }
+
+          return `
+            <tr>
+              <td class="txn-id-cell">${escapeHtml(item.transactionID.startsWith('#') ? item.transactionID : '#' + item.transactionID)}</td>
+              <td>
+                <span class="type-pill ${pillColorClass}">${escapeHtml(item.type)}</span>
+              </td>
+              <td>
+                <div class="ref-id-cell">
+                  <span class="ref-id-badge">${escapeHtml(refVal)}</span>
+                  <span class="ref-id-label">${escapeHtml(refLabel)}</span>
+                </div>
+              </td>
+              <td>
+                <div class="cust-cell">
+                  <span class="cust-name">${escapeHtml(item.customer.name)}</span>
+                  <span class="cust-email">${escapeHtml(item.customer.email)}</span>
+                </div>
+              </td>
+              <td>
+                <div class="datetime-cell">
+                  <span class="date-text">${escapeHtml(dt.date)}</span>
+                  <span class="time-text">${escapeHtml(dt.time)}</span>
+                </div>
+              </td>
+              <td class="method-cell">${escapeHtml(item.method)}</td>
+              <td class="amount-cell ${amountClass}">${escapeHtml(item.formattedAmount)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function renderPagination(total, page, totalPages) {
+        if (total === 0) {
+          resultCount.textContent = 'Showing 0 entries';
+          paginationEl.innerHTML = '';
+          return;
+        }
+
+        const start = (page - 1) * limit + 1;
+        const end = Math.min(page * limit, total);
+        resultCount.textContent = `Showing ${start}-${end} of ${total}`;
+
+        if (totalPages <= 1) {
+          paginationEl.innerHTML = '';
+          return;
+        }
+
+        let html = '';
+        html += `<button type="button" class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+
+        // Page buttons logic
+        const maxButtons = 5;
+        let startPage = Math.max(1, page - 2);
+        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+        if (endPage - startPage < maxButtons - 1) {
+          startPage = Math.max(1, endPage - maxButtons + 1);
+        }
+
+        if (startPage > 1) {
+          html += `<button type="button" class="page-btn" data-page="1">1</button>`;
+          if (startPage > 2) html += `<span style="padding: 0 4px; color: #94a3b8;">...</span>`;
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+          html += `<button type="button" class="page-btn ${i === page ? 'current' : ''}" data-page="${i}">${i}</button>`;
+        }
+
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) html += `<span style="padding: 0 4px; color: #94a3b8;">...</span>`;
+          html += `<button type="button" class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
+        }
+
+        html += `<button type="button" class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+
+        paginationEl.innerHTML = html;
+
+        paginationEl.querySelectorAll('.page-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const p = parseInt(btn.dataset.page, 10);
+            if (!isNaN(p) && p >= 1 && p <= totalPages && p !== currentPage) {
+              currentPage = p;
+              loadTransactions();
+            }
+          });
+        });
+      }
+
+      function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      // Initial load
+      loadTransactions();
+    })();
+  </script>
+</body>
+</html>
+

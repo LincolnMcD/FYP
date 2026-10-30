@@ -8,6 +8,7 @@ const deviceTradeInRouter = require("./deviceTradeInModule/server");
 const shopRouter = require("./accountManagementModule/shopServer");
 const taskAssignmentRouter = require("./taskAssignmentModule/server");
 const rentalManagementRouter = require("./rentalManagementModule/server");
+const transactionManagementRouter = require("./transactionManagementModule/server");
 const path = require("path");
 const { runWithRequest, recordRequest } = require("./config/firestoreMetrics");
 
@@ -38,6 +39,8 @@ app.use("/api/task-assignment", taskAssignmentRouter);
 app.use("/task-assignment", taskAssignmentRouter);
 app.use("/api/rental", rentalManagementRouter);
 app.use("/rental", rentalManagementRouter);
+app.use("/api/transaction-management", transactionManagementRouter);
+app.use("/transaction-management", transactionManagementRouter);
 
 const http = require("http");
 const { Server } = require("socket.io");
@@ -60,6 +63,7 @@ app.set("io", io);
 // Event-driven Task Schedule Delay & Auto-Reassign Monitoring
 const { initializeScheduleMonitoring } = require("./taskAssignmentModule/taskDelayMonitorService");
 initializeScheduleMonitoring().catch(err => console.error("Error starting schedule monitoring:", err));
+rentalManagementRouter.startRentalExpiryMonitor();
 
 const PORT = 3000;
 server.listen(PORT, "0.0.0.0", () => {

@@ -2177,7 +2177,7 @@ router.get("/admin/products", async (req, res) => {
             return res.json({
                 success: true,
                 products: [],
-                counts: { all: 0, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0 }
+                counts: { all: 0, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0, lost: 0 }
             });
         }
 
@@ -2185,6 +2185,8 @@ router.get("/admin/products", async (req, res) => {
         const trIds = [...new Set(snap.docs.map(d => d.data().tradeInRequestID).filter(Boolean))];
         const devMap = {};
         const trMap = {};
+        const rentalMap = {};
+
         await Promise.all([
             ...devIds.map(async id => {
                 try {
@@ -2197,10 +2199,26 @@ router.get("/admin/products", async (req, res) => {
                     const tSnap = await db.collection("tradeInRequests").doc(id).get();
                     if (tSnap.exists) trMap[id] = tSnap.data();
                 } catch (_) {}
-            })
+            }),
+            // Fetch active/returning rental records to attach rentalStatus to product
+            (async () => {
+                try {
+                    const rSnap = await db.collection("rental").get();
+                    rSnap.forEach(rDoc => {
+                        const rData = rDoc.data();
+                        const pId = rData.productID;
+                        if (pId) {
+                            rentalMap[pId] = {
+                                rentalID: rData.rentalID || rDoc.id,
+                                rentalStatus: String(rData.rentalStatus || "").toLowerCase().trim()
+                            };
+                        }
+                    });
+                } catch (_) {}
+            })()
         ]);
 
-        const counts = { all: snap.size, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0 };
+        const counts = { all: snap.size, draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0, lost: 0 };
         const products = snap.docs.map(doc => {
             const data = doc.data();
             const devData = devMap[data.deviceID] || {};
@@ -2251,6 +2269,9 @@ router.get("/admin/products", async (req, res) => {
             } else if (rawSt === "hidden") {
                 normStatus = "Hidden";
                 counts.hidden++;
+            } else if (rawSt === "loss") {
+                normStatus = "Lost";
+                counts.lost++;
             } else if (rawSt === "rent") {
                 normStatus = "Rent";
                 counts.rented++;
@@ -2307,6 +2328,9 @@ router.get("/admin/products", async (req, res) => {
 
             const smartTitle = data.listingTitle || formatSmartListingTitle(brandName, modelName, storageSize, colorName);
 
+            const pIdKey = data.productID || doc.id;
+            const rInfo = rentalMap[pIdKey] || rentalMap[doc.id] || null;
+
             return {
                 id: doc.id,
                 productID: data.productID || doc.id,
@@ -2330,6 +2354,8 @@ router.get("/admin/products", async (req, res) => {
                 listingStatus: rawSt,
                 status: normStatus,
                 rawStatus: rawSt,
+                rentalStatus: rInfo ? rInfo.rentalStatus : "",
+                rentalID: rInfo ? rInfo.rentalID : "",
                 sku,
                 imei,
                 imageUrl: actualImg,
@@ -2387,9 +2413,34 @@ router.post("/admin/products/:productId/status", async (req, res) => {
             updateData.lastUnlockCommandAt = FieldValue.delete();
             updateData.restrictedAt = FieldValue.delete();
             updateData.unlockedAt = FieldValue.delete();
+            if (dbStatus === "rent") {
+                updateData.rentalStatus = FieldValue.delete();
+            }
         } else {
             updateData.isPublic = dbStatus === "listed";
             updateData.marketplaceVisibility = dbStatus === "listed" ? "public" : "hidden";
+        }
+
+        // If returned or transitioning to rent, also update any returning rental records to returned
+        if (dbStatus === "rent") {
+            try {
+                const targetPId = pData.productID || productId;
+                const rQuery = await db.collection("rental").where("productID", "==", targetPId).get();
+                if (!rQuery.empty) {
+                    for (const doc of rQuery.docs) {
+                        const rd = doc.data() || {};
+                        const st = (rd.rentalStatus || "").toLowerCase();
+                        if (st === "returning" || st === "renting") {
+                            await doc.ref.update({
+                                rentalStatus: "returned",
+                                depositStatus: "pending"
+                            });
+                        }
+                    }
+                }
+            } catch (rErr) {
+                console.warn("[Admin Product Status Warning] Could not update rental status to returned:", rErr.message);
+            }
         }
 
         // Min 1 image check before listing

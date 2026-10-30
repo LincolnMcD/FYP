@@ -562,6 +562,12 @@
     }
     .status-purchased .status-dot { background: #3b82f6; }
 
+    .status-lost {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .status-lost .status-dot { background: #ef4444; }
+
     .status-rented,
     .status-rent,
     .status-renting {
@@ -1338,11 +1344,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
         Listing
       </a>
-      <a href="#" class="nav-item">
+      <a href="#"  class="nav-item">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
         System Config
       </a>
-      <a href="#" class="nav-item">
+      <a href="../transactionManagementModule/index.html" class="nav-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         Finance
       </a>
@@ -1404,6 +1410,7 @@
           <button type="button" class="tab-btn" data-tab="hidden">Hidden (<span id="countHidden">0</span>)</button>
           <button type="button" class="tab-btn" data-tab="purchased">Purchase (<span id="countPurchased">0</span>)</button>
           <button type="button" class="tab-btn" data-tab="rented">Rent (<span id="countRented">0</span>)</button>
+          <button type="button" class="tab-btn" data-tab="lost">Lost (<span id="countLost">0</span>)</button>
         </div>
 
         <!-- Filters & Search Toolbar -->
@@ -1656,7 +1663,8 @@
       listed: 0,
       hidden: 0,
       purchased: 0,
-      rented: 0
+      rented: 0,
+      lost: 0
     };
 
     function initPage() {
@@ -1699,7 +1707,7 @@
           tabParam = sessionStorage.getItem('rebyte_active_listing_tab');
         } catch (_) {}
       }
-      if (tabParam && ['draft', 'listed', 'hidden', 'purchased', 'rented'].includes(tabParam.toLowerCase())) {
+      if (tabParam && ['draft', 'listed', 'hidden', 'purchased', 'rented', 'lost'].includes(tabParam.toLowerCase())) {
         activeTab = tabParam.toLowerCase();
         document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
           if (btn.dataset.tab === activeTab) btn.classList.add('active');
@@ -1777,6 +1785,7 @@
           counts.hidden = fetchedData.counts.hidden ?? 0;
           counts.purchased = fetchedData.counts.purchased ?? 0;
           counts.rented = fetchedData.counts.rented ?? 0;
+          counts.lost = fetchedData.counts.lost ?? 0;
         } else {
           recalculateCounts();
         }
@@ -2156,6 +2165,7 @@
       setEl('countHidden', counts.hidden);
       setEl('countPurchased', counts.purchased);
       setEl('countRented', counts.rented);
+      setEl('countLost', counts.lost);
     }
 
     function renderTableHeader() {
@@ -2195,6 +2205,15 @@
             <th style="width: 14%;">STATUS</th>
           </tr>
         `;
+      } else if (activeTab === 'lost') {
+        thead.innerHTML = `
+          <tr>
+            <th style="width: 38%;">PRODUCT</th>
+            <th style="width: 28%;">PRODUCT ID / IMEI</th>
+            <th style="width: 20%;">DEVICE VALUE</th>
+            <th style="width: 14%;">STATUS</th>
+          </tr>
+        `;
       } else if (activeTab === 'rented') {
         thead.innerHTML = `
           <tr>
@@ -2215,6 +2234,7 @@
     function normalizeProductStatus(rawStatus) {
       const raw = String(rawStatus || '').trim().toLowerCase();
       if (raw === 'sold') return 'Purchased';
+      if (raw === 'loss') return 'Lost';
       if (raw === 'listed') return 'Listed';
       if (raw === 'draft') return 'Draft';
       if (raw === 'hidden') return 'Hidden';
@@ -2238,6 +2258,7 @@
         if (activeTab === 'listed' && rawStatus !== 'listed') return false;
         if (activeTab === 'hidden' && rawStatus !== 'hidden') return false;
         if (activeTab === 'purchased' && rawStatus !== 'sold') return false;
+        if (activeTab === 'lost' && rawStatus !== 'loss') return false;
         if (activeTab === 'rented' && !['rented', 'rent', 'renting', 'lock', 'locked'].includes(rawStatus)) return false;
 
         // Brand Filter
@@ -2294,7 +2315,7 @@
       renderPagination(totalPages);
 
       const hasCheckbox = activeTab === 'draft' || activeTab === 'listed' || activeTab === 'hidden';
-      const colSpanCount = activeTab === 'draft' ? 7 : (hasCheckbox ? 6 : (activeTab === 'purchased' ? 4 : 5));
+      const colSpanCount = activeTab === 'draft' ? 7 : (hasCheckbox ? 6 : (activeTab === 'purchased' || activeTab === 'lost' ? 4 : 5));
 
       if (isLoading && allListings.length === 0) {
         tbody.innerHTML = `
@@ -2339,6 +2360,9 @@
         else if (stLower === 'purchased' || stLower === 'sold') {
           statusClass = 'status-purchased';
           statusLabel = 'Purchased';
+        } else if (stLower === 'loss' || stLower === 'lost') {
+          statusClass = 'status-lost';
+          statusLabel = 'Lost';
         } else if (stLower === 'rent') {
           statusClass = 'status-rent';
           statusLabel = 'Rent';
@@ -2422,13 +2446,13 @@
               </div>
             </td>
           `;
-        } else if (activeTab === 'purchased') {
+        } else if (activeTab === 'purchased' || activeTab === 'lost') {
           priceColumnsHtml = `
             <td>
-              <span class="price-text">RM ${purPrice.toFixed(2)}</span>
+              <span class="price-text">RM ${(activeTab === 'lost' ? lstPrice : purPrice).toFixed(2)}</span>
             </td>
           `;
-          // Purchase tab: NO ACTION TAB/COLUMN
+          // Purchase and Lost tabs have no action column.
           actionColumnHtml = ``;
         } else if (activeTab === 'rented') {
           priceColumnsHtml = `
@@ -2437,7 +2461,8 @@
             </td>
           `;
           const isItemLocked = stLower === 'lock' || stLower === 'locked';
-          const isItemRenting = stLower === 'renting' || isItemLocked;
+          const isItemRenting = stLower === 'renting' || isItemLocked || stLower === 'returning';
+          const isReturningStatus = (item.rentalStatus || '').toLowerCase() === 'returning' || stLower === 'returning';
           actionColumnHtml = `
             <td>
               <div class="action-icons">
@@ -2446,9 +2471,11 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                 </button>
                 ` : `
+                ${isReturningStatus ? `
                 <button type="button" class="btn-icon btn-action-return" title="Mark Device Returned" onclick="returnRentedDevice('${item.id}', event)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
+                ` : ''}
                 ${isItemLocked ? `
                 <button type="button" class="btn-icon btn-action-unblock" title="Unlock Device (Restore Normal Mode)" onclick="unlockRentalDevice('${item.id}', event)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
@@ -3281,11 +3308,11 @@
       } else if (actionType === 'return') {
         title = 'Process Device Return';
         question = 'Mark this rented device as returned by customer?';
-        notice = 'The device will be transitioned to Draft status for post-rental quality inspection and grading before re-listing.';
+        notice = 'The device status will be updated to "Rent" so it is available for rental again, and the rental record will be marked as "Returned".';
         btnClass = 'confirm-submit info';
         btnText = 'Mark as Returned';
         iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>';
-        toastMsg = `Device ${item.productID || item.sku || id} marked as returned and moved to Draft.`;
+        toastMsg = `Device ${item.productID || item.sku || id} marked as returned and reset to Rent status.`;
       } else if (actionType === 'block') {
         title = 'Lock Rental Device';
         question = 'Send LOCK_DEVICE command to this rental phone?';
@@ -3314,12 +3341,12 @@
       submitBtn.textContent = btnText;
 
       const currentStatusLabel = item.status || 'Draft';
-      const isLockOrUnlock = actionType === 'block' || actionType === 'unblock';
+      const isRentalAction = actionType === 'block' || actionType === 'unblock' || actionType === 'return';
       summaryEl.innerHTML = `
         <div style="font-weight: 700; color: #0f172a; font-size: 14.5px;">${escapeHtml(formatProductTitle(item.brand, item.model))}</div>
         <div style="font-size: 12.5px; color: #64748b; margin-top: 4px;">
           <span>Product ID: <strong style="color: #0c5ad2;">${escapeHtml(item.productID || item.sku || item.id)}</strong></span>
-          ${!isLockOrUnlock ? ` &bull; <span>IMEI: ${escapeHtml(item.imei || 'N/A')}</span> &bull; <span>Storage: ${escapeHtml(item.storage || 'N/A')}</span>` : ''}
+          ${!isRentalAction ? ` &bull; <span>IMEI: ${escapeHtml(item.imei || 'N/A')}</span> &bull; <span>Storage: ${escapeHtml(item.storage || 'N/A')}</span>` : ''}
         </div>
         <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
           <span class="status-pill status-${currentStatusLabel.toLowerCase()}">
@@ -3412,7 +3439,7 @@
 
     function returnRentedDevice(id, e) {
       if (e) e.stopPropagation();
-      promptStatusChange(id, 'Draft', 'return');
+      promptStatusChange(id, 'Rent', 'return');
     }
 
     function lockRentalDevice(id, e) {
@@ -3514,6 +3541,9 @@
                 updatePayload.lastUnlockCommandAt = firebase.firestore.FieldValue.delete();
                 updatePayload.restrictedAt = firebase.firestore.FieldValue.delete();
                 updatePayload.unlockedAt = firebase.firestore.FieldValue.delete();
+                if (dbStatus === 'rent') {
+                  updatePayload.rentalStatus = firebase.firestore.FieldValue.delete();
+                }
               } else {
                 updatePayload.isPublic = isListed;
                 updatePayload.marketplaceVisibility = isListed ? 'public' : 'hidden';
@@ -3522,6 +3552,30 @@
                 updatePayload.listingTitle = listingTitle;
               }
               await firebase.firestore().collection('product').doc(id).update(updatePayload);
+
+              // If returned to rent, also update rental collection document to returned
+              if (dbStatus === 'rent') {
+                try {
+                  const targetPId = item.productID || item.sku || id;
+                  const rSnap = await firebase.firestore().collection('rental').where('productID', '==', targetPId).get();
+                  if (!rSnap.empty) {
+                    const batch = firebase.firestore().batch();
+                    rSnap.forEach(rDoc => {
+                      const rData = rDoc.data() || {};
+                      const st = (rData.rentalStatus || '').toLowerCase();
+                      if (st === 'returning' || st === 'renting') {
+                        batch.update(rDoc.ref, {
+                          rentalStatus: 'returned'
+                        });
+                      }
+                    });
+                    await batch.commit();
+                  }
+                } catch (rErr) {
+                  console.warn('Could not update rental collection in direct fallback:', rErr);
+                }
+              }
+
               updated = true;
             } catch (fbErr) {
               console.error('Direct Firestore update error:', fbErr);
@@ -3537,12 +3591,13 @@
     }
 
     function recalculateCounts() {
-      counts = { draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0 };
+      counts = { draft: 0, listed: 0, hidden: 0, purchased: 0, rented: 0, lost: 0 };
       allListings.forEach(item => {
         const st = getRawProductStatus(item);
         if (st === 'draft') counts.draft++;
         else if (st === 'hidden') counts.hidden++;
         else if (st === 'sold') counts.purchased++;
+        else if (st === 'loss') counts.lost++;
         else if (st === 'rented' || st === 'rent' || st === 'renting' || st === 'lock' || st === 'locked') counts.rented++;
         else if (st === 'listed') counts.listed++;
       });

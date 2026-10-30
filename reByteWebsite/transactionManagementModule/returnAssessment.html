@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deposit Return Assessment - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0c5ad2;
+      --blue-hover: #0a4cb3;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --text-muted: #64748b;
+      --card-border: #edf0f4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: 'Inter', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea, select { font: inherit; }
+
+    /* Left Sidebar - Exactly identical to Listing & Customer Management */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 20;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.15s ease;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active {
+      color: #fff;
+      background: var(--navy);
+      font-weight: 600;
+    }
+    .nav-item.active svg { color: #fff; }
+
+    /* Main Container */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .content {
+      padding: 28px 40px 60px;
+      max-width: 1360px;
+      width: 100%;
+    }
+
+    /* Back Button */
+    .back {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 20px -8px;
+      transition: color 0.15s ease;
+    }
+    .back:hover { color: #10264b; }
+    .back svg { width: 20px; height: 20px; }
+
+    /* Header Bar */
+    .header-bar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .status-tags-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .tag-rental-id {
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+    }
+    .tag-status-pending {
+      background: #fffbeb;
+      color: #b45309;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tag-status-pending::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #f59e0b;
+    }
+    .tag-status-returned {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .header-bar h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .header-bar .subtitle {
+      margin: 0;
+      font-size: 13.5px;
+      color: #64748b;
+    }
+
+    .btn-complete-action {
+      background: #082f72;
+      color: #ffffff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(8, 47, 114, 0.2);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-complete-action:hover:not(:disabled) {
+      background: #0b4fb3;
+      transform: translateY(-1px);
+    }
+    .btn-complete-action:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn-complete-action:disabled {
+      background: #94a3b8;
+      color: #e2e8f0;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+      opacity: 0.7;
+    }
+    .btn-complete-action svg { width: 16px; height: 16px; }
+
+    /* Top Two Cards Row */
+    .top-cards-grid {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
+    /* Deposit KPI Box */
+    .deposit-kpi-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .kpi-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .kpi-big-amount {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .kpi-meta-row {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    /* Product Device Card */
+    .device-card {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .device-thumb-wrap {
+      width: 130px;
+      height: 130px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      flex-shrink: 0;
+    }
+    .device-thumb-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .device-thumb-wrap .fallback-icon {
+      color: #94a3b8;
+      width: 58px;
+      height: 58px;
+    }
+
+    .device-info h2 {
+      margin: 0 0 10px;
+      font-size: 19px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .device-detail-item {
+      margin-bottom: 10px;
+    }
+    .device-detail-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .device-detail-val {
+      font-size: 13.5px;
+      color: #1e293b;
+      font-weight: 600;
+    }
+
+    /* Bottom Assessment & Calculation Grid */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Return Assessment Card */
+    .assessment-card {
+      padding: 26px;
+    }
+    .assessment-title h3 {
+      margin: 0 0 16px;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    /* Checklist 2x2 Grid with Selectable Condition */
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .check-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: border-color 0.15s ease;
+    }
+    .check-item:hover {
+      border-color: #cbd5e1;
+    }
+    .check-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .check-label svg { width: 16px; height: 16px; color: #64748b; }
+
+    .condition-select {
+      height: 36px;
+      padding: 0 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #1e293b;
+      outline: none;
+      cursor: pointer;
+      min-width: 140px;
+    }
+    .condition-select:focus {
+      border-color: #0c5ad2;
+      box-shadow: 0 0 0 3px rgba(12, 90, 210, 0.1);
+    }
+
+    /* Inspector Notes */
+    .notes-section h4 {
+      margin: 0 0 6px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .char-count {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #64748b;
+    }
+    .char-count.limit-reached {
+      color: #dc2626;
+      font-weight: 700;
+    }
+    .notes-textarea {
+      width: 100%;
+      height: 72px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #1e293b;
+      resize: none;
+      margin-bottom: 16px;
+      outline: none;
+      font-family: inherit;
+    }
+    .notes-textarea:focus {
+      border-color: #0c5ad2;
+      background: #ffffff;
+    }
+
+    /* Photo Upload Area (Max 5, initial empty) */
+    .photos-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .photo-thumb-wrap {
+      position: relative;
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      overflow: hidden;
+      background: #f1f5f9;
+    }
+    .photo-thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .photo-thumb-remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(15, 23, 42, 0.7);
+      color: #fff;
+      border: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .photo-add-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 1.5px dashed #cbd5e1;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .photo-add-btn:hover {
+      border-color: #0c5ad2;
+      color: #0c5ad2;
+      background: #eff6ff;
+    }
+    .photo-add-btn svg { width: 18px; height: 18px; color: inherit; }
+
+    /* Refund Calculation Card */
+    .calculation-card {
+      padding: 24px;
+    }
+    .calculation-card h3 {
+      margin: 0 0 20px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .calc-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      font-size: 13.5px;
+    }
+    .calc-label {
+      font-weight: 600;
+      color: #475569;
+    }
+    .calc-val {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .calc-deduct-label {
+      color: #ea580c;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .calc-deduct-label svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .calc-deduct-chip {
+      background: #fff7ed;
+      color: #ea580c;
+      border: 1px solid #ffedd5;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .no-deductions-hint {
+      font-size: 12.5px;
+      color: #94a3b8;
+      font-style: italic;
+      margin-bottom: 20px;
+      padding: 8px 0;
+    }
+
+    .capped-alert {
+      background: #fef2f2;
+      border: 1px solid #fee2e2;
+      color: #b91c1c;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .final-refund-box {
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .final-refund-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e3a8a;
+    }
+    .final-refund-amt {
+      font-size: 20px;
+      font-weight: 800;
+      color: #1d4ed8;
+      letter-spacing: -0.3px;
+    }
+
+    /* Modal / Pop-up Dialog */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 18px;
+      max-width: 480px;
+      width: 100%;
+      padding: 28px 26px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.2);
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96) translateY(6px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .modal-icon-wrap {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #0c5ad2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .modal-icon-wrap svg { width: 22px; height: 22px; }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .modal-desc {
+      font-size: 13.5px;
+      color: #64748b;
+      margin: 0 0 20px;
+      line-height: 1.5;
+    }
+    .modal-summary-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .modal-summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .modal-summary-label {
+      color: #64748b;
+      font-weight: 500;
+    }
+    .modal-summary-val {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .modal-summary-total {
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 10px;
+      margin-top: 4px;
+      font-size: 14.5px;
+    }
+    .modal-summary-total .modal-summary-val {
+      color: #1d4ed8;
+      font-size: 17px;
+    }
+    .modal-payout-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+      color: #15803d;
+    }
+    .modal-payout-box svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-modal-cancel {
+      background: #f1f5f9;
+      color: #475569;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-modal-cancel:hover {
+      background: #e2e8f0;
+    }
+    .btn-modal-confirm {
+      background: #082f72;
+      color: #ffffff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+    .btn-modal-confirm:hover {
+      background: #0b4fb3;
+    }
+    .btn-modal-confirm:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 1024px) {
+      .top-cards-grid, .bottom-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar (Identical to Customer Management & Listing) -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+        </svg>Dashboard
+      </a>
+      <a href="../listingModule/listing.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+          <path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>Listing
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/>
+        </svg>System Config
+      </a>
+      <a href="index.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>Finance
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path>
+        </svg>Analytics
+      </a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+          <path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path>
+        </svg>Task Assignment
+      </a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+          <path d="m9 16 2 2 4-4"></path>
+        </svg>Leave Management
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>Customer Management
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path>
+        </svg>Staff Management
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>Communication
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main View Area -->
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Finance"></header>
+
+    <div class="content">
+      <!-- Back button -->
+      <a class="back" href="depositManagement.html" aria-label="Back to Rental Deposit Management">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg>
+      </a>
+
+      <!-- Page Header Row -->
+      <div class="header-bar">
+        <div>
+          <div class="status-tags-row">
+            <span class="tag-rental-id" id="badgeRentalID">#RNT-8821</span>
+            <span class="tag-status-pending" id="badgeStatus">Pending Return</span>
+          </div>
+          <h1 id="pageDepositTitle">Rental Deposit</h1>
+          <p class="subtitle" id="pageDepositSubtitle">Returned on &bull; Tenant: </p>
+        </div>
+        <button type="button" class="btn-complete-action" id="btnCompleteAction">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Complete Action
+        </button>
+      </div>
+
+      <!-- Top Row: Original Deposit Card & Device Card -->
+      <div class="top-cards-grid">
+        <!-- 1. Original Deposit Card (No secured via credit card, no date captured) -->
+        <div class="card deposit-kpi-card">
+          <div class="kpi-title">ORIGINAL DEPOSIT</div>
+          <div class="kpi-big-amount" id="depositAmountDisplay">RM 0.00</div>
+          <div class="kpi-meta-row">
+            <div>Transaction ID: <strong style="color:#0f172a;" id="txnIdDisplay">—</strong></div>
+          </div>
+        </div>
+
+        <!-- 2. Device Card (Phone icon if no image, no small spec subtitle, name with custID only) -->
+        <div class="card device-card">
+          <div class="device-thumb-wrap" id="deviceThumbContainer">
+            <!-- Dynamic img or phone icon rendered by JS -->
+          </div>
+          <div class="device-info">
+            <h2 id="deviceTitle">Rental Device</h2>
+            
+            <div class="device-detail-item">
+              <span class="device-detail-label">Rental Duration</span>
+              <span class="device-detail-val" id="rentalDurationDisplay">—</span>
+            </div>
+
+            <div class="device-detail-item" style="margin-bottom:0;">
+              <span class="device-detail-label">Tenant</span>
+              <span class="device-detail-val" id="tenantName">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Return Assessment & Refund Calculation -->
+      <div class="bottom-grid">
+        <!-- Return Assessment -->
+        <div class="card assessment-card">
+          <div class="assessment-title">
+            <h3>Return Assessment</h3>
+          </div>
+
+          <!-- 2x2 Checklist items with dropdowns: Unselected (default), Perfect, Minor defect, Critical defect -->
+          <div class="checklist-grid">
+            <!-- 1. Screen -->
+            <div class="check-item">
+              <span class="check-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                Screen
+              </span>
+              <select class="condition-select" id="selScreen" onchange="recalculateRefund()">
+                <option value="none">-- Select Condition --</option>
+                <option value="perfect">Perfect (0%)</option>
+                <option value="minor">Minor defect (10%)</option>
+                <option value="major">Major / Critical (50%)</option>
+              </select>
+            </div>
+
+            <!-- 2. Back -->
+            <div class="check-item">
+              <span class="check-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                Back
+              </span>
+              <select class="condition-select" id="selBack" onchange="recalculateRefund()">
+                <option value="none">-- Select Condition --</option>
+                <option value="perfect">Perfect (0%)</option>
+                <option value="minor">Minor defect (5%)</option>
+                <option value="major">Major / Critical (25%)</option>
+              </select>
+            </div>
+
+            <!-- 3. Camera Area -->
+            <div class="check-item">
+              <span class="check-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0"></path></svg>
+                Camera Area
+              </span>
+              <select class="condition-select" id="selCamera" onchange="recalculateRefund()">
+                <option value="none">-- Select Condition --</option>
+                <option value="perfect">Perfect (0%)</option>
+                <option value="minor">Minor defect (10%)</option>
+                <option value="major">Major / Critical (50%)</option>
+              </select>
+            </div>
+
+            <!-- 4. Frame -->
+            <div class="check-item">
+              <span class="check-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3" ry="3"></rect></svg>
+                Frame
+              </span>
+              <select class="condition-select" id="selFrame" onchange="recalculateRefund()">
+                <option value="none">-- Select Condition --</option>
+                <option value="perfect">Perfect (0%)</option>
+                <option value="minor">Minor defect (2%)</option>
+                <option value="major">Major / Critical (5%)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Inspector Notes (limit 50 chars) -->
+          <div class="notes-section">
+            <h4>
+              <span>Inspector Notes</span>
+              <span class="char-count" id="notesCharCount">0 / 50</span>
+            </h4>
+            <textarea class="notes-textarea" id="notesBox" maxlength="50" placeholder="Enter brief inspector notes (max 50 chars)..." oninput="onNotesInput(this)"></textarea>
+
+            <!-- Proof Photos (max 5 images, initial 0) -->
+            <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none;" onchange="handlePhotoUpload(this.files)">
+            <div class="photos-row" id="photosContainer">
+              <!-- Rendered via JS -->
+              <div class="photo-add-btn" id="photoAddBtn" onclick="document.getElementById('photoFileInput').click()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19 4h-3.5l-1.5-2h-4L8.5 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path></svg>
+                <span>Add</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Refund Calculation -->
+        <div class="card calculation-card">
+          <h3>Refund Calculation</h3>
+
+          <div class="calc-row">
+            <span class="calc-label">Base Deposit</span>
+            <span class="calc-val" id="calcBaseDeposit">RM 0.00</span>
+          </div>
+
+          <div class="capped-alert" id="cappedAlert">
+            Deduction capped at maximum 100% (-RM <span id="cappedAmt">0.00</span>)
+          </div>
+
+          <!-- Deductions list (Dynamic based on selected conditions) -->
+          <div id="deductionsList">
+            <div class="no-deductions-hint" id="noDeductHint">No condition selected or 0% deduction.</div>
+          </div>
+
+          <!-- Final Refund Box -->
+          <div class="final-refund-box">
+            <span class="final-refund-label">Final Refund</span>
+            <span class="final-refund-amt" id="finalRefundAmount">RM 0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Confirmation Modal for Summarizing Return Deposit -->
+  <div class="modal-backdrop" id="confirmModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </div>
+        <div>
+          <h3 id="modalTitle">Confirm Return Assessment</h3>
+        </div>
+      </div>
+      <p class="modal-desc" id="modalDesc">
+        Please review the return assessment and deposit refund summary before proceeding.
+      </p>
+
+      <div class="modal-summary-box">
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Rental ID</span>
+          <span class="modal-summary-val" id="modalRentalID">—</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Tenant</span>
+          <span class="modal-summary-val" id="modalTenant">—</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Original Deposit</span>
+          <span class="modal-summary-val" id="modalOrigDeposit">RM 0.00</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Total Deduction</span>
+          <span class="modal-summary-val" style="color:#ea580c;" id="modalDeduction">- RM 0.00</span>
+        </div>
+        <div class="modal-summary-row modal-summary-total">
+          <span class="modal-summary-label" style="font-weight:700; color:#0f172a;">Deposit Refund</span>
+          <span class="modal-summary-val" id="modalRefundAmt">RM 0.00</span>
+        </div>
+      </div>
+
+      <div class="modal-payout-box" id="modalPayoutNote" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+        <span id="modalPayoutText">Deposit refund will be returned to the original payment method through Xendit.</span>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-cancel" id="btnModalCancel">Cancel</button>
+        <button type="button" class="btn-modal-confirm" id="btnModalConfirm">Confirm & Process</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="successModal" role="dialog" aria-modal="true" aria-labelledby="successModalTitle" aria-describedby="successModalDesc" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+        </div>
+        <div>
+          <h3 id="successModalTitle">Return Assessment Completed</h3>
+        </div>
+      </div>
+      <p class="modal-desc" id="successModalDesc">The return assessment has been completed.</p>
+
+      <div class="modal-summary-box">
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Rental ID</span>
+          <span class="modal-summary-val" id="successRentalID">—</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Tenant</span>
+          <span class="modal-summary-val" id="successTenant">—</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Original Deposit</span>
+          <span class="modal-summary-val" id="successOrigDeposit">RM 0.00</span>
+        </div>
+        <div class="modal-summary-row">
+          <span class="modal-summary-label">Total Deduction</span>
+          <span class="modal-summary-val" style="color:#ea580c;" id="successDeduction">- RM 0.00</span>
+        </div>
+        <div class="modal-summary-row modal-summary-total">
+          <span class="modal-summary-label" style="font-weight:700; color:#0f172a;">Deposit Refund</span>
+          <span class="modal-summary-val" id="successRefundAmt">RM 0.00</span>
+        </div>
+      </div>
+
+      <div class="modal-payout-box" id="successPayoutNote">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+        <span id="successPayoutText">The refund will be returned to the original payment method through Xendit.</span>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-confirm" id="btnSuccessDone">Back to Deposit Management</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../adminModule/adminHeader.js"></script>
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const rentalID = urlParams.get('rentalID') || urlParams.get('id') || 'RNT-8821';
+
+      let currentDeposit = 0.00;
+      let loadedDetail = null;
+      let uploadedPhotos = []; // Max 5
+      const maxPhotos = 5;
+
+      // Percentage deduction rule table
+      const deductionRates = {
+        screen: { perfect: 0, minor: 0.10, major: 0.50 },
+        back:   { perfect: 0, minor: 0.05, major: 0.25 },
+        camera: { perfect: 0, minor: 0.10, major: 0.50 },
+        frame:  { perfect: 0, minor: 0.02, major: 0.05 }
+      };
+
+      const API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+      async function apiFetch(pathAndQuery, options = {}) {
+        let lastErr = null;
+        for (const base of API_BASES) {
+          try {
+            const url = `${base.replace(/\/$/, '')}${pathAndQuery}`;
+            const res = await fetch(url, options);
+            if (res.ok) return await res.json();
+            else throw new Error(`HTTP ${res.status}`);
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr || new Error('Backend server connection failed on port 3000');
+      }
+
+      function formatMoney(num) {
+        return 'RM ' + Number(num || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      window.onNotesInput = function(el) {
+        const len = el.value.length;
+        const countEl = document.getElementById('notesCharCount');
+        countEl.textContent = `${len} / 50`;
+        if (len >= 50) {
+          countEl.classList.add('limit-reached');
+        } else {
+          countEl.classList.remove('limit-reached');
+        }
+      };
+
+      // Photo upload handler
+      window.handlePhotoUpload = function(files) {
+        if (!files || !files.length) return;
+        const remainingSlots = 5 - uploadedPhotos.length;
+        if (remainingSlots <= 0) {
+          alert('Maximum 5 images allowed.');
+          return;
+        }
+
+        const filesToAdd = Array.from(files).slice(0, remainingSlots);
+        filesToAdd.forEach(file => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const image = new Image();
+            image.onload = function() {
+              if (uploadedPhotos.length >= 5) return;
+              const maxEdge = 1280;
+              const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round(image.width * scale));
+              canvas.height = Math.max(1, Math.round(image.height * scale));
+              const context = canvas.getContext('2d');
+              if (!context) {
+                uploadedPhotos.push(e.target.result);
+              } else {
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                uploadedPhotos.push(canvas.toDataURL('image/jpeg', 0.72));
+              }
+              renderPhotos();
+            };
+            image.onerror = function() {
+              if (uploadedPhotos.length < 5) {
+                uploadedPhotos.push(e.target.result);
+                renderPhotos();
+              }
+            };
+            image.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+
+        document.getElementById('photoFileInput').value = '';
+      };
+
+      window.removePhoto = function(idx) {
+        uploadedPhotos.splice(idx, 1);
+        renderPhotos();
+      };
+
+      function renderPhotos(isReadOnly = false) {
+        const container = document.getElementById('photosContainer');
+        const addBtn = document.getElementById('photoAddBtn');
+        if (!container) return;
+
+        // Clear existing thumb wraps
+        container.querySelectorAll('.photo-thumb-wrap').forEach(w => w.remove());
+
+        uploadedPhotos.forEach((src, idx) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'photo-thumb-wrap';
+          wrap.innerHTML = `
+            <img src="${src}" alt="Proof ${idx + 1}" style="cursor: pointer;" onclick="window.open('${src}', '_blank')">
+            ${isReadOnly ? '' : `<button type="button" class="photo-thumb-remove" onclick="removePhoto(${idx})" title="Remove">&times;</button>`}
+          `;
+          if (addBtn && addBtn.parentNode === container) {
+            container.insertBefore(wrap, addBtn);
+          } else {
+            container.appendChild(wrap);
+          }
+        });
+
+        // Hide add button if reached max 5 or in read-only mode
+        if (addBtn) {
+          addBtn.style.display = (isReadOnly || uploadedPhotos.length >= 5) ? 'none' : 'flex';
+        }
+      }
+
+      // Dynamic calculation based on selected conditions
+      window.recalculateRefund = function() {
+        const screenVal = document.getElementById('selScreen').value;
+        const backVal = document.getElementById('selBack').value;
+        const cameraVal = document.getElementById('selCamera').value;
+        const frameVal = document.getElementById('selFrame').value;
+
+        // Check if all 4 conditions are selected (none of them is 'none')
+        const allSelected = (screenVal !== 'none' && backVal !== 'none' && cameraVal !== 'none' && frameVal !== 'none');
+        const completeBtn = document.getElementById('btnCompleteAction');
+        if (completeBtn) {
+          completeBtn.disabled = !allSelected;
+          if (!allSelected) {
+            completeBtn.title = 'Please select condition for Screen, Back, Camera, and Frame to proceed';
+          } else {
+            completeBtn.title = '';
+          }
+        }
+
+        const deductions = [];
+        let totalPct = 0;
+
+        if (screenVal !== 'none' && deductionRates.screen[screenVal] > 0) {
+          const pct = deductionRates.screen[screenVal];
+          totalPct += pct;
+          deductions.push({ name: `Screen (${screenVal === 'minor' ? 'Minor' : 'Major'})`, pct, rawDeduct: currentDeposit * pct });
+        }
+
+        if (backVal !== 'none' && deductionRates.back[backVal] > 0) {
+          const pct = deductionRates.back[backVal];
+          totalPct += pct;
+          deductions.push({ name: `Back (${backVal === 'minor' ? 'Minor' : 'Major'})`, pct, rawDeduct: currentDeposit * pct });
+        }
+
+        if (cameraVal !== 'none' && deductionRates.camera[cameraVal] > 0) {
+          const pct = deductionRates.camera[cameraVal];
+          totalPct += pct;
+          deductions.push({ name: `Camera Area (${cameraVal === 'minor' ? 'Minor' : 'Major'})`, pct, rawDeduct: currentDeposit * pct });
+        }
+
+        if (frameVal !== 'none' && deductionRates.frame[frameVal] > 0) {
+          const pct = deductionRates.frame[frameVal];
+          totalPct += pct;
+          deductions.push({ name: `Frame (${frameVal === 'minor' ? 'Minor' : 'Major'})`, pct, rawDeduct: currentDeposit * pct });
+        }
+
+        const isOver100 = totalPct > 1.0;
+        document.getElementById('cappedAlert').style.display = isOver100 ? 'block' : 'none';
+        if (isOver100) {
+          document.getElementById('cappedAmt').textContent = currentDeposit.toFixed(2);
+        }
+
+        const effectiveDeductPct = Math.min(1.0, totalPct);
+        const totalDeductAmt = currentDeposit * effectiveDeductPct;
+        const finalRefund = Math.max(0, currentDeposit - totalDeductAmt);
+
+        const dList = document.getElementById('deductionsList');
+        if (deductions.length === 0) {
+          dList.innerHTML = `<div class="no-deductions-hint">No defect condition selected (0% deduction).</div>`;
+        } else {
+          dList.innerHTML = deductions.map(d => `
+            <div class="calc-row">
+              <span class="calc-deduct-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                ${escapeHtml(d.name)} &bull; ${(d.pct * 100).toFixed(0)}%
+              </span>
+              <span class="calc-deduct-chip">- RM ${(currentDeposit * d.pct).toFixed(2)}</span>
+            </div>
+          `).join('');
+        }
+
+        document.getElementById('finalRefundAmount').textContent = formatMoney(finalRefund);
+      };
+
+      async function loadDepositDetails() {
+        try {
+          console.log('Fetching deposit details for:', rentalID);
+          const data = await apiFetch(`/api/transaction-management/rental-deposits/${encodeURIComponent(rentalID)}`);
+          console.log('Received depositDetail response:', data);
+          if (data && data.success && data.depositDetail) {
+            populateUI(data.depositDetail);
+          } else {
+            console.warn('API returned success:false or missing depositDetail:', data);
+          }
+        } catch (err) {
+          console.error('Failed to fetch rental deposit details:', err);
+        }
+      }
+
+      function populateUI(detail) {
+        loadedDetail = detail;
+        const normalizedDepositStatus = String(detail.rawStatus || '').trim().toLowerCase();
+        const normalizedRefundStatus = String(detail.refundStatus || '').trim().toUpperCase();
+        const isRefundSubmitted = ['SUCCEEDED', 'PENDING', 'NOT_REQUIRED'].includes(normalizedRefundStatus);
+        const isReturned = ['returned', 'refunded'].includes(normalizedDepositStatus) || isRefundSubmitted;
+        document.getElementById('badgeRentalID').textContent = '#' + (detail.rentalID || rentalID);
+
+        const isPending = normalizedDepositStatus === 'pending';
+        const stBadge = document.getElementById('badgeStatus');
+        stBadge.className = isPending ? 'tag-status-pending' : 'tag-status-returned';
+        stBadge.textContent = normalizedRefundStatus === 'SUCCEEDED' || normalizedRefundStatus === 'NOT_REQUIRED'
+          ? 'Deposit Refunded'
+          : normalizedRefundStatus === 'PENDING'
+            ? 'Refund Processing'
+            : (isReturned ? 'Returned' : (isPending ? 'Pending Return' : 'Returned'));
+
+        const custName = detail.customer?.name || 'Customer';
+        const custId = detail.customer?.id || '';
+        const prodModel = detail.product?.model || 'Rental Phone';
+
+        document.getElementById('pageDepositTitle').textContent = `${prodModel} Deposit`;
+        document.getElementById('pageDepositSubtitle').textContent = `Returned on ${detail.returnedDateText || '—'} • Tenant: ${custName}${custId ? ` (${custId})` : ''}`;
+
+        currentDeposit = Number(detail.originalDeposit || 0);
+        document.getElementById('depositAmountDisplay').textContent = formatMoney(currentDeposit);
+        document.getElementById('calcBaseDeposit').textContent = formatMoney(currentDeposit);
+
+        // Transaction ID
+        document.getElementById('txnIdDisplay').textContent = detail.transactionID || '—';
+
+        // Device Image or Phone Icon
+        const imgContainer = document.getElementById('deviceThumbContainer');
+        if (detail.product?.imageUrl && detail.product.imageUrl.trim() !== '') {
+          imgContainer.innerHTML = `<img src="${escapeHtml(detail.product.imageUrl)}" alt="${escapeHtml(prodModel)}">`;
+        } else {
+          imgContainer.innerHTML = `<svg class="fallback-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`;
+        }
+
+        document.getElementById('deviceTitle').textContent = prodModel;
+        document.getElementById('rentalDurationDisplay').textContent = detail.durationText || '—';
+
+        // Tenant format: name with custID, no profile image
+        const tenantDisplay = custId ? `${custName} (${custId})` : custName;
+        document.getElementById('tenantName').textContent = tenantDisplay;
+
+        // Existing condition values if previously saved. Returned assessments
+        // are historical records: populate the same page, but keep it read-only.
+        const conditions = detail.assessment || {};
+        if (conditions) {
+          if (conditions.screen) document.getElementById('selScreen').value = conditions.screen;
+          if (conditions.back) document.getElementById('selBack').value = conditions.back;
+          if (conditions.camera) document.getElementById('selCamera').value = conditions.camera;
+          if (conditions.frame) document.getElementById('selFrame').value = conditions.frame;
+        }
+
+        // Existing images if previously stored
+        if (Array.isArray(detail.images) && detail.images.length > 0) {
+          uploadedPhotos = detail.images.slice(0, maxPhotos);
+          renderPhotos(isReturned);
+        }
+
+        // Notes
+        if (detail.notes) {
+          const notesBox = document.getElementById('notesBox');
+          notesBox.value = detail.notes.substring(0, 50);
+          onNotesInput(notesBox);
+        }
+
+        recalculateRefund();
+
+        if (isReturned) {
+          const savedFinalRefund = Number(detail.finalRefund);
+          if (Number.isFinite(savedFinalRefund)) {
+            document.getElementById('finalRefundAmount').textContent = formatMoney(savedFinalRefund);
+          }
+
+          // Show the recorded refund breakdown for a completed assessment. It
+          // may differ from a fresh calculation if deduction rules changed.
+          if (Array.isArray(detail.deductions) && detail.deductions.length > 0) {
+            const deductionsList = document.getElementById('deductionsList');
+            deductionsList.innerHTML = detail.deductions.map(item => {
+              const name = String(item.name || 'Condition deduction');
+              const pct = Number(item.pct || 0);
+              const amount = Number(item.amount ?? item.rawDeduct ?? currentDeposit * pct);
+              return `<div class="calc-row"><span class="calc-deduct-label">${escapeHtml(name)}${pct > 0 ? ` &bull; ${(pct * 100).toFixed(0)}%` : ''}</span><span class="calc-deduct-chip">- ${formatMoney(Number.isFinite(amount) ? amount : 0)}</span></div>`;
+            }).join('');
+          }
+
+          document.getElementById('btnCompleteAction').style.display = 'none';
+          document.querySelectorAll('.condition-select').forEach(input => { input.disabled = true; });
+          const notesBox = document.getElementById('notesBox');
+          notesBox.readOnly = true;
+          document.getElementById('photoFileInput').disabled = true;
+          const addPhoto = document.getElementById('photoAddBtn');
+          if (addPhoto) addPhoto.style.display = 'none';
+          document.getElementById('pageDepositTitle').textContent = `${prodModel} Return Assessment`;
+          const refundStatus = normalizedRefundStatus;
+          stBadge.textContent = refundStatus === 'SUCCEEDED' || refundStatus === 'NOT_REQUIRED'
+            ? 'Deposit Refunded'
+            : refundStatus === 'PENDING' ? 'Refund Processing' : 'Returned';
+        }
+      }
+
+      // Modal helpers
+      const modalEl = document.getElementById('confirmModal');
+      const btnModalCancel = document.getElementById('btnModalCancel');
+      const btnModalConfirm = document.getElementById('btnModalConfirm');
+      const successModalEl = document.getElementById('successModal');
+      const btnSuccessDone = document.getElementById('btnSuccessDone');
+
+      function openSuccessModal(message, refundStatus) {
+        if (!successModalEl) return;
+        document.getElementById('successModalDesc').textContent = message;
+        document.getElementById('successRentalID').textContent = document.getElementById('modalRentalID').textContent;
+        document.getElementById('successTenant').textContent = document.getElementById('modalTenant').textContent;
+        document.getElementById('successOrigDeposit').textContent = document.getElementById('modalOrigDeposit').textContent;
+        document.getElementById('successDeduction').textContent = document.getElementById('modalDeduction').textContent;
+        document.getElementById('successRefundAmt').textContent = document.getElementById('modalRefundAmt').textContent;
+        const successPayoutNote = document.getElementById('successPayoutNote');
+        successPayoutNote.style.display = 'flex';
+        document.getElementById('successPayoutText').textContent = refundStatus === 'NOT_REQUIRED'
+          ? 'No deposit refund is due for this assessment.'
+          : refundStatus === 'PENDING'
+            ? 'Xendit accepted the refund request. It is processing back to the original payment method.'
+            : 'Xendit confirmed the refund to the original payment method.';
+        successModalEl.style.display = 'flex';
+        successModalEl.classList.add('show');
+      }
+
+      if (btnSuccessDone) {
+        btnSuccessDone.addEventListener('click', () => {
+          window.location.href = 'depositManagement.html';
+        });
+      }
+
+      let pendingAssessmentPayload = null;
+
+      function openConfirmModal(summary) {
+        const modalEl = document.getElementById('confirmModal');
+        if (!modalEl) {
+          console.error('confirmModal element not found!');
+          return;
+        }
+
+        document.getElementById('modalRentalID').textContent = '#' + (summary.rentalID || rentalID);
+        document.getElementById('modalTenant').textContent = summary.tenantName || 'Tenant';
+        document.getElementById('modalOrigDeposit').textContent = formatMoney(summary.originalDeposit);
+        document.getElementById('modalDeduction').textContent = '- ' + formatMoney(summary.totalDeductAmt) + (summary.totalPct > 0 ? ` (${(summary.totalPct * 100).toFixed(0)}%)` : ' (0%)');
+        document.getElementById('modalRefundAmt').textContent = formatMoney(summary.finalRefund);
+
+        const payoutBox = document.getElementById('modalPayoutNote');
+        const payoutText = document.getElementById('modalPayoutText');
+
+        if (summary.finalRefund > 0) {
+          payoutBox.style.display = 'flex';
+          payoutText.textContent = `A refund of ${formatMoney(summary.finalRefund)} will be requested through Xendit and returned to the original payment method used for this rental.`;
+        } else {
+          payoutBox.style.display = 'none';
+        }
+
+        modalEl.style.display = 'flex';
+        modalEl.classList.add('show');
+      }
+
+      function closeConfirmModal() {
+        const modalEl = document.getElementById('confirmModal');
+        if (modalEl) {
+          modalEl.classList.remove('show');
+          modalEl.style.display = 'none';
+        }
+        pendingAssessmentPayload = null;
+      }
+
+      if (btnModalCancel) btnModalCancel.addEventListener('click', closeConfirmModal);
+      if (modalEl) {
+        modalEl.addEventListener('click', (e) => {
+          if (e.target === modalEl) closeConfirmModal();
+        });
+      }
+
+      // Complete Action button
+      const btnCompleteAction = document.getElementById('btnCompleteAction');
+      if (btnCompleteAction) {
+        btnCompleteAction.addEventListener('click', () => {
+          const screenVal = document.getElementById('selScreen').value;
+          const backVal = document.getElementById('selBack').value;
+          const cameraVal = document.getElementById('selCamera').value;
+          const frameVal = document.getElementById('selFrame').value;
+
+          // Ensure 4 conditions are selected
+          if (screenVal === 'none' || backVal === 'none' || cameraVal === 'none' || frameVal === 'none') {
+            alert('Please select the condition for Screen, Back, Camera, and Frame before proceeding.');
+            return;
+          }
+
+          let totalPct = 0;
+          const deductions = [];
+          if (screenVal !== 'none') {
+            const pct = deductionRates.screen[screenVal] || 0;
+            totalPct += pct;
+            if (pct > 0) deductions.push({ name: `Screen (${screenVal})`, pct, amount: currentDeposit * pct });
+          }
+          if (backVal !== 'none') {
+            const pct = deductionRates.back[backVal] || 0;
+            totalPct += pct;
+            if (pct > 0) deductions.push({ name: `Back (${backVal})`, pct, amount: currentDeposit * pct });
+          }
+          if (cameraVal !== 'none') {
+            const pct = deductionRates.camera[cameraVal] || 0;
+            totalPct += pct;
+            if (pct > 0) deductions.push({ name: `Camera (${cameraVal})`, pct, amount: currentDeposit * pct });
+          }
+          if (frameVal !== 'none') {
+            const pct = deductionRates.frame[frameVal] || 0;
+            totalPct += pct;
+            if (pct > 0) deductions.push({ name: `Frame (${frameVal})`, pct, amount: currentDeposit * pct });
+          }
+
+          const effectiveDeductPct = Math.min(1.0, totalPct);
+          const totalDeductAmt = currentDeposit * effectiveDeductPct;
+          const finalRefund = Math.max(0, currentDeposit - totalDeductAmt);
+
+          const tenantDisplay = document.getElementById('tenantName').textContent || 'Tenant';
+
+          pendingAssessmentPayload = {
+            rentalID,
+            deductions,
+            finalRefund,
+            assessment: { screen: screenVal, back: backVal, camera: cameraVal, frame: frameVal },
+            notes: document.getElementById('notesBox').value.trim(),
+            photos: uploadedPhotos
+          };
+
+          openConfirmModal({
+            rentalID,
+            tenantName: tenantDisplay,
+            originalDeposit: currentDeposit,
+            totalDeductAmt,
+            totalPct: effectiveDeductPct,
+            finalRefund,
+          });
+        });
+      }
+
+      // Confirm button inside modal
+      if (btnModalConfirm) {
+        btnModalConfirm.addEventListener('click', async () => {
+          if (!pendingAssessmentPayload) return;
+
+          btnModalConfirm.disabled = true;
+          btnModalConfirm.textContent = 'Processing...';
+
+          try {
+            const res = await apiFetch('/api/transaction-management/rental-deposits/complete-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(pendingAssessmentPayload)
+            });
+
+            closeConfirmModal();
+            const successMessage = res.refundStatus === 'PENDING'
+              ? `The return assessment is complete. Xendit accepted the ${formatMoney(res.finalRefund)} refund request, and it is processing back to the original payment method.`
+              : res.refundStatus === 'NOT_REQUIRED'
+                ? 'The return assessment is complete. No deposit refund was due, and the deposit status is now returned.'
+                : `The return assessment is complete. Xendit confirmed the ${formatMoney(res.finalRefund)} refund to the original payment method.`;
+            openSuccessModal(successMessage, res.refundStatus);
+          } catch (err) {
+            alert('Failed to complete action: ' + err.message);
+            btnModalConfirm.disabled = false;
+            btnModalConfirm.textContent = 'Confirm & Process';
+          }
+        });
+      }
+
+      renderPhotos();
+      loadDepositDetails();
+    })();
+  </script>
+</body>
+</html>

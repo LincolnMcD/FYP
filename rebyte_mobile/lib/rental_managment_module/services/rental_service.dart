@@ -256,6 +256,23 @@ class RentalService {
     }
   }
 
+  static Future<Map<String, dynamic>> returnRental({
+    required String rentalID,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${AuthService.baseUrl}/api/rental/return-rental'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'rentalID': rentalID}),
+          )
+          .timeout(const Duration(seconds: 15));
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error returning rental: $e'};
+    }
+  }
+
   static Future<bool> cancelRental(String rentalID) async {
     try {
       final res = await http
