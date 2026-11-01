@@ -514,8 +514,10 @@ class _MyTradeInRequestsPageState extends State<MyTradeInRequestsPage>
       deviceID: req['deviceID']?.toString() ?? dev?['deviceID']?.toString() ?? '',
       brand: dev?['brand']?.toString() ?? 'Apple',
       model: dev?['model']?.toString() ?? 'iPhone 13 Pro',
+      modelCode: dev?['modelCode']?.toString(),
       storageCapacity: dev?['storageCapacity']?.toString() ?? '128GB',
       colour: dev?['colour']?.toString() ?? dev?['color']?.toString() ?? 'Graphite',
+      deviceAge: dev?['deviceAge']?.toString() ?? req['deviceAge']?.toString(),
       imeiNum: req['imeiNum']?.toString() ?? dev?['imeiNum']?.toString(),
     );
   }

@@ -475,12 +475,16 @@ class _StaffUploadDeviceImagesPageState
       return;
     }
 
-    // Build uploaded files map
+    // Build uploaded files map - only collect local files that need to be uploaded
     final Map<String, String> uploadedImages = {};
+    final Map<String, String> localFilesToUpload = {};
     for (final s in _slots) {
       if (s.localFilePath != null &&
           s.status == StaffImageSlotStatus.success) {
         uploadedImages[s.keyName] = s.localFilePath!;
+        if (!s.localFilePath!.startsWith('http') && File(s.localFilePath!).existsSync()) {
+          localFilesToUpload[s.keyName] = s.localFilePath!;
+        }
       }
     }
 
@@ -489,12 +493,12 @@ class _StaffUploadDeviceImagesPageState
         widget.task['orderID']?.toString() ??
         '';
 
-    if (tradeInId.isNotEmpty) {
+    if (tradeInId.isNotEmpty && localFilesToUpload.isNotEmpty) {
       setState(() => _isUploadingToServer = true);
       try {
         final res = await TradeInService.uploadStaffDeviceImages(
           tradeInRequestID: tradeInId,
-          imagePaths: uploadedImages,
+          imagePaths: localFilesToUpload,
         );
         if (!mounted) return;
         if (res['success'] != true) {

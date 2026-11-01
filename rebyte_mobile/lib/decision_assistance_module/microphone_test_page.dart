@@ -20,6 +20,7 @@ class MicrophoneTestPage extends StatefulWidget {
   final bool isTouchSkipped;
   final bool isDisplaySkipped;
   final bool isCameraSkipped;
+  final bool fromImproveAssessment;
 
   const MicrophoneTestPage({
     super.key,
@@ -34,6 +35,7 @@ class MicrophoneTestPage extends StatefulWidget {
     this.isTouchSkipped = false,
     this.isDisplaySkipped = false,
     this.isCameraSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -504,6 +506,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
                               isDisplaySkipped: widget.isDisplaySkipped,
                               isCameraSkipped: widget.isCameraSkipped,
                               isMicSkipped: isSkipped,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -635,6 +638,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
             isDisplaySkipped: widget.isDisplaySkipped,
             isCameraSkipped: widget.isCameraSkipped,
             isMicSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

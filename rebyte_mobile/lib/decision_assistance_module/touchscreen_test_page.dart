@@ -8,6 +8,7 @@ class TouchscreenTestPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromImproveAssessment;
 
   const TouchscreenTestPage({
     super.key,
@@ -16,6 +17,7 @@ class TouchscreenTestPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -170,6 +172,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
                               name: widget.name,
                               touchScore: score,
                               isTouchSkipped: isSkipped,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -295,6 +298,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
             name: widget.name,
             touchScore: 0,
             isTouchSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

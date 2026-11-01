@@ -123,7 +123,7 @@ function serializeProduct(doc) {
     let brandName = data.brand || "";
     let modelName = data.model || "";
     let storageSize = data.storage || "";
-    let conditionStr = data.condition || "Good";
+    let conditionStr = data.condition || "";
     const description = data.description || "";
     if (!brandName || !modelName) {
         const sourceStr = description.includes(" - ") ? description : (data.listingTitle || description);
@@ -137,12 +137,23 @@ function serializeProduct(doc) {
         } else {
             modelName = modelName || titlePart;
         }
-        if (!data.condition && dashParts[1]) {
+        if (!conditionStr && dashParts[1]) {
             const condition = dashParts[1].toLowerCase();
             conditionStr = condition.includes("pristine") || condition.includes("brand new") || condition.includes("like new")
-                ? "Brand New"
-                : condition.includes("grade a") || condition.includes("excellent") ? "Good" : "Fair";
+                ? "Excellent"
+                : condition.includes("grade a") || condition.includes("excellent")
+                    ? "Excellent"
+                    : condition.includes("grade b") || condition.includes("good")
+                        ? "Good"
+                        : condition.includes("grade c") || condition.includes("fair")
+                            ? "Fair"
+                            : condition.includes("grade d") || condition.includes("poor")
+                                ? "Poor"
+                                : "Good";
         }
+    }
+    if (!conditionStr) {
+        conditionStr = "Good";
     }
     const deviceID = data.deviceID || "";
     let modelCode = data.modelCode || "";
@@ -167,6 +178,7 @@ function serializeProduct(doc) {
         id: doc.id,
         productID: pid,
         deviceID,
+        tradeInRequestID: data.tradeInRequestID || "",
         modelCode: modelCode ? String(modelCode) : "",
         listingTitle: listingTitle || "",
         description,
@@ -408,8 +420,16 @@ router.get("/products/:productId", async (req, res) => {
         }
         if (product._missing) return res.status(404).json({ success: false, error: "Product not found." });
 
-        // Ensure device record is resolved by deviceID to get modelCode
-        if (product.deviceID && (!product.modelCode || product.modelCode.trim().length === 0)) {
+        // Resolve device and tradeInRequest details if missing
+        if (!product.tradeInRequestID && product.deviceID) {
+            try {
+                const trSnap = await db.collection("tradeInRequests").where("deviceID", "==", product.deviceID).limit(1).get();
+                if (!trSnap.empty) {
+                    product.tradeInRequestID = trSnap.docs[0].id;
+                }
+            } catch (_) {}
+        }
+        if (product.deviceID) {
             try {
                 let devDoc = await db.collection("devices").doc(product.deviceID).get();
                 if (!devDoc.exists) {
@@ -420,7 +440,22 @@ router.get("/products/:productId", async (req, res) => {
                     const devData = devDoc.data();
                     let mCode = devData.modelCode || "";
                     if (Array.isArray(mCode)) mCode = mCode.join(", ");
-                    if (mCode) product.modelCode = String(mCode);
+                    if (mCode && (!product.modelCode || product.modelCode.trim().length === 0)) {
+                        product.modelCode = String(mCode);
+                    }
+                    if (!product.storage || product.storage.trim().length === 0) {
+                        product.storage = devData.storageCapacity || devData.storage || "";
+                    }
+                    if (!product.color || product.color.trim().length === 0) {
+                        product.color = devData.color || "";
+                    }
+                    if (!product.brand || product.brand.trim().length === 0) {
+                        product.brand = devData.brand || "";
+                    }
+                    if (!product.model || product.model.trim().length === 0) {
+                        product.model = devData.model || "";
+                    }
+                    product.imei = devData.imeiNum || devData.imei || "";
                 }
             } catch (devErr) {
                 console.error("Error looking up device for product:", devErr);
@@ -457,24 +492,312 @@ function buildFallbackSpecs(brand, model, modelCode) {
     const isApple = bLower.includes("apple") || mLower.includes("iphone");
     const isSamsung = bLower.includes("samsung") || mLower.includes("galaxy");
     const isPixel = bLower.includes("google") || mLower.includes("pixel");
-    const isXiaomi = bLower.includes("xiaomi") || mLower.includes("poco") || mLower.includes("redmi");
+    const isXiaomi = bLower.includes("xiaomi") || bLower.includes("redmi") || bLower.includes("poco") || mLower.includes("xiaomi") || mLower.includes("poco") || mLower.includes("redmi");
+    const isOppo = bLower.includes("oppo") || mLower.includes("oppo");
+    const isVivo = bLower.includes("vivo") || mLower.includes("vivo") || bLower.includes("iqoo");
+    const isHonor = bLower.includes("honor") || mLower.includes("honor");
+    const isHuawei = bLower.includes("huawei") || mLower.includes("huawei");
+    const isRealme = bLower.includes("realme") || mLower.includes("realme");
+    const isOnePlus = bLower.includes("oneplus") || mLower.includes("oneplus");
+    const isNothing = bLower.includes("nothing") || mLower.includes("nothing");
+    const isSony = bLower.includes("sony") || mLower.includes("xperia");
+    const isAsus = bLower.includes("asus") || mLower.includes("zenfone") || mLower.includes("rog phone");
+    const isMotorola = bLower.includes("motorola") || bLower.includes("moto") || mLower.includes("moto");
+    const isTranssion = bLower.includes("infinix") || bLower.includes("tecno") || mLower.includes("infinix") || mLower.includes("tecno");
+    const isZteNubia = bLower.includes("zte") || bLower.includes("nubia") || mLower.includes("redmagic");
 
-    let screenDesc = '6.7" Super Retina XDR OLED (120Hz ProMotion, 2000 nits)';
-    let socName = 'Apple A17 Pro (3nm)';
-    let socGpu = 'Apple 6-core GPU';
-    let ram = '8 GB LPDDR5';
-    let battery = '4,422 mAh';
-    let wiredCharging = '25W PD wired';
-    let wirelessCharging = '15W MagSafe / Qi2';
-    let mainCam = '48 MP, f/1.78, 24mm, sensor-shift OIS';
-    let ultraCam = '12 MP, f/2.2, 13mm, 120˚';
-    let teleCam = '12 MP 5x optical periscope zoom';
-    let selfieCam = '12 MP, f/1.9 TrueDepth';
-    let dimensions = '159.9 x 76.7 x 8.25 mm';
-    let weight = '221 g';
-    let ipRating = 'IP68 dust/water resistant (up to 6m for 30 mins)';
-    let os = 'iOS 17 (upgradable to latest)';
-    let connectivity = 'Wi-Fi 6E, Bluetooth 5.3, NFC, USB-C 3.2 Gen 2 (10Gbps)';
+    // Generic modern smartphone base defaults
+    let screenDesc = '6.5" FHD+ Display (90Hz / 120Hz)';
+    let socName = 'Octa-Core Processor';
+    let socGpu = 'Mali / Adreno GPU';
+    let ram = '4 GB / 8 GB';
+    let battery = '5,000 mAh';
+    let wiredCharging = '18W - 33W Fast Charging';
+    let wirelessCharging = 'None';
+    let mainCam = '50 MP main camera, AF';
+    let ultraCam = '8 MP ultra-wide';
+    let teleCam = 'None';
+    let selfieCam = '8 MP / 16 MP front camera';
+    let dimensions = '162.0 x 75.0 x 8.2 mm';
+    let weight = '190 g';
+    let ipRating = 'Standard dust and splash resistance';
+    let os = 'Android (with manufacturer UI)';
+    let connectivity = 'Wi-Fi, Bluetooth 5.2, USB-C';
+
+    // 20-Brand baseline customization
+    if (isApple) {
+        screenDesc = '6.1" - 6.7" Super Retina XDR OLED (ProMotion)';
+        socName = 'Apple Bionic / A-Series Chip';
+        socGpu = 'Apple Custom GPU';
+        ram = '6 GB / 8 GB';
+        battery = '3,200 - 4,400 mAh';
+        wiredCharging = '20W - 27W wired PD';
+        wirelessCharging = '15W MagSafe / Qi2';
+        mainCam = '48 MP / 12 MP dual/triple system, OIS';
+        ultraCam = '12 MP ultra-wide';
+        teleCam = '12 MP optical zoom (Pro models)';
+        selfieCam = '12 MP TrueDepth';
+        dimensions = '147.5 x 71.5 x 7.8 mm';
+        weight = '185 g';
+        ipRating = 'IP68 dust/water resistant (up to 6m for 30 mins)';
+        os = 'iOS';
+        connectivity = 'Wi-Fi 6/6E, Bluetooth 5.3, NFC, Lightning / USB-C';
+    } else if (isSamsung) {
+        screenDesc = '6.5" Dynamic AMOLED 2X / PLS LCD';
+        socName = 'Samsung Exynos / Qualcomm Snapdragon Octa-Core';
+        socGpu = 'Mali / Adreno / Xclipse GPU';
+        ram = '4 GB / 8 GB / 12 GB';
+        battery = '5,000 mAh';
+        wiredCharging = '25W - 45W Fast Charging (USB-C)';
+        wirelessCharging = '15W wireless (on flagship models)';
+        mainCam = '50 MP / 108 MP multi-camera, AF, OIS';
+        ultraCam = '12 MP / 8 MP ultra-wide';
+        teleCam = 'None / 10 MP 3x optical zoom';
+        selfieCam = '12 MP / 32 MP front camera';
+        dimensions = '160.0 x 76.0 x 8.2 mm';
+        weight = '195 g';
+        ipRating = 'IP67 / IP68 dust and water resistance';
+        os = 'Android (One UI)';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.3, NFC, USB-C';
+    } else if (isPixel) {
+        screenDesc = '6.2" - 6.7" OLED (120Hz Smooth Display)';
+        socName = 'Google Tensor Octa-Core + Titan M2 Coprocessor';
+        socGpu = 'Mali / Immortalis GPU';
+        ram = '8 GB / 12 GB';
+        battery = '4,500 - 5,050 mAh';
+        wiredCharging = '30W fast charging, PD3.0';
+        wirelessCharging = 'Fast wireless charging, Battery Share';
+        mainCam = '50 MP Octa PD, Laser AF, OIS';
+        ultraCam = '12 MP ultra-wide';
+        teleCam = 'None / 48 MP 5x optical telephoto';
+        selfieCam = '10.5 MP Dual PD';
+        dimensions = '155.0 x 73.0 x 8.5 mm';
+        weight = '198 g';
+        ipRating = 'IP68 dust/water resistant';
+        os = 'Android (Pixel Experience)';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.3, NFC, USB-C 3.2';
+    } else if (isXiaomi) {
+        screenDesc = '6.67" AMOLED (120Hz, Dolby Vision)';
+        socName = 'Qualcomm Snapdragon / MediaTek Dimensity Octa-Core';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB LPDDR5';
+        battery = '5,000 mAh';
+        wiredCharging = '67W - 120W HyperCharge';
+        wirelessCharging = 'None / 50W wireless on Pro models';
+        mainCam = '50 MP / 108 MP main camera, OIS';
+        ultraCam = '8 MP / 13 MP ultra-wide';
+        teleCam = 'None / 2 MP macro';
+        selfieCam = '16 MP / 20 MP front camera';
+        dimensions = '162.0 x 75.0 x 8.0 mm';
+        weight = '190 g';
+        ipRating = 'IP53 / IP68 splash and dust resistance';
+        os = 'Xiaomi HyperOS / MIUI based on Android';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.4, Dual NFC, IR Blaster, USB-C';
+    } else if (isOppo) {
+        screenDesc = '6.7" AMOLED (120Hz, 1 Billion Colors)';
+        socName = 'Qualcomm Snapdragon / MediaTek Dimensity Octa-Core';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '5,000 mAh';
+        wiredCharging = '67W - 80W SUPERVOOC';
+        wirelessCharging = 'None / 50W AIRVOOC on Find series';
+        mainCam = '50 MP Sony sensor, OIS';
+        ultraCam = '8 MP / 32 MP ultra-wide';
+        teleCam = '32 MP telephoto portrait / None';
+        selfieCam = '32 MP Sony IMX front camera';
+        dimensions = '162.4 x 74.3 x 7.9 mm';
+        weight = '182 g';
+        ipRating = 'IP65 / IP68 dust and water resistance';
+        os = 'ColorOS based on Android';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.3, NFC, USB-C';
+    } else if (isVivo) {
+        screenDesc = '6.78" AMOLED (120Hz, HDR10+)';
+        socName = 'MediaTek Dimensity / Snapdragon Octa-Core';
+        socGpu = 'Mali / Adreno GPU';
+        ram = '8 GB / 12 GB / 16 GB';
+        battery = '5,000 - 5,500 mAh BlueOcean';
+        wiredCharging = '80W - 120W FlashCharge';
+        wirelessCharging = 'None / 50W wireless on X series';
+        mainCam = '50 MP Zeiss optics / Aura Light OIS';
+        ultraCam = '8 MP / 50 MP ultra-wide';
+        teleCam = '50 MP Zeiss telephoto / None';
+        selfieCam = '32 MP / 50 MP autofocus selfie';
+        dimensions = '164.0 x 75.0 x 7.6 mm';
+        weight = '188 g';
+        ipRating = 'IP54 / IP68 water resistance';
+        os = 'Funtouch OS / OriginOS based on Android';
+        connectivity = 'Wi-Fi 6/7, Bluetooth 5.4, NFC, USB-C';
+    } else if (isHonor) {
+        screenDesc = '6.78" Quad-Curved OLED (120Hz, 3840Hz PWM Dimming)';
+        socName = 'Qualcomm Snapdragon / MediaTek Octa-Core';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '5,000 - 5,600 mAh Silicon-Carbon';
+        wiredCharging = '66W - 100W HONOR SuperCharge';
+        wirelessCharging = 'None / 66W wireless on Magic Pro';
+        mainCam = '50 MP / 108 MP Falcon Camera, OIS';
+        ultraCam = '12 MP / 50 MP ultra-wide';
+        teleCam = 'None / 50 MP periscope telephoto';
+        selfieCam = '50 MP front camera';
+        dimensions = '162.0 x 75.5 x 8.1 mm';
+        weight = '199 g';
+        ipRating = 'IP68 water and dust resistance';
+        os = 'MagicOS based on Android (Google Play supported)';
+        connectivity = 'Wi-Fi 6/7, Bluetooth 5.3, NFC, USB-C';
+    } else if (isHuawei) {
+        screenDesc = '6.67" - 6.8" OLED (1-120Hz LTPO, Kunlun Glass)';
+        socName = 'HiSilicon Kirin Octa-Core';
+        socGpu = 'Maleoon / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '4,800 - 5,050 mAh';
+        wiredCharging = '66W - 88W HUAWEI SuperCharge';
+        wirelessCharging = '50W wireless SuperCharge';
+        mainCam = '50 MP Ultra Aperture (f/1.4-f/4.0), OIS';
+        ultraCam = '13 MP / 40 MP ultra-wide';
+        teleCam = '12 MP / 48 MP periscope telephoto, OIS';
+        selfieCam = '13 MP ultra-wide front';
+        dimensions = '162.6 x 75.1 x 8.4 mm';
+        weight = '209 g';
+        ipRating = 'IP68 dust/water resistant (up to 6m)';
+        os = 'EMUI / HarmonyOS';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.2, NFC, USB-C 3.1';
+    } else if (isRealme) {
+        screenDesc = '6.7" AMOLED (120Hz Curved Display)';
+        socName = 'Qualcomm Snapdragon / MediaTek Dimensity';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '5,000 mAh';
+        wiredCharging = '67W - 100W SUPERVOOC';
+        wirelessCharging = 'None';
+        mainCam = '50 MP Sony IMX, OIS';
+        ultraCam = '8 MP ultra-wide';
+        teleCam = 'None / 32 MP periscope';
+        selfieCam = '16 MP / 32 MP selfie';
+        dimensions = '161.5 x 74.0 x 8.2 mm';
+        weight = '190 g';
+        ipRating = 'IP65 splash & dust resistance';
+        os = 'realme UI based on Android';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.3, NFC, USB-C';
+    } else if (isOnePlus) {
+        screenDesc = '6.74" - 6.82" ProXDR AMOLED (120Hz LTPO)';
+        socName = 'Qualcomm Snapdragon 8 / 7 series';
+        socGpu = 'Adreno GPU';
+        ram = '12 GB / 16 GB LPDDR5X';
+        battery = '5,400 mAh Dual-Cell';
+        wiredCharging = '80W - 100W SUPERVOOC';
+        wirelessCharging = 'None / 50W AIRVOOC';
+        mainCam = '50 MP Sony LYT / IMX sensor, OIS';
+        ultraCam = '48 MP / 8 MP ultra-wide';
+        teleCam = '64 MP 3x periscope zoom / None';
+        selfieCam = '16 MP / 32 MP front camera';
+        dimensions = '163.3 x 75.3 x 8.8 mm';
+        weight = '205 g';
+        ipRating = 'IP65 / IP68 with Aqua Touch';
+        os = 'OxygenOS based on Android';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, NFC, USB-C';
+    } else if (isNothing) {
+        screenDesc = '6.7" Flexible OLED (120Hz adaptive, Glyph Interface)';
+        socName = 'Qualcomm Snapdragon / MediaTek Dimensity';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '4,700 - 5,000 mAh';
+        wiredCharging = '45W wired PD';
+        wirelessCharging = '15W wireless, 5W reverse wireless';
+        mainCam = '50 MP Sony sensor, OIS';
+        ultraCam = '50 MP Samsung ultra-wide (114˚)';
+        teleCam = 'None';
+        selfieCam = '32 MP front camera';
+        dimensions = '162.1 x 76.4 x 8.6 mm';
+        weight = '201 g';
+        ipRating = 'IP54 splash & dust resistance';
+        os = 'Nothing OS based on Android';
+        connectivity = 'Wi-Fi 6, Bluetooth 5.3, NFC, USB-C';
+    } else if (isSony) {
+        screenDesc = '6.1" - 6.5" 21:9 OLED (120Hz, Creator Mode)';
+        socName = 'Qualcomm Snapdragon Flagship Platform';
+        socGpu = 'Adreno GPU';
+        ram = '8 GB / 12 GB';
+        battery = '5,000 mAh';
+        wiredCharging = '30W USB PD fast charging';
+        wirelessCharging = '15W Qi wireless, battery share';
+        mainCam = '48 MP Exmor T for mobile, OIS, ZEISS T*';
+        ultraCam = '12 MP ultra-wide';
+        teleCam = '12 MP continuous true optical zoom';
+        selfieCam = '12 MP HDR selfie camera';
+        dimensions = '165.0 x 71.0 x 8.3 mm';
+        weight = '187 g';
+        ipRating = 'IP65/IP68 water and dust resistance';
+        os = 'Android (Clean Xperia UI)';
+        connectivity = 'Wi-Fi 6E/7, Bluetooth 5.3, 3.5mm audio jack, MicroSD slot, USB-C 3.2';
+    } else if (isAsus) {
+        screenDesc = '6.78" AMOLED (144Hz - 165Hz gaming display)';
+        socName = 'Qualcomm Snapdragon 8 Gen series';
+        socGpu = 'Adreno GPU';
+        ram = '12 GB / 16 GB LPDDR5X';
+        battery = '5,500 - 6,000 mAh';
+        wiredCharging = '65W HyperCharge, PD3.0';
+        wirelessCharging = '15W wireless (Qi)';
+        mainCam = '50 MP Sony IMX with 6-Axis Hybrid Gimbal Stabilizer';
+        ultraCam = '13 MP ultra-wide';
+        teleCam = '32 MP 3x telephoto / None';
+        selfieCam = '32 MP RGBW front camera';
+        dimensions = '163.8 x 76.8 x 8.9 mm';
+        weight = '225 g';
+        ipRating = 'IP68 water and dust resistance';
+        os = 'ZenUI / ROG UI based on Android';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, 3.5mm jack, Dual USB-C ports';
+    } else if (isMotorola) {
+        screenDesc = '6.55" - 6.7" pOLED (144Hz, HDR10+)';
+        socName = 'Qualcomm Snapdragon / MediaTek Dimensity';
+        socGpu = 'Adreno / Mali GPU';
+        ram = '8 GB / 12 GB';
+        battery = '4,500 - 5,000 mAh';
+        wiredCharging = '68W - 125W TurboPower';
+        wirelessCharging = '15W wireless';
+        mainCam = '50 MP, f/1.4, Omni-directional PDAF, OIS';
+        ultraCam = '13 MP / 50 MP ultra-wide with Macro';
+        teleCam = '10 MP 3x telephoto / None';
+        selfieCam = '32 MP / 60 MP front camera';
+        dimensions = '161.2 x 74.0 x 7.6 mm';
+        weight = '175 g';
+        ipRating = 'IP68 underwater protection';
+        os = 'Hello UI / My UX based on Android';
+        connectivity = 'Wi-Fi 6E/7, Bluetooth 5.3, Ready For, USB-C 3.1';
+    } else if (isTranssion) {
+        screenDesc = '6.78" AMOLED / IPS LCD (120Hz)';
+        socName = 'MediaTek Helio / Dimensity Octa-Core';
+        socGpu = 'Mali GPU';
+        ram = '8 GB / 12 GB (+ virtual RAM)';
+        battery = '5,000 mAh';
+        wiredCharging = '33W - 70W All-Round FastCharge';
+        wirelessCharging = 'None / 15W wireless (on select models)';
+        mainCam = '108 MP / 50 MP ultra clear camera';
+        ultraCam = '2 MP depth / auxiliary';
+        teleCam = 'None';
+        selfieCam = '32 MP dual-flash selfie';
+        dimensions = '164.0 x 75.5 x 8.0 mm';
+        weight = '189 g';
+        ipRating = 'IP53 splash resistant';
+        os = 'XOS / HiOS based on Android';
+        connectivity = 'Wi-Fi 5, Bluetooth 5.2, NFC, 3.5mm jack, USB-C';
+    } else if (isZteNubia) {
+        screenDesc = '6.8" True Full AMOLED (120Hz, Under-Display Camera)';
+        socName = 'Qualcomm Snapdragon 8 Gen flagship platform';
+        socGpu = 'Adreno GPU + ICE cooling system';
+        ram = '12 GB / 16 GB';
+        battery = '6,000 - 6,500 mAh';
+        wiredCharging = '80W - 120W Magic Charge';
+        wirelessCharging = 'None';
+        mainCam = '50 MP 35mm optical lens / GN5, OIS';
+        ultraCam = '50 MP ultra-wide';
+        teleCam = '64 MP periscope telephoto';
+        selfieCam = '16 MP under-display camera';
+        dimensions = '164.0 x 76.4 x 8.6 mm';
+        weight = '228 g';
+        ipRating = 'Aviation aluminum frame / IP68';
+        os = 'MyOS / REDMAGIC OS based on Android';
+        connectivity = 'Wi-Fi 7, Bluetooth 5.4, Shoulder Triggers, USB-C 3.2';
+    }
 
     if (mLower.includes("15 pro max")) {
         screenDesc = '6.7" Super Retina XDR OLED (120Hz ProMotion, 2000 nits, 2796 x 1290, 460 ppi)';
@@ -705,6 +1028,27 @@ function buildFallbackSpecs(brand, model, modelCode) {
         ipRating = 'IP65 water & dust resistance with Aqua Touch';
         os = 'OxygenOS 14 based on Android 14';
         connectivity = 'Wi-Fi 7, Bluetooth 5.4, NFC, USB-C 3.2 Gen 1';
+    } else if (mLower.includes("a02") || mLower.includes("a03") || mLower.includes("a04") || mLower.includes("a05")) {
+        screenDesc = '6.5" PLS LCD (720 x 1600 HD+, 270 ppi, 20:9 ratio)';
+        socName = mLower.includes("a05")
+            ? 'MediaTek Helio G85 (12nm, Octa-Core)'
+            : (mLower.includes("a04")
+                ? 'MediaTek Helio P35 (12nm, Octa-Core)'
+                : 'MediaTek MT6739W (28nm, Quad-Core 1.5 GHz Cortex-A53)');
+        socGpu = mLower.includes("a05") ? 'Mali-G52 MC2' : (mLower.includes("a04") ? 'PowerVR GE8320' : 'PowerVR GE8100');
+        ram = '2 GB / 3 GB / 4 GB';
+        battery = '5,000 mAh';
+        wiredCharging = mLower.includes("a05") ? '25W wired' : '7.8W standard (microUSB 2.0)';
+        wirelessCharging = 'None';
+        mainCam = '13 MP, f/1.9 (wide), AF + 2 MP, f/2.4 (macro)';
+        ultraCam = 'None';
+        teleCam = 'None';
+        selfieCam = '5 MP, f/2.0';
+        dimensions = '164 x 75.9 x 9.1 mm';
+        weight = '206 g';
+        ipRating = 'Standard durable plastic enclosure';
+        os = 'Android 10 (upgradable to One UI Core)';
+        connectivity = 'Wi-Fi 802.11 b/g/n, Wi-Fi Direct, Bluetooth 5.0, 3.5mm jack, microUSB 2.0';
     } else if (mLower.includes("a15")) {
         screenDesc = '6.5" Super AMOLED (90Hz, 800 nits, 2340 x 1080 FHD+)';
         socName = 'MediaTek Helio G99 (6nm, Octa-Core)';
@@ -823,24 +1167,96 @@ router.get("/products/:productId/specs", async (req, res) => {
         let techApiData = null;
         let source = "fallback";
 
-        // 4. Try querying GetTechAPI at http://localhost:8000/v1/smartphones/{slug}
+        // 4. Try querying GetTechAPI at http://localhost:8000
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5 second timeout
 
-            // First try slug endpoint, then try search with primaryCode or slug
+            // 4a. Level 1: Direct slug lookup
             const techUrl = `http://localhost:8000/v1/smartphones/${encodeURIComponent(slug)}`;
-            const response = await fetch(techUrl, {
+            let response = await fetch(techUrl, {
                 signal: controller.signal,
                 headers: { "Accept": "application/json" }
             });
-            clearTimeout(timeoutId);
 
             if (response.ok) {
-                const json = await response.json();
-                techApiData = json;
+                techApiData = await response.json();
                 source = "GetTechAPI";
+            } else {
+                // 4b. Level 1.5: Query list/index using model name keywords
+                // Cleans out noise such as storage (e.g. "128gb") or brand prefixes (e.g. "Samsung XX 128gb")
+                let cleanQuery = (model || serialized.listingTitle || "")
+                    .replace(/\b\d+\s*(gb|tb|mb)\b/gi, "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+                
+                const searchTerms = [cleanQuery, primaryCode, brand ? `${brand} ${cleanQuery}`.trim() : ""].filter(Boolean);
+
+                for (const term of searchTerms) {
+                    if (techApiData) break;
+                    try {
+                        const searchUrl = `http://localhost:8000/v1/smartphones?search=${encodeURIComponent(term)}`;
+                        const sResp = await fetch(searchUrl, {
+                            signal: controller.signal,
+                            headers: { "Accept": "application/json" }
+                        });
+                        if (sResp.ok) {
+                            const results = await sResp.json();
+                            let items = Array.isArray(results) ? results : (results.results || results.smartphones || results.items || []);
+                            if (items.length > 0) {
+                                // Filter by brand if multiple matches exist
+                                if (brand && items.length > 1) {
+                                    const bLower = brand.toLowerCase().trim();
+                                    const brandFiltered = items.filter(it => {
+                                        const itBrand = (it.brand || it.manufacturer || "").toLowerCase();
+                                        const itName = (it.name || it.model || it.slug || "").toLowerCase();
+                                        return itBrand.includes(bLower) || itName.includes(bLower);
+                                    });
+                                    if (brandFiltered.length > 0) {
+                                        items = brandFiltered;
+                                    }
+                                }
+
+                                // If still multiple, select the best / most complete spec match
+                                items.sort((a, b) => {
+                                    const scoreOf = (it) => {
+                                        let score = 0;
+                                        if (it.display && it.display.size_inch) score += 2;
+                                        if (it.soc && it.soc.name) score += 2;
+                                        if (it.cameras && Array.isArray(it.cameras) && it.cameras.length > 0) score += 2;
+                                        if (it.battery_mah) score += 2;
+                                        if (it.dimensions) score += 1;
+                                        if (it.weight_g) score += 1;
+                                        return score;
+                                    };
+                                    return scoreOf(b) - scoreOf(a);
+                                });
+
+                                const bestMatch = items[0];
+                                const bestSlug = bestMatch.slug || bestMatch.id;
+                                if (bestSlug) {
+                                    const bestUrl = `http://localhost:8000/v1/smartphones/${encodeURIComponent(bestSlug)}`;
+                                    const bResp = await fetch(bestUrl, {
+                                        signal: controller.signal,
+                                        headers: { "Accept": "application/json" }
+                                    });
+                                    if (bResp.ok) {
+                                        techApiData = await bResp.json();
+                                        source = "GetTechAPI";
+                                    } else {
+                                        techApiData = bestMatch;
+                                        source = "GetTechAPI";
+                                    }
+                                } else {
+                                    techApiData = bestMatch;
+                                    source = "GetTechAPI";
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
             }
+            clearTimeout(timeoutId);
         } catch (apiErr) {
             // GetTechAPI is offline or unreachable - proceed to fallback specs
         }
@@ -2517,6 +2933,7 @@ router.post("/admin/products/:productId/status", async (req, res) => {
         // Invalidate in-memory caches
         productPageCache.clear();
         productCache.delete(productId);
+        invalidateProductCaches();
 
         return res.json({ success: true, productId, newStatus: status });
     } catch (err) {
@@ -2632,6 +3049,7 @@ router.post("/admin/products/batch-status", async (req, res) => {
 
         productPageCache.clear();
         productIds.forEach(pid => productCache.delete(pid));
+        invalidateProductCaches();
 
         return res.json({ success: true, count: productIds.length, status: dbStatus });
     } catch (err) {

@@ -357,6 +357,54 @@ class TradeInService {
     }
   }
 
+  /// Runs Model 2 and defect evaluation against stored customer or staff photos.
+  static Future<Map<String, dynamic>> runDeviceAssessment(
+    String tradeInRequestID, {
+    String imageSource = 'images',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/run-device-assessment'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'tradeInRequestID': tradeInRequestID.replaceAll('#', '').trim(),
+          'imageSource': imageSource,
+        }),
+      ).timeout(const Duration(minutes: 12));
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return {
+          ...decoded,
+          'success': response.statusCode >= 200 && response.statusCode < 300 && decoded['success'] == true,
+        };
+      }
+      return {'success': false, 'message': 'The assessment server returned an invalid response.'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Predict and save the customer-facing quotation range for this request.
+  static Future<Map<String, dynamic>> predictQuotation(String tradeInRequestID) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/predict-quotation'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'tradeInRequestID': tradeInRequestID.replaceAll('#', '').trim()}),
+      ).timeout(const Duration(seconds: 90));
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return {
+          ...decoded,
+          'success': response.statusCode >= 200 && response.statusCode < 300 && decoded['success'] == true,
+        };
+      }
+      return {'success': false, 'message': 'The pricing service returned an invalid response.'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   /// Cancel existing active trade-in requests for a user when starting a new flow
   static Future<Map<String, dynamic>> cancelTradeInRequests(String userEmail) async {
     try {
@@ -696,7 +744,7 @@ class TradeInService {
     }
   }
 
-  /// Page 5: Add finalOfferPrice attribute with random price to tradeInRequest record
+  /// Generate and save the staff ML point estimate to tradeInRequest.finalOfferPrice.
   static Future<Map<String, dynamic>> setStaffFinalOfferPrice({
     required String tradeInRequestID,
     bool forceNew = false,
@@ -711,7 +759,7 @@ class TradeInService {
           'tradeInRequestID': cleanId,
           'forceNew': forceNew,
         }),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 90));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -720,6 +768,121 @@ class TradeInService {
       return {'success': false, 'message': 'HTTP ${response.statusCode}'};
     } catch (e) {
       return {'success': false, 'message': 'Error setting final offer price: $e'};
+    }
+  }
+
+  /// Save full internal device diagnostic results to deviceDiagnostic collection
+  static Future<Map<String, dynamic>> saveDeviceDiagnostic({
+    required String deviceID,
+    String? diagnosticID,
+    required int touchScreenMark,
+    required int displayMark,
+    required int cameraMark,
+    required int microphoneMark,
+    required int speakerMark,
+    required int sensorMark,
+    required int connectivityMark,
+    required int gpsMark,
+    required int diagnosticScore,
+  }) async {
+    try {
+      final docID = diagnosticID ?? 'INT-$deviceID';
+      final uri = Uri.parse('$baseUrl/save-device-diagnostic');
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'diagnosticID': docID,
+          'deviceID': deviceID,
+          'touchScreenMark': touchScreenMark,
+          'displayMark': displayMark,
+          'cameraMark': cameraMark,
+          'microphoneMark': microphoneMark,
+          'speakerMark': speakerMark,
+          'sensorMark': sensorMark,
+          'connectivityMark': connectivityMark,
+          'gpsMark': gpsMark,
+          'diagnosticScore': diagnosticScore,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data is Map<String, dynamic> ? data : {'success': true};
+      }
+      return {'success': false, 'message': 'HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'message': 'Error saving device diagnostic: $e'};
+    }
+  }
+
+  /// Check whether a deviceDiagnostic record exists for this device
+  static Future<bool> checkDeviceDiagnosticExists(String deviceID) async {
+    try {
+      final cleanId = deviceID.trim();
+      if (cleanId.isEmpty) return false;
+      final uri = Uri.parse('$baseUrl/diagnostic/$cleanId');
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true && data['exists'] == true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Fetch full deviceDiagnostic record for a device
+  static Future<Map<String, dynamic>?> getDeviceDiagnostic(String deviceID) async {
+    try {
+      final cleanId = deviceID.trim();
+      if (cleanId.isEmpty) return null;
+      final uri = Uri.parse('$baseUrl/diagnostic/$cleanId');
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['exists'] == true && data['data'] is Map<String, dynamic>) {
+          return data['data'] as Map<String, dynamic>;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetch evaluation record along with inspection photos from evaluation or staffEvaluation collection
+  static Future<Map<String, dynamic>?> getEvaluation(String tradeInRequestID, {String? source}) async {
+    try {
+      final cleanId = tradeInRequestID.replaceAll('#', '').trim();
+      if (cleanId.isEmpty) return null;
+      var uri = Uri.parse('$baseUrl/evaluation/$cleanId');
+      if (source != null && source.isNotEmpty) {
+        uri = uri.replace(queryParameters: {'source': source});
+      }
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['evaluation'] is Map<String, dynamic>) {
+          return data['evaluation'] as Map<String, dynamic>;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

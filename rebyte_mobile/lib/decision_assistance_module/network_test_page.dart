@@ -24,6 +24,7 @@ class NetworkTestPage extends StatefulWidget {
   final bool isMicSkipped;
   final bool isSpeakerSkipped;
   final bool isSensorSkipped;
+  final bool fromImproveAssessment;
 
   const NetworkTestPage({
     super.key,
@@ -44,6 +45,7 @@ class NetworkTestPage extends StatefulWidget {
     this.isMicSkipped = false,
     this.isSpeakerSkipped = false,
     this.isSensorSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -403,6 +405,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
                               isSpeakerSkipped: widget.isSpeakerSkipped,
                               isSensorSkipped: widget.isSensorSkipped,
                               isNetworkSkipped: false,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -541,6 +544,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
             isSpeakerSkipped: widget.isSpeakerSkipped,
             isSensorSkipped: widget.isSensorSkipped,
             isNetworkSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

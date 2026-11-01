@@ -536,7 +536,28 @@ router.get("/staff-tasks", async (req, res) => {
                 const deviceModel = devData.model || devData.name || trData.deviceModel || trData.model || "Device";
                 const storage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
                 const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
-                const condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+
+                // Resolve condition from evaluation grade if available
+                let evalGrade = trData.evaluationGrade || trData.grade || devData.grade || "";
+                if (!evalGrade && trID) {
+                    try {
+                        const evSnap = await db.collection("evaluation").doc(`EV-${trID}`).get();
+                        if (evSnap.exists && evSnap.data().grade) {
+                            evalGrade = evSnap.data().grade;
+                        }
+                    } catch (_) {}
+                }
+
+                let condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+                if (evalGrade) {
+                    const g = String(evalGrade).toUpperCase().trim();
+                    if (g === 'A') condition = 'Grade A (Excellent)';
+                    else if (g === 'B') condition = 'Grade B (Good)';
+                    else if (g === 'C') condition = 'Grade C (Fair)';
+                    else if (g === 'D') condition = 'Grade D (Poor)';
+                    else condition = `Grade ${g}`;
+                }
+
                 const deviceAge = devData.deviceAge || trData.deviceAge || "";
                 const ram = devData.ram || trData.ram || "";
                 let tradeInEstimate = trData.tradeInEstimate || trData.offeredPrice || 0;
@@ -3113,7 +3134,27 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         }
         const storage = devData.storageCapacity || devData.storage || trData.storageCapacity || trData.storage || "";
         const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
-        const condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+
+        let evalGrade = trData.evaluationGrade || trData.grade || devData.grade || "";
+        if (!evalGrade && trID) {
+            try {
+                const evSnap = await db.collection("evaluation").doc(`EV-${trID}`).get();
+                if (evSnap.exists && evSnap.data().grade) {
+                    evalGrade = evSnap.data().grade;
+                }
+            } catch (_) {}
+        }
+
+        let condition = trData.deviceCondition || trData.reportedCondition || devData.condition || "Good";
+        if (evalGrade) {
+            const g = String(evalGrade).toUpperCase().trim();
+            if (g === 'A') condition = 'Grade A (Excellent)';
+            else if (g === 'B') condition = 'Grade B (Good)';
+            else if (g === 'C') condition = 'Grade C (Fair)';
+            else if (g === 'D') condition = 'Grade D (Poor)';
+            else condition = `Grade ${g}`;
+        }
+
         const imei = devData.imeiNum || devData.imei || trData.imei || trData.imeiNum || trData.serialNumber || "";
 
         let tradeInEstimate = trData.tradeInEstimate || trData.offeredPrice || 0;

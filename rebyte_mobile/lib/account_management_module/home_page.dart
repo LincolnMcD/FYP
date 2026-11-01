@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'welcome_page.dart';
 import 'profile_page.dart';
@@ -20,6 +21,8 @@ import '../product_purchase_module/my_orders_page.dart';
 import '../product_purchase_module/services/shop_service.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
 import '../rental_managment_module/my_rentals_page.dart';
+import '../rental_managment_module/services/rental_service.dart';
+import '../rental_managment_module/rental_device_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -61,6 +64,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   bool _accountSessionEnding = false;
   ModalRoute<dynamic>? _observedRoute;
   int _cartItemCount = 0;
+  List<Map<String, dynamic>> _activeRentals = [];
+  bool _isLoadingRentals = false;
 
   bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
 
@@ -73,6 +78,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       final items = await ShopService.fetchCart(email: _email!);
       if (mounted) setState(() => _cartItemCount = items.length);
     } catch (_) {}
+  }
+
+  Future<void> _loadActiveRentals() async {
+    if (!_isLoggedIn || _email == null || _email!.isEmpty) {
+      if (mounted && _activeRentals.isNotEmpty) {
+        setState(() => _activeRentals = []);
+      }
+      return;
+    }
+    setState(() => _isLoadingRentals = true);
+    try {
+      final results = await RentalService.getCustomerRentals(_email!);
+      if (mounted) {
+        // Filter only active rentals: rentalStatus == 'renting' or 'active' (not overdue, returning, completed, missing, or purchased)
+        final activeList = results.where((r) {
+          final status = (r['rentalStatus'] ?? '').toString().toLowerCase().trim();
+          final depositStatus = (r['depositStatus'] ?? '').toString().toLowerCase().trim();
+          if (status == 'missing' || status == 'purchased' || status == 'bought_out' || status == 'overdue' || status == 'returning' || status == 'completed') {
+            return false;
+          }
+          if (depositStatus == 'returned' || depositStatus == 'refunded' || depositStatus == 'forfeited') {
+            return false;
+          }
+          return status == 'renting' || status == 'active';
+        }).toList();
+
+        // Sort by startDate or createdAt descending (latest first)
+        activeList.sort((a, b) {
+          final dateA = DateTime.tryParse(a['startDate']?.toString() ?? '') ?? DateTime(1970);
+          final dateB = DateTime.tryParse(b['startDate']?.toString() ?? '') ?? DateTime(1970);
+          return dateB.compareTo(dateA);
+        });
+
+        setState(() {
+          _activeRentals = activeList;
+          _isLoadingRentals = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingRentals = false);
+    }
   }
 
   @override
@@ -92,6 +138,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
       _loadCartCount();
+      _loadActiveRentals();
     }
   }
 
@@ -127,6 +174,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleAccountSessionState);
       _syncActiveTradeIn();
       _loadCartCount();
+      _loadActiveRentals();
     } else {
       _syncActiveTradeIn();
     }
@@ -171,9 +219,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
           );
 
           final String reqStatus = (submittedReq['requestStatus'] ?? '').toString().toLowerCase();
-          if (reqStatus == 'quoted' || TradeInFlowSession.currentStep >= 8) {
+          if (reqStatus == 'quoted') {
             TradeInFlowSession.currentStep = 8;
-          } else if (reqStatus == 'evaluated' || TradeInFlowSession.currentStep >= 7) {
+          } else if (reqStatus == 'evaluated') {
+            TradeInFlowSession.currentStep = 7;
+          } else if (TradeInFlowSession.currentStep >= 8) {
+            TradeInFlowSession.currentStep = 8;
+          } else if (TradeInFlowSession.currentStep >= 7) {
             TradeInFlowSession.currentStep = 7;
           } else {
             TradeInFlowSession.currentStep = 5;
@@ -1025,7 +1077,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
           _buildActionItem('Shop\nSmartphones', Icons.shopping_bag_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
           _buildActionItem('Trade-In\nPhone', Icons.autorenew, const Color(0xFFFFF7ED), itemWidth, onTap: () => _navigateOrRequireLogin(2)),
           _buildActionItem('Rent\nSmartphone', Icons.calendar_month_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
-          _buildActionItem('Pay Rental', Icons.receipt_long_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () => _navigateOrRequireLogin(3)),
+          _buildActionItem('My\nRentals', Icons.phone_android_outlined, const Color(0xFFE0E7FF), itemWidth, onTap: () {
+            if (!_isLoggedIn) {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+              return;
+            }
+            Navigator.push(context, MaterialPageRoute(builder: (context) => MyRentalsPage(email: _email ?? 'customer@rebyte.com', name: _name)));
+          }),
           _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
           _buildActionItem(
             'Test My\nDevice',
@@ -1112,14 +1170,79 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
         TradeInFlowSession.hasActiveFlow &&
         TradeInFlowSession.isAtPage5;
 
+    final bool hasRentals = _isLoggedIn && _activeRentals.isNotEmpty;
+
+    if (!hasActiveTradeIn && !hasRentals) {
+      if (_isLoadingRentals) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0C5AD2)),
+          ),
+        );
+      }
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Text(
+          'No active rental or trade-in activities at this moment.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+        ),
+      );
+    }
+
     return Column(
       children: [
         if (hasActiveTradeIn) ...[
           _buildTradeInActivityCard(),
-          const SizedBox(height: 12),
+          if (hasRentals) const SizedBox(height: 12),
         ],
-        _buildRentalActivityCard(),
+        if (hasRentals)
+          _buildDynamicRentalActivities(),
       ],
+    );
+  }
+
+  Widget _buildDynamicRentalActivities() {
+    if (_activeRentals.length <= 2) {
+      return Column(
+        children: _activeRentals.asMap().entries.map((entry) {
+          final index = entry.key;
+          final rental = entry.value;
+          return Padding(
+            padding: EdgeInsets.only(bottom: index < _activeRentals.length - 1 ? 12 : 0),
+            child: _buildRentalCardItem(rental),
+          );
+        }).toList(),
+      );
+    }
+
+    // When active rentals > 2: Fixed height scrollable container displaying the latest 2 in viewport, with the rest scrollable
+    return SizedBox(
+      height: 290,
+      child: Scrollbar(
+        thumbVisibility: true,
+        radius: const Radius.circular(4),
+        child: ListView.separated(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.only(right: 6, bottom: 4),
+          itemCount: _activeRentals.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            return _buildRentalCardItem(_activeRentals[index]);
+          },
+        ),
+      ),
     );
   }
 
@@ -1390,15 +1513,58 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     );
   }
 
-  Widget _buildRentalActivityCard() {
+  Widget _buildRentalCardItem(Map<String, dynamic> rental) {
+    final rentalID = rental['rentalID']?.toString() ?? '';
+    final product = rental['product'] as Map<String, dynamic>? ?? {};
+    final device = rental['device'] as Map<String, dynamic>? ?? {};
+
+    String brand = device['brand']?.toString() ?? '';
+    String model = device['model']?.toString() ?? '';
+    String title = product['listingTitle']?.toString() ?? '';
+    if (title.isEmpty) {
+      title = '$brand $model'.trim();
+    }
+    if (title.isEmpty) title = 'Device Rental';
+
+    // Due date
+    final expiryStr = rental['rentalExpiryDate']?.toString();
+    String dueFormatted = '—';
+    if (expiryStr != null && expiryStr.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(expiryStr);
+        dueFormatted = DateFormat('MMM dd, yyyy').format(dt);
+      } catch (_) {
+        dueFormatted = expiryStr;
+      }
+    }
+
+    // Time remaining (until rentalExpiryDate)
+    int daysRemaining = 0;
+    if (expiryStr != null && expiryStr.isNotEmpty) {
+      try {
+        final expiry = DateTime.parse(expiryStr);
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final expDate = DateTime(expiry.year, expiry.month, expiry.day);
+        daysRemaining = expDate.difference(today).inDays;
+      } catch (_) {}
+    }
+
+    final rawFee = rental['monthlyRentalFee'];
+    final feeNum = (rawFee is num) ? rawFee.toDouble() : double.tryParse(rawFee?.toString() ?? '');
+    final monthlyFee = feeNum != null
+        ? 'RM ${feeNum.toStringAsFixed(2)}/mth'
+        : (rawFee != null ? 'RM $rawFee/mth' : '');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1422,61 +1588,78 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Samsung Galaxy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const Text('S24, 512GB', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
                     const SizedBox(height: 2),
-                    Text('Due: Nov 15, 2026', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+                    Text(
+                      'Due: $dueFormatted' + (monthlyFee.isNotEmpty ? '  •  $monthlyFee' : ''),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                    ),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFA7F3D0)),
                 ),
-                child: const Text('Active', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Active',
+                  style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Time Remaining', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                  SizedBox(height: 2),
-                  Text('14 Days', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                children: [
+                  const Text('Time Remaining', style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                  const SizedBox(height: 2),
+                  Text(
+                    daysRemaining >= 0 ? '$daysRemaining Days' : 'Due Passed',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: daysRemaining <= 3 ? const Color(0xFFEA580C) : const Color(0xFF0F172A),
+                    ),
+                  ),
                 ],
               ),
-              Row(
-                children: [
-                  OutlinedButton(
-                    onPressed: () => _navigateOrRequireLogin(3),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      minimumSize: Size.zero,
-                      side: BorderSide(color: Colors.grey.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RentalDeviceDetailPage(
+                        rental: rental,
+                        email: _email ?? 'customer@rebyte.com',
+                        name: _name,
+                      ),
                     ),
-                    child: const Text('Extend', style: TextStyle(fontSize: 11, color: Colors.black87)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => _navigateOrRequireLogin(3),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      minimumSize: Size.zero,
-                      backgroundColor: const Color(0xFF0C5AD2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      elevation: 0,
-                    ),
-                    child: const Text('Return', style: TextStyle(fontSize: 11, color: Colors.white)),
-                  ),
-                ],
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  minimumSize: Size.zero,
+                  backgroundColor: const Color(0xFF0C5AD2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'View Detail',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
               ),
             ],
           ),

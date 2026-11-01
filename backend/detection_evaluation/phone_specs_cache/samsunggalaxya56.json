@@ -1,0 +1,196 @@
+{
+  "brand": "Samsung",
+  "model": "Galaxy A56",
+  "phone_model": "Samsung Galaxy A56",
+  "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+  "body_dimensions_mm": {
+    "height": 162.2,
+    "width": 77.5,
+    "thickness": 7.4
+  },
+  "surfaces": {
+    "Screen": {
+      "width_mm": 71.3153206404401,
+      "height_mm": 154.51652805428688,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Back": {
+      "width_mm": 77.5,
+      "height_mm": 162.2,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Left": {
+      "width_mm": 7.4,
+      "height_mm": 162.2,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Right": {
+      "width_mm": 7.4,
+      "height_mm": 162.2,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Top": {
+      "width_mm": 77.5,
+      "height_mm": 7.4,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Bottom": {
+      "width_mm": 77.5,
+      "height_mm": 7.4,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a56/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    }
+  },
+  "nominal_areas_cm2": {
+    "Screen": 110.19395742439028,
+    "Back": 125.705,
+    "Frame": 35.4756
+  },
+  "required_surfaces": [
+    "Screen",
+    "Back",
+    "Frame_Left",
+    "Frame_Right",
+    "Frame_Top",
+    "Frame_Bottom"
+  ],
+  "exact_part_areas_available": false,
+  "geometry_notes": [
+    "Screen rectangle excludes no rounded corners or cutouts.",
+    "Back rectangle excludes no camera cutouts or curvature.",
+    "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+  ],
+  "api_provider": "TechAPI",
+  "data_attribution": "Data from TechAPI",
+  "data_license": "CC-BY-SA 4.0",
+  "source_urls": [
+    "https://en.wikipedia.org/wiki/Samsung_Galaxy_A56",
+    "https://www.samsung.com/global/galaxy/galaxy-a56/specs/"
+  ],
+  "provider_raw": {
+    "id": 232007604935532,
+    "slug": "galaxy-a56",
+    "base_model_slug": "galaxy-a56",
+    "name": "Galaxy A56",
+    "brand": {
+      "id": 200230829453944,
+      "slug": "samsung",
+      "name": "Samsung",
+      "country": "KR",
+      "url": "/v1/brands/samsung"
+    },
+    "soc": {
+      "id": 197065147648091,
+      "slug": "exynos-1580",
+      "name": "Exynos 1580",
+      "manufacturer": {
+        "slug": "samsung",
+        "name": "Samsung",
+        "url": "/v1/brands/samsung"
+      },
+      "process_nm": 4.0,
+      "gpu_name": "Xclipse 540",
+      "url": "/v1/socs/exynos-1580"
+    },
+    "release_date": "2025-03-02",
+    "msrp_usd": 499,
+    "ram_gb": 8,
+    "storage_options_gb": [
+      128,
+      256
+    ],
+    "variant": {},
+    "display": {
+      "size_inch": 6.7,
+      "resolution": "2340x1080",
+      "refresh_hz": 120,
+      "type": "Super AMOLED",
+      "brightness_nits": 1900,
+      "ppi": 385
+    },
+    "cameras": [
+      {
+        "type": "main",
+        "mp": 50,
+        "aperture": 1.8,
+        "ois": true
+      },
+      {
+        "type": "ultrawide",
+        "mp": 12,
+        "aperture": 2.2,
+        "ois": false
+      },
+      {
+        "type": "macro",
+        "mp": 5,
+        "aperture": 2.4,
+        "ois": false
+      },
+      {
+        "type": "selfie",
+        "mp": 12,
+        "aperture": 2.2
+      }
+    ],
+    "battery_mah": 5000,
+    "charging_wired_w": 45.0,
+    "charging_wireless_w": 0.0,
+    "weight_g": 198.0,
+    "dimensions": {
+      "height_mm": 162.2,
+      "width_mm": 77.5,
+      "depth_mm": 7.4
+    },
+    "ip_rating": "IP67",
+    "os": "Android",
+    "os_version": "15",
+    "connectivity": {
+      "wifi": "Wi-Fi 6",
+      "bluetooth": "5.3",
+      "nfc": true,
+      "usb": "USB-C 2.0"
+    },
+    "image_url": null,
+    "images": [],
+    "image_license": null,
+    "image_attribution": null,
+    "model_3d": null,
+    "body": null,
+    "score": {
+      "algorithm_version": "2.0.0",
+      "overall": 53.6,
+      "performance": 63.6,
+      "camera": 36.1,
+      "battery": 62.8,
+      "display": 51.8,
+      "value": 66.1,
+      "perf": {
+        "index": 63.6,
+        "percentile": 60.9,
+        "tier": "B",
+        "era": "2024-2026",
+        "source": "geekbench"
+      }
+    },
+    "verified": true,
+    "source_urls": [
+      "https://en.wikipedia.org/wiki/Samsung_Galaxy_A56",
+      "https://www.samsung.com/global/galaxy/galaxy-a56/specs/"
+    ],
+    "created_at": "2026-05-28T23:32:18",
+    "updated_at": "2026-09-25T07:35:58"
+  },
+  "fetched_at": "2026-10-31T12:22:51.521750+00:00"
+}

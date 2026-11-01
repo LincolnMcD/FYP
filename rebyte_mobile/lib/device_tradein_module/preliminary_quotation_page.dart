@@ -16,6 +16,7 @@ class PreliminaryQuotationPage extends StatefulWidget {
   final String? name;
   final String? estimatedValue;
   final bool fromMyTradeInRequests;
+  final bool estimateFromModel;
 
   const PreliminaryQuotationPage({
     super.key,
@@ -26,6 +27,7 @@ class PreliminaryQuotationPage extends StatefulWidget {
     this.name,
     this.estimatedValue,
     this.fromMyTradeInRequests = false,
+    this.estimateFromModel = false,
   });
 
   @override
@@ -36,6 +38,9 @@ class PreliminaryQuotationPage extends StatefulWidget {
 class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isProcessingAction = false;
+  bool _isLoadingEstimate = false;
+  String? _estimatedValue;
+  String? _pricingError;
 
   @override
   void initState() {
@@ -46,31 +51,66 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     TradeInFlowSession.setTradeInRequestId(widget.tradeInRequestID);
     TradeInFlowSession.setCurrentDevice(widget.device);
 
-    // Update tradeInRequest status in database to 'Quoted' with estimatedValue (min & max double)
-    if (widget.tradeInRequestID.isNotEmpty) {
-      double minD = 2340.50;
-      double maxD = 2355.30;
-      if (widget.estimatedValue != null && widget.estimatedValue!.isNotEmpty) {
-        final clean = widget.estimatedValue!.replaceAll('RM', '').replaceAll(',', '');
-        final parts = clean.split(RegExp(r'\s*-\s*'));
-        if (parts.length >= 2) {
-          minD = double.tryParse(parts[0].trim()) ?? 2340.50;
-          maxD = double.tryParse(parts[1].trim()) ?? 2355.30;
-        } else if (parts.isNotEmpty) {
-          final val = double.tryParse(parts[0].trim()) ?? 2340.50;
-          minD = val;
-          maxD = val;
-        }
-      }
-      TradeInService.updateTradeInStatus(
-        tradeInRequestID: widget.tradeInRequestID,
-        status: 'Quoted',
-        estimatedValue: {
-          'min': minD,
-          'max': maxD,
-        },
-      );
+    _estimatedValue = widget.estimatedValue;
+    final shouldPredict = widget.tradeInRequestID.isNotEmpty &&
+        ((widget.fromMyTradeInRequests && !widget.estimateFromModel) ||
+            _estimatedValue == null || _estimatedValue!.trim().isEmpty);
+    if (shouldPredict) {
+      _estimatedValue = null;
+      _predictQuotation();
+    } else {
+      _saveQuotedEstimate(_parseEstimateRange(_estimatedValue));
     }
+  }
+
+  Map<String, dynamic>? _parseEstimateRange(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final cleaned = value.replaceAll(',', '');
+    final matches = RegExp(r'\d+(?:\.\d+)?')
+        .allMatches(cleaned)
+        .map((match) => double.tryParse(match.group(0)!))
+        .whereType<double>()
+        .toList();
+    if (matches.isEmpty) return null;
+    return {
+      'min': matches.first,
+      'max': matches.length > 1 ? matches[1] : matches.first,
+    };
+  }
+
+  Future<void> _saveQuotedEstimate(Map<String, dynamic>? range) async {
+    if (widget.tradeInRequestID.isEmpty || range == null) return;
+    await TradeInService.updateTradeInStatus(
+      tradeInRequestID: widget.tradeInRequestID,
+      status: 'Quoted',
+      estimatedValue: range,
+    );
+  }
+
+  Future<void> _predictQuotation() async {
+    if (_isLoadingEstimate || widget.tradeInRequestID.isEmpty) return;
+    setState(() {
+      _isLoadingEstimate = true;
+      _pricingError = null;
+    });
+    final prediction = await TradeInService.predictQuotation(widget.tradeInRequestID);
+    if (!mounted) return;
+    final range = prediction['estimatedValue'];
+    final min = range is Map ? double.tryParse(range['min']?.toString() ?? '') : null;
+    final max = range is Map ? double.tryParse(range['max']?.toString() ?? '') : null;
+    if (prediction['success'] != true || min == null || max == null) {
+      setState(() {
+        _isLoadingEstimate = false;
+        _pricingError = prediction['message']?.toString() ?? 'Could not calculate the quotation.';
+      });
+      return;
+    }
+    final savedRange = {'min': min, 'max': max};
+    setState(() {
+      _estimatedValue = 'RM ${min.toStringAsFixed(2)} - RM ${max.toStringAsFixed(2)}';
+      _isLoadingEstimate = false;
+    });
+    await _saveQuotedEstimate(savedRange);
   }
 
   void _onBack() {
@@ -126,7 +166,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     setState(() => _isProcessingAction = false);
 
     final cleanId = widget.tradeInRequestID.replaceAll('#', '').trim();
-    final priceStr = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
+    final priceStr = _estimatedValue ?? 'Quotation unavailable';
 
     Navigator.pushReplacement(
       context,
@@ -196,7 +236,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     setState(() => _isProcessingAction = false);
 
     final cleanId = widget.tradeInRequestID.replaceAll('#', '').trim();
-    final priceStr = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
+    final priceStr = _estimatedValue ?? 'Quotation unavailable';
 
     Navigator.pushReplacement(
       context,
@@ -331,7 +371,9 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _isProcessingAction ? null : _onAcceptOffer,
+                    onPressed: _isProcessingAction || _isLoadingEstimate || _estimatedValue == null
+                        ? null
+                        : _onAcceptOffer,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0C5AD2),
                       foregroundColor: Colors.white,
@@ -422,8 +464,10 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
   }
 
   Widget _buildValueCard() {
-    final rawValue = widget.estimatedValue ?? 'RM 2,340.50 - RM 2,355.30';
-    final displayValue = _formatDisplayValue(rawValue);
+    final rawValue = _estimatedValue;
+    final displayValue = rawValue == null
+        ? (_isLoadingEstimate ? 'Calculating with device assessment...' : 'Quotation unavailable')
+        : _formatDisplayValue(rawValue);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -449,17 +493,29 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            displayValue,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0C5AD2),
-              height: 1.2,
-              letterSpacing: -0.5,
+          if (_isLoadingEstimate)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
+            )
+          else
+            Text(
+              displayValue,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: rawValue == null ? 17 : 30,
+                fontWeight: FontWeight.w900,
+                color: rawValue == null ? const Color(0xFF64748B) : const Color(0xFF0C5AD2),
+                height: 1.2,
+                letterSpacing: -0.5,
+              ),
             ),
-          ),
+          if (_pricingError != null) ...[
+            const SizedBox(height: 8),
+            Text(_pricingError!, textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C))),
+            TextButton(onPressed: _predictQuotation, child: const Text('Retry')),
+          ],
           const SizedBox(height: 12),
           const Text(
             'Based on your device description. Final value\nsubject to physical inspection.',

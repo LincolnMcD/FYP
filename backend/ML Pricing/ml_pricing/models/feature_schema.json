@@ -1,0 +1,41 @@
+{
+  "features": {
+    "with_model": [
+      "deviceAge",
+      "brand",
+      "model",
+      "ramCapacity",
+      "storage",
+      "internalPerfromanceOverallMark",
+      "screenDmgScore",
+      "totalDmgScore",
+      "hasScreenDamage",
+      "msrp"
+    ],
+    "without_model": [
+      "deviceAge",
+      "brand",
+      "ramCapacity",
+      "storage",
+      "internalPerfromanceOverallMark",
+      "screenDmgScore",
+      "totalDmgScore",
+      "hasScreenDamage",
+      "msrp"
+    ]
+  },
+  "categorical": {
+    "with_model": [
+      "brand",
+      "model"
+    ],
+    "without_model": [
+      "brand"
+    ]
+  },
+  "target": "retentationRatio",
+  "forbidden_features": [
+    "actualSoldPrice",
+    "retentationRatio"
+  ]
+}

@@ -26,6 +26,7 @@ class GpsTestPage extends StatefulWidget {
   final bool isSpeakerSkipped;
   final bool isSensorSkipped;
   final bool isNetworkSkipped;
+  final bool fromImproveAssessment;
 
   const GpsTestPage({
     super.key,
@@ -48,6 +49,7 @@ class GpsTestPage extends StatefulWidget {
     this.isSpeakerSkipped = false,
     this.isSensorSkipped = false,
     this.isNetworkSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -482,6 +484,7 @@ class _GpsTestPageState extends State<GpsTestPage> {
                               isSensorSkipped: widget.isSensorSkipped,
                               isNetworkSkipped: widget.isNetworkSkipped,
                               isGpsSkipped: false,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -622,6 +625,7 @@ class _GpsTestPageState extends State<GpsTestPage> {
             isSensorSkipped: widget.isSensorSkipped,
             isNetworkSkipped: widget.isNetworkSkipped,
             isGpsSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

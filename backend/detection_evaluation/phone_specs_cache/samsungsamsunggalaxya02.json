@@ -1,0 +1,203 @@
+{
+  "brand": "Samsung",
+  "model": "Galaxy A02",
+  "phone_model": "Samsung Galaxy A02",
+  "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+  "body_dimensions_mm": {
+    "height": 164.05824050441004,
+    "width": 74.25120822698452,
+    "thickness": 8.9
+  },
+  "surfaces": {
+    "Screen": {
+      "width_mm": 67.75120822698452,
+      "height_mm": 150.55824050441004,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Back": {
+      "width_mm": 74.25120822698452,
+      "height_mm": 164.05824050441004,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Left": {
+      "width_mm": 8.9,
+      "height_mm": 164.05824050441004,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Right": {
+      "width_mm": 8.9,
+      "height_mm": 164.05824050441004,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Top": {
+      "width_mm": 74.25120822698452,
+      "height_mm": 8.9,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Bottom": {
+      "width_mm": 74.25120822698452,
+      "height_mm": 8.9,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    }
+  },
+  "nominal_areas_cm2": {
+    "Screen": 102.00502702702698,
+    "Back": 121.81522577045655,
+    "Frame": 42.41908187418823
+  },
+  "required_surfaces": [
+    "Screen",
+    "Back",
+    "Frame_Left",
+    "Frame_Right",
+    "Frame_Top",
+    "Frame_Bottom"
+  ],
+  "exact_part_areas_available": false,
+  "geometry_notes": [
+    "Screen rectangle excludes no rounded corners or cutouts.",
+    "Back rectangle excludes no camera cutouts or curvature.",
+    "Frame estimate is a rectangular-prism side area, not exact metal surface area.",
+    "Phone body dimensions are estimates because TechAPI did not provide height, width, and depth.",
+    "Screen dimensions use aspect ratio 2.222:1 (TechAPI display resolution) and the listed display diagonal.",
+    "Chassis dimensions add 6.5 mm total side bezel and 13.5 mm total top/bottom bezel.",
+    "Thickness is a heuristic from battery capacity: below 4000 mAh = 7.8 mm; 4000–4500 mAh = 8.2 mm; 4501–4999 mAh is linearly interpolated; 5000 mAh or above = 8.9 mm."
+  ],
+  "api_provider": "TechAPI",
+  "data_attribution": "Data from TechAPI; body geometry estimated by the inspection app.",
+  "data_license": "CC-BY-SA 4.0; attribute “Data from TechAPI” and share alike.",
+  "source_urls": [
+    "https://www.kaggle.com/datasets/rajibdab/global-smartphone-database-2025",
+    "https://www.mobiledokan.com/mobile/samsung-galaxy-a02"
+  ],
+  "provider_raw": {
+    "id": 126702001506261,
+    "slug": "samsung-galaxy-a02-3gb-32gb-4g",
+    "base_model_slug": "galaxy-a02",
+    "name": "Samsung Galaxy A02",
+    "brand": {
+      "id": 200230829453944,
+      "slug": "samsung",
+      "name": "Samsung",
+      "country": "KR",
+      "url": "/v1/brands/samsung"
+    },
+    "soc": {
+      "id": 19346336107715,
+      "slug": "mediatek-mt6739",
+      "name": "Mediatek MT6739",
+      "manufacturer": {
+        "slug": "mediatek",
+        "name": "MediaTek",
+        "url": "/v1/brands/mediatek"
+      },
+      "process_nm": 28.0,
+      "gpu_name": "PowerVR GE8100",
+      "url": "/v1/socs/mediatek-mt6739"
+    },
+    "release_date": "2021-01-27",
+    "release_date_precision": null,
+    "msrp_usd": null,
+    "model_numbers": [],
+    "codenames": [],
+    "ram_gb": 3,
+    "storage_options_gb": [
+      32
+    ],
+    "variant": {
+      "region": "global",
+      "memory": {
+        "ram_gb": 3,
+        "storage_gb": 32
+      },
+      "source_category": "global-smartphone-database-2025",
+      "source_dataset": "rajibdab/global-smartphone-database-2025",
+      "network": {
+        "cellular": "4G"
+      },
+      "sim": "Dual SIM, GSM+GSM"
+    },
+    "display": {
+      "size_inch": 6.5,
+      "resolution": "720 x 1600",
+      "type": "IPS LCD",
+      "refresh_hz": 60,
+      "ppi": 270
+    },
+    "cameras": [
+      {
+        "type": "main",
+        "raw": "13+2MP"
+      }
+    ],
+    "battery_mah": 5000,
+    "charging_wired_w": null,
+    "charging_wireless_w": null,
+    "weight_g": 206.0,
+    "dimensions": {},
+    "ip_rating": null,
+    "os": "Android v10",
+    "os_version": "10",
+    "connectivity": {
+      "network": "2G, 3G, 4G",
+      "sim": "Dual SIM, GSM+GSM",
+      "bluetooth": "v5.0",
+      "wlan": "Wi-Fi 4 (802.11 b/g/n)",
+      "gps": "Yes with A-GPS, Glonass"
+    },
+    "image_url": null,
+    "images": [],
+    "image_license": null,
+    "image_attribution": null,
+    "model_3d": null,
+    "body": null,
+    "score": {
+      "algorithm_version": "2.0.0",
+      "overall": 26.2,
+      "performance": null,
+      "camera": null,
+      "battery": 35.0,
+      "display": 19.2,
+      "value": null,
+      "perf": {
+        "index": null,
+        "percentile": null,
+        "tier": null,
+        "era": "2020-2021",
+        "source": null
+      }
+    },
+    "verified": false,
+    "source_urls": [
+      "https://www.kaggle.com/datasets/rajibdab/global-smartphone-database-2025",
+      "https://www.mobiledokan.com/mobile/samsung-galaxy-a02"
+    ],
+    "created_at": "2026-06-20T12:34:07Z",
+    "updated_at": "2026-10-07T09:06:14Z"
+  },
+  "fetched_at": "2026-11-01T17:34:22.685572+00:00",
+  "body_dimensions_method": "estimated_from_display_size_and_battery_capacity",
+  "body_dimensions_assumptions": {
+    "display_diagonal_in": 6.5,
+    "screen_aspect_ratio_height_to_width": 2.2222222222222223,
+    "screen_aspect_ratio_source": "TechAPI display resolution",
+    "side_bezels_total_mm": 6.5,
+    "top_and_bottom_bezels_total_mm": 13.5,
+    "battery_capacity_mah": 5000.0,
+    "estimated_thickness_mm": 8.9
+  },
+  "api_detail_url": "https://gettechapi.github.io/TechAPI/v1/smartphones/samsung-galaxy-a02-3gb-32gb-4g/index.json",
+  "techapi_slug": "samsung-galaxy-a02-3gb-32gb-4g"
+}

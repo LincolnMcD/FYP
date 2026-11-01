@@ -1,0 +1,191 @@
+{
+  "brand": "Samsung",
+  "model": "Galaxy A14",
+  "phone_model": "Samsung Galaxy A14",
+  "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+  "body_dimensions_mm": {
+    "height": 166.37452112755483,
+    "width": 75.29353450739967,
+    "thickness": 8.9
+  },
+  "surfaces": {
+    "Screen": {
+      "width_mm": 68.79353450739967,
+      "height_mm": 152.87452112755483,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Back": {
+      "width_mm": 75.29353450739967,
+      "height_mm": 166.37452112755483,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Left": {
+      "width_mm": 8.9,
+      "height_mm": 166.37452112755483,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Right": {
+      "width_mm": 8.9,
+      "height_mm": 166.37452112755483,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Top": {
+      "width_mm": 75.29353450739967,
+      "height_mm": 8.9,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Bottom": {
+      "width_mm": 75.29353450739967,
+      "height_mm": 8.9,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json (estimated geometry from display size and battery capacity)",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    }
+  },
+  "nominal_areas_cm2": {
+    "Screen": 105.16778644490643,
+    "Back": 125.26925747669645,
+    "Frame": 43.0169139030219
+  },
+  "required_surfaces": [
+    "Screen",
+    "Back",
+    "Frame_Left",
+    "Frame_Right",
+    "Frame_Top",
+    "Frame_Bottom"
+  ],
+  "exact_part_areas_available": false,
+  "geometry_notes": [
+    "Screen rectangle excludes no rounded corners or cutouts.",
+    "Back rectangle excludes no camera cutouts or curvature.",
+    "Frame estimate is a rectangular-prism side area, not exact metal surface area.",
+    "Phone body dimensions are estimates because TechAPI did not provide height, width, and depth.",
+    "Screen dimensions use the assumed 20:9 aspect ratio and the listed display diagonal.",
+    "Chassis dimensions add 6.5 mm total side bezel and 13.5 mm total top/bottom bezel.",
+    "Thickness is a heuristic from battery capacity: below 4000 mAh = 7.8 mm; 4000–4500 mAh = 8.2 mm; 4501–4999 mAh is linearly interpolated; 5000 mAh or above = 8.9 mm."
+  ],
+  "api_provider": "TechAPI",
+  "data_attribution": "Data from TechAPI; body geometry estimated by the inspection app.",
+  "data_license": "CC-BY-SA 4.0; attribute “Data from TechAPI” and share alike.",
+  "source_urls": [
+    "https://www.kaggle.com/datasets/abdulmalik1518/mobiles-dataset-2025"
+  ],
+  "provider_raw": {
+    "id": 99395102892707,
+    "slug": "galaxy-a14",
+    "base_model_slug": "galaxy-a14",
+    "name": "Galaxy A14",
+    "brand": {
+      "id": 200230829453944,
+      "slug": "samsung",
+      "name": "Samsung",
+      "country": "KR",
+      "url": "/v1/brands/samsung"
+    },
+    "soc": {
+      "id": 110793861520510,
+      "slug": "exynos-850",
+      "name": "Exynos 850",
+      "manufacturer": {
+        "slug": "samsung",
+        "name": "Samsung",
+        "url": "/v1/brands/samsung"
+      },
+      "process_nm": 8.0,
+      "gpu_name": "Mali-G52 MP1",
+      "url": "/v1/socs/exynos-850"
+    },
+    "release_date": "2023-01-01",
+    "release_date_precision": null,
+    "msrp_usd": 249,
+    "model_numbers": [],
+    "codenames": [],
+    "ram_gb": 4,
+    "storage_options_gb": [
+      128,
+      256
+    ],
+    "variant": {},
+    "display": {
+      "size_inch": 6.6,
+      "resolution": null,
+      "refresh_hz": null,
+      "type": null
+    },
+    "cameras": [
+      {
+        "type": "main",
+        "mp": 50.0
+      },
+      {
+        "type": "selfie",
+        "mp": 13.0
+      }
+    ],
+    "battery_mah": 5000,
+    "charging_wired_w": null,
+    "charging_wireless_w": null,
+    "weight_g": 190.0,
+    "dimensions": {},
+    "ip_rating": null,
+    "os": "Android",
+    "os_version": null,
+    "connectivity": {
+      "wifi": null,
+      "bluetooth": null,
+      "nfc": null,
+      "usb": null
+    },
+    "image_url": null,
+    "images": [],
+    "image_license": null,
+    "image_attribution": null,
+    "model_3d": null,
+    "body": null,
+    "score": {
+      "algorithm_version": "2.0.0",
+      "overall": 23.2,
+      "performance": 11.3,
+      "camera": 18.1,
+      "battery": 47.5,
+      "display": null,
+      "value": 59.9,
+      "perf": {
+        "index": 11.3,
+        "percentile": 4.3,
+        "tier": "F",
+        "era": "2022-2023",
+        "source": "geekbench"
+      }
+    },
+    "verified": false,
+    "source_urls": [
+      "https://www.kaggle.com/datasets/abdulmalik1518/mobiles-dataset-2025"
+    ],
+    "created_at": "2026-06-18T07:46:36Z",
+    "updated_at": "2026-09-24T22:35:31Z"
+  },
+  "fetched_at": "2026-10-31T19:42:39.656186+00:00",
+  "body_dimensions_method": "estimated_from_display_size_and_battery_capacity",
+  "body_dimensions_assumptions": {
+    "display_diagonal_in": 6.6,
+    "screen_aspect_ratio_height_to_width": "20:9",
+    "side_bezels_total_mm": 6.5,
+    "top_and_bottom_bezels_total_mm": 13.5,
+    "battery_capacity_mah": 5000.0,
+    "estimated_thickness_mm": 8.9
+  },
+  "api_detail_url": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a14/index.json",
+  "techapi_slug": "galaxy-a14"
+}

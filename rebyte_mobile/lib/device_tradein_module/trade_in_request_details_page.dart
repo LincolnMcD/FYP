@@ -38,6 +38,8 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
   bool _isLoadingFresh = false;
   bool _isActionInProgress = false;
   Timer? _refreshTimer;
+  Map<String, dynamic>? _evaluation;
+  Map<String, dynamic>? _diagnostic;
 
   // Toast state
   String? _toastMessage;
@@ -90,12 +92,28 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     setState(() => _isLoadingFresh = true);
     final fresh = await TradeInService.getTradeInRequestDetails(reqId);
     if (fresh != null && mounted) {
-      setState(() {
-        _request.addAll(fresh);
-        _isLoadingFresh = false;
-      });
-    } else if (mounted) {
-      setState(() => _isLoadingFresh = false);
+      _request.addAll(fresh);
+    }
+
+    // Also fetch evaluation & device diagnostic for condition report
+    try {
+      final evalData = await TradeInService.getEvaluation(reqId);
+      final devId = _request['deviceID']?.toString() ??
+          (_request['device'] is Map ? _request['device']['deviceID']?.toString() : null) ??
+          '';
+      Map<String, dynamic>? diagData;
+      if (devId.isNotEmpty) {
+        diagData = await TradeInService.getDeviceDiagnostic(devId);
+      }
+      if (mounted) {
+        setState(() {
+          _evaluation = evalData;
+          _diagnostic = diagData;
+          _isLoadingFresh = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingFresh = false);
     }
   }
 
@@ -288,122 +306,1509 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     return {'processor': 'Octa-Core 3.2GHz', 'memory': '8GB RAM'};
   }
 
-  void _showConditionReportModal(BuildContext context, String brand, String model) {
+  void _showConditionReportModal(
+    BuildContext context, {
+    required String brand,
+    required String model,
+    required String storage,
+    required String colour,
+    String? imei,
+    required String estValue,
+    double? finalOffer,
+  }) {
+    final eval = _evaluation;
+    final diag = _diagnostic;
+
+    final String grade = (eval?['grade']?.toString().toUpperCase() ?? 'A').trim();
+    final String diagnosticId = (eval?['diagnosticID']?.toString() ?? '').trim();
+    final bool hasDiagnostic = diagnosticId.isNotEmpty &&
+        diagnosticId.toUpperCase() != 'NULL' &&
+        diag != null;
+
+    // Inspection grade condition title & color
+    String conditionLabel;
+    Color conditionColor;
+    Color conditionBg;
+    switch (grade) {
+      case 'A':
+        conditionLabel = 'EXCELLENT CONDITION';
+        conditionColor = const Color(0xFF16A34A);
+        conditionBg = const Color(0xFFDCFCE7);
+        break;
+      case 'B':
+        conditionLabel = 'GOOD CONDITION';
+        conditionColor = const Color(0xFF0284C7);
+        conditionBg = const Color(0xFFE0F2FE);
+        break;
+      case 'C':
+        conditionLabel = 'FAIR CONDITION';
+        conditionColor = const Color(0xFFD97706);
+        conditionBg = const Color(0xFFFEF3C7);
+        break;
+      default:
+        conditionLabel = 'GRADE $grade CONDITION';
+        conditionColor = const Color(0xFFDC2626);
+        conditionBg = const Color(0xFFFEE2E2);
+        break;
+    }
+
+    // Parts data for external condition summary
+    final Map<String, dynamic>? parts = eval?['parts'] is Map<String, dynamic>
+        ? eval!['parts'] as Map<String, dynamic>
+        : null;
+
+    double parsePartCoverage(dynamic part) {
+      if (part is Map) {
+        final cov = part['dmgCoverage'] ?? part['coverage'];
+        if (cov is num) return cov.toDouble();
+        if (cov != null) return double.tryParse(cov.toString()) ?? 0.0;
+      }
+      return 0.0;
+    }
+
+    final double screenCov = parsePartCoverage(parts?['screen'] ?? eval?['screen']);
+    final double backCov = parsePartCoverage(parts?['back'] ?? eval?['back']);
+    final double frameCov = parsePartCoverage(parts?['frame'] ?? eval?['frame']);
+
+    final double avgDmgPct = ((screenCov + backCov + frameCov) / 3.0) * 100.0;
+    final int cosmeticScore = (100 - avgDmgPct).clamp(0, 100).round();
+
+    // Inspection summary description
+    String summaryDescription =
+        'Device is fully functional and evaluated according to ReByte inspection standards. '
+        'Screen damage coverage is ${(screenCov * 100).toStringAsFixed(2)}%, '
+        'Back panel ${(backCov * 100).toStringAsFixed(2)}%, '
+        'and Frame ${(frameCov * 100).toStringAsFixed(2)}%.';
+
+    // Diagnostic component breakdown list
+    final List<Map<String, dynamic>> diagItems = [
+      {
+        'title': 'Display Panel',
+        'icon': Icons.smartphone_rounded,
+        'mark': diag?['displayMark'],
+      },
+      {
+        'title': 'Touchscreen',
+        'icon': Icons.touch_app_rounded,
+        'mark': diag?['touchScreenMark'],
+      },
+      {
+        'title': 'Camera System',
+        'icon': Icons.camera_alt_outlined,
+        'mark': diag?['cameraMark'],
+      },
+      {
+        'title': 'Connectivity',
+        'icon': Icons.wifi_rounded,
+        'mark': diag?['connectivityMark'],
+      },
+      {
+        'title': 'Audio & Microphone',
+        'icon': Icons.mic_none_rounded,
+        'mark': diag?['microphoneMark'],
+      },
+      {
+        'title': 'Sensors & GPS',
+        'icon': Icons.sensors_rounded,
+        'mark': diag?['sensorMark'],
+      },
+    ];
+
+    // Images for device thumbnail
+    final allImages = _getAllImages();
+    final String? thumbUrl = allImages.isNotEmpty ? allImages[0] : null;
+
+    // Price resolution: display the estimated range (or final offer if present)
+    final String formattedRange = _formatEstimatedValue(_request['estimatedValue']);
+    final String displayPrice = (finalOffer != null)
+        ? 'RM ${finalOffer.toStringAsFixed(2)}'
+        : formattedRange;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.90,
+        minChildSize: 0.50,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => SafeArea(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Stack(
               children: [
-                const Text(
-                  'Condition Report',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Excellent',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF16A34A),
+                Column(
+                  children: [
+                    // Pull Handle
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 12),
+
+                    // Scrollable Body
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                        children: [
+                          // Report Header
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'ReByte',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0C5AD2),
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Inspection Report',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      _formatDate(DateTime.now()),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0C5AD2),
+                                      ),
+                                    ),
+                                    const Text(
+                                      'CONFIDENTIAL',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.8,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                      const SizedBox(height: 14),
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      const SizedBox(height: 18),
+
+                      // SECTION 1: Device Information Box
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Device Information',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Device Image Thumbnail
+                                Container(
+                                  width: 85,
+                                  height: 85,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: thumbUrl != null
+                                      ? (thumbUrl.startsWith('http')
+                                          ? Image.network(
+                                              thumbUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(
+                                                Icons.smartphone_rounded,
+                                                size: 34,
+                                                color: Color(0xFF94A3B8),
+                                              ),
+                                            )
+                                          : Image.file(
+                                              File(thumbUrl),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(
+                                                Icons.smartphone_rounded,
+                                                size: 34,
+                                                color: Color(0xFF94A3B8),
+                                              ),
+                                            ))
+                                      : const Icon(
+                                          Icons.smartphone_rounded,
+                                          size: 34,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                ),
+                                const SizedBox(width: 14),
+
+                                // Specs 2x2 Grid
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildReportMetaField(
+                                              'MODEL',
+                                              formatDeviceTitle(brand, model),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: _buildReportMetaField('STORAGE', storage),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildReportMetaField('COLOR', colour),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: _buildReportMetaField(
+                                              'IMEI',
+                                              (imei != null && imei.isNotEmpty) ? imei : 'N/A',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // SECTION 2: Inspection Summary Card (Grading Only, no mark)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Circular Grade Badge (Shows Grade only)
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(color: const Color(0xFF0C5AD2), width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Grade $grade',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0C5AD2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+
+                            // Summary text
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Inspection Summary',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: conditionBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      conditionLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: conditionColor,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    summaryDescription,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF64748B),
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // SECTION 3: External Condition Summary
+                      Row(
+                        children: [
+                          const Text(
+                            'External Condition Summary',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Tap part for details',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildPartConditionCard(
+                              partKey: 'screen',
+                              title: 'Screen',
+                              coverage: screenCov,
+                              icon: Icons.smartphone_rounded,
+                              onTap: () => _showPartDefectsDialog(
+                                partKey: 'screen',
+                                partTitle: 'Screen',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildPartConditionCard(
+                              partKey: 'back',
+                              title: 'Back Panel',
+                              coverage: backCov,
+                              icon: Icons.flip_to_back_rounded,
+                              onTap: () => _showPartDefectsDialog(
+                                partKey: 'back',
+                                partTitle: 'Back Panel',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildPartConditionCard(
+                              partKey: 'frame',
+                              title: 'Frame',
+                              coverage: frameCov,
+                              icon: Icons.crop_portrait_rounded,
+                              onTap: () => _showPartDefectsDialog(
+                                partKey: 'frame',
+                                partTitle: 'Frame',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+
+                      // SECTION 4: Internal Condition Summary (Diagnostics)
+                      Row(
+                        children: [
+                          const Text(
+                            'Internal Condition Summary',
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const Spacer(),
+                          if (!hasDiagnostic)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'N/A',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      if (!hasDiagnostic)
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'No internal diagnostic test record associated with this evaluation (N/A).',
+                                  style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: diagItems.length,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 2.3,
+                          ),
+                          itemBuilder: (context, i) {
+                            final item = diagItems[i];
+                            final dynamic m = item['mark'];
+                            final int score = (m is num)
+                                ? m.toInt()
+                                : (m != null ? int.tryParse(m.toString()) ?? 100 : 100);
+                            final int scoreOutOf10 = (score / 10).round().clamp(1, 10);
+                            final bool isGood = score >= 80;
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: isGood ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      item['icon'] as IconData,
+                                      size: 15,
+                                      color: isGood ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          item['title'] as String,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        Text(
+                                          isGood ? 'Pass' : 'Degraded',
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            color: isGood ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isGood ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '$scoreOutOf10/10',
+                                      style: const TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 22),
+
+                      // SECTION 5: Estimated Value Banner
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF003893), Color(0xFF0C5AD2)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0C5AD2).withValues(alpha: 0.25),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Estimated Value',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Based on diagnostic & cosmetic assessment',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  displayPrice,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+
+                      // Close Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0C5AD2),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          child: const Text('Close Report', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              formatDeviceTitle(brand, model),
-              style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 18),
-            _buildConditionCheckRow('Screen & Display', 'No scratches, cracks, or dead pixels', true),
-            _buildConditionCheckRow('Body & Enclosure', 'Pristine exterior with minimal signs of wear', true),
-            _buildConditionCheckRow('Battery Health', '85% or higher maximum capacity', true),
-            _buildConditionCheckRow('Hardware & Sensors', 'All cameras, speakers, and FaceID/TouchID functional', true),
-            _buildConditionCheckRow('Lock & Activation', 'Device is unlocked, no carrier/iCloud locks', true),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0C5AD2),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+
+            // Top Right Close Cross Icon
+            Positioned(
+              top: 8,
+              right: 12,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => Navigator.pop(ctx),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 20,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
                 ),
-                child: const Text('Close Report', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
         ),
       ),
+    ),
+  ),
+);
+  }
+
+  Widget _buildReportMetaField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF94A3B8),
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildConditionCheckRow(String title, String desc, bool passed) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            passed ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: passed ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
-            size: 20,
+  Widget _buildPartConditionCard({
+    required String partKey,
+    required String title,
+    required double coverage,
+    required IconData icon,
+    VoidCallback? onTap,
+  }) {
+    final double dmgPct = (coverage * 100.0).clamp(0.0, 100.0);
+    final bool hasDmg = dmgPct > 0.05;
+    final Color col = hasDmg ? const Color(0xFFD97706) : const Color(0xFF16A34A);
+    final Color bg = hasDmg ? const Color(0xFFFFFBEB) : const Color(0xFFF0FDF4);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: col.withValues(alpha: 0.3)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
+          child: Column(
+            children: [
+              Icon(icon, size: 18, color: col),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${dmgPct.toStringAsFixed(2)}%',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: col,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    hasDmg ? 'Dmg Cov.' : 'Intact',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: col.withValues(alpha: 0.8),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 7,
+                    color: col.withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase().trim()) {
+      case 'critical':
+        return const Color(0xFFDC2626);
+      case 'major':
+        return const Color(0xFFEA580C);
+      case 'minor':
+        return const Color(0xFFD97706);
+      case 'low':
+        return const Color(0xFF0284C7);
+      case 'none':
+      default:
+        return const Color(0xFF10B981);
+    }
+  }
+
+  void _showSeverityRankingDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final rankings = [
+          {
+            'level': 'Critical',
+            'color': const Color(0xFFDC2626),
+            'bgColor': const Color(0xFFFEF2F2),
+            'icon': Icons.dangerous_rounded,
+            'desc': 'Deep cracks, extensive shattered areas, or damage that impairs device function or touch response.',
+          },
+          {
+            'level': 'Major',
+            'color': const Color(0xFFEA580C),
+            'bgColor': const Color(0xFFFFF7ED),
+            'icon': Icons.warning_rounded,
+            'desc': 'Noticeable cracks, deep scratches, or distinct discolouration patches clearly visible at arm’s length.',
+          },
+          {
+            'level': 'Minor',
+            'color': const Color(0xFFD97706),
+            'bgColor': const Color(0xFFFFFBEB),
+            'icon': Icons.error_outline_rounded,
+            'desc': 'Light surface scratches, hairline marks, or slight cosmetic wear that does not affect functionality.',
+          },
+          {
+            'level': 'Low',
+            'color': const Color(0xFF0284C7),
+            'bgColor': const Color(0xFFF0F9FF),
+            'icon': Icons.info_outline_rounded,
+            'desc': 'Micro-scratches or faint signs of handling visible only under direct angled light inspection.',
+          },
+          {
+            'level': 'None',
+            'color': const Color(0xFF10B981),
+            'bgColor': const Color(0xFFF0FDF4),
+            'icon': Icons.check_circle_outline_rounded,
+            'desc': 'Pristine surface with zero detected cosmetic blemishes or structural anomalies.',
+          },
+        ];
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 14, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.help_outline_rounded,
+                          color: Color(0xFF0C5AD2),
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Severity Ranking Guide',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            Text(
+                              'Defect severity classifications explained',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                // Ranking list
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: rankings.map((r) {
+                      final Color col = r['color'] as Color;
+                      final Color bg = r['bgColor'] as Color;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: col.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(r['icon'] as IconData, size: 20, color: col),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    r['level'] as String,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: col,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    r['desc'] as String,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xFF475569),
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+
+                // Close Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0C5AD2),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPartDefectsDialog({
+    required String partKey,
+    required String partTitle,
+  }) {
+    // Collect defect types for this specific part
+    final List<Map<String, dynamic>> defectConfig;
+    if (partKey == 'screen') {
+      defectConfig = [
+        {'key': 'screenCrack', 'title': 'Crack', 'icon': Icons.bolt_rounded},
+        {'key': 'screenDiscolouration', 'title': 'Discolouration', 'icon': Icons.palette_outlined},
+        {'key': 'screenScratch', 'title': 'Scratch', 'icon': Icons.show_chart_rounded},
+      ];
+    } else if (partKey == 'back') {
+      defectConfig = [
+        {'key': 'backCrack', 'title': 'Crack', 'icon': Icons.bolt_rounded},
+        {'key': 'backScratch', 'title': 'Scratch', 'icon': Icons.show_chart_rounded},
+      ];
+    } else {
+      // frame
+      defectConfig = [
+        {'key': 'frameScratch', 'title': 'Scratch', 'icon': Icons.show_chart_rounded},
+        {'key': 'frameDent', 'title': 'Dent', 'icon': Icons.radio_button_checked_rounded},
+      ];
+    }
+
+    // Extract real data for each defect type from classes or root
+    final eval = _evaluation;
+    final Map<String, dynamic>? classes = eval?['classes'] is Map<String, dynamic>
+        ? eval!['classes'] as Map<String, dynamic>
+        : null;
+
+    final List<Map<String, dynamic>> pages = defectConfig.map((cfg) {
+      final key = cfg['key'] as String;
+      final dynamic raw = classes?[key] ?? eval?[key];
+
+      int count = 0;
+      double? area;
+      double? coverage;
+      String severity = 'None';
+
+      if (raw is Map) {
+        if (raw['count'] is num) count = (raw['count'] as num).toInt();
+        if (raw['area'] is num) area = (raw['area'] as num).toDouble();
+        if (raw['coverage'] is num) coverage = (raw['coverage'] as num).toDouble();
+        if (raw['severity'] != null && raw['severity'].toString().isNotEmpty) {
+          severity = raw['severity'].toString();
+        }
+      }
+
+      final bool isCrack = (cfg['title'] == 'Crack') || key.toLowerCase().contains('crack');
+
+      return {
+        'title': '$partTitle ${cfg['title']}',
+        'defectType': cfg['title'] as String,
+        'icon': cfg['icon'] as IconData,
+        'isCrack': isCrack,
+        'count': count,
+        'area': area,
+        'coverage': coverage,
+        'severity': count > 0 ? severity : 'None',
+      };
+    }).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final PageController pageController = PageController();
+        int activePage = 0;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 520, maxWidth: 420),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Dialog Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 14, 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.analytics_outlined,
+                              color: Color(0xFF0C5AD2),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$partTitle Defect Breakdown',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Swipe left / right to view each defect',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                GestureDetector(
+                                  onTap: _showSeverityRankingDialog,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.help_outline_rounded, color: Color(0xFF0C5AD2), size: 13),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Severity Ranking',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0C5AD2),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 22),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                    // Page Indicator Dots
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(pages.length, (i) {
+                          final isCurrent = i == activePage;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            height: 6,
+                            width: isCurrent ? 22 : 6,
+                            decoration: BoxDecoration(
+                              color: isCurrent ? const Color(0xFF0C5AD2) : const Color(0xFFCBD5E1),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+
+                    // Swipeable PageView with defect details
+                    Flexible(
+                      child: SizedBox(
+                        height: 380,
+                        child: PageView.builder(
+                          controller: pageController,
+                          itemCount: pages.length,
+                          onPageChanged: (i) {
+                            setDialogState(() {
+                              activePage = i;
+                            });
+                          },
+                          itemBuilder: (context, idx) {
+                            final page = pages[idx];
+                            final int count = page['count'] as int;
+                            final double? area = page['area'] as double?;
+                            final double? coverage = page['coverage'] as double?;
+                            final String severity = page['severity'] as String;
+                            final bool hasDefect = count > 0;
+
+                            final Color statusColor = hasDefect
+                                ? _getSeverityColor(severity)
+                                : const Color(0xFF10B981);
+
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Defect Category Badge & Icon
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: (page['isCrack'] == true)
+                                          ? CustomPaint(
+                                              size: const Size(28, 28),
+                                              painter: _CrackPainter(color: statusColor),
+                                            )
+                                          : Icon(
+                                              page['icon'] as IconData,
+                                              size: 28,
+                                              color: statusColor,
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Defect Title
+                                  Text(
+                                    page['title'] as String,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      hasDefect ? '$count Detected' : 'No Defects Detected',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+
+                                  // 4 Detail Grid Blocks: Count, Area, Severity, Coverage
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDefectMetricCard(
+                                          label: 'Count',
+                                          value: '$count',
+                                          icon: Icons.tag_rounded,
+                                          valueColor: statusColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildDefectMetricCard(
+                                          label: 'Severity',
+                                          value: severity,
+                                          icon: Icons.shield_outlined,
+                                          valueColor: statusColor,
+                                          onHelpTap: _showSeverityRankingDialog,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDefectMetricCard(
+                                          label: 'Damage Area',
+                                          value: area != null ? '${area.toStringAsFixed(2)} cm²' : '0.00 cm²',
+                                          icon: Icons.aspect_ratio_rounded,
+                                          valueColor: const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildDefectMetricCard(
+                                          label: 'Coverage',
+                                          value: coverage != null
+                                              ? '${(coverage * 100).toStringAsFixed(2)}%'
+                                              : '0.00%',
+                                          icon: Icons.pie_chart_outline_rounded,
+                                          valueColor: const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Bottom helper status text
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          hasDefect ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded,
+                                          size: 16,
+                                          color: statusColor,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            hasDefect
+                                                ? 'Detected during AI surface assessment. Severity level evaluated as $severity.'
+                                                : 'Zero $partTitle ${page['defectType']} defects found during evaluation.',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF64748B),
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    // Swipe Navigation controls
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: const BoxDecoration(
+                        border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton.icon(
+                            onPressed: activePage > 0
+                                ? () {
+                                    pageController.previousPage(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
+                            icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                            label: const Text('Previous', style: TextStyle(fontSize: 12.5)),
+                          ),
+                          Text(
+                            '${activePage + 1} of ${pages.length}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: activePage < pages.length - 1
+                                ? () {
+                                    pageController.nextPage(
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
+                            icon: const Text('Next', style: TextStyle(fontSize: 12.5)),
+                            label: const Icon(Icons.chevron_right_rounded, size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDefectMetricCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color valueColor,
+    VoidCallback? onHelpTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: const Color(0xFF64748B)),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              if (onHelpTap != null)
+                GestureDetector(
+                  onTap: onHelpTap,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEFF6FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.help_outline_rounded,
+                      size: 13,
+                      color: Color(0xFF0C5AD2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w800,
+              color: valueColor,
             ),
           ),
         ],
@@ -705,6 +2110,26 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     final methodStr = _request['inspectionMethod']?.toString() ?? 'Mail-in Inspection';
     final estValue = _formatEstimatedValue(_request['estimatedValue']);
     final specs = _resolveSpecs(model);
+
+    // Compute declared condition based on evaluation grade or fallback
+    final evalGrade = _evaluation?['grade']?.toString().toUpperCase() ??
+        _request['evaluationGrade']?.toString().toUpperCase() ??
+        _request['grade']?.toString().toUpperCase() ??
+        '';
+    final String declaredCondText;
+    if (evalGrade == 'A') {
+      declaredCondText = 'Grade A (Excellent)';
+    } else if (evalGrade == 'B') {
+      declaredCondText = 'Grade B (Good)';
+    } else if (evalGrade == 'C') {
+      declaredCondText = 'Grade C (Fair)';
+    } else if (evalGrade == 'D') {
+      declaredCondText = 'Grade D (Poor)';
+    } else if (evalGrade.isNotEmpty) {
+      declaredCondText = 'Grade $evalGrade';
+    } else {
+      declaredCondText = (_request['declaredCondition'] ?? _request['condition'] ?? 'Excellent').toString();
+    }
 
     final String status = (_request['status'] ?? _request['requestStatus'] ?? 'Scheduled').toString();
     final bool isShipment = methodStr.toLowerCase().contains('mail');
@@ -1076,14 +2501,29 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
                       children: [
                         Expanded(child: _buildSpecItem('STORAGE', storage)),
                         const SizedBox(width: 12),
-                        Expanded(child: _buildSpecItem('DECLARED COND.', 'Excellent', isCondition: true)),
+                        Expanded(
+                          child: _buildSpecItem(
+                            'DECLARED COND.',
+                            declaredCondText,
+                            isCondition: true,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
                     // View Condition Report Link
                     InkWell(
-                      onTap: () => _showConditionReportModal(context, brand, model),
+                      onTap: () => _showConditionReportModal(
+                        context,
+                        brand: brand,
+                        model: model,
+                        storage: storage,
+                        colour: colour,
+                        imei: dev?['imeiNum']?.toString() ?? _request['imeiNum']?.toString(),
+                        estValue: estValue,
+                        finalOffer: resolvedFinalOffer,
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -2764,5 +4204,92 @@ bottomNavigationBar: const ReByteBottomNavBar(
     }
   }
 }
+
+class _CrackPainter extends CustomPainter {
+  final Color color;
+
+  const _CrackPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.miter
+      ..style = PaintingStyle.stroke;
+
+    final w = size.width;
+    final h = size.height;
+
+    // Main crack trunk - erratic zigzag line from top to bottom
+    final mainPath = Path();
+    mainPath.moveTo(w * 0.32, h * 0.08);
+    mainPath.lineTo(w * 0.44, h * 0.18);
+    mainPath.lineTo(w * 0.38, h * 0.28);
+    mainPath.lineTo(w * 0.50, h * 0.38);
+    mainPath.lineTo(w * 0.46, h * 0.48);
+    mainPath.lineTo(w * 0.38, h * 0.58);
+    mainPath.lineTo(w * 0.44, h * 0.68);
+    mainPath.lineTo(w * 0.40, h * 0.74);
+    mainPath.lineTo(w * 0.50, h * 0.82);
+    mainPath.lineTo(w * 0.64, h * 0.94);
+    canvas.drawPath(mainPath, paint);
+
+    // Left branch 1 (top left fissure)
+    final bLeft1 = Path();
+    bLeft1.moveTo(w * 0.38, h * 0.16);
+    bLeft1.lineTo(w * 0.32, h * 0.26);
+    bLeft1.lineTo(w * 0.18, h * 0.32);
+    canvas.drawPath(bLeft1, paint);
+
+    // Left branch 2 (mid left horizontal fork)
+    final bLeft2 = Path();
+    bLeft2.moveTo(w * 0.46, h * 0.48);
+    bLeft2.lineTo(w * 0.34, h * 0.46);
+    bLeft2.lineTo(w * 0.24, h * 0.40);
+    canvas.drawPath(bLeft2, paint);
+
+    // Left branch 3 (bottom left fork)
+    final bLeft3 = Path();
+    bLeft3.moveTo(w * 0.40, h * 0.74);
+    bLeft3.lineTo(w * 0.30, h * 0.78);
+    bLeft3.lineTo(w * 0.34, h * 0.88);
+    canvas.drawPath(bLeft3, paint);
+
+    // Right branch 1 (top right sharp shoot)
+    final bRight1 = Path();
+    bRight1.moveTo(w * 0.48, h * 0.28);
+    bRight1.lineTo(w * 0.64, h * 0.20);
+    canvas.drawPath(bRight1, paint);
+
+    // Right branch 2 (upper-mid right meandering crack)
+    final bRight2 = Path();
+    bRight2.moveTo(w * 0.42, h * 0.36);
+    bRight2.lineTo(w * 0.56, h * 0.32);
+    bRight2.lineTo(w * 0.74, h * 0.34);
+    bRight2.lineTo(w * 0.76, h * 0.44);
+    bRight2.lineTo(w * 0.66, h * 0.52);
+    bRight2.lineTo(w * 0.64, h * 0.60);
+    canvas.drawPath(bRight2, paint);
+
+    // Right branch 3 (bottom right fork)
+    final bRight3 = Path();
+    bRight3.moveTo(w * 0.64, h * 0.60);
+    bRight3.lineTo(w * 0.58, h * 0.68);
+    canvas.drawPath(bRight3, paint);
+
+    final bRight4 = Path();
+    bRight4.moveTo(w * 0.64, h * 0.60);
+    bRight4.lineTo(w * 0.70, h * 0.70);
+    canvas.drawPath(bRight4, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CrackPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 
 

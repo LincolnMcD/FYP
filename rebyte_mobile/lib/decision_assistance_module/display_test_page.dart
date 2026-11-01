@@ -10,6 +10,7 @@ class DisplayTestPage extends StatefulWidget {
   final String? name;
   final int touchScore;
   final bool isTouchSkipped;
+  final bool fromImproveAssessment;
 
   const DisplayTestPage({
     super.key,
@@ -20,6 +21,7 @@ class DisplayTestPage extends StatefulWidget {
     this.name,
     this.touchScore = 100,
     this.isTouchSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -283,6 +285,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
                               displayScore: displayScore,
                               isTouchSkipped: widget.isTouchSkipped,
                               isDisplaySkipped: isSkipped,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -409,6 +412,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
             displayScore: 0,
             isTouchSkipped: widget.isTouchSkipped,
             isDisplaySkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

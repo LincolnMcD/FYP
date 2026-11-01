@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../../device_tradein_module/models/device_model.dart';
 
 class DiagnosticReportPdfService {
+  static const MethodChannel _hardwareChannel = MethodChannel('com.tarumt.rebyte/hardware');
+
   static Future<Uint8List> generateReport({
     required DeviceModel? device,
     required int overallScore,
@@ -34,9 +37,10 @@ class DiagnosticReportPdfService {
     final String monthYear = DateFormat('MMMM yyyy').format(now).toUpperCase();
     final String fullDate = DateFormat('MMM d, yyyy').format(now);
 
-    final fontRegular = await PdfGoogleFonts.interRegular();
-    final fontBold = await PdfGoogleFonts.interBold();
-    final fontSemiBold = await PdfGoogleFonts.interSemiBold();
+    // Built-in standard PDF fonts: Instant zero-latency rendering, no network wait!
+    final fontRegular = pw.Font.helvetica();
+    final fontBold = pw.Font.helveticaBold();
+    final fontSemiBold = pw.Font.helveticaBold();
 
     // Map each of the 8 tested components separately
     final List<Map<String, dynamic>> components = [
@@ -457,24 +461,52 @@ class DiagnosticReportPdfService {
     final filename = 'ReByte_Inspection_Report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
 
     String? savedPath;
-    try {
-      // Attempt to save directly to Android public Download folder
-      final downloadDir = Directory('/storage/emulated/0/Download');
-      if (await downloadDir.exists()) {
-        final file = File('${downloadDir.path}/$filename');
-        await file.writeAsBytes(pdfBytes);
-        savedPath = file.path;
-      }
-    } catch (_) {
-      // Fallback if permission/path differs
+
+    // 1. First priority: Save directly into Android MediaStore Downloads with immediate system-wide indexing
+    if (Platform.isAndroid) {
+      try {
+        final result = await _hardwareChannel.invokeMethod<String>('savePdfToDownloads', {
+          'fileName': filename,
+          'bytes': pdfBytes,
+        });
+        if (result != null && result.isNotEmpty) {
+          savedPath = result;
+        }
+      } catch (_) {}
     }
 
-    // Also share / preview so the user has immediate access and can save to any app/folder
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: filename,
-    );
+    // 2. Secondary fallback: Write to standard public downloads directory and notify MediaScanner
+    if (savedPath == null) {
+      try {
+        final downloadDir = Directory('/storage/emulated/0/Download');
+        if (await downloadDir.exists()) {
+          final file = File('${downloadDir.path}/$filename');
+          await file.writeAsBytes(pdfBytes, flush: true);
+          savedPath = file.path;
 
-    return savedPath ?? 'Downloads / Storage';
+          // Notify Android MediaScanner so file is indexed and visible instantly in Files/Downloads
+          if (Platform.isAndroid) {
+            _hardwareChannel.invokeMethod('scanFile', {'filePath': file.path}).catchError((_) {});
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Third fallback: Application documents / external storage directory
+    if (savedPath == null) {
+      try {
+        final extDir = await getExternalStorageDirectory();
+        if (extDir != null) {
+          final file = File('${extDir.path}/$filename');
+          await file.writeAsBytes(pdfBytes, flush: true);
+          savedPath = file.path;
+          if (Platform.isAndroid) {
+            _hardwareChannel.invokeMethod('scanFile', {'filePath': file.path}).catchError((_) {});
+          }
+        }
+      } catch (_) {}
+    }
+
+    return savedPath ?? 'Downloads folder';
   }
 }

@@ -30,6 +30,30 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
     _currentTask = Map<String, dynamic>.from(widget.task);
   }
 
+  String _formatConditionWithGrade(dynamic condVal, [dynamic gradeVal]) {
+    final gradeStr = (gradeVal ?? '').toString().toUpperCase().trim();
+    if (gradeStr.isNotEmpty) {
+      if (gradeStr == 'A') return 'Grade A (Excellent)';
+      if (gradeStr == 'B') return 'Grade B (Good)';
+      if (gradeStr == 'C') return 'Grade C (Fair)';
+      if (gradeStr == 'D') return 'Grade D (Poor)';
+      return 'Grade $gradeStr';
+    }
+
+    final raw = (condVal ?? 'Good').toString().trim();
+    if (raw.toUpperCase() == 'A' || raw.toLowerCase() == 'grade a') return 'Grade A (Excellent)';
+    if (raw.toUpperCase() == 'B' || raw.toLowerCase() == 'grade b') return 'Grade B (Good)';
+    if (raw.toUpperCase() == 'C' || raw.toLowerCase() == 'grade c') return 'Grade C (Fair)';
+    if (raw.toUpperCase() == 'D' || raw.toLowerCase() == 'grade d') return 'Grade D (Poor)';
+
+    if (raw.toLowerCase() == 'excellent') return 'Grade A (Excellent)';
+    if (raw.toLowerCase() == 'good') return 'Grade B (Good)';
+    if (raw.toLowerCase() == 'fair') return 'Grade C (Fair)';
+    if (raw.toLowerCase() == 'poor') return 'Grade D (Poor)';
+
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     final task = _currentTask;
@@ -117,7 +141,10 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       if (storage.isNotEmpty && storage != 'N/A' && storage != 'Standard' && !modelName.toLowerCase().contains(storage.toLowerCase())) {
         modelName = '$modelName ($storage)';
       }
-      condition = first['condition']?.toString() ?? 'Good';
+      condition = _formatConditionWithGrade(
+        first['condition'] ?? task['reportedCondition'] ?? task['condition'],
+        first['grade'] ?? first['evaluationGrade'] ?? task['evaluationGrade'] ?? task['grade'],
+      );
       imageUrl = first['imageUrl']?.toString();
     }
     final taskType = (task['taskType']?.toString() ?? task['type']?.toString() ?? 'deliver').toLowerCase();
@@ -872,7 +899,10 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
       name = name.replaceAll(RegExp('\\s*\\(${RegExp.escape(storage)}\\)', caseSensitive: false), '').trim();
     }
     name = name.replaceAll(RegExp(r'\s*\(\d+\s*(?:GB|TB)\)', caseSensitive: false), '').trim();
-    final condition = item['condition']?.toString() ?? 'Good';
+    final condition = _formatConditionWithGrade(
+      item['condition'] ?? _currentTask['reportedCondition'] ?? _currentTask['condition'],
+      item['grade'] ?? item['evaluationGrade'] ?? _currentTask['evaluationGrade'] ?? _currentTask['grade'],
+    );
     final color = item['color']?.toString() ?? item['colour']?.toString() ?? '';
     final imageUrl = item['imageUrl']?.toString();
     final productId = item['productID']?.toString();

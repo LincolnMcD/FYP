@@ -1,0 +1,196 @@
+{
+  "brand": "Samsung",
+  "model": "Galaxy A15 5G",
+  "phone_model": "Samsung Galaxy A15 5G",
+  "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+  "body_dimensions_mm": {
+    "height": 160.1,
+    "width": 76.8,
+    "thickness": 8.4
+  },
+  "surfaces": {
+    "Screen": {
+      "width_mm": 69.18650509893442,
+      "height_mm": 149.90409438102455,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Back": {
+      "width_mm": 76.8,
+      "height_mm": 160.1,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Left": {
+      "width_mm": 8.4,
+      "height_mm": 160.1,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Right": {
+      "width_mm": 8.4,
+      "height_mm": 160.1,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Top": {
+      "width_mm": 76.8,
+      "height_mm": 8.4,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    },
+    "Frame_Bottom": {
+      "width_mm": 76.8,
+      "height_mm": 8.4,
+      "source": "https://gettechapi.github.io/TechAPI/v1/smartphones/galaxy-a15/index.json",
+      "dimension_status": "nominal_rectangle_estimate",
+      "exact_area": false
+    }
+  },
+  "nominal_areas_cm2": {
+    "Screen": 103.713403902439,
+    "Back": 122.95679999999999,
+    "Frame": 39.7992
+  },
+  "required_surfaces": [
+    "Screen",
+    "Back",
+    "Frame_Left",
+    "Frame_Right",
+    "Frame_Top",
+    "Frame_Bottom"
+  ],
+  "exact_part_areas_available": false,
+  "geometry_notes": [
+    "Screen rectangle excludes no rounded corners or cutouts.",
+    "Back rectangle excludes no camera cutouts or curvature.",
+    "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+  ],
+  "api_provider": "TechAPI",
+  "data_attribution": "Data from TechAPI",
+  "data_license": "CC-BY-SA 4.0",
+  "source_urls": [
+    "https://en.wikipedia.org/wiki/Samsung_Galaxy_A15",
+    "https://www.samsung.com/global/galaxy/galaxy-a15/specs/"
+  ],
+  "provider_raw": {
+    "id": 72614961262678,
+    "slug": "galaxy-a15",
+    "base_model_slug": "galaxy-a15",
+    "name": "Galaxy A15 5G",
+    "brand": {
+      "id": 200230829453944,
+      "slug": "samsung",
+      "name": "Samsung",
+      "country": "KR",
+      "url": "/v1/brands/samsung"
+    },
+    "soc": {
+      "id": 189070420159687,
+      "slug": "dimensity-6100-plus",
+      "name": "Dimensity 6100+",
+      "manufacturer": {
+        "slug": "mediatek",
+        "name": "MediaTek",
+        "url": "/v1/brands/mediatek"
+      },
+      "process_nm": 6.0,
+      "gpu_name": "Mali-G57 MC2",
+      "url": "/v1/socs/dimensity-6100-plus"
+    },
+    "release_date": "2023-12-19",
+    "msrp_usd": 199,
+    "ram_gb": 4,
+    "storage_options_gb": [
+      128,
+      256
+    ],
+    "variant": {},
+    "display": {
+      "size_inch": 6.5,
+      "resolution": "2340x1080",
+      "refresh_hz": 90,
+      "type": "Super AMOLED",
+      "brightness_nits": 800,
+      "ppi": 396
+    },
+    "cameras": [
+      {
+        "type": "main",
+        "mp": 50,
+        "aperture": 1.8,
+        "ois": false
+      },
+      {
+        "type": "ultrawide",
+        "mp": 5,
+        "aperture": 2.2,
+        "ois": false
+      },
+      {
+        "type": "macro",
+        "mp": 2,
+        "aperture": 2.4,
+        "ois": false
+      },
+      {
+        "type": "selfie",
+        "mp": 13,
+        "aperture": 2.0
+      }
+    ],
+    "battery_mah": 5000,
+    "charging_wired_w": 25.0,
+    "charging_wireless_w": 0.0,
+    "weight_g": 200.0,
+    "dimensions": {
+      "height_mm": 160.1,
+      "width_mm": 76.8,
+      "depth_mm": 8.4
+    },
+    "ip_rating": null,
+    "os": "Android",
+    "os_version": "14",
+    "connectivity": {
+      "wifi": "Wi-Fi 5",
+      "bluetooth": "5.3",
+      "nfc": true,
+      "usb": "USB-C 2.0"
+    },
+    "image_url": null,
+    "images": [],
+    "image_license": null,
+    "image_attribution": null,
+    "model_3d": null,
+    "body": null,
+    "score": {
+      "algorithm_version": "2.0.0",
+      "overall": 37.3,
+      "performance": 40.8,
+      "camera": 28.1,
+      "battery": 55.2,
+      "display": 27.9,
+      "value": 68.7,
+      "perf": {
+        "index": 40.8,
+        "percentile": 34.3,
+        "tier": "D",
+        "era": "2022-2023",
+        "source": "geekbench"
+      }
+    },
+    "verified": true,
+    "source_urls": [
+      "https://en.wikipedia.org/wiki/Samsung_Galaxy_A15",
+      "https://www.samsung.com/global/galaxy/galaxy-a15/specs/"
+    ],
+    "created_at": "2026-05-28T23:32:18",
+    "updated_at": "2026-09-25T07:35:31"
+  },
+  "fetched_at": "2026-10-31T10:45:44.496412+00:00"
+}

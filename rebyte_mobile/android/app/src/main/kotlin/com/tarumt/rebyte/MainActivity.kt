@@ -20,6 +20,10 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.telephony.TelephonyManager
+import android.media.MediaScannerConnection
+import android.content.ContentValues
+import android.provider.MediaStore
+import android.os.Environment
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -267,6 +271,79 @@ class MainActivity : FlutterActivity(), SensorEventListener, LocationListener {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("STOP_LOCK_TASK_ERROR", e.message, null)
+                    }
+                }
+
+                // Instantly scan and index downloaded file into Android Downloads / Documents provider
+                "scanFile" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath != null) {
+                        try {
+                            MediaScannerConnection.scanFile(
+                                applicationContext,
+                                arrayOf(filePath),
+                                arrayOf("application/pdf")
+                            ) { path, uri ->
+                                mainHandler.post {
+                                    result.success(true)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    } else {
+                        result.success(false)
+                    }
+                }
+
+                // Save PDF directly to Android MediaStore Downloads
+                "savePdfToDownloads" -> {
+                    val fileName = call.argument<String>("fileName") ?: "report.pdf"
+                    val bytes = call.argument<ByteArray>("bytes")
+                    if (bytes != null) {
+                        executor.execute {
+                            try {
+                                var savedUriPath = ""
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val contentValues = ContentValues().apply {
+                                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                                        put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                                    }
+                                    val resolver = applicationContext.contentResolver
+                                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                                    if (uri != null) {
+                                        resolver.openOutputStream(uri)?.use { outputStream ->
+                                            outputStream.write(bytes)
+                                            outputStream.flush()
+                                        }
+                                        savedUriPath = uri.toString()
+                                    }
+                                } else {
+                                    val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                    if (!downloadDir.exists()) downloadDir.mkdirs()
+                                    val targetFile = java.io.File(downloadDir, fileName)
+                                    targetFile.writeBytes(bytes)
+                                    MediaScannerConnection.scanFile(
+                                        applicationContext,
+                                        arrayOf(targetFile.absolutePath),
+                                        arrayOf("application/pdf"),
+                                        null
+                                    )
+                                    savedUriPath = targetFile.absolutePath
+                                }
+
+                                mainHandler.post {
+                                    result.success(savedUriPath)
+                                }
+                            } catch (e: Exception) {
+                                mainHandler.post {
+                                    result.error("SAVE_FAILED", e.message, null)
+                                }
+                            }
+                        }
+                    } else {
+                        result.error("NO_BYTES", "Byte array is null", null)
                     }
                 }
 

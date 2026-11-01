@@ -1,0 +1,8 @@
+cd "C:\Users\User\Desktop\ML Pricing"
+python -m pip install -r .\ml_pricing\requirements.txt
+python -m ml_pricing.src.train --strategy group --configuration with_model
+
+
+
+
+python -m ml_pricing.src.train --iterations 20

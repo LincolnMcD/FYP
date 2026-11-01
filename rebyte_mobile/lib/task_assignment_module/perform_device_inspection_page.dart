@@ -58,6 +58,30 @@ class _PerformDeviceInspectionPageState
     }
   }
 
+  String _formatConditionWithGrade(dynamic condVal, [dynamic gradeVal]) {
+    final gradeStr = (gradeVal ?? '').toString().toUpperCase().trim();
+    if (gradeStr.isNotEmpty) {
+      if (gradeStr == 'A') return 'Grade A (Excellent)';
+      if (gradeStr == 'B') return 'Grade B (Good)';
+      if (gradeStr == 'C') return 'Grade C (Fair)';
+      if (gradeStr == 'D') return 'Grade D (Poor)';
+      return 'Grade $gradeStr';
+    }
+
+    final raw = (condVal ?? 'Good').toString().trim();
+    if (raw.toUpperCase() == 'A' || raw.toLowerCase() == 'grade a') return 'Grade A (Excellent)';
+    if (raw.toUpperCase() == 'B' || raw.toLowerCase() == 'grade b') return 'Grade B (Good)';
+    if (raw.toUpperCase() == 'C' || raw.toLowerCase() == 'grade c') return 'Grade C (Fair)';
+    if (raw.toUpperCase() == 'D' || raw.toLowerCase() == 'grade d') return 'Grade D (Poor)';
+
+    if (raw.toLowerCase() == 'excellent') return 'Grade A (Excellent)';
+    if (raw.toLowerCase() == 'good') return 'Grade B (Good)';
+    if (raw.toLowerCase() == 'fair') return 'Grade C (Fair)';
+    if (raw.toLowerCase() == 'poor') return 'Grade D (Poor)';
+
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
@@ -67,7 +91,14 @@ class _PerformDeviceInspectionPageState
         'iPhone 13 Pro';
     final storage = task['storage']?.toString() ?? '256GB';
     final color = task['color']?.toString() ?? task['colour']?.toString() ?? 'Graphite';
-    final reportedCondition = task['reportedCondition']?.toString() ?? 'Good (Minor Scratches)';
+
+    final items = task['items'] as List? ?? [];
+    final firstItem = (items.isNotEmpty && items[0] is Map) ? items[0] as Map : null;
+
+    final reportedCondition = _formatConditionWithGrade(
+      task['reportedCondition'] ?? task['condition'] ?? firstItem?['condition'],
+      task['grade'] ?? task['evaluationGrade'] ?? firstItem?['grade'] ?? firstItem?['evaluationGrade'],
+    );
 
     // Strip storage capacity from model name if already present (e.g. "(128GB)" or "(256GB)")
     // because specsLabel already renders a dedicated small label for storage & color.

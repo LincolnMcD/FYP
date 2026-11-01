@@ -307,16 +307,39 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
               ),
               const SizedBox(height: 16),
 
-              // Card 3: Payment Breakdown (only base amount and total)
+              // Card 3: Payment Breakdown
               _buildSectionCard(
                 icon: Icons.receipt_long_outlined,
                 title: 'Payment Breakdown',
                 child: Column(
                   children: [
-                    _buildInfoRow(
-                      'Base Amount',
-                      'RM${_formatCurrency(tx.breakdown.baseAmount > 0 ? tx.breakdown.baseAmount : tx.amount)}',
-                    ),
+                    if (tx.breakdown.isBuyout) ...[
+                      _buildInfoRow(
+                        'Current Value',
+                        'RM${_formatCurrency(tx.breakdown.currentValue ?? tx.breakdown.baseAmount)}',
+                      ),
+                      if ((tx.breakdown.rentalDiscount ?? 0) > 0) ...[
+                        const SizedBox(height: 10),
+                        _buildInfoRow(
+                          'Rental Discount',
+                          '-RM${_formatCurrency(tx.breakdown.rentalDiscount!)}',
+                          valueColor: const Color(0xFF16A34A),
+                        ),
+                      ],
+                      if ((tx.breakdown.depositDeduction ?? 0) > 0) ...[
+                        const SizedBox(height: 10),
+                        _buildInfoRow(
+                          'Deposit Deduction',
+                          '-RM${_formatCurrency(tx.breakdown.depositDeduction!)}',
+                          valueColor: const Color(0xFF16A34A),
+                        ),
+                      ],
+                    ] else ...[
+                      _buildInfoRow(
+                        'Base Amount',
+                        'RM${_formatCurrency(tx.breakdown.baseAmount > 0 ? tx.breakdown.baseAmount : tx.amount)}',
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     // Dashed divider line
                     LayoutBuilder(
@@ -416,7 +439,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -430,10 +453,10 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
+            color: valueColor ?? const Color(0xFF0F172A),
           ),
         ),
       ],

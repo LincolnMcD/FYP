@@ -1,0 +1,28 @@
+<!doctype html><html><meta charset="utf-8">
+<title>From-scratch training report</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f6f8fb;color:#182238}table{border-collapse:collapse;background:white}td,th{padding:12px;border:1px solid #ddd}img{width:100%}</style>
+<h1>From-scratch CatBoost-style regression</h1>
+<p>Independent NumPy/Pandas implementation. Ordered-prefix mode uses dyadic supporting models and shared tree structures; it is an approximation, not full CatBoost parity. Training curves are resubstitution metrics using inference encodings, not unbiased generalization estimates. Leaf fitting uses ordered encodings. Validation/test use training-only category maps.</p>
+<h2>Held-out test results</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mae</th>
+      <th>rmse</th>
+      <th>r2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>retention_ratio</th>
+      <td>0.0801</td>
+      <td>0.1005</td>
+      <td>0.8332</td>
+    </tr>
+    <tr>
+      <th>price_myr</th>
+      <td>300.6173</td>
+      <td>377.5848</td>
+      <td>0.7976</td>
+    </tr>
+  </tbody>
+</table><p>Boosting: plain; permutations: 3; best iteration: 100</p><h2>Training and validation progress</h2><img src="learning_curves.png" alt="Learning curves"><p>Lower MAE/RMSE is better; higher R² is better. Ratio metrics and MYR price metrics use different units. Synthetic results do not establish real-market accuracy.</p><p><a href="learning_history.csv">Every-iteration CSV</a> · <a href="metrics.json">Full metrics</a></p></html>

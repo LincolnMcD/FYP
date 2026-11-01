@@ -4,15 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../../account_management_module/models/address_model.dart';
 import '../../account_management_module/models/payment_account_model.dart';
-import '../../account_management_module/services/address_service.dart';
 import '../../account_management_module/services/auth_service.dart';
 import '../../account_management_module/services/xendit_service.dart';
 import '../../product_purchase_module/models/cart_item_model.dart';
 import '../../product_purchase_module/models/selected_payment_method.dart';
 import '../../product_purchase_module/payment_success_page.dart';
-import '../../product_purchase_module/select_address_page.dart';
 import '../../product_purchase_module/select_payment_method_page.dart';
 import '../../widgets/rebyte_app_bar.dart';
 import '../../widgets/rebyte_bottom_nav_bar.dart';
@@ -47,11 +44,12 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
   String _color = '';
   String _rentalID = '';
   String? _error;
-  AddressModel? _address;
   SelectedPaymentMethod? _selectedPayment;
   bool _loading = true;
   bool _loadingPayment = true;
   bool _processing = false;
+  String? _toastMessage;
+  bool _isToastError = false;
 
   double _number(dynamic value) => value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? 0;
 
@@ -63,7 +61,7 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
   }
 
   Future<void> _load() async {
-    await Future.wait([_loadQuote(), _loadPaymentMethod(), _loadAddress()]);
+    await Future.wait([_loadQuote(), _loadPaymentMethod()]);
   }
 
   Future<void> _loadQuote() async {
@@ -109,23 +107,6 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
       }
     } catch (_) {}
     if (mounted) setState(() => _loadingPayment = false);
-  }
-
-  Future<void> _loadAddress() async {
-    final addresses = await AddressService.getAddresses(widget.email);
-    if (!mounted || addresses.isEmpty) return;
-    final rentalAddressID = widget.rental['addressID']?.toString();
-    setState(() => _address = addresses.firstWhere(
-      (address) => address.addressID == rentalAddressID,
-      orElse: () => addresses.firstWhere((address) => address.isDefault, orElse: () => addresses.first),
-    ));
-  }
-
-  Future<void> _changeAddress() async {
-    final selected = await Navigator.push<AddressModel>(context, MaterialPageRoute(
-      builder: (_) => SelectAddressPage(email: widget.email, currentlySelected: _address),
-    ));
-    if (selected != null && mounted) setState(() => _address = selected);
   }
 
   Future<void> _changePaymentMethod() async {
@@ -182,7 +163,7 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
           'invoiceID': invoiceID,
           'email': widget.email,
           'paymentAccountID': _selectedPayment!.id,
-          'addressID': _address?.addressID ?? '',
+          'addressID': widget.rental['addressID']?.toString() ?? '',
         }),
       ).timeout(const Duration(seconds: 30));
       final data = jsonDecode(response.body);
@@ -199,7 +180,7 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
         paymentTitle: _selectedPayment!.title,
         paidAt: DateTime.now(),
         isRental: true,
-        deliveryAddress: _address,
+        deliveryAddress: null,
         items: [CartItemModel(
           productID: _productID.isNotEmpty ? _productID : _rentalID,
           listingTitle: _title,
@@ -218,9 +199,17 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
 
   String _rm(dynamic value) => 'RM ${_money.format(_number(value))}';
 
-  void _showToast(String message) {
+  void _showToast(String message, {bool isError = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+    setState(() {
+      _toastMessage = message;
+      _isToastError = isError;
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _toastMessage == message) {
+        setState(() => _toastMessage = null);
+      }
+    });
   }
 
   Widget _card({required String title, required IconData icon, required Widget child}) => Container(
@@ -274,82 +263,188 @@ class _RentalBuyoutConfirmationPageState extends State<RentalBuyoutConfirmationP
               const Icon(Icons.error_outline, color: Colors.red, size: 38), const SizedBox(height: 12), Text(_error!, textAlign: TextAlign.center),
               TextButton(onPressed: () { setState(() { _loading = true; _error = null; }); _loadQuote(); }, child: const Text('Try again')),
             ])))
-          : Column(children: [
-              Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 4), child: Row(children: [
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back, color: _ink)),
-                const Expanded(child: Text('Buyout Confirmation', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: _ink))),
-              ])),
-              Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(18, 2, 18, 20), children: [
-                const Text('Review your final buyout price to own this device.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF596273), fontSize: 14)),
-                const SizedBox(height: 16),
-                _deviceCard(),
-                const SizedBox(height: 14),
-                _card(title: 'Delivery Address', icon: Icons.local_shipping_outlined, child: InkWell(onTap: _processing ? null : _changeAddress, child: Row(children: [
-                  Expanded(child: _address == null
-                    ? const Text('Select a delivery address', style: TextStyle(color: Color(0xFF64748B)))
-                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(_address!.recipientName, style: const TextStyle(fontWeight: FontWeight.bold, color: _ink)),
-                        Text('${_address!.addressLine}, ${_address!.postcode} ${_address!.city}, ${_address!.state}', style: const TextStyle(color: Color(0xFF596273))),
-                      ])),
-                  Text(_address == null ? 'Select' : 'Change', style: const TextStyle(color: _blue, fontWeight: FontWeight.bold)),
-                ]))),
-                const SizedBox(height: 14),
-                _card(title: 'Payment Method', icon: Icons.credit_card_outlined, child: InkWell(onTap: _loadingPayment || _processing ? null : _changePaymentMethod, child: Row(children: [
-                  const Icon(Icons.payment, color: _blue), const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_loadingPayment
-                        ? 'Loading payment methods…'
-                        : (_selectedPayment?.title ?? 'Select a payment method'),
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: _ink)),
-                    if (_selectedPayment != null) Text(_selectedPayment!.subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                  ])),
-                  Text(_selectedPayment == null ? 'Select' : 'Change', style: const TextStyle(color: _blue, fontWeight: FontWeight.bold)),
-                ]))),
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAF8F0),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFB9E6CC)),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF167A45).withValues(alpha: 0.10), blurRadius: 12, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: const BoxDecoration(color: Color(0xFFD3F1DF), shape: BoxShape.circle),
-                      child: const Icon(Icons.payments_outlined, color: Color(0xFF16834A), size: 21),
+          : Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top Navigation Row
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B), size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    const Expanded(child: Text('Total rental spend', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF276345)))),
-                    Text(_rm(_quote['rentalFeePaid']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF16834A))),
-                  ]),
+
+                    // Main Title (Left aligned under back button)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                      child: Text(
+                        'Buyout Confirmation',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 2, 20, 20),
+                        children: [
+                          const Text(
+                            'Review your final buyout price to own this device.',
+                            style: TextStyle(color: Color(0xFF596273), fontSize: 14),
+                          ),
+                          const SizedBox(height: 16),
+                          _deviceCard(),
+                          const SizedBox(height: 14),
+                          _card(
+                            title: 'Payment Method',
+                            icon: Icons.credit_card_outlined,
+                            child: InkWell(
+                              onTap: _loadingPayment || _processing ? null : _changePaymentMethod,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.payment, color: _blue),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _loadingPayment
+                                              ? 'Loading payment methods…'
+                                              : (_selectedPayment?.title ?? 'Select a payment method'),
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: _ink),
+                                        ),
+                                        if (_selectedPayment != null)
+                                          Text(
+                                            _selectedPayment!.subtitle,
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    _selectedPayment == null ? 'Select' : 'Change',
+                                    style: const TextStyle(color: _blue, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF8F0),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFB9E6CC)),
+                              boxShadow: [
+                                BoxShadow(color: const Color(0xFF167A45).withValues(alpha: 0.10), blurRadius: 12, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: const BoxDecoration(color: Color(0xFFD3F1DF), shape: BoxShape.circle),
+                                child: const Icon(Icons.payments_outlined, color: Color(0xFF16834A), size: 21),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(child: Text('Total rental spend', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF276345)))),
+                              Text(_rm(_quote['rentalFeePaid']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF16834A))),
+                            ]),
+                          ),
+                          const SizedBox(height: 14),
+                          _card(title: 'Payment Summary', icon: Icons.receipt_long_outlined, child: Column(children: [
+                            _summaryRow('Current value', _rm(_quote['currentValue'])),
+                            _summaryRow('Rental payment discount ($discountPercent%)', '-${_rm(_quote['rentalDiscount'])}', valueColor: const Color(0xFF16A765)),
+                            _summaryRow('Deposit deduction', '-${_rm(_quote['depositDeduction'])}', valueColor: const Color(0xFF16A765)),
+                            const Divider(height: 22),
+                            _summaryRow('Total', _rm(total), valueColor: _blue, bold: true),
+                          ])),
+                          const SizedBox(height: 16),
+                          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(14)), child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Icon(Icons.info_outline, color: _blue), SizedBox(width: 10), Expanded(child: Text('After successful payment, recurring rental billing will stop and ownership of this device will transfer to you.', style: TextStyle(color: Color(0xFF475569), height: 1.35))),
+                          ])),
+                          const SizedBox(height: 16),
+                          SizedBox(height: 52, child: ElevatedButton.icon(
+                            onPressed: _processing || _loadingPayment || _selectedPayment == null ? null : _confirmBuyout,
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0645A0), disabledBackgroundColor: const Color(0xFFCBD5E1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+                            icon: _processing ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.lock_outline, color: Colors.white),
+                            label: Text(_processing ? 'Processing…' : total <= 0 ? 'Confirm Buyout' : 'Confirm & Pay ${_rm(total)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                _card(title: 'Payment Summary', icon: Icons.receipt_long_outlined, child: Column(children: [
-                  _summaryRow('Current value', _rm(_quote['currentValue'])),
-                  _summaryRow('Rental payment discount ($discountPercent%)', '-${_rm(_quote['rentalDiscount'])}', valueColor: const Color(0xFF16A765)),
-                  _summaryRow('Deposit deduction', '-${_rm(_quote['depositDeduction'])}', valueColor: const Color(0xFF16A765)),
-                  const Divider(height: 22),
-                  _summaryRow('Total', _rm(total), valueColor: _blue, bold: true),
-                ])),
-                const SizedBox(height: 16),
-                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(14)), child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Icon(Icons.info_outline, color: _blue), SizedBox(width: 10), Expanded(child: Text('After successful payment, recurring rental billing will stop and ownership of this device will transfer to you.', style: TextStyle(color: Color(0xFF475569), height: 1.35))),
-                ])),
-                const SizedBox(height: 16),
-                SizedBox(height: 52, child: ElevatedButton.icon(
-                  onPressed: _processing || _loadingPayment || _selectedPayment == null ? null : _confirmBuyout,
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0645A0), disabledBackgroundColor: const Color(0xFFCBD5E1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
-                  icon: _processing ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.lock_outline, color: Colors.white),
-                  label: Text(_processing ? 'Processing…' : total <= 0 ? 'Confirm Buyout' : 'Confirm & Pay ${_rm(total)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                )),
-              ])),
-            ])),
+
+                // Top Floating Toast Banner (Dismissible like renew rental page)
+                if (_toastMessage != null)
+                  Positioned(
+                    top: 12,
+                    left: 16,
+                    right: 16,
+                    child: Dismissible(
+                      key: ValueKey(_toastMessage),
+                      direction: DismissDirection.horizontal,
+                      onDismissed: (_) {
+                        setState(() => _toastMessage = null);
+                      },
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _isToastError ? const Color(0xFFE11D48) : Colors.green.shade600,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isToastError ? Icons.error_outline : Icons.check_circle_outline,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _toastMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => setState(() => _toastMessage = null),
+                                child: const Icon(
+                                  Icons.close,
+                                  color: Colors.white70,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            )),
     );
   }
 }

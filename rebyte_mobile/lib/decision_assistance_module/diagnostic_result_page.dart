@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../device_tradein_module/models/device_model.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
+import '../device_tradein_module/improve_assessment_page.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import 'services/diagnostic_report_pdf_service.dart';
@@ -11,6 +13,7 @@ class DiagnosticResultPage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromImproveAssessment;
 
   // 8 Tests scores (0 - 100)
   final int touchScore;
@@ -39,6 +42,7 @@ class DiagnosticResultPage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromImproveAssessment = false,
     required this.touchScore,
     required this.displayScore,
     this.cameraScore = 100,
@@ -65,6 +69,40 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
   String? _toastMessage;
   bool _isToastError = false;
   bool _isDownloading = false;
+  bool _hasSavedDiagnostic = false;
+  bool _isDownloaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndSaveDiagnostic();
+  }
+
+  Future<void> _checkAndSaveDiagnostic() async {
+    if (widget.fromImproveAssessment && widget.device != null && !_hasSavedDiagnostic) {
+      _hasSavedDiagnostic = true;
+      final devId = widget.device!.deviceID;
+      if (devId.isNotEmpty) {
+        try {
+          await TradeInService.saveDeviceDiagnostic(
+            deviceID: devId,
+            diagnosticID: 'INT-$devId',
+            touchScreenMark: widget.touchScore,
+            displayMark: widget.displayScore,
+            cameraMark: widget.cameraScore,
+            microphoneMark: widget.micScore,
+            speakerMark: widget.speakerScore,
+            sensorMark: widget.sensorScore,
+            connectivityMark: widget.networkScore,
+            gpsMark: widget.gpsScore,
+            diagnosticScore: overallScore,
+          );
+        } catch (e) {
+          debugPrint('Error auto-saving diagnostic result: $e');
+        }
+      }
+    }
+  }
 
   void _showTopToast(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -137,6 +175,9 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
       );
 
       if (mounted) {
+        setState(() {
+          _isDownloaded = true;
+        });
         _showTopToast(
           savedPath != null && savedPath.contains('Download')
               ? 'PDF report downloaded successfully to Downloads folder!'
@@ -212,29 +253,107 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                         // Download Action Button (Single button)
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _isDownloading ? null : _handleDownloadPdf,
-                            icon: _isDownloading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.download_rounded, size: 18, color: Colors.white),
-                            label: Text(
-                              _isDownloading ? 'Downloading PDF Report...' : 'Download Inspection Report (PDF)',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 13),
-                              backgroundColor: const Color(0xFF0848AA),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: const Color(0xFF0848AA).withValues(alpha: 0.6),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
+                          child: Stack(
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: (_isDownloading || _isDownloaded) ? null : _handleDownloadPdf,
+                                  icon: _isDownloading
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : Icon(
+                                          _isDownloaded
+                                              ? Icons.check_circle_outline_rounded
+                                              : Icons.download_rounded,
+                                          size: 18,
+                                          color: _isDownloaded ? const Color(0xFF94A3B8) : Colors.white,
+                                        ),
+                                  label: Text(
+                                    _isDownloading
+                                        ? 'Downloading PDF Report...'
+                                        : (_isDownloaded
+                                            ? 'PDF Report Downloaded'
+                                            : 'Download Inspection Report (PDF)'),
+                                    style: TextStyle(
+                                      color: _isDownloaded ? const Color(0xFF94A3B8) : Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 13),
+                                    backgroundColor: _isDownloaded
+                                        ? const Color(0xFFF1F5F9)
+                                        : const Color(0xFF0848AA),
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: _isDownloaded
+                                        ? const Color(0xFFF1F5F9)
+                                        : const Color(0xFF0848AA).withValues(alpha: 0.6),
+                                    disabledForegroundColor: const Color(0xFF94A3B8),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(
+                                        color: _isDownloaded ? const Color(0xFFE2E8F0) : Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Gray overlay when already downloaded
+                              if (_isDownloaded)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF64748B).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
+
+                        // Blue caution label at the top of Overall Health block (when NOT accessed from Improve Assessment)
+                        if (!widget.fromImproveAssessment) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF), // soft blue background
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFBFDBFE)), // blue border
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  color: Color(0xFF1D4ED8),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text(
+                                    'the internal test result will no be record.Please export the result if you need.',
+                                    textAlign: TextAlign.justify,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF1E40AF),
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
 
                     // Overall Health Big Card
@@ -450,7 +569,7 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
               ),
             ),
 
-            // Bottom CTA: Use Result in Trade-In
+            // Bottom CTA: Use Result in Trade-In (if from improve assessment) or Complete (if from home/sidebar)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: const BoxDecoration(
@@ -462,8 +581,25 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                 height: 48,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Return or navigate to Trade-In
-                    Navigator.popUntil(context, (route) => route.isFirst);
+                    if (widget.fromImproveAssessment && widget.device != null && widget.tradeInRequestID != null) {
+                      // Navigate back to ImproveAssessmentPage (not evaluating yet)
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ImproveAssessmentPage(
+                            device: widget.device!,
+                            tradeInRequestID: widget.tradeInRequestID!,
+                            isLoggedIn: widget.isLoggedIn,
+                            email: widget.email,
+                            name: widget.name,
+                          ),
+                        ),
+                        (route) => route.isFirst,
+                      );
+                    } else {
+                      // Home / sidebar test finished -> Return to main screen
+                      Navigator.popUntil(context, (route) => route.isFirst);
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0848AA),
@@ -471,15 +607,20 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Use Result in Trade-In',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        widget.fromImproveAssessment ? 'Use Result in Trade-In' : 'Complete',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                       ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Icon(
+                        widget.fromImproveAssessment
+                            ? Icons.arrow_forward_rounded
+                            : Icons.check_circle_outline_rounded,
+                        size: 18,
+                      ),
                     ],
                   ),
                 ),

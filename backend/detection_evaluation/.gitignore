@@ -1,0 +1,8 @@
+.venv/
+.tmp/
+weights/
+runs/
+__pycache__/
+**/__pycache__/
+inspection.json
+inspection.phone_profile.json

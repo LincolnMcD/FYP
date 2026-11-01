@@ -1,0 +1,507 @@
+{
+  "retention_mae": 0.06445556657870319,
+  "retention_rmse": 0.08388632286879967,
+  "retention_r2": 0.8330183009779866,
+  "price_mae_myr": 205.62949370387742,
+  "price_rmse_myr": 275.0174041158361,
+  "price_r2": 0.8425178925189012,
+  "price_median_absolute_error_myr": 159.94506474993017,
+  "error_breakdowns": {
+    "by_device_age": [
+      {
+        "deviceAge": 0,
+        "mae_myr": 448.1672314989868,
+        "count": 6771
+      },
+      {
+        "deviceAge": 1,
+        "mae_myr": 378.7036721666092,
+        "count": 6876
+      },
+      {
+        "deviceAge": 2,
+        "mae_myr": 158.86858795937462,
+        "count": 6761
+      },
+      {
+        "deviceAge": 3,
+        "mae_myr": 123.69727499339177,
+        "count": 6906
+      },
+      {
+        "deviceAge": 4,
+        "mae_myr": 74.9321531166813,
+        "count": 6864
+      },
+      {
+        "deviceAge": 5,
+        "mae_myr": 118.01400507148769,
+        "count": 6719
+      },
+      {
+        "deviceAge": 6,
+        "mae_myr": 100.31363323015161,
+        "count": 6767
+      },
+      {
+        "deviceAge": 7,
+        "mae_myr": 146.25973544579858,
+        "count": 6779
+      },
+      {
+        "deviceAge": 8,
+        "mae_myr": 147.27805435316114,
+        "count": 6851
+      },
+      {
+        "deviceAge": 9,
+        "mae_myr": 313.45564645104116,
+        "count": 6896
+      },
+      {
+        "deviceAge": 10,
+        "mae_myr": 250.68454613395707,
+        "count": 6810
+      }
+    ],
+    "by_brand": [
+      {
+        "brand": "apple",
+        "mae_myr": 236.75472743974422,
+        "count": 39311
+      },
+      {
+        "brand": "asus",
+        "mae_myr": 171.66465783296127,
+        "count": 1314
+      },
+      {
+        "brand": "google pixel",
+        "mae_myr": 211.5071310893131,
+        "count": 4467
+      },
+      {
+        "brand": "honor",
+        "mae_myr": 101.98215613526372,
+        "count": 858
+      },
+      {
+        "brand": "huawei",
+        "mae_myr": 165.79119476228686,
+        "count": 2818
+      },
+      {
+        "brand": "infinix",
+        "mae_myr": 28.81297976941476,
+        "count": 2069
+      },
+      {
+        "brand": "motorola",
+        "mae_myr": 50.778353694759346,
+        "count": 760
+      },
+      {
+        "brand": "nothing",
+        "mae_myr": 230.54523958969924,
+        "count": 1135
+      },
+      {
+        "brand": "nubia",
+        "mae_myr": 101.42229224630205,
+        "count": 1400
+      },
+      {
+        "brand": "oneplus",
+        "mae_myr": 94.75042979753741,
+        "count": 1369
+      },
+      {
+        "brand": "oppo",
+        "mae_myr": 85.21117048439125,
+        "count": 837
+      },
+      {
+        "brand": "poco",
+        "mae_myr": 90.52922234755374,
+        "count": 2482
+      },
+      {
+        "brand": "realme",
+        "mae_myr": 134.5475206605958,
+        "count": 2828
+      },
+      {
+        "brand": "redmi",
+        "mae_myr": 26.809465012903637,
+        "count": 855
+      },
+      {
+        "brand": "samsung",
+        "mae_myr": 457.90713448726837,
+        "count": 4843
+      },
+      {
+        "brand": "sony",
+        "mae_myr": 131.46051942000025,
+        "count": 1372
+      },
+      {
+        "brand": "tecno",
+        "mae_myr": 95.31676170265527,
+        "count": 1508
+      },
+      {
+        "brand": "vivo",
+        "mae_myr": 100.48084969414326,
+        "count": 868
+      },
+      {
+        "brand": "xiaomi",
+        "mae_myr": 134.63079561527846,
+        "count": 2206
+      },
+      {
+        "brand": "zte",
+        "mae_myr": 78.29500727041399,
+        "count": 1700
+      }
+    ],
+    "by_msrp_range": [
+      {
+        "msrp_range": "<=1k",
+        "mae_myr": 19.239110692393723,
+        "count": 2062
+      },
+      {
+        "msrp_range": "1-2k",
+        "mae_myr": 67.55881871102277,
+        "count": 3543
+      },
+      {
+        "msrp_range": "2-4k",
+        "mae_myr": 195.80259560967818,
+        "count": 50216
+      },
+      {
+        "msrp_range": "4-8k",
+        "mae_myr": 276.90478886878026,
+        "count": 19179
+      },
+      {
+        "msrp_range": ">8k",
+        "mae_myr": NaN,
+        "count": 0
+      }
+    ],
+    "by_performance_range": [
+      {
+        "performance_range": "0-40",
+        "mae_myr": 207.28461326734555,
+        "count": 2994
+      },
+      {
+        "performance_range": "40-60",
+        "mae_myr": 184.28310375658805,
+        "count": 13361
+      },
+      {
+        "performance_range": "60-80",
+        "mae_myr": 193.419173057976,
+        "count": 33419
+      },
+      {
+        "performance_range": "80-100",
+        "mae_myr": 232.9152462519662,
+        "count": 25226
+      }
+    ],
+    "by_total_damage_range": [
+      {
+        "damage_range": "0-10",
+        "mae_myr": 250.30849414183575,
+        "count": 5417
+      },
+      {
+        "damage_range": "10-30",
+        "mae_myr": 230.56302229677058,
+        "count": 13049
+      },
+      {
+        "damage_range": "30-60",
+        "mae_myr": 205.36431127285147,
+        "count": 17952
+      },
+      {
+        "damage_range": ">60",
+        "mae_myr": 191.0469628610153,
+        "count": 38582
+      }
+    ],
+    "seen_vs_unseen_models": [
+      {
+        "model_exposure": "seen",
+        "mae_myr": 205.62949370387742,
+        "count": 75000
+      }
+    ]
+  },
+  "training_seconds": 1.412589300000036,
+  "best_iteration": 19,
+  "split": {
+    "train": {
+      "records": 350000,
+      "models": 40,
+      "brands": 20,
+      "ages": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "brand_list": [
+        "apple",
+        "asus",
+        "google pixel",
+        "honor",
+        "huawei",
+        "infinix",
+        "motorola",
+        "nothing",
+        "nubia",
+        "oneplus",
+        "oppo",
+        "poco",
+        "realme",
+        "redmi",
+        "samsung",
+        "sony",
+        "tecno",
+        "vivo",
+        "xiaomi",
+        "zte"
+      ],
+      "models_list": [
+        "asus rog phone 5",
+        "axon 40 ultra",
+        "f5 pro",
+        "find x5 pro",
+        "galaxy s24",
+        "galaxy s24 ultra",
+        "galaxy s25",
+        "galaxy s26",
+        "honor magic4 pro",
+        "hot 11",
+        "huawei p60 pro",
+        "iphone 11",
+        "iphone 12",
+        "iphone 16",
+        "iphone 17 pro",
+        "iphone 17 pro max",
+        "iphone 17e",
+        "iphone 7",
+        "iphone x",
+        "iphone xr",
+        "mate 60 pro",
+        "moto g stylus 5g",
+        "note 40 5g",
+        "nothing phone (3)",
+        "oneplus 11",
+        "phantom v flip2",
+        "pixel 10a",
+        "pixel 8",
+        "pixel 9",
+        "realme gt 2 pro",
+        "realme gt 6",
+        "realme gt 8 pro",
+        "red magic 6",
+        "redmi note 12 pro",
+        "sony xperia 5 iii",
+        "spark 20c",
+        "vivo x90 pro",
+        "x7 pro",
+        "xiaomi 12 pro",
+        "xiaomi 12t pro"
+      ],
+      "missing_ages_vs_dataset": [],
+      "missing_brands_vs_dataset": [],
+      "models_unseen_in_training": []
+    },
+    "validation": {
+      "records": 75000,
+      "models": 40,
+      "brands": 20,
+      "ages": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "brand_list": [
+        "apple",
+        "asus",
+        "google pixel",
+        "honor",
+        "huawei",
+        "infinix",
+        "motorola",
+        "nothing",
+        "nubia",
+        "oneplus",
+        "oppo",
+        "poco",
+        "realme",
+        "redmi",
+        "samsung",
+        "sony",
+        "tecno",
+        "vivo",
+        "xiaomi",
+        "zte"
+      ],
+      "models_list": [
+        "asus rog phone 5",
+        "axon 40 ultra",
+        "f5 pro",
+        "find x5 pro",
+        "galaxy s24",
+        "galaxy s24 ultra",
+        "galaxy s25",
+        "galaxy s26",
+        "honor magic4 pro",
+        "hot 11",
+        "huawei p60 pro",
+        "iphone 11",
+        "iphone 12",
+        "iphone 16",
+        "iphone 17 pro",
+        "iphone 17 pro max",
+        "iphone 17e",
+        "iphone 7",
+        "iphone x",
+        "iphone xr",
+        "mate 60 pro",
+        "moto g stylus 5g",
+        "note 40 5g",
+        "nothing phone (3)",
+        "oneplus 11",
+        "phantom v flip2",
+        "pixel 10a",
+        "pixel 8",
+        "pixel 9",
+        "realme gt 2 pro",
+        "realme gt 6",
+        "realme gt 8 pro",
+        "red magic 6",
+        "redmi note 12 pro",
+        "sony xperia 5 iii",
+        "spark 20c",
+        "vivo x90 pro",
+        "x7 pro",
+        "xiaomi 12 pro",
+        "xiaomi 12t pro"
+      ],
+      "missing_ages_vs_dataset": [],
+      "missing_brands_vs_dataset": [],
+      "models_unseen_in_training": []
+    },
+    "test": {
+      "records": 75000,
+      "models": 40,
+      "brands": 20,
+      "ages": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "brand_list": [
+        "apple",
+        "asus",
+        "google pixel",
+        "honor",
+        "huawei",
+        "infinix",
+        "motorola",
+        "nothing",
+        "nubia",
+        "oneplus",
+        "oppo",
+        "poco",
+        "realme",
+        "redmi",
+        "samsung",
+        "sony",
+        "tecno",
+        "vivo",
+        "xiaomi",
+        "zte"
+      ],
+      "models_list": [
+        "asus rog phone 5",
+        "axon 40 ultra",
+        "f5 pro",
+        "find x5 pro",
+        "galaxy s24",
+        "galaxy s24 ultra",
+        "galaxy s25",
+        "galaxy s26",
+        "honor magic4 pro",
+        "hot 11",
+        "huawei p60 pro",
+        "iphone 11",
+        "iphone 12",
+        "iphone 16",
+        "iphone 17 pro",
+        "iphone 17 pro max",
+        "iphone 17e",
+        "iphone 7",
+        "iphone x",
+        "iphone xr",
+        "mate 60 pro",
+        "moto g stylus 5g",
+        "note 40 5g",
+        "nothing phone (3)",
+        "oneplus 11",
+        "phantom v flip2",
+        "pixel 10a",
+        "pixel 8",
+        "pixel 9",
+        "realme gt 2 pro",
+        "realme gt 6",
+        "realme gt 8 pro",
+        "red magic 6",
+        "redmi note 12 pro",
+        "sony xperia 5 iii",
+        "spark 20c",
+        "vivo x90 pro",
+        "x7 pro",
+        "xiaomi 12 pro",
+        "xiaomi 12t pro"
+      ],
+      "missing_ages_vs_dataset": [],
+      "missing_brands_vs_dataset": [],
+      "models_unseen_in_training": []
+    }
+  }
+}

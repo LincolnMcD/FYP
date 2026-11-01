@@ -1,0 +1,305 @@
+{
+  "description": "Sourced brand/model registry. Nominal rectangle areas are estimates, not exact CAD surface areas. Extend via a profile or configured specification API.",
+  "profiles": [
+    {
+      "brand": "Apple",
+      "model": "iPhone 15",
+      "phone_model": "Apple iPhone 15",
+      "source": "https://support.apple.com/en-us/111831",
+      "body_dimensions_mm": {
+        "height": 147.6,
+        "width": 71.6,
+        "thickness": 7.8
+      },
+      "surfaces": {
+        "Screen": {
+          "width_mm": 65.10130434782609,
+          "height_mm": 141.13565217391303,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Back": {
+          "width_mm": 71.6,
+          "height_mm": 147.6,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Left": {
+          "width_mm": 7.8,
+          "height_mm": 147.6,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Right": {
+          "width_mm": 7.8,
+          "height_mm": 147.6,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Top": {
+          "width_mm": 71.6,
+          "height_mm": 7.8,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Bottom": {
+          "width_mm": 71.6,
+          "height_mm": 7.8,
+          "source": "https://support.apple.com/en-us/111831",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        }
+      },
+      "nominal_areas_cm2": {
+        "Screen": 91.88115046502836,
+        "Back": 105.68159999999997,
+        "Frame": 34.19519999999999
+      },
+      "required_surfaces": [
+        "Screen",
+        "Back",
+        "Frame_Left",
+        "Frame_Right",
+        "Frame_Top",
+        "Frame_Bottom"
+      ],
+      "exact_part_areas_available": false,
+      "geometry_notes": [
+        "Screen rectangle excludes no rounded corners or cutouts.",
+        "Back rectangle excludes no camera cutouts or curvature.",
+        "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+      ],
+      "display_basis": "1179 \u00d7 2556 pixels at nominal 460 PPI; rounded corners/cutouts excluded from this rectangle estimate."
+    },
+    {
+      "brand": "Apple",
+      "model": "iPhone 11",
+      "phone_model": "Apple iPhone 11",
+      "source": "https://support.apple.com/en-ie/111865",
+      "body_dimensions_mm": {
+        "height": 150.9,
+        "width": 75.7,
+        "thickness": 8.3
+      },
+      "surfaces": {
+        "Screen": {
+          "width_mm": 64.56244137806448,
+          "height_mm": 139.72934172643906,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Back": {
+          "width_mm": 75.7,
+          "height_mm": 150.9,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Left": {
+          "width_mm": 8.3,
+          "height_mm": 150.9,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Right": {
+          "width_mm": 8.3,
+          "height_mm": 150.9,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Top": {
+          "width_mm": 75.7,
+          "height_mm": 8.3,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Bottom": {
+          "width_mm": 75.7,
+          "height_mm": 8.3,
+          "source": "https://support.apple.com/en-ie/111865",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        }
+      },
+      "nominal_areas_cm2": {
+        "Screen": 90.2126743400876,
+        "Back": 114.2313,
+        "Frame": 37.61560000000001
+      },
+      "required_surfaces": [
+        "Screen",
+        "Back",
+        "Frame_Left",
+        "Frame_Right",
+        "Frame_Top",
+        "Frame_Bottom"
+      ],
+      "exact_part_areas_available": false,
+      "geometry_notes": [
+        "Screen is an estimated 6.06-inch standard rectangle derived from Apple's 6.1-inch diagonal and 1792 × 828 resolution; rounded corners and cutouts make visible area smaller.",
+        "Back rectangle excludes camera cutouts and curvature.",
+        "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+      ],
+      "display_basis": "Apple lists a 6.1-inch diagonal, 1792 × 828 pixel display, and a 6.06-inch standard rectangle diagonal; the nominal screen rectangle uses 6.06 inches."
+    },
+    {
+      "brand": "Samsung",
+      "model": "Galaxy S24 Ultra",
+      "phone_model": "Samsung Galaxy S24 Ultra",
+      "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+      "body_dimensions_mm": {
+        "height": 162.3,
+        "width": 79.0,
+        "thickness": 8.6
+      },
+      "surfaces": {
+        "Screen": {
+          "width_mm": 72.37972841119293,
+          "height_mm": 156.822744890918,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Back": {
+          "width_mm": 79.0,
+          "height_mm": 162.3,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Left": {
+          "width_mm": 8.6,
+          "height_mm": 162.3,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Right": {
+          "width_mm": 8.6,
+          "height_mm": 162.3,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Top": {
+          "width_mm": 79.0,
+          "height_mm": 8.6,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Bottom": {
+          "width_mm": 79.0,
+          "height_mm": 8.6,
+          "source": "https://www.samsung.com/sec/smartphones/galaxy-s24-ultra/specs/",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        }
+      },
+      "nominal_areas_cm2": {
+        "Screen": 113.50787683902438,
+        "Back": 128.217,
+        "Frame": 41.5036
+      },
+      "required_surfaces": [
+        "Screen",
+        "Back",
+        "Frame_Left",
+        "Frame_Right",
+        "Frame_Top",
+        "Frame_Bottom"
+      ],
+      "exact_part_areas_available": false,
+      "geometry_notes": [
+        "Screen rectangle excludes no rounded corners or cutouts.",
+        "Back rectangle excludes no camera cutouts or curvature.",
+        "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+      ],
+      "display_basis": "6.8-inch nominal diagonal and 3120:1440 resolution aspect; excludes corner/camera cutouts."
+    },
+    {
+      "brand": "Google",
+      "model": "Pixel 8",
+      "phone_model": "Google Pixel 8",
+      "source": "https://support.google.com/pixelphone/answer/7158570",
+      "body_dimensions_mm": {
+        "height": 150.5,
+        "width": 70.8,
+        "thickness": 8.9
+      },
+      "surfaces": {
+        "Screen": {
+          "width_mm": 64.09345794392523,
+          "height_mm": 142.42990654205607,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Back": {
+          "width_mm": 70.8,
+          "height_mm": 150.5,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Left": {
+          "width_mm": 8.9,
+          "height_mm": 150.5,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Right": {
+          "width_mm": 8.9,
+          "height_mm": 150.5,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Top": {
+          "width_mm": 70.8,
+          "height_mm": 8.9,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        },
+        "Frame_Bottom": {
+          "width_mm": 70.8,
+          "height_mm": 8.9,
+          "source": "https://support.google.com/pixelphone/answer/7158570",
+          "dimension_status": "nominal_rectangle_estimate",
+          "exact_area": false
+        }
+      },
+      "nominal_areas_cm2": {
+        "Screen": 91.28825224910472,
+        "Back": 106.554,
+        "Frame": 39.391400000000004
+      },
+      "required_surfaces": [
+        "Screen",
+        "Back",
+        "Frame_Left",
+        "Frame_Right",
+        "Frame_Top",
+        "Frame_Bottom"
+      ],
+      "exact_part_areas_available": false,
+      "geometry_notes": [
+        "Screen rectangle excludes no rounded corners or cutouts.",
+        "Back rectangle excludes no camera cutouts or curvature.",
+        "Frame estimate is a rectangular-prism side area, not exact metal surface area."
+      ],
+      "display_basis": "1080 \u00d7 2400 pixels at nominal 428 PPI; excludes rounded corners/cutouts."
+    }
+  ]
+}

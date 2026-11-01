@@ -1,6 +1,9 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+const crypto = require("crypto");
+const axios = require("axios");
 const androidDeviceList = require("android-device-list");
 const TradeInRequest = require("../models/tradeInModel");
 const Device = require("../models/deviceModel");
@@ -1043,7 +1046,137 @@ router.post("/staff/verify-device", upload.single("ownershipProof"), async (req,
     }
 });
 
-// POST /staff/set-final-offer - Page 5: Add finalOfferPrice attribute with random price to tradeInRequest record
+function pricingNumber(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const match = String(value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+}
+
+function deviceAgeInYears(value) {
+    if (typeof value === "string" && /<\s*1|less than\s+1|under\s+1/i.test(value)) return 0;
+    return pricingNumber(value);
+}
+
+function capacityInGb(value) {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const text = String(value).trim().toLowerCase().replace(/,/g, "");
+    const sumMatch = text.match(/^(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)/);
+    const match = text.match(/\d+(?:\.\d+)?/g);
+    if (!match) return null;
+    let amount = sumMatch ? Number(sumMatch[1]) + Number(sumMatch[2]) : Number(match[0]);
+    if (/\btb\b|terabyte/.test(text)) amount *= 1024;
+    else if (/\bmb\b|megabyte/.test(text)) amount /= 1024;
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function damagePart(evaluation, name) {
+    return evaluation[name] || evaluation.parts?.[name] || {};
+}
+
+async function predictTradeInValue(tradeInRequestID, evaluationCollection = "evaluation") {
+    if (!db) throw new Error("Firebase is unavailable.");
+    const requestRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) throw new Error("Trade-in request not found.");
+    const request = requestSnap.data() || {};
+    if (!request.deviceID) throw new Error("The trade-in request has no deviceID.");
+
+    const [deviceSnap, evaluationSnap] = await Promise.all([
+        db.collection("devices").doc(String(request.deviceID)).get(),
+        db.collection(evaluationCollection).doc(
+            `${evaluationCollection === "staffEvaluation" ? "STAEV" : "EV"}-${tradeInRequestID}`
+        ).get()
+    ]);
+    if (!deviceSnap.exists) throw new Error("Device record not found.");
+    if (!evaluationSnap.exists) throw new Error("Device evaluation not found.");
+    const device = deviceSnap.data() || {};
+    const evaluation = evaluationSnap.data() || {};
+
+    let diagnostic = null;
+    const diagnosticID = String(evaluation.diagnosticID || "").trim();
+    if (diagnosticID && diagnosticID.toLowerCase() !== "null") {
+        const diagnosticSnap = await db.collection("deviceDiagnostic").doc(diagnosticID).get();
+        if (diagnosticSnap.exists) diagnostic = diagnosticSnap.data() || {};
+    }
+
+    const screen = damagePart(evaluation, "screen");
+    const back = damagePart(evaluation, "back");
+    const frame = damagePart(evaluation, "frame");
+    const score = part => {
+        const area = pricingNumber(part.dmgArea) || 0;
+        const coverage = pricingNumber(part.dmgCoverage) || 0;
+        return Math.max(0, area * coverage);
+    };
+    const screenDmgScore = score(screen) * 100;
+    const totalDmgScore = 2 * screenDmgScore + score(back) + score(frame);
+    const deviceAge = deviceAgeInYears(device.deviceAge);
+    const storage = capacityInGb(device.storageCapacity ?? device.storage);
+    const msrp = pricingNumber(typeof evaluation.msrp === "object"
+        ? evaluation.msrp.amount
+        : evaluation.msrp);
+    if (deviceAge === null) throw new Error("Device age is missing or invalid.");
+    if (storage === null) throw new Error("Device storage capacity is missing or invalid.");
+    if (msrp === null || msrp <= 0) throw new Error("Evaluation MSRP is missing or invalid.");
+
+    const ramCapacity = capacityInGb(device.ram ?? device.ramCapacity);
+    const performanceMark = diagnostic
+        ? pricingNumber(diagnostic.diagnosisMark ?? diagnostic.diagnosticMark
+            ?? diagnostic.diagnosticScore ?? diagnostic.internalPerfromanceOverallMark)
+        : null;
+    const input = {
+        deviceAge: Math.trunc(deviceAge),
+        brand: String(device.brand || ""),
+        model: String(device.model || ""),
+        ramCapacity,
+        storage,
+        internalPerfromanceOverallMark: performanceMark,
+        screenDmgScore,
+        totalDmgScore,
+        hasScreenDamage: screenDmgScore > 0 ? 1 : 0,
+        msrp
+    };
+
+    const backendRoot = path.resolve(__dirname, "..");
+    const pricingRoot = path.join(backendRoot, "ML Pricing");
+    const runRoot = path.join(pricingRoot, "ml_pricing", "scratch_runs",
+        "group_with_model_20261031_230012_911368");
+    const modelPath = process.env.ML_PRICING_MODEL_PATH || path.join(runRoot, "model.json");
+    const metricsPath = process.env.ML_PRICING_METRICS_PATH || path.join(runRoot, "metrics.json");
+    if (!fs.existsSync(modelPath) || !fs.existsSync(metricsPath)) {
+        throw new Error("ML pricing model files are missing: " + modelPath);
+    }
+
+    const token = crypto.randomBytes(8).toString("hex");
+    const inputDir = path.join(os.tmpdir(), "rebyte-price-" + token);
+    fs.mkdirSync(inputDir, { recursive: true });
+    const inputPath = path.join(inputDir, "request.json");
+    fs.writeFileSync(inputPath, JSON.stringify(input), "utf8");
+    try {
+        const bundledPython = path.join(backendRoot, "detection_evaluation", ".venv", "Scripts", "python.exe");
+        const pythonBin = process.env.ML_PRICING_PYTHON_PATH
+            || process.env.MODEL2_PYTHON_PATH
+            || (fs.existsSync(bundledPython) ? bundledPython : "python");
+        const stdout = await new Promise((resolve, reject) => {
+            execFile(pythonBin, [
+                "-m", "ml_pricing.src.runtime_predict", modelPath, metricsPath, inputPath
+            ], { cwd: pricingRoot, timeout: 60000, maxBuffer: 2 * 1024 * 1024 },
+            (error, output, stderr) => {
+                if (error) {
+                    return reject(new Error(
+                        "ML price prediction failed: " + (stderr?.trim() || error.message)
+                    ));
+                }
+                resolve(output);
+            });
+        });
+        return JSON.parse(stdout);
+    } finally {
+        fs.rmSync(inputDir, { recursive: true, force: true });
+    }
+}
+
+// POST /staff/set-final-offer - Page 5: use the trained model's point estimate.
 router.post("/staff/set-final-offer", async (req, res) => {
     try {
         const tradeInRequestID = (req.body.tradeInRequestID || '').replace('#', '').trim();
@@ -1072,35 +1205,12 @@ router.post("/staff/set-final-offer", async (req, res) => {
             return res.status(404).json({ success: false, message: "Trade-in request not found." });
         }
 
-        const tradeInData = tradeInDoc.data() || {};
-        let finalOfferPrice = tradeInData.finalOfferPrice;
-
-        // If already has finalOfferPrice, keep it unless forceNew is true
-        if (finalOfferPrice == null || isNaN(Number(finalOfferPrice)) || Number(finalOfferPrice) <= 0 || req.body.forceNew === true) {
-            const est = tradeInData.estimatedValue;
-            if (est && typeof est === 'object') {
-                const min = Number(est.min != null ? est.min : (est.minEstimatedValue || 0));
-                const max = Number(est.max != null ? est.max : (est.maxEstimatedValue || 0));
-                if (max > min && min > 0) {
-                    finalOfferPrice = Number((Math.random() * (max - min) + min).toFixed(2));
-                } else if (min > 0) {
-                    finalOfferPrice = Number((min * (0.95 + Math.random() * 0.1)).toFixed(2));
-                }
-            }
-            if (!finalOfferPrice || isNaN(Number(finalOfferPrice)) || Number(finalOfferPrice) <= 0) {
-                // Random realistic price between RM 1,200 and RM 2,400
-                const base = Math.floor(Math.random() * (2400 - 1200 + 1) + 1200);
-                const cents = [0.00, 0.50, 0.80, 0.25][Math.floor(Math.random() * 4)];
-                finalOfferPrice = Number((base + cents).toFixed(2));
-            }
-
-            await tradeInRef.update({
-                finalOfferPrice: Number(finalOfferPrice),
-                updatedAt: FieldValue.serverTimestamp()
-            });
-        } else {
-            finalOfferPrice = Number(Number(finalOfferPrice).toFixed(2));
-        }
+        const prediction = await predictTradeInValue(tradeInRef.id, "staffEvaluation");
+        const finalOfferPrice = Number(prediction.actualPrice.toFixed(2));
+        await tradeInRef.update({
+            finalOfferPrice,
+            updatedAt: FieldValue.serverTimestamp()
+        });
 
         return res.status(200).json({
             success: true,
@@ -1111,6 +1221,32 @@ router.post("/staff/set-final-offer", async (req, res) => {
     } catch (err) {
         console.error("staff/set-final-offer error:", err);
         return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Customer quotation: save the model's point estimate +/- its held-out price RMSE.
+router.post("/predict-quotation", async (req, res) => {
+    try {
+        const tradeInRequestID = String(req.body.tradeInRequestID || "").replace(/^#/, "").trim();
+        if (!/^[A-Za-z0-9_-]+$/.test(tradeInRequestID)) {
+            return res.status(400).json({ success: false, message: "A valid tradeInRequestID is required." });
+        }
+        const prediction = await predictTradeInValue(tradeInRequestID);
+        const estimatedValue = { min: prediction.min, max: prediction.max };
+        await db.collection("tradeInRequests").doc(tradeInRequestID).update({
+            estimatedValue,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+        return res.json({
+            success: true,
+            tradeInRequestID,
+            estimatedValue,
+            actualPrice: prediction.actualPrice,
+            retentionRatio: prediction.retentionRatio
+        });
+    } catch (err) {
+        console.error("predict-quotation error:", err);
+        return res.status(500).json({ success: false, message: err.message || "Price prediction failed." });
     }
 });
 
@@ -2902,6 +3038,455 @@ router.post("/detect-phone", upload.single("image"), async (req, res) => {
         }
         console.error("detect-phone endpoint error:", err);
         return res.status(500).json({ success: false, isPhone: false, message: err.message });
+    }
+});
+
+// POST /run-device-assessment - evaluate stored customer or staff photos with Model 2.
+router.post("/run-device-assessment", async (req, res) => {
+    let workDir = null;
+    try {
+        if (!db) return res.status(503).json({ success: false, message: "Firebase is unavailable." });
+        const tradeInRequestID = String(req.body.tradeInRequestID || "").replace(/^#/, "").trim();
+        if (!/^[A-Za-z0-9_-]+$/.test(tradeInRequestID)) {
+            return res.status(400).json({ success: false, message: "A valid tradeInRequestID is required." });
+        }
+        const imageSource = req.body.imageSource || "images";
+        if (!(["images", "staffImages"].includes(imageSource))) {
+            return res.status(400).json({ success: false, message: "imageSource must be images or staffImages." });
+        }
+
+        const isStaffEvaluation = imageSource === "staffImages";
+        const evaluationID = `${isStaffEvaluation ? "STAEV" : "EV"}-${tradeInRequestID}`;
+        const evaluationCollection = isStaffEvaluation ? "staffEvaluation" : "evaluation";
+        const evaluationRef = db.collection(evaluationCollection).doc(evaluationID);
+        const cached = await evaluationRef.get();
+        const cachedData = cached.exists ? cached.data() || {} : {};
+        const isCurrentCachedEvaluation = cachedData.evaluationID === evaluationID
+            && typeof cachedData.status === "undefined";
+        const requestRef = db.collection("tradeInRequests").doc(tradeInRequestID);
+        const requestSnapshot = await requestRef.get();
+        if (!requestSnapshot.exists) {
+            return res.status(404).json({ success: false, message: "Trade-in request not found." });
+        }
+        const requestData = requestSnapshot.data() || {};
+        const deviceSnapshot = requestData.deviceID
+            ? await db.collection("devices").doc(requestData.deviceID).get()
+            : null;
+        const device = deviceSnapshot?.exists ? deviceSnapshot.data() : {};
+        const deviceID = String(requestData.deviceID || device.deviceID || "").trim();
+        let diagnosticID = null;
+        if (deviceID) {
+            const canonicalDiagnosticRef = db.collection("deviceDiagnostic").doc(`INT-${deviceID}`);
+            const canonicalDiagnostic = await canonicalDiagnosticRef.get();
+            if (canonicalDiagnostic.exists) {
+                diagnosticID = canonicalDiagnostic.data()?.diagnosticID || canonicalDiagnostic.id;
+            } else {
+                const matchingDiagnostics = await db.collection("deviceDiagnostic")
+                    .where("deviceID", "==", deviceID)
+                    .limit(1)
+                    .get();
+                if (!matchingDiagnostics.empty) {
+                    const matchingDiagnostic = matchingDiagnostics.docs[0];
+                    diagnosticID = matchingDiagnostic.data()?.diagnosticID || matchingDiagnostic.id;
+                }
+            }
+        }
+
+        if (imageSource === "images" && isCurrentCachedEvaluation) {
+            if (cachedData.diagnosticID !== diagnosticID || !cachedData.tradeInRequestID) {
+                await evaluationRef.set({ tradeInRequestID, diagnosticID }, { merge: true });
+            }
+            const imageSnapshot = await evaluationRef.collection("images").get();
+            const otherSnapshot = await evaluationRef.collection("other").doc("details").get();
+            return res.json({
+                success: true,
+                evaluationID,
+                evaluation: {
+                    ...cachedData,
+                    tradeInRequestID,
+                    diagnosticID,
+                    images: imageSnapshot.docs.map(doc => doc.data()),
+                    other: otherSnapshot.exists ? otherSnapshot.data() : {}
+                }
+            });
+        }
+
+        const imagesSnapshot = await requestRef.collection(imageSource).get();
+        const storedImages = imagesSnapshot.docs
+            .map(doc => ({ imageID: doc.id, ...doc.data() }))
+            .filter(image => typeof image.imageUrl === "string" && image.imageUrl.trim());
+        if (!storedImages.length) {
+            const label = imageSource === "staffImages" ? "staff" : "customer";
+            return res.status(400).json({ success: false, message: `No stored ${label} trade-in images were found.` });
+        }
+        if (storedImages.length > 12) {
+            return res.status(400).json({ success: false, message: "This evaluation supports up to 12 photos." });
+        }
+
+        const backendRoot = path.resolve(__dirname, "..");
+        const requestToken = crypto.randomBytes(8).toString("hex");
+        workDir = path.join(os.tmpdir(), `rebyte-model2-${requestToken}`);
+        const inputDir = path.join(workDir, "inputs");
+        const outputDir = path.join(workDir, "output");
+        fs.mkdirSync(inputDir, { recursive: true });
+
+        const imageInputs = [];
+        for (let index = 0; index < storedImages.length; index++) {
+            const image = storedImages[index];
+            const imageUrl = new URL(image.imageUrl);
+            if (imageUrl.protocol !== "https:" || imageUrl.hostname !== "res.cloudinary.com") {
+                throw new Error(`Stored image ${image.imageID} is not a Cloudinary HTTPS URL.`);
+            }
+            const response = await axios.get(imageUrl.toString(), {
+                responseType: "arraybuffer",
+                timeout: 45000,
+                maxContentLength: 15 * 1024 * 1024,
+                maxBodyLength: 15 * 1024 * 1024
+            });
+            const extension = path.extname(imageUrl.pathname).toLowerCase() || ".jpg";
+            const filePath = path.join(inputDir, `photo_${String(index + 1).padStart(2, "0")}${extension}`);
+            fs.writeFileSync(filePath, Buffer.from(response.data));
+            const rawView = String(image.imageView || image.imageID || `photo_${index + 1}`);
+            const safeView = rawView.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || `photo_${index + 1}`;
+            imageInputs.push({
+                id: `${safeView}_${index + 1}`,
+                path: filePath,
+                capture_view: safeView,
+                source_image_id: image.imageID,
+                source_url: image.imageUrl
+            });
+        }
+
+        const manifestPath = path.join(workDir, "inspection.json");
+        const brand = String(device.brand || "").trim();
+        const model = String(device.model || "").trim();
+        const phoneModel = [brand, model].filter(Boolean).join(" ") || "Unknown smartphone";
+        const trainedPipelineModel2 = path.join(
+            "C:\\Users\\User\\Desktop\\trained pipeline",
+            "model2_defect_segmentation"
+        );
+        const model2Checkpoint = process.env.MODEL2_CHECKPOINT_PATH || path.join(
+            trainedPipelineModel2,
+            "runs",
+            "auto_hard_negative_from_hn",
+            "saved_models",
+            "best.pt"
+        );
+        const model2Config = process.env.MODEL2_CONFIG_PATH || path.join(
+            trainedPipelineModel2,
+            "config",
+            "config.yaml"
+        );
+        const manifest = {
+            evaluationID,
+            tradeInRequestID,
+            device_id: tradeInRequestID,
+            model2_code_root: trainedPipelineModel2,
+            phone_brand: brand,
+            phone_model: phoneModel,
+            confidence_threshold: 0.30,
+            combine_complementary: false,
+            defect_model: {
+                checkpoint: model2Checkpoint,
+                config: model2Config,
+                device: "cpu"
+            },
+            part_segmentation: {
+                mode: "whole_phone_outline",
+                checkpoint: path.join(backendRoot, "detection_evaluation", "weights", "sam2.1_t.pt"),
+                device: "cpu",
+                detector_model: "IDEA-Research/grounding-dino-tiny",
+                estimate_metric_from_outline: true
+            },
+            matching: { backend: "sift", device: "cpu", min_inliers: 12, min_inlier_ratio: 0.65 },
+            images: imageInputs.map(image => ({ id: image.id, path: image.path, capture_view: image.capture_view }))
+        };
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+
+        const bundledPython = path.join(backendRoot, "detection_evaluation", ".venv", "Scripts", "python.exe");
+        const pythonBin = process.env.MODEL2_PYTHON_PATH || (fs.existsSync(bundledPython) ? bundledPython : "python");
+        await new Promise((resolve, reject) => {
+            execFile(pythonBin, ["-m", "detection_evaluation.run_customer_assessment", manifestPath, outputDir], {
+                cwd: backendRoot,
+                timeout: Number(process.env.MODEL2_EVALUATION_TIMEOUT_MS || 600000),
+                maxBuffer: 8 * 1024 * 1024
+            }, (error, stdout, stderr) => {
+                if (error) {
+                    const details = [
+                        `exit code: ${error.code ?? "unknown"}`,
+                        `signal: ${error.signal || "none"}`,
+                        `process error: ${error.message}`,
+                        stderr?.trim() ? `stderr:\n${stderr.trim().slice(-4000)}` : "",
+                        stdout?.trim() ? `stdout:\n${stdout.trim().slice(-4000)}` : ""
+                    ].filter(Boolean).join("\n");
+                    return reject(new Error(`Model 2 evaluation failed:\n${details}`));
+                }
+                resolve(stdout);
+            });
+        });
+
+        const resultPath = path.join(outputDir, "customer_evaluation.json");
+        const result = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+        const cloudFolder = `rebyte/trade_in/${tradeInRequestID}/evaluation`;
+        const evaluatedImages = [];
+        for (const evaluated of result.images) {
+            const original = imageInputs.find(image => image.id === evaluated.imageID);
+            let imageUrl = original?.source_url || null;
+            if (evaluated.evaluatedPath && fs.existsSync(evaluated.evaluatedPath)) {
+                const imageBuffer = fs.readFileSync(evaluated.evaluatedPath);
+                const uploaded = await new Promise((resolve, reject) => {
+                    cloudinary.uploader.upload_stream({
+                        folder: cloudFolder,
+                        public_id: `${evaluated.imageID}_segmented`,
+                        resource_type: "image",
+                        overwrite: true
+                    }, (error, cloudResult) => error ? reject(error) : resolve(cloudResult))
+                        .end(imageBuffer);
+                });
+                imageUrl = uploaded.secure_url;
+            }
+            evaluatedImages.push({
+                imageID: evaluated.imageID,
+                imageView: evaluated.imageView,
+                imageUrl,
+                originalImageUrl: original?.source_url || null,
+            });
+        }
+
+        const classFields = result.classes || {};
+        const partFields = result.parts || {};
+        const document = {
+            evaluationID,
+            tradeInRequestID,
+            diagnosticID,
+            grade: result.grade,
+            msrp: result.msrp ?? null,
+            classes: classFields,
+            parts: partFields,
+            ...classFields,
+            ...partFields
+        };
+        const imageBatch = db.batch();
+        const oldEvaluationImages = await evaluationRef.collection("images").get();
+        const currentImageIDs = new Set(evaluatedImages.map(image => image.imageID));
+        for (const oldImage of oldEvaluationImages.docs) {
+            if (!currentImageIDs.has(oldImage.id)) imageBatch.delete(oldImage.ref);
+        }
+        for (const image of evaluatedImages) {
+            imageBatch.set(evaluationRef.collection("images").doc(image.imageID), image);
+        }
+        imageBatch.set(evaluationRef.collection("other").doc("details"), {
+            ...(result.other || {}),
+            createdAt: FieldValue.serverTimestamp()
+        });
+        await imageBatch.commit();
+        await evaluationRef.set(document);
+
+        let finalOfferPrice = null;
+        let pricingError = null;
+        if (isStaffEvaluation) {
+            try {
+                await requestRef.update({ finalOfferPrice: FieldValue.delete() });
+                const prediction = await predictTradeInValue(tradeInRequestID, "staffEvaluation");
+                finalOfferPrice = Number(prediction.actualPrice.toFixed(2));
+                await requestRef.update({
+                    finalOfferPrice,
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } catch (priceError) {
+                pricingError = priceError.message || "ML price prediction failed.";
+                console.error("Staff evaluation saved, but ML pricing failed:", priceError);
+            }
+        }
+
+        return res.json({
+            success: true,
+            evaluationID,
+            ...(isStaffEvaluation ? { finalOfferPrice, pricingError } : {}),
+            evaluation: {
+                ...result,
+                tradeInRequestID,
+                diagnosticID,
+                images: evaluatedImages
+            }
+        });
+    } catch (err) {
+        console.error("run-device-assessment error:", err);
+        return res.status(500).json({ success: false, message: err.message || "Device evaluation failed." });
+    } finally {
+        if (workDir) {
+            const tempRoot = path.resolve(os.tmpdir());
+            const resolvedWorkDir = path.resolve(workDir);
+            if (resolvedWorkDir.startsWith(tempRoot + path.sep)) {
+                fs.rmSync(resolvedWorkDir, { recursive: true, force: true });
+            }
+        }
+    }
+});
+
+// Save complete internal diagnostic test results to deviceDiagnostic collection
+router.post("/save-device-diagnostic", async (req, res) => {
+    try {
+        const {
+            diagnosticID,
+            deviceID,
+            touchScreenMark,
+            displayMark,
+            cameraMark,
+            microphoneMark,
+            speakerMark,
+            sensorMark,
+            connectivityMark,
+            gpsMark,
+            diagnosticScore
+        } = req.body;
+
+        if (!deviceID) {
+            return res.status(400).json({
+                success: false,
+                message: "deviceID is required to save diagnostic record."
+            });
+        }
+
+        const docID = diagnosticID || `INT-${deviceID}`;
+
+        const diagnosticData = {
+            diagnosticID: docID,
+            deviceID: deviceID,
+            touchScreenMark: Number(touchScreenMark ?? 0),
+            displayMark: Number(displayMark ?? 0),
+            cameraMark: Number(cameraMark ?? 0),
+            microphoneMark: Number(microphoneMark ?? 0),
+            speakerMark: Number(speakerMark ?? 0),
+            sensorMark: Number(sensorMark ?? 0),
+            connectivityMark: Number(connectivityMark ?? 0),
+            gpsMark: Number(gpsMark ?? 0),
+            diagnosticScore: Number(diagnosticScore ?? 0),
+            createdAt: new Date().toISOString()
+        };
+
+        await db.collection("deviceDiagnostic").doc(docID).set(diagnosticData, { merge: true });
+
+        console.log(`[Diagnostic] Saved diagnostic record ${docID} for device ${deviceID} successfully.`);
+        return res.json({
+            success: true,
+            diagnosticID: docID,
+            data: diagnosticData
+        });
+    } catch (err) {
+        console.error("Error saving device diagnostic record:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to save device diagnostic: " + err.message
+        });
+    }
+});
+
+// Check if a deviceDiagnostic record exists for a given deviceID
+router.get("/diagnostic/:deviceID", async (req, res) => {
+    try {
+        const { deviceID } = req.params;
+        if (!deviceID) {
+            return res.status(400).json({ success: false, exists: false, message: "deviceID is required." });
+        }
+
+        const docID = `INT-${deviceID}`;
+        const docSnap = await db.collection("deviceDiagnostic").doc(docID).get();
+
+        if (docSnap.exists) {
+            return res.json({
+                success: true,
+                exists: true,
+                diagnosticID: docID,
+                data: docSnap.data()
+            });
+        }
+
+        // Also query in case diagnosticID differed
+        const querySnap = await db.collection("deviceDiagnostic").where("deviceID", "==", deviceID).limit(1).get();
+        if (!querySnap.empty) {
+            const doc = querySnap.docs[0];
+            return res.json({
+                success: true,
+                exists: true,
+                diagnosticID: doc.id,
+                data: doc.data()
+            });
+        }
+
+        return res.json({ success: true, exists: false });
+    } catch (err) {
+        console.error("Error checking device diagnostic record:", err);
+        return res.status(500).json({ success: false, exists: false, error: err.message });
+    }
+});
+
+// GET /evaluation/:tradeInRequestID - retrieve evaluation record along with subcollections
+// Supports query param source="staffEvaluation" to fetch staff evaluation (STAEV-<id>)
+router.get("/evaluation/:tradeInRequestID", async (req, res) => {
+    try {
+        if (!db) return res.status(503).json({ success: false, message: "Firebase is unavailable." });
+        const tradeInRequestID = String(req.params.tradeInRequestID || "").replace(/^#/, "").trim();
+        if (!tradeInRequestID) {
+            return res.status(400).json({ success: false, message: "tradeInRequestID is required." });
+        }
+
+        const source = req.query.source === "staffEvaluation" ? "staffEvaluation" : "evaluation";
+        const prefix = source === "staffEvaluation" ? "STAEV" : "EV";
+        const evaluationID = `${prefix}-${tradeInRequestID}`;
+        const evaluationRef = db.collection(source).doc(evaluationID);
+        const docSnap = await evaluationRef.get();
+
+        if (!docSnap.exists) {
+            // Also attempt query by tradeInRequestID directly in this collection
+            const q = await db.collection(source).where("tradeInRequestID", "==", tradeInRequestID).limit(1).get();
+            if (q.empty) {
+                // If checking staffEvaluation and not found, fallback to check evaluation
+                if (source === "staffEvaluation") {
+                    const fallbackRef = db.collection("evaluation").doc(`EV-${tradeInRequestID}`);
+                    const fbSnap = await fallbackRef.get();
+                    if (fbSnap.exists) {
+                        const imagesSnap = await fallbackRef.collection("images").get();
+                        const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
+                        return res.json({
+                            success: true,
+                            evaluationID: `EV-${tradeInRequestID}`,
+                            evaluation: {
+                                ...fbSnap.data(),
+                                images,
+                            }
+                        });
+                    }
+                }
+                return res.status(404).json({ success: false, message: "Evaluation not found." });
+            }
+            const foundDoc = q.docs[0];
+            const imagesSnap = await foundDoc.ref.collection("images").get();
+            const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
+            return res.json({
+                success: true,
+                evaluationID: foundDoc.id,
+                evaluation: {
+                    ...foundDoc.data(),
+                    images,
+                }
+            });
+        }
+
+        const imagesSnap = await evaluationRef.collection("images").get();
+        const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
+
+        return res.json({
+            success: true,
+            evaluationID,
+            evaluation: {
+                ...docSnap.data(),
+                images,
+            }
+        });
+    } catch (err) {
+        console.error("Error fetching evaluation:", err);
+        return res.status(500).json({ success: false, message: err.message });
     }
 });
 

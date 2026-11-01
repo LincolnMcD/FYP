@@ -1,0 +1,103 @@
+{
+  "implementation": "scratch_boost_v2",
+  "boosting": "ordered",
+  "categorical_encoding": "permutation_aligned_ordered_statistics",
+  "ordered_approximation": "dyadic prefix leaf models; shared tree structures and quantile borders",
+  "encoded_feature_count": 17,
+  "training_metric_encoding": "inference (resubstitution)",
+  "configuration": "with_model",
+  "strategy": "group",
+  "training_seconds": 119.16627679999988,
+  "hyperparameters": {
+    "iterations": 200,
+    "depth": 4,
+    "learning_rate": 0.05,
+    "bins": 32,
+    "l2": 3.0,
+    "patience": 50,
+    "seed": 42,
+    "prior": 0.25,
+    "smoothing": 10.0,
+    "boosting": "ordered",
+    "permutations": 3,
+    "one_hot_max_size": 4,
+    "max_cat_combination": 2,
+    "min_samples_leaf": 5,
+    "min_gain": 1e-08,
+    "feature_fraction": 1.0,
+    "bagging_temperature": 0.0
+  },
+  "dataset": "C:\\Users\\User\\Desktop\\ML Pricing\\dataset 12col.csv",
+  "sample_rows": 500000,
+  "split": {
+    "test": {
+      "records": 88073,
+      "models": [
+        "galaxy s24",
+        "galaxy s26",
+        "iphone x",
+        "red magic 6",
+        "x7 pro",
+        "xiaomi 12t pro"
+      ]
+    },
+    "validation": {
+      "records": 44440,
+      "models": [
+        "galaxy s24 ultra",
+        "iphone 17e",
+        "mate 60 pro",
+        "moto g stylus 5g",
+        "phantom v flip2",
+        "pixel 9"
+      ]
+    },
+    "train": {
+      "records": 367487,
+      "models": [
+        "asus rog phone 5",
+        "axon 40 ultra",
+        "f5 pro",
+        "find x5 pro",
+        "galaxy s25",
+        "honor magic4 pro",
+        "hot 11",
+        "huawei p60 pro",
+        "iphone 11",
+        "iphone 12",
+        "iphone 16",
+        "iphone 17 pro",
+        "iphone 17 pro max",
+        "iphone 7",
+        "iphone xr",
+        "note 40 5g",
+        "nothing phone (3)",
+        "oneplus 11",
+        "pixel 10a",
+        "pixel 8",
+        "realme gt 2 pro",
+        "realme gt 6",
+        "realme gt 8 pro",
+        "redmi note 12 pro",
+        "sony xperia 5 iii",
+        "spark 20c",
+        "vivo x90 pro",
+        "xiaomi 12 pro"
+      ]
+    }
+  },
+  "best_iteration": 198,
+  "attempted_iterations": 200,
+  "test_metrics": {
+    "retention_ratio": {
+      "mae": 0.07998608154983151,
+      "rmse": 0.09884383231307188,
+      "r2": 0.844820898771402
+    },
+    "price_myr": {
+      "mae": 290.3098533033597,
+      "rmse": 363.2741609626348,
+      "r2": 0.8208093667585609
+    }
+  }
+}

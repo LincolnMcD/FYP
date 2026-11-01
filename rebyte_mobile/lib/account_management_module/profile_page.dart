@@ -190,8 +190,7 @@ class ProfilePage extends StatelessWidget {
               );
             },
           ),
-          _buildDivider(),
-          _buildMenuItem(Icons.pending_actions_outlined, 'Pending Payment'),
+          
           _buildDivider(),
           _buildMenuItem(
             Icons.history_outlined,

@@ -295,16 +295,34 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
       bottomNavigationBar: const ReByteBottomNavBar(selectedIndex: 3),
       body: SafeArea(
         child: Stack(children: [
-          Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Row(children: [
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back, color: _ink)),
-              const SizedBox(width: 4),
-              const Expanded(child: Text('Report Missing Device', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: _ink))),
-            ]),
-          ),
-          Expanded(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Navigation Row
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B), size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+
+              // Main Title (Left aligned)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                child: Text(
+                  'Report Missing Device',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

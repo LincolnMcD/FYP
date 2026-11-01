@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models/device_model.dart';
 import 'assessment_result_page.dart';
+import 'services/trade_in_service.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 
@@ -33,9 +33,10 @@ class _DeviceAssessmentLoadingPageState extends State<DeviceAssessmentLoadingPag
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late AnimationController _rotationController;
 
-  // 0: validating, 1: analysing images, 2: detecting defects, 3: generating score, 4: calculating value, 5: all done
+  // 0: validating, 1: analysing images, 2: detecting defects, 3: generating score, 4: all done
   int _completedStepIndex = 0;
-  Timer? _stepTimer;
+  String? _assessmentError;
+  bool _isProcessing = false;
 
   final List<Map<String, dynamic>> _steps = [
     {
@@ -50,18 +51,13 @@ class _DeviceAssessmentLoadingPageState extends State<DeviceAssessmentLoadingPag
     },
     {
       'title': 'Detecting visible defects',
-      'subtitle': 'Scanning screen and chassis...',
+      'subtitle': 'Estimated a few minutes; time depends on photo count.',
       'icon': Icons.sync,
     },
     {
       'title': 'Generating condition score',
       'subtitle': null,
       'icon': Icons.query_stats_rounded,
-    },
-    {
-      'title': 'Calculating preliminary value',
-      'subtitle': null,
-      'icon': Icons.account_balance_wallet_outlined,
     },
   ];
 
@@ -73,53 +69,53 @@ class _DeviceAssessmentLoadingPageState extends State<DeviceAssessmentLoadingPag
       duration: const Duration(seconds: 2),
     )..repeat();
 
-    _startSimulatedPipeline();
+    _runAssessment();
   }
 
-  void _startSimulatedPipeline() {
-    // Step-by-step progress timer (roughly 1.0 - 1.2s per step so it smoothly takes ~5-6s total)
-    _stepTimer = Timer.periodic(const Duration(milliseconds: 1100), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() {
-        _completedStepIndex++;
-      });
-
-      if (_completedStepIndex >= 5) {
-        timer.cancel();
-        // Wait a brief moment on full completion, then smoothly transition to AssessmentResultPage
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (!mounted) return;
-          Navigator.pushReplacement(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  AssessmentResultPage(
-                device: widget.device,
-                tradeInRequestID: widget.tradeInRequestID,
-                isLoggedIn: widget.isLoggedIn,
-                email: widget.email,
-                name: widget.name,
-                fromMyTradeInRequests: widget.fromMyTradeInRequests,
-              ),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        });
-      }
+  Future<void> _runAssessment() async {
+    if (_isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+      _assessmentError = null;
+      _completedStepIndex = 2;
     });
+
+    final result = await TradeInService.runDeviceAssessment(widget.tradeInRequestID);
+    if (!mounted) return;
+    if (result['success'] != true) {
+      setState(() {
+        _isProcessing = false;
+        _assessmentError = result['message']?.toString() ?? 'Device assessment failed. Please try again.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isProcessing = false;
+      _completedStepIndex = 4;
+    });
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => AssessmentResultPage(
+          device: widget.device,
+          tradeInRequestID: widget.tradeInRequestID,
+          isLoggedIn: widget.isLoggedIn,
+          email: widget.email,
+          name: widget.name,
+          fromMyTradeInRequests: widget.fromMyTradeInRequests,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _stepTimer?.cancel();
     _rotationController.dispose();
     super.dispose();
   }
@@ -187,6 +183,20 @@ class _DeviceAssessmentLoadingPageState extends State<DeviceAssessmentLoadingPag
 
                 // 5 Pipeline steps list
                 _buildStepsList(),
+                if (_assessmentError != null) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    _assessmentError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFFB42318), fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _isProcessing ? null : _runAssessment,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Try assessment again'),
+                  ),
+                ],
                 const SizedBox(height: 16),
               ],
             ),

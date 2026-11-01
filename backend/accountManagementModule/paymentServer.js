@@ -1028,8 +1028,11 @@ router.get("/transactions", async (req, res) => {
                 });
             }
 
-            // Breakdown: only base amount and total paid (no tax)
-            const baseAmount = Number(parentData?.subtotal || parentData?.finalOfferPrice || rawAmount);
+            // Breakdown: support buyout details if present
+            const isBuyout = t.currentValue !== undefined || t.rentalDiscount !== undefined || t.depositDeduction !== undefined;
+            const baseAmount = isBuyout
+                ? Number(t.currentValue || rawAmount)
+                : Number(parentData?.subtotal || parentData?.finalOfferPrice || rawAmount);
 
             // Use orderID, tradeInRequestID, or rentalID as primary business ID
             const businessId = (matchedType === "purchase" ? t.orderID : (matchedType === "trade-in" ? t.tradeInRequestID : t.rentalID))
@@ -1054,6 +1057,9 @@ router.get("/transactions", async (req, res) => {
                 date: isoDate,
                 formattedDate,
                 paymentMethod,
+                currentValue: t.currentValue !== undefined ? Number(t.currentValue) : null,
+                rentalDiscount: t.rentalDiscount !== undefined ? Number(t.rentalDiscount) : null,
+                depositDeduction: t.depositDeduction !== undefined ? Number(t.depositDeduction) : null,
                 relatedItem: relatedItems[0] || {
                     name: title,
                     imei: "N/A",
@@ -1065,7 +1071,10 @@ router.get("/transactions", async (req, res) => {
                 breakdown: {
                     baseAmount,
                     taxAmount: 0.00,
-                    totalPaid: rawAmount
+                    totalPaid: rawAmount,
+                    currentValue: t.currentValue !== undefined ? Number(t.currentValue) : null,
+                    rentalDiscount: t.rentalDiscount !== undefined ? Number(t.rentalDiscount) : null,
+                    depositDeduction: t.depositDeduction !== undefined ? Number(t.depositDeduction) : null
                 }
             });
         }

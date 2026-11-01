@@ -14,6 +14,7 @@ class CameraTestPage extends StatefulWidget {
   final int displayScore;
   final bool isTouchSkipped;
   final bool isDisplaySkipped;
+  final bool fromImproveAssessment;
 
   const CameraTestPage({
     super.key,
@@ -26,6 +27,7 @@ class CameraTestPage extends StatefulWidget {
     required this.displayScore,
     this.isTouchSkipped = false,
     this.isDisplaySkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -266,6 +268,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
                               isTouchSkipped: widget.isTouchSkipped,
                               isDisplaySkipped: widget.isDisplaySkipped,
                               isCameraSkipped: isSkipped,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -395,6 +398,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
             isTouchSkipped: widget.isTouchSkipped,
             isDisplaySkipped: widget.isDisplaySkipped,
             isCameraSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

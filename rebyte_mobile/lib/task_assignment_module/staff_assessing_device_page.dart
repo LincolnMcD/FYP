@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../device_tradein_module/models/device_model.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 import 'staff_inspection_summary_page.dart';
 
@@ -30,7 +31,9 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late AnimationController _rotationController;
   Timer? _stepTimer;
-  int _completedStepIndex = 0; // 0 to 5
+  int _completedStepIndex = 0; // 0 to the final step
+  bool _isAssessing = false;
+  String? _assessmentError;
 
   final List<Map<String, dynamic>> _steps = [
     {
@@ -53,11 +56,6 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
       'subtitle': null,
       'icon': Icons.query_stats_rounded,
     },
-    {
-      'title': 'Calculating preliminary value',
-      'subtitle': null,
-      'icon': Icons.account_balance_wallet_outlined,
-    },
   ];
 
   @override
@@ -68,46 +66,81 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
       duration: const Duration(seconds: 2),
     )..repeat();
 
-    _startSimulatedPipeline();
+    _runStaffAssessment();
   }
 
-  void _startSimulatedPipeline() {
-    _stepTimer = Timer.periodic(const Duration(milliseconds: 1100), (timer) {
+  String get _tradeInRequestID => widget.task['tradeInRequestID']?.toString() ??
+      widget.task['tradeInID']?.toString() ??
+      widget.task['orderID']?.toString() ??
+      widget.task['id']?.toString() ??
+      '';
+
+  Future<void> _runStaffAssessment() async {
+    if (_isAssessing) return;
+    if (_tradeInRequestID.trim().isEmpty) {
+      setState(() => _assessmentError = 'This task has no trade-in request ID.');
+      return;
+    }
+    setState(() {
+      _isAssessing = true;
+      _assessmentError = null;
+      _completedStepIndex = 0;
+    });
+    _stepTimer?.cancel();
+    _stepTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-
-      setState(() {
-        _completedStepIndex++;
-      });
-
-      if (_completedStepIndex >= 5) {
-        timer.cancel();
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (!mounted) return;
-          Navigator.pushReplacement(
-            context,
-            PageRouteBuilder(
-              settings: const RouteSettings(name: 'StaffInspectionSummaryPage'),
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  StaffInspectionSummaryPage(
-                task: widget.task,
-                device: widget.device,
-                uploadedImages: widget.uploadedImages,
-                ownershipPhotoPath: widget.ownershipPhotoPath,
-                onTaskUpdated: widget.onTaskUpdated,
-              ),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        });
+      if (_completedStepIndex < _steps.length - 1) {
+        setState(() => _completedStepIndex++);
       }
     });
+
+    final result = await TradeInService.runDeviceAssessment(
+      _tradeInRequestID,
+      imageSource: 'staffImages',
+    );
+    _stepTimer?.cancel();
+    if (!mounted) return;
+    if (result['success'] != true || result['evaluation'] is! Map) {
+      setState(() {
+        _isAssessing = false;
+        _assessmentError = result['message']?.toString() ?? 'Staff image assessment failed.';
+      });
+      return;
+    }
+
+    final evaluation = Map<String, dynamic>.from(result['evaluation'] as Map);
+    widget.task.remove('finalOfferPrice');
+    final finalOfferPrice = result['finalOfferPrice'];
+    if (finalOfferPrice is num && finalOfferPrice > 0) {
+      widget.task['finalOfferPrice'] = finalOfferPrice;
+    }
+    setState(() {
+      _isAssessing = false;
+      _completedStepIndex = _steps.length;
+    });
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        settings: const RouteSettings(name: 'StaffInspectionSummaryPage'),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            StaffInspectionSummaryPage(
+          task: widget.task,
+          device: widget.device,
+          uploadedImages: widget.uploadedImages,
+          ownershipPhotoPath: widget.ownershipPhotoPath,
+          evaluation: evaluation,
+          onTaskUpdated: widget.onTaskUpdated,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
   }
 
   @override
@@ -146,7 +179,8 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
               children: [
                 const SizedBox(height: 12),
                 // Exact Radar concentric loader from customer flow
-                _buildRadarLoader(),
+                if (_assessmentError == null) _buildRadarLoader()
+                else const Icon(Icons.error_outline_rounded, size: 68, color: Color(0xFFDC2626)),
                 const SizedBox(height: 28),
 
                 // Title
@@ -162,8 +196,10 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
                 const SizedBox(height: 8),
 
                 // Subtitle
-                const Text(
-                  'Please wait while our AI analyzes your\ndevice condition.',
+                Text(
+                  _assessmentError == null
+                      ? 'Please wait while our AI analyzes your\ndevice condition.'
+                      : 'The device assessment could not be completed.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13.5,
@@ -175,6 +211,20 @@ class _StaffAssessingDevicePageState extends State<StaffAssessingDevicePage>
 
                 // 5 Pipeline steps list
                 _buildStepsList(),
+                if (_assessmentError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _assessmentError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _runStaffAssessment,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry assessment'),
+                  ),
+                ],
                 const SizedBox(height: 16),
               ],
             ),

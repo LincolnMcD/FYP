@@ -1,0 +1,20 @@
+{
+  "dataset_version": "rebyte_depreciation_500000_AGE_BALANCED_12columns",
+  "models": {
+    "group_with_model": "C:\\Users\\User\\Desktop\\ML Pricing\\ml_pricing\\models\\group\\catboost_with_model.cbm"
+  },
+  "results": [
+    {
+      "configuration": "with_model",
+      "evaluation_strategy": "group",
+      "training_records": 318869,
+      "validation_records": 47296,
+      "test_records": 133835,
+      "retention_mae": 0.060785807866324496,
+      "price_mae_myr": 156.45739833794045,
+      "price_rmse_myr": 236.12017141695637,
+      "price_r2": 0.8929148765502822,
+      "training_time_seconds": 15.189403399999946
+    }
+  ]
+}

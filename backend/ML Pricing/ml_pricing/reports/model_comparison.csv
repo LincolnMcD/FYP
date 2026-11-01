@@ -1,0 +1,2 @@
+configuration,evaluation_strategy,training_records,validation_records,test_records,retention_mae,price_mae_myr,price_rmse_myr,price_r2,training_time_seconds
+with_model,group,318869,47296,133835,0.060785807866324496,156.45739833794045,236.12017141695637,0.8929148765502822,15.189403399999946

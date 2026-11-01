@@ -20,6 +20,7 @@ class SpeakerTestPage extends StatefulWidget {
   final bool isDisplaySkipped;
   final bool isCameraSkipped;
   final bool isMicSkipped;
+  final bool fromImproveAssessment;
 
   const SpeakerTestPage({
     super.key,
@@ -36,6 +37,7 @@ class SpeakerTestPage extends StatefulWidget {
     this.isDisplaySkipped = false,
     this.isCameraSkipped = false,
     this.isMicSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -321,6 +323,7 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
                               isCameraSkipped: widget.isCameraSkipped,
                               isMicSkipped: widget.isMicSkipped,
                               isSpeakerSkipped: false,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -454,6 +457,7 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
             isCameraSkipped: widget.isCameraSkipped,
             isMicSkipped: widget.isMicSkipped,
             isSpeakerSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );

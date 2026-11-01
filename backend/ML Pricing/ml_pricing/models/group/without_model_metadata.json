@@ -1,0 +1,441 @@
+{
+  "dataset_version": "rebyte_depreciation_500000_AGE_BALANCED_12columns",
+  "dataset_path": "C:\\Users\\User\\Desktop\\ML Pricing\\dataset 12col.csv",
+  "training_date_utc": "2026-10-31T14:19:49.378953+00:00",
+  "feature_names": [
+    "deviceAge",
+    "brand",
+    "ramCapacity",
+    "storage",
+    "internalPerfromanceOverallMark",
+    "screenDmgScore",
+    "totalDmgScore",
+    "hasScreenDamage",
+    "msrp"
+  ],
+  "categorical_feature_names": [
+    "brand"
+  ],
+  "hyperparameters": {
+    "iterations": 20,
+    "learning_rate": 0.05,
+    "depth": 6,
+    "l2_leaf_reg": 3,
+    "loss_function": "RMSE",
+    "random_seed": 42,
+    "verbose": false,
+    "metric_period": 1,
+    "custom_metric": [
+      "MAE",
+      "R2"
+    ],
+    "eval_metric": "RMSE"
+  },
+  "model_version": "catboost_v1",
+  "configuration": "without_model",
+  "strategy": "group",
+  "best_iteration": 19,
+  "evaluation_metrics": {
+    "retention_mae": 0.10172651576781834,
+    "retention_rmse": 0.1652912729663807,
+    "retention_r2": 0.5884915529837494,
+    "price_mae_myr": 268.20793555622686,
+    "price_rmse_myr": 411.8113754871523,
+    "price_r2": 0.6742685894358635,
+    "price_median_absolute_error_myr": 122.39462047625466,
+    "error_breakdowns": {
+      "by_device_age": [
+        {
+          "deviceAge": 0,
+          "mae_myr": 703.2448553359201,
+          "count": 30308
+        },
+        {
+          "deviceAge": 1,
+          "mae_myr": 664.1386067991267,
+          "count": 7581
+        },
+        {
+          "deviceAge": 2,
+          "mae_myr": 265.9785658931492,
+          "count": 5038
+        },
+        {
+          "deviceAge": 6,
+          "mae_myr": 61.69987632994077,
+          "count": 45454
+        },
+        {
+          "deviceAge": 8,
+          "mae_myr": 118.85253240268321,
+          "count": 45454
+        }
+      ],
+      "by_brand": [
+        {
+          "brand": "apple",
+          "mae_myr": 227.39495440238855,
+          "count": 113519
+        },
+        {
+          "brand": "google pixel",
+          "mae_myr": 572.1927746690134,
+          "count": 15278
+        },
+        {
+          "brand": "samsung",
+          "mae_myr": 265.9785658931492,
+          "count": 5038
+        }
+      ],
+      "by_msrp_range": [
+        {
+          "msrp_range": "<=1k",
+          "mae_myr": NaN,
+          "count": 0
+        },
+        {
+          "msrp_range": "1-2k",
+          "mae_myr": NaN,
+          "count": 0
+        },
+        {
+          "msrp_range": "2-4k",
+          "mae_myr": 244.43403200709238,
+          "count": 126254
+        },
+        {
+          "msrp_range": "4-8k",
+          "mae_myr": 664.1386067991267,
+          "count": 7581
+        },
+        {
+          "msrp_range": ">8k",
+          "mae_myr": NaN,
+          "count": 0
+        }
+      ],
+      "by_performance_range": [
+        {
+          "performance_range": "0-40",
+          "mae_myr": 173.11755590326055,
+          "count": 5395
+        },
+        {
+          "performance_range": "40-60",
+          "mae_myr": 190.9406977285599,
+          "count": 23652
+        },
+        {
+          "performance_range": "60-80",
+          "mae_myr": 238.93369871636384,
+          "count": 58981
+        },
+        {
+          "performance_range": "80-100",
+          "mae_myr": 356.9970086319509,
+          "count": 45807
+        }
+      ],
+      "by_total_damage_range": [
+        {
+          "damage_range": "0-10",
+          "mae_myr": 367.6081978388947,
+          "count": 9727
+        },
+        {
+          "damage_range": "10-30",
+          "mae_myr": 337.8319370764787,
+          "count": 23591
+        },
+        {
+          "damage_range": "30-60",
+          "mae_myr": 293.89165906222416,
+          "count": 32019
+        },
+        {
+          "damage_range": ">60",
+          "mae_myr": 218.10817623440286,
+          "count": 68498
+        }
+      ],
+      "seen_vs_unseen_models": [
+        {
+          "model_exposure": "unseen",
+          "mae_myr": 268.20793555622686,
+          "count": 133835
+        }
+      ]
+    },
+    "training_seconds": 1.2709198999999671,
+    "best_iteration": 19,
+    "split": {
+      "train": {
+        "records": 318869,
+        "models": 28,
+        "brands": 17,
+        "ages": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          9,
+          10
+        ],
+        "brand_list": [
+          "apple",
+          "asus",
+          "google pixel",
+          "honor",
+          "huawei",
+          "infinix",
+          "motorola",
+          "nothing",
+          "oppo",
+          "poco",
+          "realme",
+          "samsung",
+          "sony",
+          "tecno",
+          "vivo",
+          "xiaomi",
+          "zte"
+        ],
+        "models_list": [
+          "asus rog phone 5",
+          "axon 40 ultra",
+          "f5 pro",
+          "find x5 pro",
+          "galaxy s24 ultra",
+          "galaxy s25",
+          "galaxy s26",
+          "honor magic4 pro",
+          "huawei p60 pro",
+          "iphone 11",
+          "iphone 16",
+          "iphone 17 pro",
+          "iphone 7",
+          "iphone x",
+          "moto g stylus 5g",
+          "note 40 5g",
+          "nothing phone (3)",
+          "phantom v flip2",
+          "pixel 8",
+          "pixel 9",
+          "realme gt 2 pro",
+          "realme gt 8 pro",
+          "sony xperia 5 iii",
+          "spark 20c",
+          "vivo x90 pro",
+          "x7 pro",
+          "xiaomi 12 pro",
+          "xiaomi 12t pro"
+        ],
+        "missing_ages_vs_dataset": [
+          6,
+          8
+        ],
+        "missing_brands_vs_dataset": [
+          "nubia",
+          "oneplus",
+          "redmi"
+        ],
+        "models_unseen_in_training": []
+      },
+      "validation": {
+        "records": 47296,
+        "models": 6,
+        "brands": 6,
+        "ages": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "brand_list": [
+          "huawei",
+          "infinix",
+          "nubia",
+          "oneplus",
+          "realme",
+          "redmi"
+        ],
+        "models_list": [
+          "hot 11",
+          "mate 60 pro",
+          "oneplus 11",
+          "realme gt 6",
+          "red magic 6",
+          "redmi note 12 pro"
+        ],
+        "missing_ages_vs_dataset": [
+          0,
+          1,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "missing_brands_vs_dataset": [
+          "apple",
+          "asus",
+          "google pixel",
+          "honor",
+          "motorola",
+          "nothing",
+          "oppo",
+          "poco",
+          "samsung",
+          "sony",
+          "tecno",
+          "vivo",
+          "xiaomi",
+          "zte"
+        ],
+        "models_unseen_in_training": [
+          "hot 11",
+          "mate 60 pro",
+          "oneplus 11",
+          "realme gt 6",
+          "red magic 6",
+          "redmi note 12 pro"
+        ]
+      },
+      "test": {
+        "records": 133835,
+        "models": 6,
+        "brands": 3,
+        "ages": [
+          0,
+          1,
+          2,
+          6,
+          8
+        ],
+        "brand_list": [
+          "apple",
+          "google pixel",
+          "samsung"
+        ],
+        "models_list": [
+          "galaxy s24",
+          "iphone 12",
+          "iphone 17 pro max",
+          "iphone 17e",
+          "iphone xr",
+          "pixel 10a"
+        ],
+        "missing_ages_vs_dataset": [
+          3,
+          4,
+          5,
+          7,
+          9,
+          10
+        ],
+        "missing_brands_vs_dataset": [
+          "asus",
+          "honor",
+          "huawei",
+          "infinix",
+          "motorola",
+          "nothing",
+          "nubia",
+          "oneplus",
+          "oppo",
+          "poco",
+          "realme",
+          "redmi",
+          "sony",
+          "tecno",
+          "vivo",
+          "xiaomi",
+          "zte"
+        ],
+        "models_unseen_in_training": [
+          "galaxy s24",
+          "iphone 12",
+          "iphone 17 pro max",
+          "iphone 17e",
+          "iphone xr",
+          "pixel 10a"
+        ]
+      }
+    }
+  },
+  "supported_brand_list": [
+    "apple",
+    "asus",
+    "google pixel",
+    "honor",
+    "huawei",
+    "infinix",
+    "motorola",
+    "nothing",
+    "nubia",
+    "oneplus",
+    "oppo",
+    "poco",
+    "realme",
+    "redmi",
+    "samsung",
+    "sony",
+    "tecno",
+    "vivo",
+    "xiaomi",
+    "zte"
+  ],
+  "training_model_list": [
+    "asus rog phone 5",
+    "axon 40 ultra",
+    "f5 pro",
+    "find x5 pro",
+    "galaxy s24 ultra",
+    "galaxy s25",
+    "galaxy s26",
+    "honor magic4 pro",
+    "huawei p60 pro",
+    "iphone 11",
+    "iphone 16",
+    "iphone 17 pro",
+    "iphone 7",
+    "iphone x",
+    "moto g stylus 5g",
+    "note 40 5g",
+    "nothing phone (3)",
+    "phantom v flip2",
+    "pixel 8",
+    "pixel 9",
+    "realme gt 2 pro",
+    "realme gt 8 pro",
+    "sony xperia 5 iii",
+    "spark 20c",
+    "vivo x90 pro",
+    "x7 pro",
+    "xiaomi 12 pro",
+    "xiaomi 12t pro"
+  ],
+  "input_validation_constraints": {
+    "deviceAge": [
+      0,
+      10
+    ],
+    "ramCapacity": ">0",
+    "storage": ">0",
+    "internalPerfromanceOverallMark": [
+      0,
+      100
+    ],
+    "screenDmgScore": ">=0",
+    "totalDmgScore": ">=0",
+    "hasScreenDamage": [
+      0,
+      1
+    ],
+    "msrp": ">0"
+  }
+}

@@ -1197,11 +1197,11 @@ router.post("/complete-buyout", async (req, res) => {
         if (existingTransaction && String(existingTransaction.data()?.rentalID || "") !== rentalID) {
             return res.status(409).json({ success: false, error: "This invoice is already linked to another rental." });
         }
-        if (String(records.rentalData.rentalStatus || "").trim().toLowerCase() === "bought_out" && existingTransaction) {
+        const currentRentalStatus = String(records.rentalData.rentalStatus || "").trim().toLowerCase();
+        if (["bought_out", "purchased"].includes(currentRentalStatus) && existingTransaction) {
             return res.json({ success: true, transactionID: existingTransaction.data()?.transactionID || existingTransaction.id, amountPaid: quote.totalDue, rentalID });
         }
-        const rentalStatus = String(records.rentalData.rentalStatus || "").trim().toLowerCase();
-        if (!["renting", "overdue"].includes(rentalStatus)) {
+        if (!["renting", "overdue"].includes(currentRentalStatus)) {
             return res.status(409).json({ success: false, error: "This rental is not available for buyout." });
         }
         if (!noCharge) {
@@ -1272,11 +1272,22 @@ router.post("/complete-buyout", async (req, res) => {
                 paymentAccountID,
                 addressID,
                 gatewayTransactionID,
+                currentValue: quote.currentValue,
+                rentalDiscount: quote.rentalDiscount,
+                depositDeduction: quote.depositDeduction,
                 createdAt: new Date().toISOString()
             });
         }
-        batch.update(records.rentalRef, { rentalStatus: "bought_out", recurringStatus: "INACTIVE" });
-        batch.update(records.productRef, { listingStatus: "sold", status: "sold" });
+        batch.update(records.rentalRef, {
+            rentalStatus: "purchased",
+            depositStatus: "forfeited",
+            recurringStatus: "INACTIVE"
+        });
+        batch.update(records.productRef, {
+            sellingPrice: quote.currentValue,
+            listingStatus: "sold",
+            status: "sold"
+        });
         await batch.commit();
         return res.json({ success: true, transactionID, amountPaid: quote.totalDue, rentalID });
     } catch (error) {

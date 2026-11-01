@@ -18,6 +18,7 @@ class DiagnosticSuitePage extends StatefulWidget {
   final bool isLoggedIn;
   final String? email;
   final String? name;
+  final bool fromImproveAssessment;
 
   const DiagnosticSuitePage({
     super.key,
@@ -26,6 +27,7 @@ class DiagnosticSuitePage extends StatefulWidget {
     this.isLoggedIn = false,
     this.email,
     this.name,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -99,135 +101,10 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
           isLoggedIn: widget.isLoggedIn,
           email: widget.email,
           name: widget.name,
+          fromImproveAssessment: widget.fromImproveAssessment,
         ),
       ),
     );
-  }
-
-  void _onTileTapped(Map<String, dynamic> item) {
-    if (!_checkLoginRequired()) return;
-
-    if (item['title'] == 'Touchscreen') {
-      _onStartDiagnostic();
-    } else if (item['title'] == 'Display') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DisplayTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'Camera') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CameraTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'Microphone') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MicrophoneTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-            cameraScore: 100,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'Speaker') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SpeakerTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-            cameraScore: 100,
-            micScore: 100,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'Sensors') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SensorTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-            cameraScore: 100,
-            micScore: 100,
-            speakerScore: 100,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'Wi-Fi') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => NetworkTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-            cameraScore: 100,
-            micScore: 100,
-            speakerScore: 100,
-            sensorScore: 100,
-          ),
-        ),
-      );
-    } else if (item['title'] == 'GPS') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => GpsTestPage(
-            device: widget.device,
-            tradeInRequestID: widget.tradeInRequestID,
-            isLoggedIn: widget.isLoggedIn,
-            email: widget.email,
-            name: widget.name,
-            touchScore: 100,
-            displayScore: 100,
-            cameraScore: 100,
-            micScore: 100,
-            speakerScore: 100,
-            sensorScore: 100,
-            networkScore: 100,
-          ),
-        ),
-      );
-    }
   }
 
   @override
@@ -385,53 +262,46 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
   }
 
   Widget _buildTestCard(Map<String, dynamic> item) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: () => _onTileTapped(item),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0).withValues(alpha: 0.8)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+        border: Border.all(color: const Color(0xFFE2E8F0).withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Circular icon container
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF2FF),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  item['icon'] as IconData,
-                  size: 24,
-                  color: const Color(0xFF0C5AD2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                item['title'] as String,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Circular icon container
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEEF2FF),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              item['icon'] as IconData,
+              size: 24,
+              color: const Color(0xFF0C5AD2),
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            item['title'] as String,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+        ],
       ),
     );
   }

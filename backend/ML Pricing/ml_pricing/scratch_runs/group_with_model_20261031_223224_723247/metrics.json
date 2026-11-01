@@ -1,0 +1,92 @@
+{
+  "implementation": "scratch_boost_v1",
+  "boosting": "plain",
+  "categorical_encoding": "ordered_target_statistics",
+  "configuration": "with_model",
+  "strategy": "group",
+  "training_seconds": 0.06736309999996593,
+  "hyperparameters": {
+    "iterations": 20,
+    "depth": 4,
+    "learning_rate": 0.05,
+    "bins": 32,
+    "l2": 3.0,
+    "patience": 50,
+    "seed": 42,
+    "prior": 0.25,
+    "smoothing": 10.0
+  },
+  "dataset": "C:\\Users\\User\\Desktop\\ML Pricing\\dataset 12col.csv",
+  "sample_rows": 5000,
+  "split": {
+    "test": {
+      "records": 879,
+      "models": [
+        "galaxy s24",
+        "galaxy s26",
+        "iphone x",
+        "red magic 6",
+        "x7 pro",
+        "xiaomi 12t pro"
+      ]
+    },
+    "validation": {
+      "records": 442,
+      "models": [
+        "galaxy s24 ultra",
+        "iphone 17e",
+        "mate 60 pro",
+        "moto g stylus 5g",
+        "phantom v flip2",
+        "pixel 9"
+      ]
+    },
+    "train": {
+      "records": 3679,
+      "models": [
+        "asus rog phone 5",
+        "axon 40 ultra",
+        "f5 pro",
+        "find x5 pro",
+        "galaxy s25",
+        "honor magic4 pro",
+        "hot 11",
+        "huawei p60 pro",
+        "iphone 11",
+        "iphone 12",
+        "iphone 16",
+        "iphone 17 pro",
+        "iphone 17 pro max",
+        "iphone 7",
+        "iphone xr",
+        "note 40 5g",
+        "nothing phone (3)",
+        "oneplus 11",
+        "pixel 10a",
+        "pixel 8",
+        "realme gt 2 pro",
+        "realme gt 6",
+        "realme gt 8 pro",
+        "redmi note 12 pro",
+        "sony xperia 5 iii",
+        "spark 20c",
+        "vivo x90 pro",
+        "xiaomi 12 pro"
+      ]
+    }
+  },
+  "best_iteration": 20,
+  "attempted_iterations": 20,
+  "test_metrics": {
+    "retention_ratio": {
+      "mae": 0.10320705417265395,
+      "rmse": 0.13457153302816374,
+      "r2": 0.7007156093553877
+    },
+    "price_myr": {
+      "mae": 378.79421161237576,
+      "rmse": 493.1184659477305,
+      "r2": 0.6548740116892999
+    }
+  }
+}

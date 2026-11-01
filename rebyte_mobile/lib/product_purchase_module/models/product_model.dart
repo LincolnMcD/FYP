@@ -15,6 +15,8 @@ class ProductModel {
   final String listingStatus;
   final String deviceID;
   final String modelCode;
+  final String tradeInRequestID;
+  final String imei;
   final double rentalPrice;
   final double collectedPrice;
 
@@ -35,6 +37,8 @@ class ProductModel {
     required this.listingStatus,
     this.deviceID = '',
     this.modelCode = '',
+    this.tradeInRequestID = '',
+    this.imei = '',
     this.rentalPrice = 0.0,
     this.collectedPrice = 0.0,
   });
@@ -70,6 +74,8 @@ class ProductModel {
       listingStatus: json['listingStatus']?.toString() ?? 'listed',
       deviceID: json['deviceID']?.toString() ?? '',
       modelCode: json['modelCode']?.toString() ?? '',
+      tradeInRequestID: json['tradeInRequestID']?.toString() ?? '',
+      imei: json['imei']?.toString() ?? '',
     );
   }
 

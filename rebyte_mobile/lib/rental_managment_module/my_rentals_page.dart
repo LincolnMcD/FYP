@@ -75,17 +75,17 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
   /// - 'active': rentalStatus == 'renting' (and not overdue)
   /// - 'returning': rentalStatus == 'returning'
   /// - 'overdue': rentalStatus == 'overdue'
-  /// - 'completed': rentalStatus == 'completed', 'returned', 'bought_out', or 'missing'
+  /// - 'completed': rentalStatus == 'completed', 'returned', 'bought_out', 'purchased', or 'missing'
   String _categorizeRental(Map<String, dynamic> rental) {
     final status = (rental['rentalStatus'] ?? '').toString().toLowerCase().trim();
     final depositStatus = (rental['depositStatus'] ?? '').toString().toLowerCase().trim();
-    if (status == 'missing') {
+    if (status == 'missing' || status == 'purchased' || status == 'bought_out') {
       return 'completed';
     }
     if (status == 'overdue') {
       return 'overdue';
     }
-    if (depositStatus == 'returned' || depositStatus == 'refunded') {
+    if (depositStatus == 'returned' || depositStatus == 'refunded' || depositStatus == 'forfeited') {
       return 'completed';
     }
     if (_isRentalOverdue(rental)) {
@@ -486,7 +486,9 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
 
   Widget _buildRentalCard(Map<String, dynamic> rental, {required String category}) {
     final rentalID = rental['rentalID']?.toString() ?? '';
-    final isMissing = (rental['rentalStatus'] ?? '').toString().toLowerCase().trim() == 'missing';
+    final rawRentalStatus = (rental['rentalStatus'] ?? '').toString().toLowerCase().trim();
+    final isMissing = rawRentalStatus == 'missing';
+    final isPurchased = rawRentalStatus == 'purchased' || rawRentalStatus == 'bought_out';
     final product = rental['product'] as Map<String, dynamic>? ?? {};
     final device = rental['device'] as Map<String, dynamic>? ?? {};
 
@@ -633,6 +635,7 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                   depositRefundComplete: depositRefundComplete,
                   depositIsReturned: depositIsReturned,
                   isMissing: isMissing,
+                  isPurchased: isPurchased,
                 ),
               ),
             ],
@@ -1151,8 +1154,8 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      isMissing ? 'Device Reported Missing' : 'Rental Completed',
-                      style: TextStyle(
+                      isMissing ? 'Device Reported Missing' : (isPurchased ? 'Device Purchased (Buyout)' : 'Rental Completed'),
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF64748B),
@@ -1175,6 +1178,7 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
     bool depositRefundComplete = false,
     bool depositIsReturned = false,
     bool isMissing = false,
+    bool isPurchased = false,
   }) {
     if (isOverdue) {
       return Container(
@@ -1241,6 +1245,21 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
             Icon(Icons.report_outlined, size: 14, color: Color(0xFFB91C1C)),
             SizedBox(width: 4),
             Text('Missing', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFB91C1C))),
+          ]),
+        );
+      }
+      if (isPurchased) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.shopping_bag_outlined, size: 14, color: Color(0xFF1D4ED8)),
+            SizedBox(width: 4),
+            Text('Purchased', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8))),
           ]),
         );
       }

@@ -1,0 +1,28 @@
+<!doctype html><html><meta charset="utf-8">
+<title>From-scratch training report</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f6f8fb;color:#182238}table{border-collapse:collapse;background:white}td,th{padding:12px;border:1px solid #ddd}img{width:100%}</style>
+<h1>From-scratch CatBoost-style regression</h1>
+<p>Ordered target statistics, symmetric trees, plain gradient boosting. This is an educational implementation, not full CatBoost ordered boosting. Train curves use ordered encodings; validation and inference use complete training-category statistics.</p>
+<h2>Held-out test results</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mae</th>
+      <th>rmse</th>
+      <th>r2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>retention_ratio</th>
+      <td>0.1032</td>
+      <td>0.1346</td>
+      <td>0.7007</td>
+    </tr>
+    <tr>
+      <th>price_myr</th>
+      <td>378.7942</td>
+      <td>493.1185</td>
+      <td>0.6549</td>
+    </tr>
+  </tbody>
+</table><p>Best iteration: 20</p><h2>Training and validation progress</h2><img src="learning_curves.png" alt="Learning curves"><p>Lower MAE/RMSE is better; higher R² is better. Ratio metrics and MYR price metrics use different units. Synthetic results do not establish real-market accuracy.</p><p><a href="learning_history.csv">Every-iteration CSV</a> · <a href="metrics.json">Full metrics</a></p></html>

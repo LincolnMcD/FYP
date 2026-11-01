@@ -635,20 +635,31 @@ class ShopPageState extends State<ShopPage> {
     Color badgeBgColor = const Color(0xFFDEF7EC);
     Color badgeTextColor = const Color(0xFF03543F);
     IconData badgeIcon = Icons.verified_outlined;
+    String displayCondition = product.condition.trim();
 
     final cond = product.condition.toLowerCase();
-    if (cond.contains('new')) {
-      badgeBgColor = const Color(0xFFE8F5E9);
-      badgeTextColor = const Color(0xFF2E7D32);
+    if (cond.contains('grade a') || cond.contains('excellent') || cond.contains('pristine') || cond.contains('new')) {
+      badgeBgColor = const Color(0xFFDCFCE7);
+      badgeTextColor = const Color(0xFF16A34A);
       badgeIcon = Icons.verified_outlined;
-    } else if (cond.contains('good')) {
+      displayCondition = 'Excellent';
+    } else if (cond.contains('grade b') || cond.contains('good')) {
       badgeBgColor = const Color(0xFFE0F2FE);
       badgeTextColor = const Color(0xFF0284C7);
       badgeIcon = Icons.thumb_up_alt_outlined;
-    } else if (cond.contains('fair')) {
-      badgeBgColor = const Color(0xFFF3F4F6);
-      badgeTextColor = const Color(0xFF4B5563);
+      displayCondition = 'Good';
+    } else if (cond.contains('grade c') || cond.contains('fair')) {
+      badgeBgColor = const Color(0xFFFEF3C7);
+      badgeTextColor = const Color(0xFFD97706);
       badgeIcon = Icons.tune;
+      displayCondition = 'Fair';
+    } else if (cond.contains('grade d') || cond.contains('poor')) {
+      badgeBgColor = const Color(0xFFFEE2E2);
+      badgeTextColor = const Color(0xFFDC2626);
+      badgeIcon = Icons.warning_amber_rounded;
+      displayCondition = 'Poor';
+    } else if (displayCondition.isEmpty) {
+      displayCondition = 'Good';
     }
 
     return Container(
@@ -736,7 +747,7 @@ class ShopPageState extends State<ShopPage> {
                           Icon(badgeIcon, size: 12, color: badgeTextColor),
                           const SizedBox(width: 4),
                           Text(
-                            product.condition,
+                            displayCondition,
                             style: TextStyle(
                               color: badgeTextColor,
                               fontSize: 10,

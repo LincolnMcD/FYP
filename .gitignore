@@ -1,3 +1,4 @@
 backend/serviceAccountKey.json
 .env
 *.pt
+backend/model2_defect_segmentation/

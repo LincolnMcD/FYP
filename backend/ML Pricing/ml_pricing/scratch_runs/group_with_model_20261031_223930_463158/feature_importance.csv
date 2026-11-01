@@ -1,0 +1,18 @@
+feature,split_gain_percent
+deviceAge,77.59359951021845
+"[""model""]:frequency",9.720816590964954
+totalDmgScore,6.44955170088969
+internalPerfromanceOverallMark,2.303798199489943
+msrp,2.1551486568755407
+ramCapacity,0.8348496792499915
+"[""brand""]:frequency",0.7862089280609166
+"[""model""]:target_mean:10.0",0.06629839943029309
+"[""model""]:target_mean:50.0",0.06411504260861717
+"[""brand""]:target_mean:10.0",0.015369301642667895
+screenDmgScore,0.010243990568927946
+hasScreenDamage,0.0
+storage,0.0
+"[""brand""]:target_mean:50.0",0.0
+"[""brand"", ""model""]:target_mean:10.0",0.0
+"[""brand"", ""model""]:target_mean:50.0",0.0
+"[""brand"", ""model""]:frequency",0.0

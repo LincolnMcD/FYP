@@ -42,18 +42,29 @@ class TransactionBreakdown {
   final double baseAmount;
   final double taxAmount;
   final double totalPaid;
+  final double? currentValue;
+  final double? rentalDiscount;
+  final double? depositDeduction;
 
   TransactionBreakdown({
     required this.baseAmount,
     required this.taxAmount,
     required this.totalPaid,
+    this.currentValue,
+    this.rentalDiscount,
+    this.depositDeduction,
   });
+
+  bool get isBuyout => currentValue != null || rentalDiscount != null || depositDeduction != null;
 
   factory TransactionBreakdown.fromJson(Map<String, dynamic> json) {
     return TransactionBreakdown(
       baseAmount: (json['baseAmount'] as num?)?.toDouble() ?? 0.0,
       taxAmount: (json['taxAmount'] as num?)?.toDouble() ?? 0.0,
       totalPaid: (json['totalPaid'] as num?)?.toDouble() ?? 0.0,
+      currentValue: (json['currentValue'] as num?)?.toDouble(),
+      rentalDiscount: (json['rentalDiscount'] as num?)?.toDouble(),
+      depositDeduction: (json['depositDeduction'] as num?)?.toDouble(),
     );
   }
 
@@ -62,6 +73,9 @@ class TransactionBreakdown {
       'baseAmount': baseAmount,
       'taxAmount': taxAmount,
       'totalPaid': totalPaid,
+      if (currentValue != null) 'currentValue': currentValue,
+      if (rentalDiscount != null) 'rentalDiscount': rentalDiscount,
+      if (depositDeduction != null) 'depositDeduction': depositDeduction,
     };
   }
 }

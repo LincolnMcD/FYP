@@ -20,6 +20,7 @@ class SensorTestPage extends StatefulWidget {
   final bool isCameraSkipped;
   final bool isMicSkipped;
   final bool isSpeakerSkipped;
+  final bool fromImproveAssessment;
 
   const SensorTestPage({
     super.key,
@@ -38,6 +39,7 @@ class SensorTestPage extends StatefulWidget {
     this.isCameraSkipped = false,
     this.isMicSkipped = false,
     this.isSpeakerSkipped = false,
+    this.fromImproveAssessment = false,
   });
 
   @override
@@ -350,6 +352,7 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
                               isMicSkipped: widget.isMicSkipped,
                               isSpeakerSkipped: widget.isSpeakerSkipped,
                               isSensorSkipped: false,
+                              fromImproveAssessment: widget.fromImproveAssessment,
                             ),
                           ),
                         );
@@ -485,6 +488,7 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
             isMicSkipped: widget.isMicSkipped,
             isSpeakerSkipped: widget.isSpeakerSkipped,
             isSensorSkipped: true,
+            fromImproveAssessment: widget.fromImproveAssessment,
           ),
         ),
       );
