@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operational Performance - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0b4fb3;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --muted: #717b8e;
+      --card-bg: #ffffff;
+      --accent-blue: #1d4ed8;
+      --green: #10b981;
+      --green-bg: #d1fae5;
+      --amber: #f59e0b;
+      --amber-bg: #fef3c7;
+      --red: #ef4444;
+      --red-bg: #fee2e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: 'Inter', Arial, sans-serif;
+    }
+    button, input, select { font: inherit; }
+
+    /* Shared Standard Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active { color: #fff; background: var(--navy); }
+
+    /* Main Container with Admin Header */
+    .main-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow-y: auto;
+    }
+    .content {
+      padding: 32px 40px 60px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Top Bar */
+    .back-btn-row {
+      margin-bottom: 14px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: #fff;
+      transition: background 0.15s, color 0.15s;
+    }
+    .back-link:hover {
+      background: #eef2f7;
+      color: var(--text);
+    }
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 26px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .page-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .date-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: #334155;
+    }
+    .export-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #1e293b;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .export-cta-btn:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    /* 4 KPI Cards Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 26px;
+    }
+    .kpi-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .kpi-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .kpi-header svg {
+      width: 17px;
+      height: 17px;
+      color: #475569;
+    }
+    .kpi-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .kpi-num {
+      font-size: 32px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1;
+    }
+    .kpi-unit {
+      font-size: 18px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .kpi-trend {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .trend-down { color: #10b981; } /* For operational cycle times, decrease is positive/green */
+    .trend-neutral { color: #64748b; }
+    .trend-up { color: #ef4444; } /* Increase in cycle time is warning/red */
+
+    /* Middle Row: Resale Cycle Time + Processing Time by Stage */
+    .mid-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 26px;
+    }
+    .chart-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 24px 28px;
+    }
+    .chart-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* Category Cycle Times */
+    .cat-cycle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 8px;
+    }
+    .cat-cycle-item {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .cat-cycle-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .cat-name { color: #1e293b; }
+    .cat-days { color: #082f72; font-weight: 700; }
+    .cat-progress-track {
+      width: 100%;
+      height: 9px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cat-progress-bar {
+      height: 100%;
+      background: #082f72;
+      border-radius: 6px;
+    }
+
+    /* Processing Time Stages */
+    .stage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 8px;
+    }
+    .stage-item {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .stage-num-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #082f72;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .stage-body {
+      flex: 1;
+    }
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .stage-name {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .stage-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-on-track {
+      background: var(--green-bg);
+      color: #047857;
+    }
+    .status-warning {
+      background: var(--amber-bg);
+      color: #b45309;
+    }
+    .status-delayed {
+      background: var(--red-bg);
+      color: #b91c1c;
+    }
+    .stage-metric {
+      font-size: 20px;
+      font-weight: 800;
+      color: #082f72;
+    }
+    .stage-metric-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #64748b;
+      margin-left: 4px;
+    }
+
+    /* Resource Allocation by Stage Section */
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 34px 0 16px;
+    }
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .resource-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .resource-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 18px;
+    }
+    .resource-val-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .resource-count {
+      font-size: 32px;
+      font-weight: 800;
+      color: #082f72;
+      line-height: 1;
+    }
+    .resource-role {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .resource-track {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .resource-bar {
+      height: 100%;
+      background: #082f72;
+      border-radius: 5px;
+    }
+    .resource-pct {
+      font-size: 13px;
+      font-weight: 500;
+      color: #64748b;
+    }
+
+    /* Footer */
+    .page-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: #94a3b8;
+      font-size: 12.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Listings</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>System Config</span>
+      </a>
+      <a href="../financeModule/financialManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        <span>Finance</span>
+      </a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span>Analytics</span>
+      </a>
+      <a href="../adminModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Task Assignment</span>
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>User</span>
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Staff Management</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Communication</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Area -->
+  <div class="main-wrap">
+    <!-- Shared Admin Header -->
+    <header class="admin-header" data-admin-header data-page-title="Analytics"></header>
+
+    <main class="content">
+      <!-- Back Arrow Navigation -->
+      <div class="back-btn-row">
+        <a href="../adminModule/analyticsHub.html" class="back-link" title="Back to Analytics Hub">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </a>
+      </div>
+
+      <!-- Page Title & Date/Export Controls -->
+      <div class="page-title-row">
+        <h1 class="page-title">Operational Performance</h1>
+        <div class="header-actions">
+          <div class="date-pill">
+            <span>October 2023</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <a href="exportReport.html?type=operations" class="export-cta-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export Report</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 4 KPI Cards -->
+      <div class="kpi-grid">
+        <!-- Avg Inspection -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>AVG INSPECTION</span>
+          </div>
+          <div class="kpi-value-row">
+            <span class="kpi-num">45</span>
+            <span class="kpi-unit">mins</span>
+          </div>
+          <div class="kpi-trend trend-down">
+            <span>&darr; 12% vs prev</span>
+          </div>
+        </div>
+
+        <!-- Refurbishment -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <span>REFURBISHMENT</span>
+          </div>
+          <div class="kpi-value-row">
+            <span class="kpi-num">2.5</span>
+            <span class="kpi-unit">days</span>
+          </div>
+          <div class="kpi-trend trend-neutral">
+            <span>&minus; 0% vs prev</span>
+          </div>
+        </div>
+
+        <!-- Avg Delivery -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            <span>AVG DELIVERY</span>
+          </div>
+          <div class="kpi-value-row">
+            <span class="kpi-num">24</span>
+            <span class="kpi-unit">hours</span>
+          </div>
+          <div class="kpi-trend trend-down">
+            <span>&darr; 4% vs prev</span>
+          </div>
+        </div>
+
+        <!-- Total Cycle Time -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>TOTAL CYCLE TIME</span>
+          </div>
+          <div class="kpi-value-row">
+            <span class="kpi-num">12</span>
+            <span class="kpi-unit">days</span>
+          </div>
+          <div class="kpi-trend trend-up">
+            <span>&uarr; 2% vs prev</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle 2 Cards: Resale Cycle Time by Category & Processing Time by Stage -->
+      <div class="mid-grid">
+        <!-- Resale Cycle Time by Category -->
+        <div class="chart-card">
+          <h2 class="chart-title">Resale Cycle Time by Category</h2>
+          <div class="cat-cycle-list">
+            <div class="cat-cycle-item">
+              <div class="cat-cycle-info">
+                <span class="cat-name">iPhone</span>
+                <span class="cat-days">6 Days</span>
+              </div>
+              <div class="cat-progress-track">
+                <div class="cat-progress-bar" style="width: 35%;"></div>
+              </div>
+            </div>
+
+            <div class="cat-cycle-item">
+              <div class="cat-cycle-info">
+                <span class="cat-name">Samsung</span>
+                <span class="cat-days">8 Days</span>
+              </div>
+              <div class="cat-progress-track">
+                <div class="cat-progress-bar" style="width: 48%;"></div>
+              </div>
+            </div>
+
+            <div class="cat-cycle-item">
+              <div class="cat-cycle-info">
+                <span class="cat-name">Xiaomi</span>
+                <span class="cat-days">14 Days</span>
+              </div>
+              <div class="cat-progress-track">
+                <div class="cat-progress-bar" style="width: 75%;"></div>
+              </div>
+            </div>
+
+            <div class="cat-cycle-item">
+              <div class="cat-cycle-info">
+                <span class="cat-name">Huawei</span>
+                <span class="cat-days">11 Days</span>
+              </div>
+              <div class="cat-progress-track">
+                <div class="cat-progress-bar" style="width: 60%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Processing Time by Stage -->
+        <div class="chart-card">
+          <h2 class="chart-title">Processing Time by Stage</h2>
+          <div class="stage-list">
+            <!-- Stage 1 -->
+            <div class="stage-item">
+              <div class="stage-num-badge">1</div>
+              <div class="stage-body">
+                <div class="stage-top">
+                  <span class="stage-name">Inspection</span>
+                  <span class="stage-status-badge status-on-track">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    On Track
+                  </span>
+                </div>
+                <div>
+                  <span class="stage-metric">45 mins</span>
+                  <span class="stage-metric-label">avg</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 2 -->
+            <div class="stage-item">
+              <div class="stage-num-badge">2</div>
+              <div class="stage-body">
+                <div class="stage-top">
+                  <span class="stage-name">Refurbishment</span>
+                  <span class="stage-status-badge status-warning">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Warning
+                  </span>
+                </div>
+                <div>
+                  <span class="stage-metric">2.5 days</span>
+                  <span class="stage-metric-label">avg</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 3 -->
+            <div class="stage-item">
+              <div class="stage-num-badge">3</div>
+              <div class="stage-body">
+                <div class="stage-top">
+                  <span class="stage-name">Delivery</span>
+                  <span class="stage-status-badge status-delayed">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Delayed
+                  </span>
+                </div>
+                <div>
+                  <span class="stage-metric">24 hours</span>
+                  <span class="stage-metric-label">avg</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resource Allocation by Stage Section -->
+      <h2 class="section-title">Resource Allocation by Stage</h2>
+      <div class="resource-grid">
+        <!-- Inspection Team -->
+        <div class="resource-card">
+          <div class="resource-header">INSPECTION TEAM</div>
+          <div class="resource-val-row">
+            <span class="resource-count">12</span>
+            <span class="resource-role">Staff Members</span>
+          </div>
+          <div class="resource-track">
+            <div class="resource-bar" style="width: 25%;"></div>
+          </div>
+          <div class="resource-pct">25% of total workforce</div>
+        </div>
+
+        <!-- Refurbishment Team -->
+        <div class="resource-card">
+          <div class="resource-header">REFURBISHMENT TEAM</div>
+          <div class="resource-val-row">
+            <span class="resource-count">28</span>
+            <span class="resource-role">Technicians</span>
+          </div>
+          <div class="resource-track">
+            <div class="resource-bar" style="width: 58%;"></div>
+          </div>
+          <div class="resource-pct">58% of total workforce</div>
+        </div>
+
+        <!-- Shipping & Logistics -->
+        <div class="resource-card">
+          <div class="resource-header">SHIPPING & LOGISTICS</div>
+          <div class="resource-val-row">
+            <span class="resource-count">8</span>
+            <span class="resource-role">Personnel</span>
+          </div>
+          <div class="resource-track">
+            <div class="resource-bar" style="width: 17%;"></div>
+          </div>
+          <div class="resource-pct">17% of total workforce</div>
+        </div>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="page-footer">
+        <span>Generated on Nov 1, 2023 &bull; ReByte Internal Reporting System</span>
+        <span>Page 1 of 1</span>
+      </div>
+    </main>
+  </div>
+
+  <script src="adminHeader.js"></script>
+</body>
+</html>
+

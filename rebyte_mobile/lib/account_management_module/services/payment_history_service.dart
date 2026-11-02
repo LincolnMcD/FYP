@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -39,7 +40,7 @@ class PaymentHistoryService {
       final uri = Uri.parse('${AuthService.baseUrl}/api/payment/transactions')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -73,6 +74,14 @@ class PaymentHistoryService {
           error: 'Server returned error ${response.statusCode}',
         );
       }
+    } on TimeoutException {
+      return PaymentHistoryResult(
+        success: false,
+        transactions: [],
+        totalCount: 0,
+        hasMore: false,
+        error: 'The transaction request timed out. Please try again.',
+      );
     } catch (e) {
       return PaymentHistoryResult(
         success: false,

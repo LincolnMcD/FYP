@@ -272,22 +272,6 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
     }
   }
 
-  Color _getSeverityBgColor(String severity) {
-    switch (severity.toLowerCase()) {
-      case 'critical':
-        return const Color(0xFFFEF2F2);
-      case 'major':
-        return const Color(0xFFFFF7ED);
-      case 'minor':
-        return const Color(0xFFFFFBEB);
-      case 'low':
-        return const Color(0xFFF0F9FF);
-      case 'none':
-      default:
-        return const Color(0xFFF0FDF4);
-    }
-  }
-
   Widget _buildEvaluatingDeviceCard() {
     final device = widget.device;
     final devRec = _deviceRecord;
@@ -321,8 +305,6 @@ class _AssessmentResultPageState extends State<AssessmentResultPage> {
         device.deviceAge ??
         '';
     final String age = rawAge.trim().isNotEmpty ? rawAge.trim() : 'N/A';
-
-    final String? modelCode = devRec?['modelCode']?.toString() ?? device.modelCode;
 
     return Container(
       width: double.infinity,

@@ -4,13 +4,6 @@ import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../device_tradein_module/models/device_model.dart';
 import '../account_management_module/welcome_page.dart';
 import 'touchscreen_test_page.dart';
-import 'display_test_page.dart';
-import 'camera_test_page.dart';
-import 'microphone_test_page.dart';
-import 'speaker_test_page.dart';
-import 'sensor_test_page.dart';
-import 'network_test_page.dart';
-import 'gps_test_page.dart';
 
 class DiagnosticSuitePage extends StatefulWidget {
   final DeviceModel? device;

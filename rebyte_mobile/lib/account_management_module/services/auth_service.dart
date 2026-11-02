@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'session_service.dart';
 import 'account_session_watch_service.dart';
+import 'network_discovery_service.dart';
 
 class AuthService {
   // Token revocation happens before this device can reauthenticate with the new
@@ -14,7 +15,7 @@ class AuthService {
 
   static String get baseUrl {
     // 192.168.100.185 explicitly targets the IPv4 host computer over local area network, perfectly unblocking physical devices/emulators natively.
-    return 'http://192.168.100.185:3000';
+    return NetworkDiscoveryService.currentUrl;
   }
 
   static Future<Map<String, dynamic>> requestOTP(String email) async {

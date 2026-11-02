@@ -5,6 +5,19 @@ import numpy as np
 from PIL import Image
 
 
+def resolve_torch_device(requested='auto'):
+    """Resolve auto to an available accelerator, otherwise use the CPU."""
+    import torch
+    if requested and requested != 'auto':
+        return str(requested)
+    if torch.cuda.is_available():
+        return 'cuda'
+    xpu = getattr(torch, 'xpu', None)
+    if xpu is not None and xpu.is_available():
+        return 'xpu'
+    return 'cpu'
+
+
 def load_rgb(path):
     from PIL import ImageOps
     with Image.open(path) as im: return np.asarray(ImageOps.exif_transpose(im).convert('RGB')).copy()
@@ -30,7 +43,7 @@ class PartSegmenter:
             if not checkpoint.is_file(): raise FileNotFoundError(f'SAM checkpoint not found: {checkpoint}')
             self.sam=SAM(str(checkpoint))
         kwargs={'source':cv2.cvtColor(rgb,cv2.COLOR_RGB2BGR),'verbose':False,
-                'device':self.settings.get('device','cpu')}
+                'device':resolve_torch_device(self.settings.get('device','auto'))}
         if 'box' in spec: kwargs['bboxes']=[spec['box']]
         if 'points' in spec:
             kwargs['points']=[spec['points']];kwargs['labels']=[spec.get('point_labels',[1]*len(spec['points']))]
@@ -49,11 +62,12 @@ class PartSegmenter:
         import torch
         try:from transformers import AutoProcessor,AutoModelForZeroShotObjectDetection
         except ImportError as exc:raise RuntimeError('Automatic phone-outline proposals require requirements-parts.txt.') from exc
+        device=resolve_torch_device(self.settings.get('device','auto'))
         if not hasattr(self,'grounder'):
             model_id=self.settings.get('detector_model','IDEA-Research/grounding-dino-tiny')
             cache=str(Path(__file__).parent/'weights'/'huggingface')
             self.processor=AutoProcessor.from_pretrained(model_id,cache_dir=cache)
-            self.grounder=AutoModelForZeroShotObjectDetection.from_pretrained(model_id,cache_dir=cache).eval().to(self.settings.get('device','cpu'))
+            self.grounder=AutoModelForZeroShotObjectDetection.from_pretrained(model_id,cache_dir=cache).eval().to(device)
         if mode=='whole_phone_outline':
             targets=[('Phone_Outline','Phone','the complete outline of a whole mobile phone')]
         else:
@@ -67,7 +81,7 @@ class PartSegmenter:
                 targets=[('Frame_'+facet,'Frame','the side metal frame of a mobile phone')]
         proposals=[]
         for sid,part,text in targets:
-            inputs=self.processor(images=Image.fromarray(rgb),text=text+'.',return_tensors='pt').to(self.settings.get('device','cpu'))
+            inputs=self.processor(images=Image.fromarray(rgb),text=text+'.',return_tensors='pt').to(device)
             with torch.inference_mode():outputs=self.grounder(**inputs)
             rows=self.processor.post_process_grounded_object_detection(outputs,inputs.input_ids,
                 threshold=float(self.settings.get('box_threshold',.3)),text_threshold=.25,target_sizes=[rgb.shape[:2]])[0]

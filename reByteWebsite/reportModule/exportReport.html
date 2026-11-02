@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Export Report - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0b4fb3;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --muted: #717b8e;
+      --card-bg: #ffffff;
+      --accent-blue: #1d4ed8;
+      --teal-badge: #14b8a6;
+      --teal-bg: #ccfbf1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: 'Inter', Arial, sans-serif;
+    }
+    button, input, select { font: inherit; }
+
+    /* Shared Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active { color: #fff; background: var(--navy); }
+
+    /* Main Container with Admin Header */
+    .main-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow-y: auto;
+    }
+    .content {
+      padding: 32px 40px 60px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Back Arrow */
+    .back-btn-row {
+      margin-bottom: 14px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: #fff;
+      transition: background 0.15s, color 0.15s;
+    }
+    .back-link:hover {
+      background: #eef2f7;
+      color: var(--text);
+    }
+    .page-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 26px;
+    }
+
+    /* 2 Columns: Config Form (Left) & Preview Sheet (Right) */
+    .export-layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .export-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Panel: Generate New Report Form */
+    .config-card {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 26px 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .config-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 6px;
+    }
+    .config-desc {
+      font-size: 13px;
+      color: #64748b;
+      margin: 0 0 22px;
+      line-height: 1.45;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 8px;
+    }
+    .form-select {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: #0f172a;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      cursor: pointer;
+    }
+    .form-select:focus {
+      border-color: #082f72;
+      box-shadow: 0 0 0 3px rgba(8, 47, 114, 0.1);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .btn-generate {
+      width: 100%;
+      height: 46px;
+      margin-top: 10px;
+      background: #082f72;
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-generate:hover {
+      background: #062254;
+    }
+
+    /* Right Panel: Report Preview */
+    .preview-wrapper {
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 24px 28px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 24px;
+    }
+    .preview-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .preview-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+    }
+    .preview-id {
+      font-size: 12px;
+      color: #64748b;
+      font-family: monospace;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .draft-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    /* Inner Report Sheet (Formatted clean printable layout) */
+    .report-sheet {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 32px 36px;
+      background: #fff;
+    }
+    .sheet-brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+    .sheet-brand-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #082f72;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sheet-sub-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #475569;
+      margin: 0;
+    }
+    .sheet-meta {
+      text-align: right;
+    }
+    .sheet-date {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #082f72;
+    }
+    .sheet-confidential {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* 4 Summary Mini KPI Cards inside preview */
+    .sheet-kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 26px;
+    }
+    .sheet-kpi-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet-kpi-card.highlight {
+      background: #082f72;
+      border-color: #082f72;
+      color: #fff;
+    }
+    .sheet-kpi-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 8px;
+    }
+    .sheet-kpi-card.highlight .sheet-kpi-top {
+      color: #cbd5e1;
+    }
+    .sheet-kpi-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .sheet-kpi-card.highlight .sheet-kpi-val {
+      color: #fff;
+    }
+    .sheet-kpi-trend {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #10b981;
+    }
+    .sheet-kpi-card.highlight .sheet-kpi-trend {
+      color: #93c5fd;
+    }
+
+    /* Middle Section of Preview: Charts */
+    .sheet-mid-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .sheet-chart-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 18px;
+      background: #fff;
+    }
+    .sheet-chart-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 12px;
+    }
+
+    /* Simple Pure SVG Bar Chart inside Preview */
+    .preview-bars-container {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      height: 120px;
+      padding: 10px 10px 0;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .preview-bar-group {
+      display: flex;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    .preview-bar-rev {
+      width: 14px;
+      background: #082f72;
+      border-radius: 3px 3px 0 0;
+    }
+    .preview-bar-cost {
+      width: 14px;
+      background: #cbd5e1;
+      border-radius: 3px 3px 0 0;
+    }
+    .bar-labels {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 12px 0;
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    /* Sales by Brand Mini List */
+    .mini-brand-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mini-brand-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mini-brand-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .mini-brand-track {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+    }
+    .mini-brand-fill {
+      height: 100%;
+      background: #082f72;
+      border-radius: 3px;
+    }
+
+    /* Detailed Table inside Preview */
+    .sheet-table-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .sheet-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .sheet-table th {
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      padding: 8px 10px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .sheet-table td {
+      padding: 9px 10px;
+      color: #1e293b;
+      font-weight: 500;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* Print styles */
+    @media print {
+      body { background: #fff; }
+      .sidebar, .admin-header, .back-btn-row, .config-card, .preview-header { display: none !important; }
+      .main-wrap, .content { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+      .preview-wrapper { border: none !important; box-shadow: none !important; padding: 0 !important; }
+      .report-sheet { border: none !important; padding: 0 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Listings</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>System Config</span>
+      </a>
+      <a href="../financeModule/financialManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        <span>Finance</span>
+      </a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span>Analytics</span>
+      </a>
+      <a href="../adminModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Task Assignment</span>
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>User</span>
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Staff Management</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Communication</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Area -->
+  <div class="main-wrap">
+    <!-- Shared Admin Header -->
+    <header class="admin-header" data-admin-header data-page-title="Analytics"></header>
+
+    <main class="content">
+      <!-- Back Arrow Navigation -->
+      <div class="back-btn-row">
+        <a href="../adminModule/analyticsHub.html" class="back-link" title="Back to Analytics Hub">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </a>
+      </div>
+
+      <h1 class="page-title">Export Report</h1>
+
+      <!-- 2-Column Interface -->
+      <div class="export-layout">
+        <!-- Left Panel: Form Parameters -->
+        <div class="config-card">
+          <h2 class="config-title">Generate New Report</h2>
+          <p class="config-desc">Select parameters to compile a comprehensive data summary.</p>
+
+          <form id="exportForm" onsubmit="handleGenerateReport(event)">
+            <div class="form-group">
+              <label class="form-label" for="reportType">Report Type</label>
+              <select id="reportType" class="form-select" onchange="updateReportPreview()">
+                <option value="business">Business Analytics Report</option>
+                <option value="inventory">Inventory Performance Report</option>
+                <option value="operations">Operational Efficiency Report</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="reportYear">Year</label>
+                <select id="reportYear" class="form-select" onchange="updateReportDate()"></select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="reportMonth">Month</label>
+                <select id="reportMonth" class="form-select" onchange="updateReportDate()">
+                  <option value="January">January</option>
+                  <option value="February">February</option>
+                  <option value="March">March</option>
+                  <option value="April">April</option>
+                  <option value="May">May</option>
+                  <option value="June">June</option>
+                  <option value="July">July</option>
+                  <option value="August">August</option>
+                  <option value="September">September</option>
+                  <option value="October">October</option>
+                  <option value="November">November</option>
+                  <option value="December">December</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-generate">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Generate and Download Report</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Panel: Report Preview -->
+        <div class="preview-wrapper">
+          <div class="preview-header">
+            <div class="preview-header-left">
+              <h3 class="preview-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Report Preview</span>
+              </h3>
+              <span class="preview-id" id="reportPreviewId">ID: REP-2023-10-8891</span>
+            </div>
+            <span class="draft-badge">DRAFT</span>
+          </div>
+
+          <!-- Dynamic Report Sheet Container -->
+          <div class="report-sheet" id="reportSheetContainer">
+            <!-- Populated dynamically based on reportType -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="adminHeader.js"></script>
+  <script src="inventoryAnalytics.js"></script>
+  <script>
+    // Templates for the 3 reports
+    const reportMoney = value => `RM ${new Intl.NumberFormat('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
+    const reportNumber = value => new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 }).format(Number(value) || 0);
+    const reportEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+    function renderBusinessReport(period, data) {
+      const business = data.business || {};
+      const breakdown = business.detailedBreakdown || [];
+      const brands = business.brandSales || [];
+      const bars = business.historicalBars || [];
+      const totalUnits = breakdown.reduce((sum, row) => sum + (Number(row.processed) || 0), 0);
+      const totalGross = breakdown.reduce((sum, row) => sum + (Number(row.grossRevenue) || 0), 0);
+      const totalCost = breakdown.reduce((sum, row) => sum + (Number(row.collectionCost) || 0), 0);
+      const totalMargin = totalGross > 0 && !business.missingCostUnits ? ((totalGross - totalCost) / totalGross) * 100 : null;
+      const maxBar = Math.max(1, ...bars.flatMap(row => [Number(row.revenue) || 0, Number(row.cost) || 0]));
+      const brandRows = brands.map(row => {
+        const share = Math.max(0, Math.min(100, Number(row.share) || 0));
+        return `<div class="mini-brand-item"><div class="mini-brand-top"><span>${reportEscape(row.brand)}</span><span>${share.toFixed(1)}%</span></div><div class="mini-brand-track"><div class="mini-brand-fill" style="width:${share}%;"></div></div></div>`;
+      }).join('') || '<div>No completed sales for this month.</div>';
+      const tableRows = breakdown.map(row => `<tr><td>${reportEscape(row.brand)}</td><td>${reportNumber(row.processed)}</td><td>${reportMoney(row.grossRevenue)}</td><td>${reportMoney(row.collectionCost)}</td><td style="color:#10b981;font-weight:700;">${row.margin == null ? '—' : `${Number(row.margin).toFixed(1)}%`}</td></tr>`).join('') || '<tr><td colspan="5">No completed sales for this month.</td></tr>';
+      const barsMarkup = bars.map(row => {
+        const revenueHeight = Math.max(2, (Number(row.revenue) || 0) / maxBar * 105);
+        const costHeight = Math.max(2, (Number(row.cost) || 0) / maxBar * 105);
+        return `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${revenueHeight}px;"></div><div class="preview-bar-cost" style="height:${costHeight}px;"></div></div>`;
+      }).join('');
+      const labels = bars.map(row => `<span>${reportEscape(row.label)}</span>`).join('');
+      const missingCost = Number(business.missingCostUnits) || 0;
+
+      return `
+        <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Business Analytics Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
+        <div class="sheet-kpis">
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Total Sales Revenue</span></div><div class="sheet-kpi-val">${reportMoney(business.totalSalesRevenue)}</div><div class="sheet-kpi-trend">${reportEscape(business.revenueGrowthTrend || 'No prior month comparison')}</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Rental Revenue</span></div><div class="sheet-kpi-val">${reportMoney(business.rentalRevenue)}</div><div class="sheet-kpi-trend">${reportEscape(business.rentalGrowthTrend || 'No prior month comparison')}</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Trade-In Volume</span></div><div class="sheet-kpi-val">${reportNumber(business.tradeInVolume)}</div><div class="sheet-kpi-trend">${reportEscape(business.tradeInGrowthTrend || 'No prior month comparison')}</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Profit Margin</span></div><div class="sheet-kpi-val">${business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`}</div><div class="sheet-kpi-trend">Revenue less collect cost</div></div>
+        </div>
+        <div class="sheet-mid-grid">
+          <div class="sheet-chart-box"><h4 class="sheet-chart-title">Revenue vs. Collect Cost Trends</h4><div class="preview-bars-container">${barsMarkup}</div><div class="bar-labels">${labels}</div></div>
+          <div class="sheet-chart-box"><h4 class="sheet-chart-title">Sales by Brand</h4><div class="mini-brand-list">${brandRows}</div></div>
+        </div>
+        <div class="sheet-table-card"><table class="sheet-table"><thead><tr><th>Hardware Category</th><th>Units Processed</th><th>Gross Revenue</th><th>Collect Cost</th><th>Net Margin</th></tr></thead><tbody>${tableRows}<tr><td><strong>Total (${reportEscape(period)})</strong></td><td><strong>${reportNumber(totalUnits)}</strong></td><td><strong>${reportMoney(totalGross)}</strong></td><td><strong>${reportMoney(totalCost)}</strong></td><td><strong>${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</strong></td></tr></tbody></table></div>
+        <p>${missingCost ? `Collect cost is missing for ${reportNumber(missingCost)} sold units; net margin is not calculated for incomplete cost data.` : `Collect cost is recorded for all ${reportNumber(totalUnits)} sold units.`} ${reportEscape(business.allocationNote || '')}</p>
+      `;
+    }
+
+    function renderInventoryReport(period, summary) {
+      const maxWeekly = Math.max(1, ...summary.weeklyAdded);
+      const weekBars = summary.weeklyAdded.map((count, index) => `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${Math.max(2, count / maxWeekly * 105)}px;"></div></div>`).join('');
+      const weekLabels = summary.weeklyAdded.map((_, index) => `<span>W${index + 1}</span>`).join('');
+      const statuses = InventoryAnalytics.STATUS_LABELS.filter(label => summary.statusCounts[label] > 0).map(label => `<tr><td>${reportEscape(label)}</td><td>${reportNumber(summary.statusCounts[label])}</td><td>${summary.totalAdded ? `${(summary.statusCounts[label] / summary.totalAdded * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('') || '<tr><td colspan="3">No products found for this month.</td></tr>';
+      const modelRows = summary.topFive.map(row => `<tr><td>${reportEscape(row.model)}</td><td>${reportNumber(row.added)}</td><td>${reportNumber(row.active)}</td><td>${reportNumber(row.sold)}</td></tr>`).join('') || '<tr><td colspan="4">No products found for this month.</td></tr>';
+      return `
+        <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Inventory Performance Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
+        <div class="sheet-kpis">
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Products Added</span></div><div class="sheet-kpi-val">${reportNumber(summary.totalAdded)}</div><div class="sheet-kpi-trend">Date added in selected month</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Available Now</span></div><div class="sheet-kpi-val">${reportNumber(summary.availableStock)}</div><div class="sheet-kpi-trend">Current status</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Sold Now</span></div><div class="sheet-kpi-val">${reportNumber(summary.sold)}</div><div class="sheet-kpi-trend">Current status</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Top Model</span></div><div class="sheet-kpi-val">${reportEscape(summary.topModel ? summary.topModel.model : '—')}</div><div class="sheet-kpi-trend">${summary.topModel ? `${summary.topModelShare.toFixed(1)}% of additions` : 'No product records'}</div></div>
+        </div>
+        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Products Added by Week</h4><div class="preview-bars-container">${weekBars}</div><div class="bar-labels">${weekLabels}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">Current Product Status</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Products</th><th>Share</th></tr></thead><tbody>${statuses}</tbody></table></div></div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Most Added Models</h4><table class="sheet-table"><thead><tr><th>Product Model</th><th>Units Added</th><th>Available Now</th><th>Sold Now</th></tr></thead><tbody>${modelRows}</tbody></table></div>
+        <p>Products are grouped by their Firebase date added in ${reportEscape(period)}. Status values reflect the current product records because historical status change dates are not available.</p>
+      `;
+    }
+
+    function renderOperationsReport(period) {
+      return `
+        <div class="sheet-brand-row">
+          <div>
+            <div class="sheet-brand-title">ReByte</div>
+            <div class="sheet-sub-title">Operational Efficiency Report</div>
+          </div>
+          <div class="sheet-meta">
+            <div class="sheet-date">${period}</div>
+            <div class="sheet-confidential">CONFIDENTIAL</div>
+          </div>
+        </div>
+
+        <div class="sheet-kpis">
+          <div class="sheet-kpi-card">
+            <div class="sheet-kpi-top"><span>Avg Inspection</span></div>
+            <div class="sheet-kpi-val">45 mins</div>
+            <div class="sheet-kpi-trend">&darr; 12% vs prev</div>
+          </div>
+          <div class="sheet-kpi-card">
+            <div class="sheet-kpi-top"><span>Refurbishment</span></div>
+            <div class="sheet-kpi-val">2.5 days</div>
+            <div class="sheet-kpi-trend" style="color:#64748b;">&minus; 0% vs prev</div>
+          </div>
+          <div class="sheet-kpi-card">
+            <div class="sheet-kpi-top"><span>Avg Delivery</span></div>
+            <div class="sheet-kpi-val">24 hours</div>
+            <div class="sheet-kpi-trend">&darr; 4% vs prev</div>
+          </div>
+          <div class="sheet-kpi-card highlight">
+            <div class="sheet-kpi-top"><span>Total Cycle</span></div>
+            <div class="sheet-kpi-val">12 days</div>
+            <div class="sheet-kpi-trend">&uarr; 2% vs prev</div>
+          </div>
+        </div>
+
+        <div class="sheet-table-card">
+          <h4 class="sheet-chart-title" style="margin-bottom: 12px;">Resource Allocation Breakdown</h4>
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Staff Count</th>
+                <th>Share of Workforce</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Inspection Team</td>
+                <td>12 Members</td>
+                <td>25%</td>
+                <td><span style="color:#10b981; font-weight:600;">On Track</span></td>
+              </tr>
+              <tr>
+                <td>Refurbishment Team</td>
+                <td>28 Technicians</td>
+                <td>58%</td>
+                <td><span style="color:#f59e0b; font-weight:600;">Warning</span></td>
+              </tr>
+              <tr>
+                <td>Shipping & Logistics</td>
+                <td>8 Personnel</td>
+                <td>17%</td>
+                <td><span style="color:#ef4444; font-weight:600;">Delayed</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function getCurrentPeriod() {
+      const month = document.getElementById('reportMonth').value;
+      const year = document.getElementById('reportYear').value;
+      return `${month} ${year}`;
+    }
+
+    function getSelectedMonthKey() {
+      const monthIndex = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ].indexOf(document.getElementById('reportMonth').value);
+      return `${document.getElementById('reportYear').value}-${String(monthIndex + 1).padStart(2, '0')}`;
+    }
+
+    let reportPreviewRequest = 0;
+    async function updateReportPreview() {
+      const requestId = ++reportPreviewRequest;
+      const type = document.getElementById('reportType').value;
+      const period = getCurrentPeriod();
+      const container = document.getElementById('reportSheetContainer');
+      const year = document.getElementById('reportYear').value;
+      const month = document.getElementById('reportMonth').value.substring(0, 3).toUpperCase();
+      document.getElementById('reportPreviewId').innerText = `ID: REP-${year}-${month}-8891`;
+
+      if (type === 'inventory') {
+        container.innerHTML = '<p>Loading live Firebase product report…</p>';
+        try {
+          const products = await InventoryAnalytics.fetchProducts();
+          if (requestId === reportPreviewRequest) {
+            const summary = InventoryAnalytics.summarize(products, getSelectedMonthKey());
+            container.innerHTML = renderInventoryReport(period, summary);
+          }
+        } catch (error) {
+          if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
+        }
+      } else if (type === 'operations') {
+        container.innerHTML = renderOperationsReport(period);
+      } else {
+        container.innerHTML = '<p>Loading live Firebase report…</p>';
+        try {
+          const monthKey = getSelectedMonthKey();
+          const response = await fetch(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(monthKey)}`);
+          const data = await response.json();
+          if (!response.ok || !data.success) throw new Error(data.error || 'Could not load the business report.');
+          if (requestId === reportPreviewRequest) container.innerHTML = renderBusinessReport(period, data);
+        } catch (error) {
+          if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
+        }
+      }
+    }
+
+    function updateReportDate() {
+      updateReportPreview();
+    }
+
+    function handleGenerateReport(e) {
+      e.preventDefault();
+      // Trigger native print / PDF export dialog
+      window.print();
+    }
+
+    // Read the selected report type and month from the URL.
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const requestedType = params.get('type');
+      if (requestedType && ['business', 'inventory', 'operations'].includes(requestedType)) {
+        document.getElementById('reportType').value = requestedType;
+      }
+      const yearSelect = document.getElementById('reportYear');
+      const currentYear = new Date().getFullYear();
+      for (let year = currentYear; year >= currentYear - 10; year--) {
+        const option = document.createElement('option');
+        option.value = String(year);
+        option.textContent = String(year);
+        yearSelect.appendChild(option);
+      }
+      const now = new Date();
+      yearSelect.value = String(now.getFullYear());
+      document.getElementById('reportMonth').value = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ][now.getMonth()];
+      const requestedMonth = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(params.get('month') || '');
+      if (requestedMonth) {
+        if (![...yearSelect.options].some(option => option.value === requestedMonth[1])) {
+          const option = document.createElement('option');
+          option.value = requestedMonth[1];
+          option.textContent = requestedMonth[1];
+          yearSelect.add(option);
+        }
+        yearSelect.value = requestedMonth[1];
+        document.getElementById('reportMonth').value = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ][Number(requestedMonth[2]) - 1];
+      }
+      updateReportPreview();
+    });
+  </script>
+</body>
+</html>
+

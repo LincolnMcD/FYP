@@ -1406,11 +1406,20 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
         );
       }
 
+      Map<String, dynamic>? initialEval;
+      if (tradeInId.isNotEmpty) {
+        try {
+          initialEval = await TradeInService.getEvaluation(tradeInId, source: 'staffEvaluation');
+          initialEval ??= await TradeInService.getEvaluation(tradeInId);
+        } catch (_) {}
+      }
+
       targetPage = StaffInspectionSummaryPage(
         task: StaffInspectionSession.savedTask ?? fullReqDetails ?? _task,
         device: deviceModel,
         uploadedImages: uploadedImages,
         ownershipPhotoPath: ownershipProof ?? StaffInspectionSession.savedOwnershipPhotoPath,
+        evaluation: initialEval,
         onTaskUpdated: widget.onTaskUpdated,
       );
     } else {

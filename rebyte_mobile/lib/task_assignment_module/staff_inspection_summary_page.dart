@@ -36,9 +36,19 @@ class _StaffInspectionSummaryPageState
   bool _isSubmitting = false;
   double? _finalOfferPrice;
   Map<String, dynamic>? _diagnosticData;
-  bool _isLoadingDiagnostic = false;
   Map<String, dynamic>? _evaluationData;
   bool _isLoadingEvaluation = false;
+
+  Map<String, dynamic>? get _effectiveEvaluation => _evaluationData ?? widget.evaluation;
+
+  String get _resolvedTradeInId {
+    final tId = widget.task['tradeInRequestID']?.toString() ??
+        widget.task['tradeInID']?.toString() ??
+        widget.task['orderID']?.toString() ??
+        widget.task['id']?.toString() ??
+        '';
+    return tId.replaceAll('#', '').trim();
+  }
 
   @override
   void initState() {
@@ -63,15 +73,13 @@ class _StaffInspectionSummaryPageState
   }
 
   Future<void> _loadEvaluationWithSegmentedImages() async {
-    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
-        widget.task['tradeInID']?.toString() ??
-        widget.task['orderID']?.toString() ??
-        widget.task['id']?.toString() ??
-        '';
+    final tradeInId = _resolvedTradeInId;
     if (tradeInId.isEmpty) return;
 
-    // If _evaluationData already has images with segmented urls, check if any need refresh
-    if (_evaluationData?['images'] is List && (_evaluationData!['images'] as List).isNotEmpty) {
+    // If _evaluationData already has full evaluation info including grade and images, skip
+    final hasImages = _evaluationData?['images'] is List && (_evaluationData!['images'] as List).isNotEmpty;
+    final hasGrade = _evaluationData?['grade'] != null && _evaluationData!['grade'].toString().isNotEmpty;
+    if (hasImages && hasGrade) {
       return;
     }
 
@@ -85,6 +93,13 @@ class _StaffInspectionSummaryPageState
           _evaluationData = eval;
           _isLoadingEvaluation = false;
         });
+        // Check if evaluation contains diagnosticID or deviceID to reload diagnostic if missing
+        if (_diagnosticData == null) {
+          final diagId = eval['diagnosticID']?.toString();
+          if (diagId != null && diagId.isNotEmpty && diagId.toUpperCase() != 'NULL') {
+            _loadDeviceDiagnostic();
+          }
+        }
       } else if (mounted) {
         setState(() => _isLoadingEvaluation = false);
       }
@@ -98,29 +113,22 @@ class _StaffInspectionSummaryPageState
         ? widget.device.deviceID
         : (widget.task['deviceID']?.toString() ??
             (widget.task['device'] is Map ? widget.task['device']['deviceID']?.toString() : null) ??
+            (_effectiveEvaluation?['deviceID']?.toString()) ??
             '');
     if (devId.isEmpty) return;
 
-    setState(() => _isLoadingDiagnostic = true);
     try {
       final diag = await TradeInService.getDeviceDiagnostic(devId);
       if (mounted) {
         setState(() {
           _diagnosticData = diag;
-          _isLoadingDiagnostic = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingDiagnostic = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> _initFinalOfferPrice() async {
-    final tradeInId = widget.task['tradeInRequestID']?.toString() ??
-        widget.task['tradeInID']?.toString() ??
-        widget.task['orderID']?.toString() ??
-        widget.task['id']?.toString() ??
-        '';
+    final tradeInId = _resolvedTradeInId;
     if (tradeInId.isEmpty) return;
 
     if (widget.task['finalOfferPrice'] != null) {
@@ -894,7 +902,9 @@ class _StaffInspectionSummaryPageState
   }
 
   Widget _buildGradeAndValuationCard() {
-    final grade = widget.evaluation?['grade']?.toString();
+    final grade = _effectiveEvaluation?['grade']?.toString() ??
+        widget.task['grade']?.toString() ??
+        widget.task['evaluationGrade']?.toString();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
@@ -960,15 +970,15 @@ class _StaffInspectionSummaryPageState
 
   Widget _buildDiagnosticSummaryCard() {
     // 3-Part Summary: Screen, Back, Frame damage coverage %
-    final Map<String, dynamic>? parts = widget.evaluation?['parts'] is Map<String, dynamic>
-        ? widget.evaluation!['parts'] as Map<String, dynamic>
-        : (widget.evaluation?['parts'] is Map
-            ? Map<String, dynamic>.from(widget.evaluation!['parts'] as Map)
+    final Map<String, dynamic>? parts = _effectiveEvaluation?['parts'] is Map<String, dynamic>
+        ? _effectiveEvaluation!['parts'] as Map<String, dynamic>
+        : (_effectiveEvaluation?['parts'] is Map
+            ? Map<String, dynamic>.from(_effectiveEvaluation!['parts'] as Map)
             : null);
 
-    final screenData = parts?['screen'] ?? widget.evaluation?['screen'];
-    final backData = parts?['back'] ?? widget.evaluation?['back'];
-    final frameData = parts?['frame'] ?? widget.evaluation?['frame'];
+    final screenData = parts?['screen'] ?? _effectiveEvaluation?['screen'];
+    final backData = parts?['back'] ?? _effectiveEvaluation?['back'];
+    final frameData = parts?['frame'] ?? _effectiveEvaluation?['frame'];
 
     double getDmgCoverage(dynamic part) {
       if (part is Map) {
@@ -984,10 +994,11 @@ class _StaffInspectionSummaryPageState
     final double frameCov = getDmgCoverage(frameData);
 
     // Internal Diagnostic
-    final String? diagnosticId = widget.evaluation?['diagnosticID']?.toString();
-    final bool hasDiagnostic = diagnosticId != null &&
-        diagnosticId.trim().isNotEmpty &&
-        diagnosticId.trim().toUpperCase() != 'NULL' &&
+    final String? diagnosticId = _effectiveEvaluation?['diagnosticID']?.toString();
+    final bool hasDiagnostic = (diagnosticId != null &&
+            diagnosticId.trim().isNotEmpty &&
+            diagnosticId.trim().toUpperCase() != 'NULL' &&
+            _diagnosticData != null) ||
         _diagnosticData != null;
 
     final diag = hasDiagnostic ? _diagnosticData : null;
@@ -1600,7 +1611,7 @@ class _StaffInspectionSummaryPageState
       ];
     }
 
-    final eval = widget.evaluation;
+    final eval = _effectiveEvaluation;
     final Map<String, dynamic>? classes = eval?['classes'] is Map
         ? Map<String, dynamic>.from(eval!['classes'] as Map)
         : null;
@@ -2051,9 +2062,9 @@ class _StaffInspectionSummaryPageState
     );
   }
   Widget _buildSegmentedPhotosCard() {
-    // 1. Check for segmented evaluation images in _evaluationData or widget.evaluation
+    // 1. Check for segmented evaluation images in _effectiveEvaluation
     final List<Map<String, dynamic>> evalImages = [];
-    final rawImages = _evaluationData?['images'] ?? widget.evaluation?['images'];
+    final rawImages = _effectiveEvaluation?['images'];
     if (rawImages is List) {
       for (final img in rawImages) {
         if (img is Map) {
@@ -2094,27 +2105,27 @@ class _StaffInspectionSummaryPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text(
-                'Segmented & Inspection Photos',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+          const Text(
+            'Segmented & Inspection Photos',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          if (itemCount > 0) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '$itemCount photos (tap to zoom)',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF64748B),
                 ),
               ),
-              const Spacer(),
-              if (itemCount > 0)
-                Text(
-                  '$itemCount photos (tap to zoom)',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           if (_isLoadingEvaluation)

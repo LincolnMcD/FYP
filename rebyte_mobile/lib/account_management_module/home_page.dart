@@ -1514,7 +1514,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   }
 
   Widget _buildRentalCardItem(Map<String, dynamic> rental) {
-    final rentalID = rental['rentalID']?.toString() ?? '';
     final product = rental['product'] as Map<String, dynamic>? ?? {};
     final device = rental['device'] as Map<String, dynamic>? ?? {};
 

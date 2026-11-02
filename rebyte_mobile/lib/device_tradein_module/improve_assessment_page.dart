@@ -34,7 +34,6 @@ class ImproveAssessmentPage extends StatefulWidget {
 class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _hasDiagnosticRecord = false;
-  bool _isCheckingDiagnostic = true;
 
   @override
   void initState() {
@@ -54,12 +53,7 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
       if (mounted) {
         setState(() {
           _hasDiagnosticRecord = exists;
-          _isCheckingDiagnostic = false;
         });
-      }
-    } else {
-      if (mounted) {
-        setState(() => _isCheckingDiagnostic = false);
       }
     }
   }

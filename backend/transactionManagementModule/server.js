@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/firebase");
 const cloudinary = require("../config/cloudinary");
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const axios = require("axios");
 
 function timestampMillis(value) {
@@ -1295,6 +1295,315 @@ router.post("/rental-deposits/return", async (req, res) => {
         success: false,
         error: "Use the return assessment workflow so the refund is processed through Xendit before the deposit is marked returned."
     });
+});
+
+
+/**
+ * GET /api/transaction-management/analytics/summary
+ * Provides live operational, financial, and inventory analytics for ReByte Analytics Hub
+ */
+router.get("/analytics/summary", async (req, res) => {
+    try {
+        const monthParam = String(req.query.month || "").trim();
+        const nowMalaysia = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        const defaultMonth = `${nowMalaysia.getUTCFullYear()}-${String(nowMalaysia.getUTCMonth() + 1).padStart(2, "0")}`;
+        const selectedMonth = monthParam || defaultMonth;
+        const monthMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(selectedMonth);
+        if (!monthMatch) {
+            return res.status(400).json({ success: false, error: "month must use YYYY-MM format" });
+        }
+
+        const year = Number(monthMatch[1]);
+        const monthIndex = Number(monthMatch[2]) - 1;
+        const malaysiaOffsetMs = 8 * 60 * 60 * 1000;
+        const monthBoundary = offset => new Date(Date.UTC(year, monthIndex + offset, 1) - malaysiaOffsetMs);
+        const selectedEnd = monthBoundary(1);
+        const windowStart = monthBoundary(-3);
+        const previousMonthStart = monthBoundary(-1);
+
+        const transactionCollection = db.collection("transaction");
+        const windowStartIso = windowStart.toISOString();
+        const selectedEndIso = selectedEnd.toISOString();
+        const [transactionDateSnap, createdAtSnap, transactionDateStringSnap, createdAtStringSnap] = await Promise.all([
+            transactionCollection
+                .where("transactionDate", ">=", Timestamp.fromDate(windowStart))
+                .where("transactionDate", "<", Timestamp.fromDate(selectedEnd))
+                .get(),
+            transactionCollection
+                .where("createdAt", ">=", Timestamp.fromDate(windowStart))
+                .where("createdAt", "<", Timestamp.fromDate(selectedEnd))
+                .get(),
+            transactionCollection
+                .where("transactionDate", ">=", windowStartIso)
+                .where("transactionDate", "<", selectedEndIso)
+                .get(),
+            transactionCollection
+                .where("createdAt", ">=", windowStartIso)
+                .where("createdAt", "<", selectedEndIso)
+                .get()
+        ]);
+        const transactionDocs = new Map();
+        transactionDateSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
+        createdAtSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
+        transactionDateStringSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
+        createdAtStringSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
+        // Older transactions may store dates as epoch milliseconds or another legacy
+        // representation that Firestore range queries cannot match. Scan only when
+        // the indexed queries found nothing, then keep records in the requested window.
+        if (transactionDocs.size === 0) {
+            const fallbackSnap = await transactionCollection.get();
+            fallbackSnap.forEach(doc => {
+                const data = doc.data() || {};
+                const millis = timestampMillis(data.transactionDate) || timestampMillis(data.createdAt);
+                if (millis >= windowStart.getTime() && millis < selectedEnd.getTime()) {
+                    transactionDocs.set(doc.id, data);
+                }
+            });
+        }
+
+        const referenceIds = (field, data) => [...new Set(data.map(record => String(record[field] || "").trim()).filter(Boolean))];
+        const loadLinkedDocuments = async (collectionName, ids, alternateField) => {
+            const collection = db.collection(collectionName);
+            const uniqueIds = [...new Set(ids.filter(Boolean))];
+            const docs = new Map();
+            const jobs = uniqueIds.map(id => collection.doc(id).get().catch(() => null));
+            if (alternateField) {
+                for (let i = 0; i < uniqueIds.length; i += 10) {
+                    jobs.push(collection.where(alternateField, "in", uniqueIds.slice(i, i + 10)).get());
+                }
+            }
+            const results = await Promise.all(jobs);
+            results.forEach(result => {
+                if (!result) return;
+                if (Array.isArray(result)) return;
+                if (typeof result.forEach !== "function") {
+                    if (result.exists) docs.set(result.id, result.data() || {});
+                    return;
+                }
+                result.forEach(doc => {
+                    const data = doc.data() || {};
+                    docs.set(doc.id, data);
+                    if (data[alternateField]) docs.set(String(data[alternateField]), data);
+                });
+            });
+            return docs;
+        };
+
+        const txRecords = [...transactionDocs.entries()].map(([id, data]) => ({ id, data }));
+        const orderIds = referenceIds("orderID", txRecords.map(row => row.data));
+        const orders = await loadLinkedDocuments("order", orderIds, "orderID");
+
+        const productIds = [...new Set(txRecords.flatMap(({ data }) => {
+            const order = orders.get(String(data.orderID || "")) || {};
+            const ids = Array.isArray(order.productIDs) ? order.productIDs : [];
+            return [...ids, data.productID].map(id => String(id || "").trim()).filter(Boolean);
+        }))];
+        const products = await loadLinkedDocuments("product", productIds, "productID");
+        const deviceIds = [...new Set([...products.values()].map(product => String(product.deviceID || "").trim()).filter(Boolean))];
+        const tradeInIds = [
+            ...referenceIds("tradeInRequestID", txRecords.map(row => row.data)),
+            ...[...products.values()].map(product => String(product.tradeInRequestID || "").trim())
+        ].filter(Boolean);
+        const [devices, tradeIns] = await Promise.all([
+            loadLinkedDocuments("devices", deviceIds, "deviceID"),
+            loadLinkedDocuments("tradeInRequests", tradeInIds, "tradeInRequestID")
+        ]);
+
+        const monthKey = date => {
+            const malaysiaDate = new Date(date.getTime() + malaysiaOffsetMs);
+            return `${malaysiaDate.getUTCFullYear()}-${String(malaysiaDate.getUTCMonth() + 1).padStart(2, "0")}`;
+        };
+        const monthKeys = Array.from({ length: 4 }, (_, index) => monthKey(monthBoundary(index - 3)));
+        const monthly = new Map(monthKeys.map(key => [key, {
+            sales: 0, rental: 0, collectionCost: 0, tradeIns: new Set(), brands: new Map(), countedOrders: new Set(), units: 0, missingCostUnits: 0
+        }]));
+        const getBrandRow = (stats, brand) => {
+            const key = brand || "Other";
+            if (!stats.brands.has(key)) stats.brands.set(key, { brand: key, processed: 0, grossRevenue: 0, collectionCost: 0, missingCostUnits: 0 });
+            return stats.brands.get(key);
+        };
+        const normalizeBrand = value => {
+            const brand = String(value || "").trim();
+            const lower = brand.toLowerCase();
+            if (lower.includes("apple")) return "Apple";
+            if (lower.includes("samsung")) return "Samsung";
+            if (lower.includes("xiaomi") || lower.includes("redmi") || lower.includes("poco")) return "Xiaomi";
+            if (lower.includes("huawei") || lower.includes("honor")) return "Huawei";
+            return brand || "Other";
+        };
+        const getDate = data => {
+            const millis = timestampMillis(data.transactionDate) || timestampMillis(data.createdAt);
+            return millis ? new Date(millis) : null;
+        };
+        const getCategory = data => {
+            const type = String(data.transactionType || "").toLowerCase().trim();
+            if (["payout", "trade-in", "tradein"].includes(type)) return "trade-in";
+            if (type.includes("deposit")) return "deposit";
+            if (type.includes("refund")) return "refund";
+            if (type.includes("rental")) return "rental";
+            if (type === "purchase" || data.orderID) return "purchase";
+            if (data.rentalID) return "rental";
+            if (data.tradeInRequestID) return "trade-in";
+            return "other";
+        };
+        const getCollectionCost = (product, tradeIn) => {
+            const quotation = tradeIn?.finalQuotation || {};
+            const candidates = [
+                product?.collectionCost, product?.collectCost, product?.collectedPrice,
+                product?.acquisitionCost, product?.purchaseCost, product?.costPrice,
+                quotation.finalOfferPrice, tradeIn?.finalOfferPrice, tradeIn?.quotedValue
+            ];
+            let hasZeroCost = false;
+            for (const value of candidates) {
+                const amount = Number(value);
+                if (value === undefined || value === null || value === "" || !Number.isFinite(amount) || amount < 0) continue;
+                if (amount > 0) return amount;
+                hasZeroCost = true;
+            }
+            return hasZeroCost ? 0 : null;
+        };
+
+        txRecords.forEach(({ data }) => {
+            const date = getDate(data);
+            if (!date) return;
+            const key = monthKey(date);
+            const stats = monthly.get(key);
+            if (!stats) return;
+            const status = String(data.transactionStatus || data.status || "success").toLowerCase();
+            if (status.includes("fail") || status.includes("cancel") || status.includes("pending")) return;
+
+            const amount = Number(data.transactionAmount ?? data.amount ?? data.totalAmount ?? 0) || 0;
+            const category = getCategory(data);
+            if (category === "rental") {
+                stats.rental += amount;
+                return;
+            }
+            if (category === "refund") {
+                if (data.rentalID) stats.rental -= amount;
+                else stats.sales -= amount;
+                return;
+            }
+            if (category === "trade-in") {
+                if (data.tradeInRequestID) stats.tradeIns.add(String(data.tradeInRequestID));
+                return;
+            }
+            if (category !== "purchase") return;
+
+            stats.sales += amount;
+            const orderId = String(data.orderID || "");
+            const order = orders.get(orderId) || {};
+            const ids = (Array.isArray(order.productIDs) ? order.productIDs : [data.productID]).map(id => String(id || "")).filter(Boolean);
+            if (!ids.length) {
+                const row = getBrandRow(stats, "Other");
+                row.grossRevenue += amount;
+                row.processed += 1;
+                row.missingCostUnits += 1;
+                stats.units += 1;
+                stats.missingCostUnits += 1;
+                return;
+            }
+
+            const items = ids.map(id => {
+                const product = products.get(id) || {};
+                const device = devices.get(String(product.deviceID || "")) || {};
+                const tradeIn = tradeIns.get(String(product.tradeInRequestID || "")) || {};
+                const brand = normalizeBrand(product.brand || device.brand || tradeIn.finalQuotation?.brand || tradeIn.brand);
+                const price = Number(product.soldPrice ?? product.purchasedPrice ?? product.sellingPrice ?? product.price ?? 0) || 0;
+                return { id, product, tradeIn, brand, price };
+            });
+            const weightTotal = items.reduce((sum, item) => sum + item.price, 0);
+            items.forEach(item => {
+                const row = getBrandRow(stats, item.brand);
+                const share = weightTotal > 0 ? item.price / weightTotal : 1 / items.length;
+                row.grossRevenue += amount * share;
+
+                if (!orderId || !stats.countedOrders.has(orderId)) {
+                    row.processed += 1;
+                    stats.units += 1;
+                    const collectionCost = getCollectionCost(item.product, item.tradeIn);
+                    if (collectionCost === null) {
+                        row.missingCostUnits += 1;
+                        stats.missingCostUnits += 1;
+                    }
+                    else {
+                        row.collectionCost += collectionCost;
+                        stats.collectionCost += collectionCost;
+                    }
+                }
+            });
+            if (orderId) stats.countedOrders.add(orderId);
+        });
+
+        const currentStats = monthly.get(selectedMonth);
+        const previousStats = monthly.get(monthKey(previousMonthStart)) || { sales: 0, rental: 0, collectionCost: 0, tradeIns: new Set(), missingCostUnits: 0 };
+        const revenue = currentStats.sales + currentStats.rental;
+        const missingCostUnits = currentStats.missingCostUnits;
+        const profitMargin = revenue > 0 && missingCostUnits === 0 ? ((revenue - currentStats.collectionCost) / revenue) * 100 : null;
+        const previousRevenue = previousStats.sales + previousStats.rental;
+        const previousMargin = previousRevenue > 0 && previousStats.missingCostUnits === 0 ? ((previousRevenue - previousStats.collectionCost) / previousRevenue) * 100 : null;
+        const percentChange = (current, previous) => previous > 0 ? ((current - previous) / previous) * 100 : null;
+        const formatTrend = value => value === null ? null : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+        const formatMoney = value => `RM ${Number(value || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const detailedBreakdown = [...currentStats.brands.values()]
+            .sort((a, b) => b.grossRevenue - a.grossRevenue)
+            .map(row => ({
+                ...row,
+                grossRevenue: Math.round(row.grossRevenue * 100) / 100,
+                collectionCost: Math.round(row.collectionCost * 100) / 100,
+                margin: row.grossRevenue > 0 && row.missingCostUnits === 0 ? Math.round(((row.grossRevenue - row.collectionCost) / row.grossRevenue) * 1000) / 10 : null
+            }));
+        const totalBrandGross = detailedBreakdown.reduce((sum, row) => sum + row.grossRevenue, 0);
+        const brandSales = detailedBreakdown.map(row => ({
+            brand: row.brand,
+            revenue: row.grossRevenue,
+            share: totalBrandGross > 0 ? Math.round((row.grossRevenue / totalBrandGross) * 1000) / 10 : 0
+        }));
+        const historicalBars = monthKeys.map(key => {
+            const stats = monthly.get(key);
+            const [barYear, barMonth] = key.split("-").map(Number);
+            return {
+                key,
+                label: new Date(Date.UTC(barYear, barMonth - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
+                revenue: Math.round((stats.sales + stats.rental) * 100) / 100,
+                cost: Math.round(stats.collectionCost * 100) / 100
+            };
+        });
+        const monthLabel = new Date(Date.UTC(year, monthIndex, 1)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+
+        return res.json({
+            success: true,
+            month: selectedMonth,
+            monthLabel,
+            transactionRecordCount: txRecords.filter(({ data }) => {
+                const date = getDate(data);
+                return date && monthKey(date) === selectedMonth;
+            }).length,
+            business: {
+                totalSalesRevenue: currentStats.sales,
+                totalSalesRevenueFormatted: formatMoney(currentStats.sales),
+                rentalRevenue: currentStats.rental,
+                rentalRevenueFormatted: formatMoney(currentStats.rental),
+                tradeInVolume: currentStats.tradeIns.size,
+                profitMargin,
+                profitMarginFormatted: profitMargin === null ? "Not available" : `${profitMargin.toFixed(1)}%`,
+                revenueGrowthTrend: formatTrend(percentChange(currentStats.sales, previousStats.sales)),
+                rentalGrowthTrend: formatTrend(percentChange(currentStats.rental, previousStats.rental)),
+                tradeInGrowthTrend: formatTrend(percentChange(currentStats.tradeIns.size, previousStats.tradeIns.size)),
+                profitMarginGrowthTrend: profitMargin === null || previousMargin === null ? null : `${profitMargin - previousMargin >= 0 ? "+" : ""}${(profitMargin - previousMargin).toFixed(1)}`,
+                totalRevenue: revenue,
+                totalCollectionCost: currentStats.collectionCost,
+                totalUnitsProcessed: currentStats.units,
+                missingCostUnits,
+                allocationNote: "For multi-product orders, transaction revenue is split by stored product selling prices; equal shares are used when those prices are missing.",
+                historicalBars,
+                brandSales,
+                detailedBreakdown
+            }
+        });
+    } catch (err) {
+        console.error("Error fetching analytics summary:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 module.exports = router;

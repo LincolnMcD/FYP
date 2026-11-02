@@ -65,7 +65,10 @@ const { initializeScheduleMonitoring } = require("./taskAssignmentModule/taskDel
 initializeScheduleMonitoring().catch(err => console.error("Error starting schedule monitoring:", err));
 rentalManagementRouter.startRentalExpiryMonitor();
 
+const { startAutoDiscoveryServer } = require("./config/autoDiscovery");
+
 const PORT = 3000;
 server.listen(PORT, "0.0.0.0", () => {
     console.log(`Global ReByte Server (with Socket.IO) running on port ${PORT}`);
+    startAutoDiscoveryServer(PORT);
 });

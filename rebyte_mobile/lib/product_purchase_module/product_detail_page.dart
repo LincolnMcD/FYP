@@ -517,12 +517,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       galleryGrade = eval['grade'].toString().toUpperCase();
     } else if (_product.condition.isNotEmpty) {
       final cLower = _product.condition.toLowerCase();
-      if (cLower.contains('grade d') || cLower == 'poor') {
-        galleryGrade = 'D';
+      if (cLower.contains('grade b') || cLower == 'good') {
+        galleryGrade = 'B';
       } else if (cLower.contains('grade c') || cLower == 'fair') {
         galleryGrade = 'C';
-      } else if (cLower.contains('grade b') || cLower == 'good') {
-        galleryGrade = 'B';
       } else {
         galleryGrade = 'A';
       }
@@ -671,15 +669,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         return 'GOOD CONDITION';
       case 'C':
         return 'FAIR CONDITION';
-      case 'D':
-        return 'POOR CONDITION';
       default:
         if (condition != null && condition.trim().isNotEmpty) {
           final c = condition.trim().toUpperCase();
-          if (c.contains('GRADE A') || c == 'EXCELLENT' || c == 'PRISTINE') return 'EXCELLENT CONDITION';
           if (c.contains('GRADE B') || c == 'GOOD') return 'GOOD CONDITION';
+          if (c.contains('GRADE A') || c == 'EXCELLENT' || c == 'PRISTINE') return 'EXCELLENT CONDITION';
           if (c.contains('GRADE C') || c == 'FAIR') return 'FAIR CONDITION';
-          if (c.contains('GRADE D') || c == 'POOR') return 'POOR CONDITION';
           return c.endsWith('CONDITION') ? c : '$c CONDITION';
         }
         return 'GRADE $grade CONDITION';
@@ -697,9 +692,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (lower.contains('fair') || lower.startsWith('grade c')) {
       return const Color(0xFFD97706);
     }
-    if (lower.contains('poor') || lower.startsWith('grade d')) {
-      return const Color(0xFFDC2626);
-    }
     return const Color(0xFFDC2626);
   }
 
@@ -713,9 +705,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
     if (lower.contains('fair') || lower.startsWith('grade c')) {
       return const Color(0xFFFEF3C7);
-    }
-    if (lower.contains('poor') || lower.startsWith('grade d')) {
-      return const Color(0xFFFEE2E2);
     }
     return const Color(0xFFFEE2E2);
   }
@@ -739,12 +728,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       grade = eval['grade'].toString().toUpperCase();
     } else if (_product.condition.isNotEmpty) {
       final cLower = _product.condition.toLowerCase();
-      if (cLower.contains('grade d') || cLower == 'poor') {
-        grade = 'D';
+      if (cLower.contains('grade b') || cLower == 'good') {
+        grade = 'B';
       } else if (cLower.contains('grade c') || cLower == 'fair') {
         grade = 'C';
-      } else if (cLower.contains('grade b') || cLower == 'good') {
-        grade = 'B';
       } else {
         grade = 'A';
       }
@@ -1750,12 +1737,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       grade = eval['grade'].toString().toUpperCase();
     } else if (_product.condition.isNotEmpty) {
       final cLower = _product.condition.toLowerCase();
-      if (cLower.contains('grade d') || cLower == 'poor') {
-        grade = 'D';
+      if (cLower.contains('grade b') || cLower == 'good') {
+        grade = 'B';
       } else if (cLower.contains('grade c') || cLower == 'fair') {
         grade = 'C';
-      } else if (cLower.contains('grade b') || cLower == 'good') {
-        grade = 'B';
       } else {
         grade = 'A';
       }

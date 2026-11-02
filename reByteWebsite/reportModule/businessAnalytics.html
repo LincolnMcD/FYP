@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Business Analytics - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="adminHeader.css">
+  <style>
+    :root {
+      --navy: #082f72;
+      --blue: #0b4fb3;
+      --page: #f5f7fb;
+      --border: #e2e6ee;
+      --text: #172033;
+      --muted: #717b8e;
+      --card-bg: #ffffff;
+      --accent-blue: #1d4ed8;
+    }
+    * { box-sizing: border-box; }
+    .sidebar { display: none; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: var(--page);
+      color: var(--text);
+      font-family: 'Inter', Arial, sans-serif;
+    }
+    button, input, select { font: inherit; }
+
+    /* Shared Standard Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+    .brand {
+      height: 105px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 28px;
+      border-bottom: 1px solid #edf0f4;
+    }
+    .brand img { width: 38px; height: 38px; object-fit: contain; }
+    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
+
+    .nav-list {
+      list-style: none;
+      padding: 22px 16px;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+      flex: 1;
+      align-content: start;
+    }
+    .nav-item {
+      min-height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 9px;
+      color: #586579;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
+    .nav-item:hover { background: #f1f4f9; }
+    .nav-item.active { color: #fff; background: var(--navy); }
+
+    /* Main Container with Admin Header */
+    .main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .content {
+      padding: 30px 40px 48px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .back {
+      display: inline-flex;
+      padding: 8px;
+      color: #5d6572;
+      text-decoration: none;
+      margin: 0 0 16px -8px;
+      border-radius: 8px;
+      transition: background-color 0.15s;
+    }
+    .back:hover { background: #e2e8f0; color: #1e293b; }
+    .back svg { width: 20px; height: 20px; }
+
+    /* Header Row */
+    .page-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      gap: 20px;
+    }
+    .page-title-area h1 {
+      margin: 0;
+      color: #161a20;
+      font-size: clamp(24px, 2vw, 30px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .report-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .date-filter-pill {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #334155;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .date-filter-pill input, .date-filter-pill select {
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      min-width: 74px;
+      cursor: pointer;
+    }
+    .date-filter-pill select + label { margin-left: 8px; }
+    .date-filter-pill label { color: #64748b; font-size: 12px; font-weight: 700; }
+    .report-error {
+      margin: -8px 0 18px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      background: #fff7f7;
+      color: #991b1b;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .export-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      color: #1e293b;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .export-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+    /* 4 Summary Stat Cards */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #ffffff;
+      border: 1px solid #edf0f4;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 4px 12px #1a2b4508;
+      position: relative;
+    }
+    .stat-card.highlight {
+      background: #082f72;
+      color: #ffffff;
+      border-color: #082f72;
+    }
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .stat-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .stat-card.highlight .stat-title { color: #93c5fd; }
+    .stat-icon {
+      color: #64748b;
+      display: flex;
+    }
+    .stat-card.highlight .stat-icon { color: #93c5fd; }
+    .stat-val {
+      font-size: 26px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .stat-secondary {
+      margin: -2px 0 7px;
+      color: #64748b;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .stat-card.highlight .stat-val { color: #ffffff; }
+    .stat-trend {
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .trend-up { color: #16a34a; }
+    .trend-down { color: #dc2626; }
+    .stat-card.highlight .trend-up { color: #86efac; }
+
+    /* Charts Row */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1.8fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .chart-box {
+      background: #ffffff;
+      border: 1px solid #edf0f4;
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 4px 12px #1a2b4508;
+    }
+    .chart-box h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 18px;
+    }
+
+    /* Sales vs Revenue Trend Graphic */
+    .trend-chart-canvas {
+      width: 100%;
+      height: 220px;
+      position: relative;
+    }
+    .trend-chart-canvas svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .trend-legend {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 14px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; }
+    .dot-rev { width: 10px; height: 10px; border-radius: 50%; background: #082f72; }
+    .dot-cost { width: 10px; height: 10px; border-radius: 50%; background: #93c5fd; }
+
+    /* Sales by Brand List */
+    .brand-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .brand-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brand-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .progress-track {
+      width: 100%;
+      height: 9px;
+      background: #f1f5f9;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #082f72;
+      border-radius: 999px;
+    }
+
+    /* Detailed Breakdown Table */
+    .table-box {
+      background: #ffffff;
+      border: 1px solid #edf0f4;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 4px 12px #1a2b4508;
+      margin-bottom: 24px;
+    }
+    .table-box h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 12px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    th.num, td.num { text-align: right; }
+    td {
+      padding: 14px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #1e293b;
+    }
+    tr.total-row {
+      font-weight: 800;
+      border-top: 2px solid #cbd5e1;
+    }
+    tr.total-row td {
+      border-bottom: none;
+      padding-top: 16px;
+    }
+    .margin-val {
+      font-weight: 700;
+      color: #16a34a;
+    }
+
+    /* Report Footer Citation */
+    .report-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #94a3b8;
+      padding-top: 16px;
+      border-top: 1px solid #edf0f4;
+    }
+
+    @media (max-width: 1024px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
+      <span>ReByte</span>
+    </div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Listings</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>System Config</span>
+      </a>
+      <a href="../financeModule/financialManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        <span>Finance</span>
+      </a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        <span>Analytics</span>
+      </a>
+      <a href="../adminModule/taskAssignment.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Task Assignment</span>
+      </a>
+      <a href="../adminModule/customerManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>User</span>
+      </a>
+      <a href="../adminModule/staffManagement.html" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Staff Management</span>
+      </a>
+      <a href="#" class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Communication</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Container -->
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Analytics"></header>
+
+    <section class="content">
+      <a class="back" href="../adminModule/analyticsHub.html" aria-label="Back to Analytics Hub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg>
+      </a>
+
+      <!-- Page Header -->
+      <div class="page-header-row">
+        <div class="page-title-area">
+          <h1>Business Analytics</h1>
+        </div>
+        <div class="report-header-actions">
+          <div class="date-filter-pill" role="group" aria-label="Select report year and month">
+            <label for="reportYearSelector">Year</label>
+            <select id="reportYearSelector" aria-label="Select report year" disabled></select>
+            <label for="reportMonthSelector">Month</label>
+            <select id="reportMonthSelector" aria-label="Select report month" disabled></select>
+          </div>
+          <a id="exportReportLink" href="exportReport.html?type=business" class="export-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export Report
+          </a>
+        </div>
+      </div>
+      <div id="reportError" class="report-error" role="alert" aria-live="polite" hidden></div>
+
+      <!-- 4 Top Cards -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-title">Total Sales Revenue</span>
+            <span class="stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+          </div>
+          <div class="stat-val" id="valSales">—</div>
+          <div class="stat-trend" id="valSalesTrend">vs previous month: —</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-title">Rental Revenue</span>
+            <span class="stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+          </div>
+          <div class="stat-val" id="valRental">—</div>
+          <div class="stat-trend" id="valRentalTrend">vs previous month: —</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-title">Collection Cost</span>
+            <span class="stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
+          </div>
+          <div class="stat-val" id="valTradeIn">—</div>
+          <div class="stat-secondary" id="valTradeInCount">— successful trade-ins</div>
+          <div class="stat-trend" id="valTradeInTrend">Collection cost for selected month</div>
+        </div>
+
+        <div class="stat-card highlight">
+          <div class="stat-top">
+            <span class="stat-title">Profit Margin</span>
+            <span class="stat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+          </div>
+          <div class="stat-val" id="valMargin">—</div>
+          <div class="stat-trend" id="valMarginTrend">(Revenue − collect cost) ÷ revenue</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-row">
+        <div class="chart-box">
+          <h3>Revenue vs. Collect Cost Trends</h3>
+          <div class="trend-chart-canvas">
+            <svg viewBox="0 0 540 180" preserveAspectRatio="none">
+              <!-- Grid lines -->
+              <line x1="0" y1="30" x2="540" y2="30" stroke="#f1f5f9" stroke-width="1"/>
+              <line x1="0" y1="75" x2="540" y2="75" stroke="#f1f5f9" stroke-width="1"/>
+              <line x1="0" y1="120" x2="540" y2="120" stroke="#f1f5f9" stroke-width="1"/>
+              <line x1="0" y1="165" x2="540" y2="165" stroke="#f1f5f9" stroke-width="1"/>
+
+              <!-- Axis labels -->
+              <text id="axisMax" x="5" y="26" font-size="10" fill="#94a3b8">RM 0</text>
+              <text id="axisTwoThirds" x="5" y="71" font-size="10" fill="#94a3b8">RM 0</text>
+              <text id="axisOneThird" x="5" y="116" font-size="10" fill="#94a3b8">RM 0</text>
+              <text x="5" y="161" font-size="10" fill="#94a3b8">RM 0</text>
+
+              <!-- Line 1: Cost (Light Blue) -->
+              <polyline id="costLine" fill="none" stroke="#93c5fd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                points="70,165 210,165 350,165 490,165" />
+
+              <!-- Line 2: Revenue (Dark Navy) -->
+              <polyline id="revenueLine" fill="none" stroke="#082f72" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"
+                points="100,165 230,165 360,165 500,165" />
+
+              <!-- X Axis Month Labels -->
+              <text class="month-label" x="100" y="180" font-size="11" fill="#64748b" text-anchor="middle">—</text>
+              <text class="month-label" x="230" y="180" font-size="11" fill="#64748b" text-anchor="middle">—</text>
+              <text class="month-label" x="360" y="180" font-size="11" fill="#64748b" text-anchor="middle">—</text>
+              <text class="month-label" x="500" y="180" font-size="11" fill="#082f72" font-weight="700" text-anchor="middle">—</text>
+            </svg>
+          </div>
+          <div class="trend-legend">
+            <div class="legend-item"><span class="dot-rev"></span> Revenue</div>
+            <div class="legend-item"><span class="dot-cost"></span> Cost</div>
+          </div>
+        </div>
+
+        <div class="chart-box">
+          <h3>Sales by Brand</h3>
+          <div class="brand-list" id="brandList"></div>
+        </div>
+      </div>
+
+      <!-- Phone Brand Breakdown -->
+      <div class="table-box">
+        <h3>Phone Brand Breakdown</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Phone Brand</th>
+              <th class="num">Units Processed</th>
+              <th class="num">Gross Revenue</th>
+              <th class="num">Collect Cost</th>
+              <th class="num">Net Margin</th>
+            </tr>
+          </thead>
+          <tbody id="breakdownBody"></tbody>
+        </table>
+        <p id="coverageNote" class="report-footer" style="border-top:0; padding-top:8px; margin:0;"></p>
+      </div>
+
+      <div class="report-footer">
+        <span id="reportGenerated">Live Firebase report</span>
+        <span>Page 1 of 1</span>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script src="adminHeader.js"></script>
+  <script>
+    let yearSelector;
+    let monthSelector;
+    let reportMonths = [];
+    let reportRequestVersion = 0;
+    const ANALYTICS_API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    const numberFormat = new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 });
+    const moneyFormat = value => `RM ${new Intl.NumberFormat('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+    async function fetchAnalytics(pathAndQuery) {
+      let lastError;
+      const attempts = [];
+      for (const base of ANALYTICS_API_BASES) {
+        const url = `${base.replace(/\/$/, '')}${pathAndQuery}`;
+        try {
+          const response = await fetch(url, { headers: { Accept: 'application/json' } });
+          if (response.status === 404) {
+            attempts.push(`${url} → HTTP 404`);
+            continue;
+          }
+          return response;
+        } catch (error) {
+          lastError = error;
+          attempts.push(`${url} → ${error.message || 'Network/CORS error'}`);
+        }
+      }
+      const details = attempts.length ? ` Attempts: ${attempts.join('; ')}.` : '';
+      if (attempts.length && attempts.every(attempt => attempt.includes('HTTP 404'))) {
+        throw new Error(`Analytics endpoint was not found on the backend hosts at port 3000 for ${pathAndQuery}.${details}`);
+      }
+      throw new Error(`Could not reach the analytics API at ${pathAndQuery}. Check that the API server is running and allows this site through CORS.${details}${lastError ? ` Last error: ${lastError.message}` : ''}`);
+    }
+
+    async function readAnalyticsResponse(response, endpoint) {
+      const responseText = await response.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (_) {
+        const preview = responseText.slice(0, 300).replace(/\s+/g, ' ').trim();
+        throw new Error(`${endpoint} returned HTTP ${response.status} with a non-JSON response${preview ? `: ${preview}` : '.'}`);
+      }
+      if (!response.ok) {
+        throw new Error(`${endpoint} returned HTTP ${response.status}: ${data.error || data.message || responseText || 'No error details were returned.'}`);
+      }
+      if (data.success === false) throw new Error(`${endpoint}: ${data.error || data.message || 'The API reported that the request failed.'}`);
+      return data;
+    }
+
+    function normalizeAvailableMonths(data) {
+      const rawMonths = Array.isArray(data) ? data : (data?.months || data?.availableMonths || []);
+      return [...new Set(rawMonths.map(item => typeof item === 'string' ? item : item?.month).filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')))]
+        .sort((a, b) => b.localeCompare(a));
+    }
+
+    function recentCalendarMonths(count = 120) {
+      const now = new Date();
+      return Array.from({ length: count }, (_, offset) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      });
+    }
+
+    function getSelectedMonthKey() {
+      if (!yearSelector?.value || !monthSelector?.value) return '';
+      return `${yearSelector.value}-${monthSelector.value}`;
+    }
+
+    function populateMonthOptions(preferredMonth = '') {
+      const monthsForYear = reportMonths
+        .filter(month => month.startsWith(`${yearSelector.value}-`))
+        .map(month => month.slice(5));
+      monthSelector.replaceChildren();
+      monthsForYear.forEach(monthValue => {
+        const monthDate = new Date(Number(yearSelector.value), Number(monthValue) - 1, 1);
+        const option = document.createElement('option');
+        option.value = monthValue;
+        option.textContent = new Intl.DateTimeFormat('en', { month: 'long' }).format(monthDate);
+        monthSelector.appendChild(option);
+      });
+      monthSelector.value = monthsForYear.includes(preferredMonth) ? preferredMonth : (monthsForYear[0] || '');
+    }
+
+    function setTrend(id, value, suffix = '') {
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.textContent = value == null ? 'No prior month comparison' : `${String(value).startsWith('-') ? '↘' : '↗'} ${value}${suffix}`;
+      element.classList.toggle('trend-up', value != null && !String(value).startsWith('-'));
+      element.classList.toggle('trend-down', value != null && String(value).startsWith('-'));
+    }
+
+    function renderChart(rows) {
+      const values = rows.flatMap(row => [Number(row.revenue) || 0, Number(row.cost) || 0]);
+      const maxValue = Math.max(500000, ...values);
+      const axisMax = Math.ceil(maxValue / 500000) * 500000;
+      const xValues = [100, 230, 360, 500];
+      const yFor = value => 165 - ((Number(value) || 0) / axisMax) * 135;
+      document.getElementById('revenueLine').setAttribute('points', rows.map((row, i) => `${xValues[i]},${yFor(row.revenue)}`).join(' '));
+      document.getElementById('costLine').setAttribute('points', rows.map((row, i) => `${xValues[i]},${yFor(row.cost)}`).join(' '));
+      const axisMoney = value => value >= 1000000 ? `RM ${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `RM ${(value / 1000).toFixed(0)}K` : `RM ${Math.round(value)}`;
+      document.getElementById('axisMax').textContent = axisMoney(axisMax);
+      document.getElementById('axisTwoThirds').textContent = axisMoney(axisMax * 2 / 3);
+      document.getElementById('axisOneThird').textContent = axisMoney(axisMax / 3);
+      document.querySelectorAll('.month-label').forEach((element, i) => {
+        element.textContent = rows[i]?.label || '';
+        element.setAttribute('fill', i === rows.length - 1 ? '#082f72' : '#64748b');
+        element.setAttribute('font-weight', i === rows.length - 1 ? '700' : '400');
+      });
+    }
+
+    function renderBrandSales(rows) {
+      const list = document.getElementById('brandList');
+      if (!rows.length) {
+        list.innerHTML = '<div class="brand-meta">No completed sales for this month.</div>';
+        return;
+      }
+      list.innerHTML = rows.map(row => {
+        const share = Math.max(0, Math.min(100, Number(row.share) || 0));
+        return `<div class="brand-item"><div class="brand-meta"><span>${escapeHtml(row.brand)}</span><span>${share.toFixed(1)}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${share}%;"></div></div></div>`;
+      }).join('');
+    }
+
+    function renderBreakdown(rows, data) {
+      const tbody = document.getElementById('breakdownBody');
+      const totalUnits = rows.reduce((sum, row) => sum + (Number(row.processed) || 0), 0);
+      const totalRevenue = rows.reduce((sum, row) => sum + (Number(row.grossRevenue) || 0), 0);
+      const totalCost = rows.reduce((sum, row) => sum + (Number(row.collectionCost) || 0), 0);
+      const missingCostUnits = Number(data.business.missingCostUnits) || 0;
+      const totalMargin = totalRevenue > 0 && missingCostUnits === 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : null;
+      const detailRows = rows.length ? rows.map(row => {
+        const grossRevenue = Number(row.grossRevenue);
+        const collectionCost = Number(row.collectionCost);
+        let margin = row.margin == null ? null : Number(row.margin);
+        if (margin == null && row.collectionCost != null && Number.isFinite(grossRevenue) && grossRevenue > 0 && Number.isFinite(collectionCost)) {
+          const rowMissingCosts = row.missingCostUnits == null ? missingCostUnits : Number(row.missingCostUnits) || 0;
+          if (rowMissingCosts === 0) margin = ((grossRevenue - collectionCost) / grossRevenue) * 100;
+        }
+        return `<tr><td>${escapeHtml(row.brand)}</td><td class="num">${numberFormat.format(row.processed || 0)}</td><td class="num"><strong>${moneyFormat(row.grossRevenue)}</strong></td><td class="num">${moneyFormat(row.collectionCost)}</td><td class="num"><span class="margin-val">${margin == null || !Number.isFinite(margin) ? '—' : `${margin.toFixed(1)}%`}</span></td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="num">No completed sales for this month.</td></tr>';
+      tbody.innerHTML = `${detailRows}<tr class="total-row"><td>Total (${escapeHtml(data.monthLabel)})</td><td class="num">${numberFormat.format(totalUnits)}</td><td class="num"><strong>${moneyFormat(totalRevenue)}</strong></td><td class="num">${moneyFormat(totalCost)}</td><td class="num"><span class="margin-val">${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</span></td></tr>`;
+      const coveredUnits = Math.max(0, totalUnits - missingCostUnits);
+      const costCoverage = missingCostUnits > 0
+        ? `Collect cost found for ${numberFormat.format(coveredUnits)} of ${numberFormat.format(totalUnits)} sold units; margin is unavailable until missing costs are recorded.`
+        : `Collect cost found for all ${numberFormat.format(totalUnits)} sold units.`;
+      document.getElementById('coverageNote').textContent = `${costCoverage} ${data.business.allocationNote || ''}`;
+    }
+
+    function getCollectionCost(business) {
+      const directCost = business.collectionCost ?? business.totalCollectionCost;
+      if (directCost != null && Number.isFinite(Number(directCost))) return Number(directCost);
+      return (business.detailedBreakdown || []).reduce((sum, row) => sum + (Number(row.collectionCost) || 0), 0);
+    }
+
+    async function loadData() {
+      const requestVersion = ++reportRequestVersion;
+      const month = getSelectedMonthKey();
+      if (!month) return;
+      const errorElement = document.getElementById('reportError');
+      errorElement.hidden = true;
+      const exportUrl = new URL('exportReport.html', window.location.href);
+      exportUrl.searchParams.set('type', 'business');
+      exportUrl.searchParams.set('month', month);
+      const pageUrl = new URL(window.location.href);
+      pageUrl.searchParams.set('month', month);
+      window.history.replaceState({}, '', pageUrl.toString());
+      document.getElementById('exportReportLink').href = exportUrl.toString();
+      ['valSales', 'valRental', 'valTradeIn', 'valMargin'].forEach(id => {
+        document.getElementById(id).textContent = 'Loading…';
+      });
+      try {
+        const res = await fetchAnalytics(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(month)}`);
+        const data = await readAnalyticsResponse(res, 'Business analytics summary');
+        if (!data.success) throw new Error('Business analytics summary returned no success flag. Check the API response format.');
+        if (requestVersion !== reportRequestVersion) return;
+        const business = data.business;
+        if (Number(data.transactionRecordCount) === 0) {
+          errorElement.textContent = `No transaction records were found for ${data.monthLabel}. Choose another month to view its report.`;
+          errorElement.hidden = false;
+        }
+        document.getElementById('valSales').textContent = moneyFormat(business.totalSalesRevenue);
+        document.getElementById('valRental').textContent = moneyFormat(business.rentalRevenue);
+        document.getElementById('valTradeIn').textContent = moneyFormat(getCollectionCost(business));
+        const successfulTradeIns = Number(business.tradeInVolume) || 0;
+        document.getElementById('valTradeInCount').textContent = numberFormat.format(successfulTradeIns) + ' successful trade-in' + (successfulTradeIns === 1 ? '' : 's');
+        document.getElementById('valMargin').textContent = business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`;
+        setTrend('valSalesTrend', business.revenueGrowthTrend);
+        setTrend('valRentalTrend', business.rentalGrowthTrend);
+        if (business.collectionCostGrowthTrend != null) setTrend('valTradeInTrend', business.collectionCostGrowthTrend);
+        else document.getElementById('valTradeInTrend').textContent = 'Collection cost for selected month';
+        if (business.profitMargin == null) document.getElementById('valMarginTrend').textContent = business.missingCostUnits ? 'Missing collect cost data' : 'No revenue to calculate margin';
+        else setTrend('valMarginTrend', business.profitMarginGrowthTrend, ' pp');
+        renderChart(business.historicalBars || []);
+        renderBrandSales(business.brandSales || []);
+        renderBreakdown(business.detailedBreakdown || [], data);
+        document.getElementById('reportGenerated').textContent = `Live Firebase report • Generated ${new Date().toLocaleDateString()}`;
+      } catch (error) {
+        if (requestVersion !== reportRequestVersion) return;
+        ['valSales', 'valRental', 'valTradeIn', 'valMargin'].forEach(id => {
+          document.getElementById(id).textContent = '—';
+        });
+        document.getElementById('valTradeInCount').textContent = '— successful trade-ins';
+        errorElement.textContent = `Report data was not loaded. Why: ${error.message}`;
+        errorElement.hidden = false;
+      }
+    }
+
+    async function initBusinessAnalytics() {
+      yearSelector = document.getElementById('reportYearSelector');
+      monthSelector = document.getElementById('reportMonthSelector');
+      const exportLink = document.getElementById('exportReportLink');
+      if (!yearSelector || !monthSelector || !exportLink || yearSelector.dataset.initialized === 'true') return;
+      yearSelector.dataset.initialized = 'true';
+      yearSelector.disabled = true;
+      monthSelector.disabled = true;
+      yearSelector.innerHTML = '<option value="">Loading…</option>';
+      monthSelector.innerHTML = '<option value="">Loading…</option>';
+      const requestedMonth = new URLSearchParams(window.location.search).get('month');
+      let availableMonths = [];
+      try {
+        const response = await fetchAnalytics('/api/transaction-management/analytics/months');
+        const data = await readAnalyticsResponse(response, 'Available analytics months');
+        availableMonths = normalizeAvailableMonths(data);
+      } catch (_) { /* Fall back to recent calendar months when this optional endpoint is unavailable. */ }
+
+      reportMonths = availableMonths.length ? availableMonths : recentCalendarMonths();
+      const yearsToShow = [...new Set(reportMonths.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+      const selectedMonth = reportMonths.includes(requestedMonth) ? requestedMonth : reportMonths[0];
+      yearSelector.replaceChildren();
+      yearsToShow.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelector.appendChild(option);
+      });
+      yearSelector.value = selectedMonth.slice(0, 4);
+      populateMonthOptions(selectedMonth.slice(5));
+      yearSelector.disabled = false;
+      monthSelector.disabled = false;
+      yearSelector.addEventListener('change', () => {
+        populateMonthOptions();
+        loadData();
+      });
+      monthSelector.addEventListener('change', loadData);
+      loadData();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initBusinessAnalytics, { once: true });
+    else initBusinessAnalytics();
+  </script>
+</body>
+</html>
+

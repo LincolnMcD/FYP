@@ -370,9 +370,6 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     final double backCov = parsePartCoverage(parts?['back'] ?? eval?['back']);
     final double frameCov = parsePartCoverage(parts?['frame'] ?? eval?['frame']);
 
-    final double avgDmgPct = ((screenCov + backCov + frameCov) / 3.0) * 100.0;
-    final int cosmeticScore = (100 - avgDmgPct).clamp(0, 100).round();
-
     // Inspection summary description
     String summaryDescription =
         'Device is fully functional and evaluated according to ReByte inspection standards. '

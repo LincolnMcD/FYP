@@ -50,16 +50,29 @@ const ReByteAuth = {
 
     if (typeof firebase !== 'undefined' && firebase.auth) {
       try {
-        let currentUser = firebase.auth().currentUser;
+        // API requests can start before DOMContentLoaded, so initialize Firebase
+        // here instead of relying only on the page-load handler below.
+        this.initFirebase();
+        const auth = firebase.auth();
+        let currentUser = auth.currentUser;
         if (!currentUser) {
-          await new Promise(resolve => {
-            const unsub = firebase.auth().onAuthStateChanged(u => {
-              unsub();
-              resolve(u);
-            });
-            setTimeout(resolve, 1500);
+          if (typeof auth.authStateReady === 'function') await auth.authStateReady();
+          currentUser = auth.currentUser;
+        }
+        if (!currentUser) {
+          currentUser = await new Promise(resolve => {
+            let settled = false;
+            let unsubscribe = () => {};
+            const finish = authUser => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeout);
+              unsubscribe();
+              resolve(authUser || null);
+            };
+            const timeout = setTimeout(() => finish(auth.currentUser), 5000);
+            unsubscribe = auth.onAuthStateChanged(finish, () => finish(auth.currentUser));
           });
-          currentUser = firebase.auth().currentUser;
         }
         if (currentUser) {
           const freshToken = await currentUser.getIdToken(forceRefresh);
@@ -172,8 +185,8 @@ const ReByteAuth = {
 
   /**
    * Authenticated fetch wrapper.
-   * Automatically injects the Authorization header and calls forceSessionLogout()
-   * if the server returns 401 or 403 (token rejected / expired).
+   * Automatically injects the Authorization header and signs out on an expired
+   * session (401) or an explicit archived/suspended/banned account response.
    * Usage: const data = await ReByteAuth.authFetch(url, options);
    */
   async authFetch(url, options = {}, isRetry = false) {
@@ -192,8 +205,11 @@ const ReByteAuth = {
       let errData = {};
       try { errData = await response.clone().json(); } catch (_) {}
       const isArchived = errData?.archived === true;
-      this.forceSessionLogout(isArchived, errData?.status);
-      return new Promise(() => {});
+      const accountStatus = String(errData?.status || '').toLowerCase();
+      if (response.status === 401 || isArchived || accountStatus === 'suspended' || accountStatus === 'banned') {
+        this.forceSessionLogout(isArchived, errData?.status);
+      }
+      if (response.status === 401) return new Promise(() => {});
     }
     return response;
   },
@@ -843,7 +859,10 @@ const ReByteAuth = {
         let errData = {};
         try { errData = await response.clone().json(); } catch (_) {}
         const isArchived = errData?.archived === true;
-        this.forceSessionLogout(isArchived, errData?.status);
+        const accountStatus = String(errData?.status || '').toLowerCase();
+        if (response.status === 401 || isArchived || accountStatus === 'suspended' || accountStatus === 'banned') {
+          this.forceSessionLogout(isArchived, errData?.status);
+        }
       }
       return response;
     } catch (err) {

@@ -3136,9 +3136,10 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         const color = devData.colour || devData.color || trData.colour || trData.color || trData.deviceColor || "";
 
         let evalGrade = trData.evaluationGrade || trData.grade || devData.grade || "";
-        if (!evalGrade && trID) {
+        const trIDForEval = tradeInRequestID || trData.tradeInRequestID || tData.tradeInRequestID || aData.tradeInRequestID || null;
+        if (!evalGrade && trIDForEval) {
             try {
-                const evSnap = await db.collection("evaluation").doc(`EV-${trID}`).get();
+                const evSnap = await db.collection("evaluation").doc(`EV-${trIDForEval}`).get();
                 if (evSnap.exists && evSnap.data().grade) {
                     evalGrade = evSnap.data().grade;
                 }

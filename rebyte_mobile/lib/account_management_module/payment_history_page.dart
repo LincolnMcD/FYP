@@ -29,6 +29,9 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasMore = false;
+  String? _loadError;
+  String? _loadMoreError;
+  int _requestVersion = 0;
   String _selectedFilter = 'All'; // 'All', 'Purchases', 'Trade-Ins', 'Rentals'
   Timer? _searchDebounce;
   String? _userName;
@@ -75,59 +78,96 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
   }
 
   Future<void> _fetchInitialTransactions() async {
-    setState(() => _isLoading = true);
+    final requestVersion = ++_requestVersion;
+    final filter = _mapFilterToType(_selectedFilter);
+    final searchId = _searchController.text.trim();
+    setState(() {
+      _isLoading = true;
+      _isLoadingMore = false;
+      _loadError = null;
+      _loadMoreError = null;
+    });
 
     final res = await PaymentHistoryService.fetchTransactions(
       email: widget.email,
-      type: _mapFilterToType(_selectedFilter),
+      type: filter,
       limit: 5,
       offset: 0,
-      searchId: _searchController.text.trim(),
+      searchId: searchId,
     );
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (res.success) {
-          _transactions = res.transactions;
-          _hasMore = res.hasMore;
-        } else {
-          _transactions = [];
-          _hasMore = false;
-        }
-      });
-    }
+    if (!mounted || requestVersion != _requestVersion) return;
+    setState(() {
+      _isLoading = false;
+      if (res.success) {
+        _transactions = _filterTransactionsById(res.transactions, searchId);
+        _hasMore = res.hasMore;
+      } else {
+        _transactions = [];
+        _hasMore = false;
+        _loadError = res.error ?? 'Failed to load transactions';
+      }
+    });
   }
 
   Future<void> _loadMoreTransactions() async {
     if (_isLoadingMore || !_hasMore) return;
 
-    setState(() => _isLoadingMore = true);
+    final requestVersion = _requestVersion;
+    final filter = _mapFilterToType(_selectedFilter);
+    final searchId = _searchController.text.trim();
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreError = null;
+    });
 
     final res = await PaymentHistoryService.fetchTransactions(
       email: widget.email,
-      type: _mapFilterToType(_selectedFilter),
+      type: filter,
       limit: 10,
       offset: _transactions.length,
-      searchId: _searchController.text.trim(),
+      searchId: searchId,
     );
 
-    if (mounted) {
-      setState(() {
-        _isLoadingMore = false;
-        if (res.success) {
-          _transactions.addAll(res.transactions);
-          _hasMore = res.hasMore;
-        }
-      });
-    }
+    if (!mounted || requestVersion != _requestVersion) return;
+    setState(() {
+      _isLoadingMore = false;
+      if (res.success) {
+        _transactions.addAll(_filterTransactionsById(res.transactions, searchId));
+        _hasMore = res.hasMore;
+      } else {
+        _loadMoreError = res.error ?? 'Failed to load more transactions';
+      }
+    });
   }
 
   void _onSearchChanged(String val) {
+    setState(() {});
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       _fetchInitialTransactions();
     });
+  }
+
+  List<CustomerTransactionModel> _filterTransactionsById(
+    List<CustomerTransactionModel> transactions,
+    String searchId,
+  ) {
+    final query = searchId.trim().toLowerCase().replaceFirst(RegExp(r'^#'), '');
+    if (query.isEmpty) return transactions;
+
+    return transactions.where((tx) {
+      final ids = <String?>[
+        tx.transactionId,
+        tx.rawTransactionId,
+        tx.id,
+        tx.orderID,
+        tx.tradeInRequestID,
+        tx.rentalID,
+      ];
+      return ids.any((id) =>
+          (id ?? '').toLowerCase().replaceFirst(RegExp(r'^#'), '').contains(query));
+    }).toList();
   }
 
   void _onFilterSelected(String filter) {
@@ -292,6 +332,37 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
                       child: CircularProgressIndicator(color: Color(0xFF0C5AD2)),
                     ),
                   )
+                else if (_loadError != null)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48.0),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.cloud_off_outlined, size: 48, color: Color(0xFF64748B)),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Could not load transactions',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _loadError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed: _fetchInitialTransactions,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 else if (_transactions.isEmpty)
                   Center(
                     child: Padding(
@@ -330,6 +401,17 @@ class _PaymentHistoryPageState extends State<PaymentHistoryPage> {
                 else ...[
                   ..._transactions.map((tx) => _buildTransactionCard(tx)),
                   const SizedBox(height: 16),
+
+                  if (_loadMoreError != null) ...[
+                    Center(
+                      child: Text(
+                        _loadMoreError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFFB91C1C)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
                   // Load More Transactions Button
                   if (_hasMore)

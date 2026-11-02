@@ -740,17 +740,40 @@ router.get("/transactions", async (req, res) => {
             }
         } catch (_) {}
 
-        // 5. Query transaction collection from Firestore
-        const tranSnap = await db.collection("transaction").get();
+        // 5. Query only transaction documents linked to this customer. The old
+        // collection-wide read made every history request scan every transaction.
+        const transactionCollection = db.collection("transaction");
+        const transactionDocs = new Map();
+        const transactionQueries = [];
+        const addTransactionQueries = (field, values) => {
+            const uniqueValues = [...new Set(values.filter(Boolean))];
+            for (let index = 0; index < uniqueValues.length; index += 10) {
+                const valueBatch = uniqueValues.slice(index, index + 10);
+                transactionQueries.push(transactionCollection.where(field, "in", valueBatch));
+            }
+        };
+
+        addTransactionQueries("orderID", [...userOrdersMap.keys()]);
+        addTransactionQueries("tradeInRequestID", [...userTradeInsMap.keys()]);
+        addTransactionQueries("rentalID", [...userRentalsMap.keys()]);
+        addTransactionQueries("paymentAccountID", [...userPaymentAccountIds]);
+        addTransactionQueries("customerID", targetCustIds);
+
+        await Promise.all(transactionQueries.map(async query => {
+            const snapshot = await query.get();
+            snapshot.forEach(doc => transactionDocs.set(doc.id, doc));
+        }));
 
         // 6. Caches for product, devices, paymentAccount to avoid duplicate queries
         const productCache = new Map();
         const deviceCache = new Map();
         const paymentAccountCache = new Map();
 
-        const allMatchedTransactions = [];
+        const searchText = String(searchId || "").trim().toLowerCase().replace(/^#/, "");
+        const cleanType = String(type || "all").toLowerCase().replace(/s$/, '').replace(/_/g, '-');
+        const candidates = [];
 
-        for (const doc of tranSnap.docs) {
+        for (const doc of transactionDocs.values()) {
             const t = doc.data();
 
             let matchedType = null;
@@ -810,6 +833,48 @@ router.get("/transactions", async (req, res) => {
             // If not owned by this user, skip!
             if (!matchedType) continue;
 
+            const normalizedType = matchedType.toLowerCase().replace(/_/g, '-');
+            const isTradeInFilter = cleanType === "trade-in" || cleanType === "tradein";
+            if (cleanType !== "all" && !(isTradeInFilter && normalizedType === "trade-in") && normalizedType !== cleanType) continue;
+
+            const businessId = (matchedType === "purchase" ? t.orderID : (matchedType === "trade-in" ? t.tradeInRequestID : t.rentalID))
+                || t.orderID
+                || t.tradeInRequestID
+                || t.rentalID
+                || t.transactionID
+                || doc.id;
+            if (searchText) {
+                const searchableIds = [businessId, doc.id, t.transactionID, t.orderID, t.tradeInRequestID, t.rentalID];
+                const matchesSearch = searchableIds.some(value =>
+                    String(value || "").toLowerCase().replace(/^#/, "").includes(searchText)
+                );
+                if (!matchesSearch) continue;
+            }
+
+            let isoDate = new Date().toISOString();
+            if (t.transactionDate) {
+                if (t.transactionDate._seconds) {
+                    isoDate = new Date(t.transactionDate._seconds * 1000).toISOString();
+                } else if (typeof t.transactionDate === "string") {
+                    isoDate = t.transactionDate;
+                }
+            } else if (t.createdAt && t.createdAt._seconds) {
+                isoDate = new Date(t.createdAt._seconds * 1000).toISOString();
+            }
+
+            candidates.push({ doc, t, matchedType, parentData, businessId, isoDate });
+        }
+
+        // Filter, sort, and page before loading product/device/payment details.
+        candidates.sort((a, b) => new Date(b.isoDate) - new Date(a.isoDate));
+        const totalCount = candidates.length;
+        const pageCandidates = candidates.slice(offsetNum, offsetNum + limitNum);
+        const hasMore = (offsetNum + limitNum) < totalCount;
+        const allMatchedTransactions = [];
+
+        for (const candidate of pageCandidates) {
+            const { doc, t, matchedType, parentData, businessId, isoDate } = candidate;
+
             const rawAmount = Number(t.transactionAmount || 0);
             const isTrade = matchedType === "trade-in";
             const isRefund = (t.transactionType || "").toLowerCase() === "refund";
@@ -823,18 +888,6 @@ router.get("/transactions", async (req, res) => {
                 status = "failed";
             } else if (rawStatus === "pending") {
                 status = "pending";
-            }
-
-            // Parse date
-            let isoDate = new Date().toISOString();
-            if (t.transactionDate) {
-                if (t.transactionDate._seconds) {
-                    isoDate = new Date(t.transactionDate._seconds * 1000).toISOString();
-                } else if (typeof t.transactionDate === "string") {
-                    isoDate = t.transactionDate;
-                }
-            } else if (t.createdAt && t.createdAt._seconds) {
-                isoDate = new Date(t.createdAt._seconds * 1000).toISOString();
             }
 
             const dateObj = new Date(isoDate);
@@ -1035,13 +1088,6 @@ router.get("/transactions", async (req, res) => {
                 : Number(parentData?.subtotal || parentData?.finalOfferPrice || rawAmount);
 
             // Use orderID, tradeInRequestID, or rentalID as primary business ID
-            const businessId = (matchedType === "purchase" ? t.orderID : (matchedType === "trade-in" ? t.tradeInRequestID : t.rentalID))
-                || t.orderID
-                || t.tradeInRequestID
-                || t.rentalID
-                || t.transactionID
-                || doc.id;
-
             allMatchedTransactions.push({
                 id: doc.id,
                 transactionId: businessId,
@@ -1079,52 +1125,13 @@ router.get("/transactions", async (req, res) => {
             });
         }
 
-        // Sort by date (newest first)
-        allMatchedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        // Filter by category type ('all', 'purchase', 'trade-in', 'rental')
-        let filtered = allMatchedTransactions;
-        if (type && type.toLowerCase() !== "all") {
-            const cleanType = type.toLowerCase().replace(/s$/, '').replace(/_/g, '-');
-            filtered = filtered.filter(tx => {
-                const txType = (tx.type || "").toLowerCase().replace(/_/g, '-');
-                if (cleanType === "purchase") return txType === "purchase";
-                if (cleanType === "trade-in" || cleanType === "tradein") return txType === "trade-in";
-                if (cleanType === "rental") return txType === "rental";
-                return true;
-            });
-        }
-
-        // Search bar: strictly search by ID (supports orderID, tradeInRequestID, rentalID, or transactionID)
-        if (searchId && searchId.trim().length > 0) {
-            const cleanSearch = searchId.trim().toLowerCase().replace(/^#/, '');
-            filtered = filtered.filter(tx => {
-                const txId = (tx.transactionId || "").toLowerCase().replace(/^#/, '');
-                const rawId = (tx.id || "").toLowerCase();
-                const rawTxId = (tx.rawTransactionId || "").toLowerCase();
-                const ordId = (tx.orderID || "").toLowerCase();
-                const trId = (tx.tradeInRequestID || "").toLowerCase();
-                const rntId = (tx.rentalID || "").toLowerCase();
-                return txId.includes(cleanSearch) || 
-                       rawId.includes(cleanSearch) || 
-                       rawTxId.includes(cleanSearch) || 
-                       ordId.includes(cleanSearch) || 
-                       trId.includes(cleanSearch) || 
-                       rntId.includes(cleanSearch);
-            });
-        }
-
-        const totalCount = filtered.length;
-        const pagedData = filtered.slice(offsetNum, offsetNum + limitNum);
-        const hasMore = (offsetNum + limitNum) < totalCount;
-
         return res.json({
             success: true,
             totalCount,
             offset: offsetNum,
             limit: limitNum,
             hasMore,
-            transactions: pagedData
+            transactions: allMatchedTransactions
         });
     } catch (err) {
         console.error("Error fetching transactions:", err);
