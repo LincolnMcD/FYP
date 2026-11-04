@@ -234,6 +234,23 @@
     .legend-item { display: flex; align-items: center; gap: 8px; }
     .dot-rev { width: 10px; height: 10px; border-radius: 50%; background: #082f72; }
     .dot-cost { width: 10px; height: 10px; border-radius: 50%; background: #93c5fd; }
+    .trend-point { cursor: help; }
+    .trend-chart-tooltip {
+      display: none;
+      position: absolute;
+      z-index: 5;
+      max-width: 240px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #ffffff;
+      box-shadow: 0 8px 22px #0f172a33;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-line;
+      pointer-events: none;
+    }
+    .trend-chart-tooltip.visible { display: block; }
 
     /* Sales by Brand List */
     .brand-list {
@@ -430,6 +447,7 @@
               <!-- Line 2: Revenue (Dark Navy) -->
               <polyline id="revenueLine" fill="none" stroke="#082f72" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"
                 points="100,165 230,165 360,165 500,165" />
+              <g id="trendPoints"></g>
 
               <!-- X Axis Month Labels -->
               <text class="month-label" x="100" y="180" font-size="11" fill="#64748b" text-anchor="middle">—</text>
@@ -437,6 +455,7 @@
               <text class="month-label" x="360" y="180" font-size="11" fill="#64748b" text-anchor="middle">—</text>
               <text class="month-label" x="500" y="180" font-size="11" fill="#082f72" font-weight="700" text-anchor="middle">—</text>
             </svg>
+            <div class="trend-chart-tooltip" id="trendChartTooltip" role="tooltip"></div>
           </div>
           <div class="trend-legend">
             <div class="legend-item"><span class="dot-rev"></span> Revenue</div>
@@ -617,6 +636,47 @@
       const yFor = value => 165 - ((Number(value) || 0) / axisMax) * 135;
       document.getElementById('revenueLine').setAttribute('points', rows.map((row, i) => `${xValues[i]},${yFor(row.revenue)}`).join(' '));
       document.getElementById('costLine').setAttribute('points', rows.map((row, i) => `${xValues[i]},${yFor(row.cost)}`).join(' '));
+      const pointLayer = document.getElementById('trendPoints');
+      const chartHost = document.querySelector('.trend-chart-canvas');
+      const tooltip = document.getElementById('trendChartTooltip');
+      pointLayer.replaceChildren();
+      const svgNamespace = 'http://www.w3.org/2000/svg';
+      rows.forEach((row, index) => {
+        [
+          { series: 'Revenue', value: Number(row.revenue) || 0, color: '#082f72', offset: -2 },
+          { series: 'Cost', value: Number(row.cost) || 0, color: '#93c5fd', offset: 2 }
+        ].forEach(point => {
+          const circle = document.createElementNS(svgNamespace, 'circle');
+          circle.setAttribute('cx', xValues[index] + point.offset);
+          circle.setAttribute('cy', yFor(point.value));
+          circle.setAttribute('r', '6');
+          circle.setAttribute('fill', point.color);
+          circle.setAttribute('stroke', '#ffffff');
+          circle.setAttribute('stroke-width', '2');
+          circle.setAttribute('class', 'trend-point');
+          circle.setAttribute('tabindex', '0');
+          circle.setAttribute('role', 'img');
+          circle.setAttribute('aria-label', `${row.label} ${point.series}: ${moneyFormat(point.value)}`);
+          const showTooltip = event => {
+            tooltip.textContent = `${row.label} · ${point.series}\n${moneyFormat(point.value)}`;
+            tooltip.classList.add('visible');
+            const hostRect = chartHost.getBoundingClientRect();
+            const targetRect = event && typeof event.clientX === 'number' && event.clientX
+              ? { left: event.clientX - hostRect.left, top: event.clientY - hostRect.top }
+              : { left: circle.getBoundingClientRect().left - hostRect.left + circle.getBoundingClientRect().width / 2, top: circle.getBoundingClientRect().top - hostRect.top };
+            const left = Math.max(8, Math.min(targetRect.left + 12, chartHost.clientWidth - tooltip.offsetWidth - 8));
+            const top = Math.max(8, targetRect.top - tooltip.offsetHeight - 10);
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${top}px`;
+          };
+          circle.addEventListener('mouseenter', showTooltip);
+          circle.addEventListener('mousemove', showTooltip);
+          circle.addEventListener('focus', showTooltip);
+          circle.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+          circle.addEventListener('blur', () => tooltip.classList.remove('visible'));
+          pointLayer.appendChild(circle);
+        });
+      });
       const axisMoney = value => value >= 1000000 ? `RM ${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `RM ${(value / 1000).toFixed(0)}K` : `RM ${Math.round(value)}`;
       document.getElementById('axisMax').textContent = axisMoney(axisMax);
       document.getElementById('axisTwoThirds').textContent = axisMoney(axisMax * 2 / 3);
