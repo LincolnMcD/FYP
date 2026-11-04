@@ -611,8 +611,12 @@
     </main>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
   <script src="inventoryAnalytics.js"></script>
+  <script src="operationsAnalytics.js"></script>
   <script>
     // Templates for the 3 reports
     const reportMoney = value => `RM ${new Intl.NumberFormat('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
@@ -629,9 +633,13 @@
       const totalCost = breakdown.reduce((sum, row) => sum + (Number(row.collectionCost) || 0), 0);
       const totalMargin = totalGross > 0 && !business.missingCostUnits ? ((totalGross - totalCost) / totalGross) * 100 : null;
       const maxBar = Math.max(1, ...bars.flatMap(row => [Number(row.revenue) || 0, Number(row.cost) || 0]));
+      const breakdownByBrand = new Map(breakdown.map(row => [String(row.brand || '').trim().toLowerCase(), Number(row.grossRevenue) || 0]));
       const brandRows = brands.map(row => {
-        const share = Math.max(0, Math.min(100, Number(row.share) || 0));
-        return `<div class="mini-brand-item"><div class="mini-brand-top"><span>${reportEscape(row.brand)}</span><span>${share.toFixed(1)}%</span></div><div class="mini-brand-track"><div class="mini-brand-fill" style="width:${share}%;"></div></div></div>`;
+        const brandRevenue = Number(row.grossRevenue) || breakdownByBrand.get(String(row.brand || '').trim().toLowerCase()) || 0;
+        const rawShare = totalGross > 0 ? (brandRevenue / totalGross) * 100 : Number(row.share) || 0;
+        const share = Math.max(0, Math.min(100, rawShare));
+        const displayShare = share > 0 ? Math.max(0.01, share) : 0;
+        return `<div class="mini-brand-item"><div class="mini-brand-top"><span>${reportEscape(row.brand)}</span><span>${displayShare.toFixed(2)}%</span></div><div class="mini-brand-track"><div class="mini-brand-fill" style="width:${displayShare}%;"></div></div></div>`;
       }).join('') || '<div>No completed sales for this month.</div>';
       const tableRows = breakdown.map(row => `<tr><td>${reportEscape(row.brand)}</td><td>${reportNumber(row.processed)}</td><td>${reportMoney(row.grossRevenue)}</td><td>${reportMoney(row.collectionCost)}</td><td style="color:#10b981;font-weight:700;">${row.margin == null ? '—' : `${Number(row.margin).toFixed(1)}%`}</td></tr>`).join('') || '<tr><td colspan="5">No completed sales for this month.</td></tr>';
       const barsMarkup = bars.map(row => {
@@ -640,8 +648,6 @@
         return `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${revenueHeight}px;"></div><div class="preview-bar-cost" style="height:${costHeight}px;"></div></div>`;
       }).join('');
       const labels = bars.map(row => `<span>${reportEscape(row.label)}</span>`).join('');
-      const missingCost = Number(business.missingCostUnits) || 0;
-
       return `
         <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Business Analytics Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
         <div class="sheet-kpis">
@@ -654,8 +660,8 @@
           <div class="sheet-chart-box"><h4 class="sheet-chart-title">Revenue vs. Collect Cost Trends</h4><div class="preview-bars-container">${barsMarkup}</div><div class="bar-labels">${labels}</div></div>
           <div class="sheet-chart-box"><h4 class="sheet-chart-title">Sales by Brand</h4><div class="mini-brand-list">${brandRows}</div></div>
         </div>
-        <div class="sheet-table-card"><table class="sheet-table"><thead><tr><th>Hardware Category</th><th>Units Processed</th><th>Gross Revenue</th><th>Collect Cost</th><th>Net Margin</th></tr></thead><tbody>${tableRows}<tr><td><strong>Total (${reportEscape(period)})</strong></td><td><strong>${reportNumber(totalUnits)}</strong></td><td><strong>${reportMoney(totalGross)}</strong></td><td><strong>${reportMoney(totalCost)}</strong></td><td><strong>${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</strong></td></tr></tbody></table></div>
-        <p>${missingCost ? `Collect cost is missing for ${reportNumber(missingCost)} sold units; net margin is not calculated for incomplete cost data.` : `Collect cost is recorded for all ${reportNumber(totalUnits)} sold units.`} ${reportEscape(business.allocationNote || '')}</p>
+        <div class="sheet-table-card"><table class="sheet-table"><thead><tr><th>Hardware Category</th><th title="Distinct Firebase product records with listingStatus Sold, assigned to their latest linked order month; only Fail and Cancelled orders are excluded">Units Processed</th><th>Gross Revenue</th><th>Collect Cost</th><th>Net Margin</th></tr></thead><tbody>${tableRows}<tr><td><strong>Total (${reportEscape(period)})</strong></td><td><strong>${reportNumber(totalUnits)}</strong></td><td><strong>${reportMoney(totalGross)}</strong></td><td><strong>${reportMoney(totalCost)}</strong></td><td><strong>${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</strong></td></tr></tbody></table></div>
+        <p>Units count distinct products currently marked Sold, assigned to their latest linked order month. Only Fail and Cancelled orders are excluded; statuses such as Delivering and Delivered count. Revenue is from purchase orders only.</p>
       `;
     }
 
@@ -663,91 +669,43 @@
       const maxWeekly = Math.max(1, ...summary.weeklyAdded);
       const weekBars = summary.weeklyAdded.map((count, index) => `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${Math.max(2, count / maxWeekly * 105)}px;"></div></div>`).join('');
       const weekLabels = summary.weeklyAdded.map((_, index) => `<span>W${index + 1}</span>`).join('');
-      const statuses = InventoryAnalytics.STATUS_LABELS.filter(label => summary.statusCounts[label] > 0).map(label => `<tr><td>${reportEscape(label)}</td><td>${reportNumber(summary.statusCounts[label])}</td><td>${summary.totalAdded ? `${(summary.statusCounts[label] / summary.totalAdded * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('') || '<tr><td colspan="3">No products found for this month.</td></tr>';
-      const modelRows = summary.topFive.map(row => `<tr><td>${reportEscape(row.model)}</td><td>${reportNumber(row.added)}</td><td>${reportNumber(row.active)}</td><td>${reportNumber(row.sold)}</td></tr>`).join('') || '<tr><td colspan="4">No products found for this month.</td></tr>';
+      const carryRows = ['Draft', 'Listed', 'Hidden', 'Rented'].map(label => `<tr><td>${label}</td><td>${reportNumber(summary.carryStatusCounts[label])}</td><td>Carried forward</td></tr>`).join('') + (summary.carryStatusCounts['Unknown Carried'] ? `<tr><td>Status changed after this month</td><td>${reportNumber(summary.carryStatusCounts['Unknown Carried'])}</td><td>Carried forward</td></tr>` : '') + (summary.unknownSnapshotRecords ? `<tr><td>Unclassified status history</td><td>${reportNumber(summary.unknownSnapshotRecords)}</td><td>Unknown</td></tr>` : '');
+      const exitRows = [['Sold', summary.soldDuringMonth], ['Lost', summary.lostDuringMonth]].map(([label, value]) => `<tr><td>${label}</td><td>${value == null ? '—' : reportNumber(value)}</td><td>Exit during month</td></tr>`).join('');
+      const modelRows = rows => rows.map(row => `<tr><td>${reportEscape(row.model)}</td><td>${reportNumber(row.openingStock)}${row.unknownOpening ? ' + ?' : ''}</td><td>${reportNumber(row.added)}</td><td>${row.soldDuringMonth == null ? '—' : reportNumber(row.soldDuringMonth)}</td><td>${row.lostDuringMonth == null ? '—' : reportNumber(row.lostDuringMonth)}${row.unknownLostDuringMonth && row.lostDuringMonth != null ? ' + ?' : ''}</td><td>${row.sellThroughRate == null ? '—' : `${row.sellThroughRate.toFixed(1)}%`}</td><td>${reportNumber(row.closingStock)}${row.unknownClosing ? ' + ?' : ''}</td></tr>`).join('') || '<tr><td colspan="7">No products found for this month.</td></tr>';
+      const modelTable = rows => `<table class="sheet-table"><thead><tr><th>Product Model</th><th>Opening Stock</th><th>Added</th><th>Sold</th><th>Lost</th><th>Sell-Through Rate</th><th>Current / Month-End Stock</th></tr></thead><tbody>${modelRows(rows)}</tbody></table>`;
+      const currentMonth = getSelectedMonthKey() === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      const closingLabel = currentMonth ? 'Current Inventory' : 'Closing Inventory';
+      const stockValue = summary.closingInventory == null ? '—' : reportNumber(summary.closingInventory);
       return `
         <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Inventory Performance Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
         <div class="sheet-kpis">
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Opening Inventory</span></div><div class="sheet-kpi-val">${summary.openingInventory == null ? `${reportNumber(summary.knownOpeningInventory)} + ?` : reportNumber(summary.openingInventory)}</div><div class="sheet-kpi-trend">At start of month</div></div>
           <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Products Added</span></div><div class="sheet-kpi-val">${reportNumber(summary.totalAdded)}</div><div class="sheet-kpi-trend">Date added in selected month</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Available Now</span></div><div class="sheet-kpi-val">${reportNumber(summary.availableStock)}</div><div class="sheet-kpi-trend">Current status</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Sold Now</span></div><div class="sheet-kpi-val">${reportNumber(summary.sold)}</div><div class="sheet-kpi-trend">Current status</div></div>
-          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Top Model</span></div><div class="sheet-kpi-val">${reportEscape(summary.topModel ? summary.topModel.model : '—')}</div><div class="sheet-kpi-trend">${summary.topModel ? `${summary.topModelShare.toFixed(1)}% of additions` : 'No product records'}</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Sold During Month</span></div><div class="sheet-kpi-val">${summary.soldDuringMonth == null ? '—' : reportNumber(summary.soldDuringMonth)}</div><div class="sheet-kpi-trend">Successful purchase transactions</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>${closingLabel}</span></div><div class="sheet-kpi-val">${summary.closingInventory == null ? `${reportNumber(summary.knownClosingInventory)} + ?` : stockValue}</div><div class="sheet-kpi-trend">Draft, listed, hidden, and rented stock</div></div>
         </div>
-        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Products Added by Week</h4><div class="preview-bars-container">${weekBars}</div><div class="bar-labels">${weekLabels}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">Current Product Status</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Products</th><th>Share</th></tr></thead><tbody>${statuses}</tbody></table></div></div>
-        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Most Added Models</h4><table class="sheet-table"><thead><tr><th>Product Model</th><th>Units Added</th><th>Available Now</th><th>Sold Now</th></tr></thead><tbody>${modelRows}</tbody></table></div>
-        <p>Products are grouped by their Firebase date added in ${reportEscape(period)}. Status values reflect the current product records because historical status change dates are not available.</p>
+        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Products Added by Week</h4><div class="preview-bars-container">${weekBars}</div><div class="bar-labels">${weekLabels}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">${currentMonth ? 'Inventory Status' : 'Month-End Inventory Status'}</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Products</th><th>Movement</th></tr></thead><tbody>${carryRows}${exitRows}</tbody></table></div></div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Most Added Models</h4>${modelTable(summary.topFive)}</div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Least Added Models</h4>${modelTable(summary.bottomFive)}</div>
+        <p>Sell-through rate = sold ÷ (opening stock + added) × 100. “+ ?” means some product status history is unavailable for the selected period.</p>
+        ${summary.historicalSnapshotAvailable || currentMonth ? '' : `<p>Known stock counts are shown with + ? where status history is incomplete. ${reportNumber(summary.unknownSnapshotRecords)} products have no status timestamp for this period.</p>`}
+        ${summary.overlappingExitUnits ? `<p>${reportNumber(summary.overlappingExitUnits)} product(s) are recorded as both sold and lost in ${reportEscape(period)}; exit counts overlap, so subtracting both counts from additions will not produce closing stock.</p>` : ''}
       `;
     }
 
-    function renderOperationsReport(period) {
+    function renderOperationsReport(period, summary) {
+      const statuses = Object.entries(summary.statusCounts).sort((a, b) => b[1] - a[1]).map(([status, count]) => `<tr><td>${reportEscape(status)}</td><td>${reportNumber(count)}</td><td>${summary.totalTasks ? `${(count / summary.totalTasks * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('') || '<tr><td colspan="3">No task records for this month.</td></tr>';
+      const types = ['Collection', 'Inspection', 'Delivery', 'Other'].map(type => `<tr><td>${type}</td><td>${reportNumber(summary.typeCounts[type])}</td><td>${summary.totalTasks ? `${(summary.typeCounts[type] / summary.totalTasks * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('');
       return `
-        <div class="sheet-brand-row">
-          <div>
-            <div class="sheet-brand-title">ReByte</div>
-            <div class="sheet-sub-title">Operational Efficiency Report</div>
-          </div>
-          <div class="sheet-meta">
-            <div class="sheet-date">${period}</div>
-            <div class="sheet-confidential">CONFIDENTIAL</div>
-          </div>
-        </div>
-
+        <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Operational Performance Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
         <div class="sheet-kpis">
-          <div class="sheet-kpi-card">
-            <div class="sheet-kpi-top"><span>Avg Inspection</span></div>
-            <div class="sheet-kpi-val">45 mins</div>
-            <div class="sheet-kpi-trend">&darr; 12% vs prev</div>
-          </div>
-          <div class="sheet-kpi-card">
-            <div class="sheet-kpi-top"><span>Refurbishment</span></div>
-            <div class="sheet-kpi-val">2.5 days</div>
-            <div class="sheet-kpi-trend" style="color:#64748b;">&minus; 0% vs prev</div>
-          </div>
-          <div class="sheet-kpi-card">
-            <div class="sheet-kpi-top"><span>Avg Delivery</span></div>
-            <div class="sheet-kpi-val">24 hours</div>
-            <div class="sheet-kpi-trend">&darr; 4% vs prev</div>
-          </div>
-          <div class="sheet-kpi-card highlight">
-            <div class="sheet-kpi-top"><span>Total Cycle</span></div>
-            <div class="sheet-kpi-val">12 days</div>
-            <div class="sheet-kpi-trend">&uarr; 2% vs prev</div>
-          </div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Tasks Created</span></div><div class="sheet-kpi-val">${reportNumber(summary.totalTasks)}</div><div class="sheet-kpi-trend">Selected month</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Completed Tasks</span></div><div class="sheet-kpi-val">${reportNumber(summary.completed)}</div><div class="sheet-kpi-trend">Current status</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Collection Tasks</span></div><div class="sheet-kpi-val">${reportNumber(summary.collection)}</div><div class="sheet-kpi-trend">Current month</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Completion Rate</span></div><div class="sheet-kpi-val">${summary.totalTasks ? `${summary.completionRate.toFixed(1)}%` : '—'}</div><div class="sheet-kpi-trend">Completed / created</div></div>
         </div>
-
-        <div class="sheet-table-card">
-          <h4 class="sheet-chart-title" style="margin-bottom: 12px;">Resource Allocation Breakdown</h4>
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>Department</th>
-                <th>Staff Count</th>
-                <th>Share of Workforce</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Inspection Team</td>
-                <td>12 Members</td>
-                <td>25%</td>
-                <td><span style="color:#10b981; font-weight:600;">On Track</span></td>
-              </tr>
-              <tr>
-                <td>Refurbishment Team</td>
-                <td>28 Technicians</td>
-                <td>58%</td>
-                <td><span style="color:#f59e0b; font-weight:600;">Warning</span></td>
-              </tr>
-              <tr>
-                <td>Shipping & Logistics</td>
-                <td>8 Personnel</td>
-                <td>17%</td>
-                <td><span style="color:#ef4444; font-weight:600;">Delayed</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Task Volume by Type</h4><table class="sheet-table"><thead><tr><th>Task Type</th><th>Tasks</th><th>Share</th></tr></thead><tbody>${types}</tbody></table></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">Current Task Status</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Tasks</th><th>Share</th></tr></thead><tbody>${statuses}</tbody></table></div></div>
+        <p>Tasks are grouped by Firebase task creation date in ${reportEscape(period)}. Status values reflect current task status. Historical stage timing is not available in the task records.</p>
       `;
     }
 
@@ -779,15 +737,26 @@
         container.innerHTML = '<p>Loading live Firebase product report…</p>';
         try {
           const products = await InventoryAnalytics.fetchProducts();
+          const saleEvents = await InventoryAnalytics.fetchSaleEvents(products);
+          const salesSummary = await InventoryAnalytics.fetchSalesSummary(getSelectedMonthKey());
           if (requestId === reportPreviewRequest) {
-            const summary = InventoryAnalytics.summarize(products, getSelectedMonthKey());
+            const summary = InventoryAnalytics.summarize(products, getSelectedMonthKey(), salesSummary, saleEvents);
             container.innerHTML = renderInventoryReport(period, summary);
           }
         } catch (error) {
           if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
         }
       } else if (type === 'operations') {
-        container.innerHTML = renderOperationsReport(period);
+        container.innerHTML = '<p>Loading live Firebase task report…</p>';
+        try {
+          const tasks = await OperationsAnalytics.fetchTasks();
+          if (requestId === reportPreviewRequest) {
+            const summary = OperationsAnalytics.summarize(tasks, getSelectedMonthKey());
+            container.innerHTML = renderOperationsReport(period, summary);
+          }
+        } catch (error) {
+          if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
+        }
       } else {
         container.innerHTML = '<p>Loading live Firebase report…</p>';
         try {

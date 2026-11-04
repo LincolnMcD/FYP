@@ -6,6 +6,7 @@
   <title>Analytics Hub - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="adminHeader.css">
+  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
   <style>
     :root {
       --navy: #082f72;
@@ -28,52 +29,6 @@
       font-family: 'Inter', Arial, sans-serif;
     }
     button, input { font: inherit; }
-
-    /* Shared Standard Sidebar matching customerManagement & staffManagement */
-    .sidebar {
-      width: 260px;
-      background: #fff;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-    .brand {
-      height: 105px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 28px;
-      border-bottom: 1px solid #edf0f4;
-    }
-    .brand img { width: 38px; height: 38px; object-fit: contain; }
-    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
-
-    .nav-list {
-      list-style: none;
-      padding: 22px 16px;
-      margin: 0;
-      display: grid;
-      gap: 8px;
-      flex: 1;
-      align-content: start;
-    }
-    .nav-item {
-      min-height: 48px;
-      padding: 0 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 9px;
-      color: #586579;
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.15s, color 0.15s;
-    }
-    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
-    .nav-item:hover { background: #f1f4f9; }
-    .nav-item.active { color: #fff; background: var(--navy); }
 
     /* Main Container with Standard Admin Header */
     .main {
@@ -489,25 +444,8 @@
 </head>
 <body>
 
-  <!-- Shared Sidebar Matching Other Admin Pages -->
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
-      <span>ReByte</span>
-    </div>
-    <nav class="nav-list" aria-label="Admin navigation">
-      <a href="adminDashboard.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
-      <a href="../listingModule/listing.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>Listing</a>
-      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
-      <a href="../transactionManagementModule/index.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
-      <a href="analyticsHub.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
-      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
-      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
-      <a href="customerManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
-      <a href="staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
-      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
-    </nav>
-  </aside>
+  <!-- Shared Admin Sidebar -->
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
 
   <!-- Main Container -->
   <main class="main">
@@ -584,7 +522,7 @@
             <span class="metric-value" id="invStock">—</span>
           </div>
           <div class="metric-row">
-            <span class="metric-label">Turnover Velocity</span>
+            <span class="metric-label">Latest Month Added</span>
             <span class="metric-value" id="invVelocity">—</span>
           </div>
 
@@ -831,6 +769,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
+  <script src="../reportModule/adminSidebar.js"></script>
+  <script src="../reportModule/inventoryAnalytics.js"></script>
   <script>
     const ANALYTICS_API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
@@ -884,20 +824,37 @@
           document.getElementById('kpiCosts').textContent = data.business.operatingCostsFormatted || '—';
           document.getElementById('kpiForecast').textContent = data.business.q4ForecastFormatted || '—';
         }
-        if (data.inventory) {
-          document.getElementById('invStock').textContent = data.inventory.activeStockFormatted || '—';
-          document.getElementById('invVelocity').textContent = data.inventory.turnoverVelocityFormatted || '—';
-        }
         if (data.operations) {
           document.getElementById('opsInspection').textContent = data.operations.avgInspection || '—';
           document.getElementById('opsDelivery').textContent = data.operations.avgDeliveryTime || '—';
         }
       } catch (err) {
-        ['bizRevenue', 'bizMargin', 'kpiRevenue', 'kpiMargin', 'kpiCosts', 'kpiForecast', 'invStock', 'invVelocity', 'opsInspection', 'opsDelivery']
+        ['bizRevenue', 'bizMargin', 'kpiRevenue', 'kpiMargin', 'kpiCosts', 'kpiForecast', 'opsInspection', 'opsDelivery']
           .forEach(id => { document.getElementById(id).textContent = '—'; });
         errorBanner.textContent = `Analytics data was not loaded. Why: ${err.message}`;
         errorBanner.hidden = false;
         console.error('Analytics summary request failed:', err);
+      }
+    }
+
+    async function loadInventoryHubData() {
+      try {
+        const products = await InventoryAnalytics.fetchProducts();
+        const current = InventoryAnalytics.summarizeCurrentStock(products);
+        const months = InventoryAnalytics.availableMonths(products);
+        document.getElementById('invStock').textContent = Number(current.available).toLocaleString('en-MY');
+        if (months.length) {
+          const latest = InventoryAnalytics.summarize(products, months[0]);
+          document.getElementById('invVelocity').textContent = `${Number(latest.totalAdded).toLocaleString('en-MY')} (${months[0]})`;
+        } else {
+          document.getElementById('invVelocity').textContent = '—';
+        }
+      } catch (err) {
+        document.getElementById('invStock').textContent = '—';
+        document.getElementById('invVelocity').textContent = '—';
+        const errorBanner = document.getElementById('analyticsDataError');
+        errorBanner.textContent = `${errorBanner.hidden ? '' : `${errorBanner.textContent} `}Inventory data was not loaded. Why: ${err.message}`;
+        errorBanner.hidden = false;
       }
     }
 
@@ -932,6 +889,7 @@
         }
       }
       loadAnalyticsData();
+      loadInventoryHubData();
     });
   </script>
 </body>

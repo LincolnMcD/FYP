@@ -2777,6 +2777,9 @@ router.get("/admin/products", async (req, res) => {
                 imageUrl: actualImg,
                 hasActualImage: Boolean(actualImg),
                 dateAdded,
+                // Preserve the latest status-related update so historical inventory
+                // reports can place Lost/Sold status changes within the right month.
+                updatedAt: data.updatedAt || null,
                 category: devData.deviceCategory || data.category || "Smartphones"
             };
         });

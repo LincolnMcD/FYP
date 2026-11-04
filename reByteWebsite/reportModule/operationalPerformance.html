@@ -6,6 +6,7 @@
   <title>Operational Performance - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="adminHeader.css">
+  <link rel="stylesheet" href="adminSidebar.css">
   <style>
     :root {
       --navy: #082f72;
@@ -33,55 +34,6 @@
       font-family: 'Inter', Arial, sans-serif;
     }
     button, input, select { font: inherit; }
-
-    /* Shared Standard Sidebar */
-    .sidebar {
-      width: 260px;
-      background: #fff;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      height: 100vh;
-      position: sticky;
-      top: 0;
-    }
-    .brand {
-      height: 105px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 28px;
-      border-bottom: 1px solid #edf0f4;
-    }
-    .brand img { width: 38px; height: 38px; object-fit: contain; }
-    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
-
-    .nav-list {
-      list-style: none;
-      padding: 22px 16px;
-      margin: 0;
-      display: grid;
-      gap: 8px;
-      flex: 1;
-      align-content: start;
-    }
-    .nav-item {
-      min-height: 48px;
-      padding: 0 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 9px;
-      color: #586579;
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.15s, color 0.15s;
-    }
-    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
-    .nav-item:hover { background: #f1f4f9; }
-    .nav-item.active { color: #fff; background: var(--navy); }
 
     /* Main Container with Admin Header */
     .main-wrap {
@@ -150,6 +102,12 @@
       font-weight: 500;
       color: #334155;
     }
+    .date-pill label { color: #64748b; font-size: 12px; font-weight: 700; }
+    .date-pill select { min-width: 76px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .date-pill select + label { margin-left: 8px; }
+    .ops-header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .operations-error { margin: 0 0 18px; padding: 14px 16px; border: 1px solid #fecaca; border-radius: 10px; background: #fff7f7; color: #991b1b; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .operations-note { margin: -12px 0 20px; color: #64748b; font-size: 12px; line-height: 1.5; }
     .export-cta-btn {
       display: inline-flex;
       align-items: center;
@@ -438,47 +396,7 @@
 <body>
 
   <!-- Shared Sidebar -->
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
-      <span>ReByte</span>
-    </div>
-
-    <nav class="nav-list" aria-label="Admin navigation">
-      <a href="../adminModule/adminDashboard.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Listings</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>System Config</span>
-      </a>
-      <a href="../financeModule/financialManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        <span>Finance</span>
-      </a>
-      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-        <span>Analytics</span>
-      </a>
-      <a href="../adminModule/taskAssignment.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Task Assignment</span>
-      </a>
-      <a href="../adminModule/customerManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>User</span>
-      </a>
-      <a href="../adminModule/staffManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Staff Management</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>Communication</span>
-      </a>
-    </nav>
-  </aside>
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
 
   <!-- Main Area -->
   <div class="main-wrap">
@@ -499,17 +417,22 @@
       <!-- Page Title & Date/Export Controls -->
       <div class="page-title-row">
         <h1 class="page-title">Operational Performance</h1>
-        <div class="header-actions">
-          <div class="date-pill">
-            <span>October 2023</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <div class="ops-header-actions">
+          <div class="date-pill" role="group" aria-label="Select operational report year and month">
+            <label for="operationsYear">Year</label>
+            <select id="operationsYear" aria-label="Select report year" disabled></select>
+            <label for="operationsMonth">Month</label>
+            <select id="operationsMonth" aria-label="Select report month" disabled></select>
           </div>
-          <a href="exportReport.html?type=operations" class="export-cta-btn">
+          <a id="operationsExportLink" href="exportReport.html?type=operations" class="export-cta-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>Export Report</span>
           </a>
         </div>
       </div>
+
+      <div id="operationsError" class="operations-error" role="alert" aria-live="polite" hidden></div>
+      <p id="operationsNote" class="operations-note">Loading task records from Firebase…</p>
 
       <!-- 4 KPI Cards -->
       <div class="kpi-grid">
@@ -517,29 +440,29 @@
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span>AVG INSPECTION</span>
+            <span>TASKS CREATED</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num">45</span>
-            <span class="kpi-unit">mins</span>
+            <span class="kpi-num" id="opsTasks">—</span>
+            <span class="kpi-unit">tasks</span>
           </div>
           <div class="kpi-trend trend-down">
-            <span>&darr; 12% vs prev</span>
+            <span id="opsTasksNote">Selected month</span>
           </div>
         </div>
 
-        <!-- Refurbishment -->
+        <!-- Collection -->
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <span>REFURBISHMENT</span>
+            <span>COLLECTION TASKS</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num">2.5</span>
-            <span class="kpi-unit">days</span>
+            <span class="kpi-num" id="opsCollection">—</span>
+            <span class="kpi-unit">tasks</span>
           </div>
           <div class="kpi-trend trend-neutral">
-            <span>&minus; 0% vs prev</span>
+            <span>Firebase task records</span>
           </div>
         </div>
 
@@ -547,14 +470,14 @@
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-            <span>AVG DELIVERY</span>
+            <span>DELIVERY TASKS</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num">24</span>
-            <span class="kpi-unit">hours</span>
+            <span class="kpi-num" id="opsDelivery">—</span>
+            <span class="kpi-unit">tasks</span>
           </div>
           <div class="kpi-trend trend-down">
-            <span>&darr; 4% vs prev</span>
+            <span>Firebase task records</span>
           </div>
         </div>
 
@@ -562,179 +485,120 @@
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>TOTAL CYCLE TIME</span>
+            <span>COMPLETION RATE</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num">12</span>
-            <span class="kpi-unit">days</span>
+            <span class="kpi-num" id="opsCompletionRate">—</span>
+            <span class="kpi-unit">%</span>
           </div>
           <div class="kpi-trend trend-up">
-            <span>&uarr; 2% vs prev</span>
+            <span id="opsCompletedNote">Completed tasks this month</span>
           </div>
         </div>
       </div>
 
-      <!-- Middle 2 Cards: Resale Cycle Time by Category & Processing Time by Stage -->
+      <!-- Monthly Firebase task summaries -->
       <div class="mid-grid">
-        <!-- Resale Cycle Time by Category -->
         <div class="chart-card">
-          <h2 class="chart-title">Resale Cycle Time by Category</h2>
-          <div class="cat-cycle-list">
-            <div class="cat-cycle-item">
-              <div class="cat-cycle-info">
-                <span class="cat-name">iPhone</span>
-                <span class="cat-days">6 Days</span>
-              </div>
-              <div class="cat-progress-track">
-                <div class="cat-progress-bar" style="width: 35%;"></div>
-              </div>
-            </div>
-
-            <div class="cat-cycle-item">
-              <div class="cat-cycle-info">
-                <span class="cat-name">Samsung</span>
-                <span class="cat-days">8 Days</span>
-              </div>
-              <div class="cat-progress-track">
-                <div class="cat-progress-bar" style="width: 48%;"></div>
-              </div>
-            </div>
-
-            <div class="cat-cycle-item">
-              <div class="cat-cycle-info">
-                <span class="cat-name">Xiaomi</span>
-                <span class="cat-days">14 Days</span>
-              </div>
-              <div class="cat-progress-track">
-                <div class="cat-progress-bar" style="width: 75%;"></div>
-              </div>
-            </div>
-
-            <div class="cat-cycle-item">
-              <div class="cat-cycle-info">
-                <span class="cat-name">Huawei</span>
-                <span class="cat-days">11 Days</span>
-              </div>
-              <div class="cat-progress-track">
-                <div class="cat-progress-bar" style="width: 60%;"></div>
-              </div>
-            </div>
-          </div>
+          <h2 class="chart-title">Tasks Created by Week</h2>
+          <div id="opsWeeklyTasks" class="cat-cycle-list"></div>
         </div>
-
-        <!-- Processing Time by Stage -->
         <div class="chart-card">
-          <h2 class="chart-title">Processing Time by Stage</h2>
-          <div class="stage-list">
-            <!-- Stage 1 -->
-            <div class="stage-item">
-              <div class="stage-num-badge">1</div>
-              <div class="stage-body">
-                <div class="stage-top">
-                  <span class="stage-name">Inspection</span>
-                  <span class="stage-status-badge status-on-track">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    On Track
-                  </span>
-                </div>
-                <div>
-                  <span class="stage-metric">45 mins</span>
-                  <span class="stage-metric-label">avg</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Stage 2 -->
-            <div class="stage-item">
-              <div class="stage-num-badge">2</div>
-              <div class="stage-body">
-                <div class="stage-top">
-                  <span class="stage-name">Refurbishment</span>
-                  <span class="stage-status-badge status-warning">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    Warning
-                  </span>
-                </div>
-                <div>
-                  <span class="stage-metric">2.5 days</span>
-                  <span class="stage-metric-label">avg</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Stage 3 -->
-            <div class="stage-item">
-              <div class="stage-num-badge">3</div>
-              <div class="stage-body">
-                <div class="stage-top">
-                  <span class="stage-name">Delivery</span>
-                  <span class="stage-status-badge status-delayed">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    Delayed
-                  </span>
-                </div>
-                <div>
-                  <span class="stage-metric">24 hours</span>
-                  <span class="stage-metric-label">avg</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <h2 class="chart-title">Current Task Status</h2>
+          <div id="opsStatusList" class="stage-list"></div>
         </div>
       </div>
 
-      <!-- Resource Allocation by Stage Section -->
-      <h2 class="section-title">Resource Allocation by Stage</h2>
-      <div class="resource-grid">
-        <!-- Inspection Team -->
-        <div class="resource-card">
-          <div class="resource-header">INSPECTION TEAM</div>
-          <div class="resource-val-row">
-            <span class="resource-count">12</span>
-            <span class="resource-role">Staff Members</span>
-          </div>
-          <div class="resource-track">
-            <div class="resource-bar" style="width: 25%;"></div>
-          </div>
-          <div class="resource-pct">25% of total workforce</div>
-        </div>
+      <h2 class="section-title">Task Volume by Type</h2>
+      <div id="opsTypeBreakdown" class="resource-grid"></div>
 
-        <!-- Refurbishment Team -->
-        <div class="resource-card">
-          <div class="resource-header">REFURBISHMENT TEAM</div>
-          <div class="resource-val-row">
-            <span class="resource-count">28</span>
-            <span class="resource-role">Technicians</span>
-          </div>
-          <div class="resource-track">
-            <div class="resource-bar" style="width: 58%;"></div>
-          </div>
-          <div class="resource-pct">58% of total workforce</div>
-        </div>
-
-        <!-- Shipping & Logistics -->
-        <div class="resource-card">
-          <div class="resource-header">SHIPPING & LOGISTICS</div>
-          <div class="resource-val-row">
-            <span class="resource-count">8</span>
-            <span class="resource-role">Personnel</span>
-          </div>
-          <div class="resource-track">
-            <div class="resource-bar" style="width: 17%;"></div>
-          </div>
-          <div class="resource-pct">17% of total workforce</div>
-        </div>
-      </div>
-
-      <!-- Footer Info -->
       <div class="page-footer">
-        <span>Generated on Nov 1, 2023 &bull; ReByte Internal Reporting System</span>
+        <span id="opsGeneratedNote">Live Firebase task report</span>
         <span>Page 1 of 1</span>
       </div>
     </main>
   </div>
 
   <script src="adminHeader.js"></script>
+  <script src="adminSidebar.js"></script>
+  <script src="operationsAnalytics.js"></script>
+  <script>
+    const opsMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const opsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const opsCount = value => new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 }).format(Number(value) || 0);
+
+    function selectedOpsMonth() {
+      return `${document.getElementById('operationsYear').value}-${document.getElementById('operationsMonth').value}`;
+    }
+
+    function populateOpsPicker(months) {
+      const yearSelect = document.getElementById('operationsYear');
+      const monthSelect = document.getElementById('operationsMonth');
+      const years = [...new Set(months.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+      yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
+      const updateMonths = preferred => {
+        const matches = months.filter(month => month.startsWith(`${yearSelect.value}-`));
+        monthSelect.innerHTML = matches.map(month => `<option value="${month.slice(5, 7)}">${opsMonths[Number(month.slice(5, 7)) - 1]}</option>`).join('');
+        if (matches.includes(preferred)) monthSelect.value = preferred.slice(5, 7);
+        else if (matches.length) monthSelect.value = matches[0].slice(5, 7);
+      };
+      yearSelect.addEventListener('change', () => { updateMonths(''); renderOperations(); });
+      monthSelect.addEventListener('change', renderOperations);
+      const requested = new URLSearchParams(location.search).get('month');
+      const initial = months.includes(requested) ? requested : months[0];
+      yearSelect.value = initial.slice(0, 4);
+      updateMonths(initial);
+      yearSelect.disabled = false;
+      monthSelect.disabled = false;
+    }
+
+    function renderOperations() {
+      if (!window.operationTasks) return;
+      const month = selectedOpsMonth();
+      const summary = OperationsAnalytics.summarize(window.operationTasks, month);
+      document.getElementById('opsTasks').textContent = opsCount(summary.totalTasks);
+      document.getElementById('opsTasksNote').textContent = `${month} task records`;
+      document.getElementById('opsCollection').textContent = opsCount(summary.collection);
+      document.getElementById('opsDelivery').textContent = opsCount(summary.delivery);
+      document.getElementById('opsCompletionRate').textContent = summary.totalTasks ? summary.completionRate.toFixed(1) : '—';
+      document.getElementById('opsCompletedNote').textContent = `${opsCount(summary.completed)} completed of ${opsCount(summary.totalTasks)} tasks`;
+
+      const maxWeekly = Math.max(1, ...summary.weeklyTasks);
+      document.getElementById('opsWeeklyTasks').innerHTML = summary.weeklyTasks.map((count, index) => {
+        const percent = count / maxWeekly * 100;
+        return `<div class="cat-cycle-item"><div class="cat-cycle-info"><span class="cat-name">Week ${index + 1}</span><span class="cat-days">${opsCount(count)} tasks</span></div><div class="cat-progress-track"><div class="cat-progress-bar" style="width:${percent}%;"></div></div></div>`;
+      }).join('') || '<div>No task records for this month.</div>';
+
+      const statuses = Object.entries(summary.statusCounts).sort((a, b) => b[1] - a[1]);
+      document.getElementById('opsStatusList').innerHTML = statuses.map(([status, count], index) => `<div class="stage-item"><div class="stage-num-badge">${index + 1}</div><div class="stage-body"><div class="stage-top"><span class="stage-name">${opsEscape(status)}</span><span class="stage-status-badge" style="background:#eef2f7;color:#475569;">${opsCount(count)}</span></div><div class="stage-metric-label">${summary.totalTasks ? (count / summary.totalTasks * 100).toFixed(1) : '0.0'}% of this month’s tasks</div></div></div>`).join('') || '<div>No task records for this month.</div>';
+
+      const types = ['Collection', 'Inspection', 'Delivery', 'Other'];
+      document.getElementById('opsTypeBreakdown').innerHTML = types.map((type, index) => {
+        const count = summary.typeCounts[type];
+        const percent = summary.totalTasks ? count / summary.totalTasks * 100 : 0;
+        return `<div class="resource-card"><div class="resource-header">${type.toUpperCase()}</div><div class="resource-val-row"><span class="resource-count">${opsCount(count)}</span><span class="resource-role">Tasks</span></div><div class="resource-track"><div class="resource-bar" style="width:${percent}%;"></div></div><div class="resource-pct">${percent.toFixed(1)}% of this month’s tasks</div></div>`;
+      }).join('');
+
+      document.getElementById('opsGeneratedNote').textContent = `Selected task period: ${month} · grouped by task creation date`;
+      document.getElementById('operationsExportLink').href = `exportReport.html?type=operations&month=${encodeURIComponent(month)}`;
+      document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Statuses are current task status; historical stage timing is not available in the task records.` : `No task records have a creation date in ${month}.`;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const error = document.getElementById('operationsError');
+      try {
+        window.operationTasks = await OperationsAnalytics.fetchTasks();
+        const months = OperationsAnalytics.availableMonths(window.operationTasks);
+        if (!months.length) throw new Error('The task API returned records, but none has a usable createdAt, createdAtMs, or orderDate.');
+        populateOpsPicker(months);
+        renderOperations();
+      } catch (err) {
+        error.textContent = `Operational data could not be loaded. ${err.message}`;
+        error.hidden = false;
+        document.getElementById('operationsNote').textContent = 'No operational metrics are shown because task records could not be retrieved.';
+      }
+    });
+  </script>
 </body>
 </html>
 

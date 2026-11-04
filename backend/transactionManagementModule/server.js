@@ -379,6 +379,11 @@ router.get("/transactions", async (req, res) => {
                 method,
                 status,
                 orderID: t.orderID || null,
+                productIDs: (() => {
+                    const order = ordersMap.get(t.orderID) || {};
+                    const ids = Array.isArray(order.productIDs) ? order.productIDs : [];
+                    return ids.length ? ids : (t.productID ? [t.productID] : []);
+                })(),
                 tradeInRequestID: t.tradeInRequestID || null,
                 rentalID: t.rentalID || null,
                 gatewayTransactionID: t.gatewayTransactionID || null
@@ -1390,7 +1395,11 @@ router.get("/analytics/summary", async (req, res) => {
         };
 
         const txRecords = [...transactionDocs.entries()].map(([id, data]) => ({ id, data }));
-        const orderIds = referenceIds("orderID", txRecords.map(row => row.data));
+        // Read the full transaction history for product-ID deduplication so a
+        // later order outside the 4-month chart window still supersedes an older one.
+        const historySnap = await transactionCollection.get();
+        const historyRecords = historySnap.docs.map(doc => ({ id: doc.id, data: doc.data() || {} }));
+        const orderIds = referenceIds("orderID", [...txRecords, ...historyRecords].map(row => row.data));
         const orders = await loadLinkedDocuments("order", orderIds, "orderID");
 
         const productIds = [...new Set(txRecords.flatMap(({ data }) => {
@@ -1415,11 +1424,12 @@ router.get("/analytics/summary", async (req, res) => {
         };
         const monthKeys = Array.from({ length: 4 }, (_, index) => monthKey(monthBoundary(index - 3)));
         const monthly = new Map(monthKeys.map(key => [key, {
-            sales: 0, rental: 0, collectionCost: 0, tradeIns: new Set(), brands: new Map(), countedOrders: new Set(), units: 0, missingCostUnits: 0
+            sales: 0, rental: 0, collectionCost: 0, tradeIns: new Set(), brands: new Map(), processedProductIds: new Set(), units: 0, missingCostUnits: 0,
+            salesRefunds: [], purchaseOrders: new Map()
         }]));
         const getBrandRow = (stats, brand) => {
             const key = brand || "Other";
-            if (!stats.brands.has(key)) stats.brands.set(key, { brand: key, processed: 0, grossRevenue: 0, collectionCost: 0, missingCostUnits: 0 });
+            if (!stats.brands.has(key)) stats.brands.set(key, { brand: key, processed: 0, partialRefundQuantity: 0, grossRevenue: 0, collectionCost: 0, missingCostUnits: 0 });
             return stats.brands.get(key);
         };
         const normalizeBrand = value => {
@@ -1446,6 +1456,27 @@ router.get("/analytics/summary", async (req, res) => {
             if (data.tradeInRequestID) return "trade-in";
             return "other";
         };
+        // Product IDs can appear in more than one order. Keep the latest
+        // successful purchase order for each product so one device is not
+        // counted or attributed to multiple brands/orders.
+        const latestOrderByProductId = new Map();
+        historyRecords.forEach(({ id, data }) => {
+            const date = getDate(data);
+            const status = String(data.transactionStatus || data.status || "success").toLowerCase();
+            if (!date || getCategory(data) !== "purchase" || status.includes("fail") || status.includes("cancel")) return;
+            const orderId = String(data.orderID || "").trim();
+            const order = orders.get(orderId) || {};
+            const orderStatus = String(order.orderStatus || order.status || "").trim().toLowerCase();
+            if (orderStatus.includes("fail") || orderStatus.includes("cancel")) return;
+            const ids = [...new Set((Array.isArray(order.productIDs) ? order.productIDs : [data.productID]).map(value => String(value || "").trim()).filter(Boolean))];
+            ids.forEach(productId => {
+                const previous = latestOrderByProductId.get(productId);
+                const transactionId = String(data.transactionID || id || "");
+                if (!previous || date.getTime() > previous.dateMs || (date.getTime() === previous.dateMs && transactionId.localeCompare(previous.transactionId) > 0)) {
+                    latestOrderByProductId.set(productId, { orderId, transactionId, dateMs: date.getTime() });
+                }
+            });
+        });
         const getCollectionCost = (product, tradeIn) => {
             const quotation = tradeIn?.finalQuotation || {};
             const candidates = [
@@ -1470,17 +1501,23 @@ router.get("/analytics/summary", async (req, res) => {
             const stats = monthly.get(key);
             if (!stats) return;
             const status = String(data.transactionStatus || data.status || "success").toLowerCase();
-            if (status.includes("fail") || status.includes("cancel") || status.includes("pending")) return;
-
+            if (status.includes("fail") || status.includes("cancel")) return;
             const amount = Number(data.transactionAmount ?? data.amount ?? data.totalAmount ?? 0) || 0;
             const category = getCategory(data);
+            const orderId = String(data.orderID || "").trim();
+            const order = orders.get(orderId) || {};
+            const orderStatus = String(order.orderStatus || order.status || "").trim().toLowerCase();
+            if ((category === "purchase" || category === "refund") && (orderStatus.includes("fail") || orderStatus.includes("cancel"))) return;
             if (category === "rental") {
                 stats.rental += amount;
                 return;
             }
             if (category === "refund") {
                 if (data.rentalID) stats.rental -= amount;
-                else stats.sales -= amount;
+                else if (String(data.orderID || "").trim()) {
+                    stats.sales -= amount;
+                    stats.salesRefunds.push({ data, amount });
+                }
                 return;
             }
             if (category === "trade-in") {
@@ -1490,18 +1527,22 @@ router.get("/analytics/summary", async (req, res) => {
             if (category !== "purchase") return;
 
             stats.sales += amount;
-            const orderId = String(data.orderID || "");
-            const order = orders.get(orderId) || {};
-            const ids = (Array.isArray(order.productIDs) ? order.productIDs : [data.productID]).map(id => String(id || "")).filter(Boolean);
+            const ids = [...new Set((Array.isArray(order.productIDs) ? order.productIDs : [data.productID]).map(id => String(id || "").trim()).filter(Boolean))];
+            const latestIds = ids.filter(id => latestOrderByProductId.get(id)?.orderId === orderId);
+            if (orderId) {
+                const purchase = stats.purchaseOrders.get(orderId) || { amount: 0, productIds: new Set() };
+                purchase.amount += amount;
+                latestIds.forEach(id => purchase.productIds.add(id));
+                stats.purchaseOrders.set(orderId, purchase);
+            }
             if (!ids.length) {
                 const row = getBrandRow(stats, "Other");
                 row.grossRevenue += amount;
-                row.processed += 1;
                 row.missingCostUnits += 1;
-                stats.units += 1;
                 stats.missingCostUnits += 1;
                 return;
             }
+            if (!latestIds.length) return;
 
             const items = ids.map(id => {
                 const product = products.get(id) || {};
@@ -1513,11 +1554,17 @@ router.get("/analytics/summary", async (req, res) => {
             });
             const weightTotal = items.reduce((sum, item) => sum + item.price, 0);
             items.forEach(item => {
+                if (latestOrderByProductId.get(item.id)?.orderId !== orderId) return;
                 const row = getBrandRow(stats, item.brand);
                 const share = weightTotal > 0 ? item.price / weightTotal : 1 / items.length;
                 row.grossRevenue += amount * share;
 
-                if (!orderId || !stats.countedOrders.has(orderId)) {
+                // Units processed follows the product's current Firebase status.
+                // Transaction/order data supplies its month and brand attribution;
+                // duplicate product IDs are counted only once.
+                const isCurrentlySold = String(item.product.listingStatus || item.product.rawStatus || item.product.status || "").trim().toLowerCase() === "sold";
+                if (isCurrentlySold && !stats.processedProductIds.has(item.id)) {
+                    stats.processedProductIds.add(item.id);
                     row.processed += 1;
                     stats.units += 1;
                     const collectionCost = getCollectionCost(item.product, item.tradeIn);
@@ -1531,7 +1578,70 @@ router.get("/analytics/summary", async (req, res) => {
                     }
                 }
             });
-            if (orderId) stats.countedOrders.add(orderId);
+        });
+
+        // Refunds reduce net brand revenue. Attribute them through the original
+        // order's products, using the same selling-price weights as purchases.
+        monthly.forEach(stats => {
+            stats.salesRefunds.forEach(({ data, amount }) => {
+                const orderId = String(data.orderID || "").trim();
+                const order = orders.get(orderId) || {};
+                const ids = [...new Set([
+                    ...(Array.isArray(order.productIDs) ? order.productIDs : []),
+                    ...(Array.isArray(data.productIDs) ? data.productIDs : []),
+                    data.productID
+                ].map(id => String(id || "").trim()).filter(Boolean))];
+                const items = ids.map(id => {
+                    const product = products.get(id) || {};
+                    const device = devices.get(String(product.deviceID || "")) || {};
+                    const tradeIn = tradeIns.get(String(product.tradeInRequestID || "")) || {};
+                    return {
+                        id,
+                        product,
+                        tradeIn,
+                        brand: normalizeBrand(product.brand || device.brand || tradeIn.finalQuotation?.brand || tradeIn.brand),
+                        price: Number(product.soldPrice ?? product.purchasedPrice ?? product.sellingPrice ?? product.price ?? 0) || 0
+                    };
+                });
+                if (!items.length) items.push({ brand: "Other", price: 0 });
+                const weightTotal = items.reduce((sum, item) => sum + item.price, 0);
+                items.forEach(item => {
+                    // Keep the refund's original order-level price allocation,
+                    // but don't create a negative "Other" brand when the
+                    // product was superseded by a later order.
+                    if (item.id && latestOrderByProductId.get(item.id)?.orderId !== orderId) return;
+                    const row = getBrandRow(stats, item.brand);
+                    const share = weightTotal > 0 ? item.price / weightTotal : 1 / items.length;
+                    row.grossRevenue -= amount * share;
+                });
+
+                // Only remove units when the full order was refunded in this
+                // month; partial refunds do not prove that a product was returned.
+                const purchase = orderId ? stats.purchaseOrders.get(orderId) : null;
+                const orderRefunds = orderId
+                    ? stats.salesRefunds.filter(refund => String(refund.data.orderID || "").trim() === orderId)
+                        .reduce((sum, refund) => sum + refund.amount, 0)
+                    : 0;
+                if (purchase && orderRefunds > 0 && orderRefunds + 0.01 < purchase.amount) {
+                    // Keep units from partially refunded orders visible in a
+                    // separate quantity so they are not mixed into fully
+                    // processed, non-refunded units. An order-level refund
+                    // identifies all products in that order as affected.
+                    const partialOrders = stats.partialRefundedOrders || (stats.partialRefundedOrders = new Set());
+                    if (!partialOrders.has(orderId)) {
+                        const partialIds = purchase.productIds.size ? [...purchase.productIds] : items.map(item => item.id).filter(Boolean);
+                        const uniqueItems = new Map(items.filter(item => item.id).map(item => [item.id, item]));
+                        partialIds.forEach(id => {
+                            const item = uniqueItems.get(id);
+                            if (!item) return;
+                            const row = stats.brands.get(item.brand);
+                            if (!row) return;
+                            row.partialRefundQuantity += 1;
+                        });
+                        partialOrders.add(orderId);
+                    }
+                }
+            });
         });
 
         const currentStats = monthly.get(selectedMonth);
@@ -1548,6 +1658,7 @@ router.get("/analytics/summary", async (req, res) => {
             .sort((a, b) => b.grossRevenue - a.grossRevenue)
             .map(row => ({
                 ...row,
+                partialRefundQuantity: Number(row.partialRefundQuantity) || 0,
                 grossRevenue: Math.round(row.grossRevenue * 100) / 100,
                 collectionCost: Math.round(row.collectionCost * 100) / 100,
                 margin: row.grossRevenue > 0 && row.missingCostUnits === 0 ? Math.round(((row.grossRevenue - row.collectionCost) / row.grossRevenue) * 1000) / 10 : null

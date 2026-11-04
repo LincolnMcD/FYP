@@ -6,6 +6,7 @@
   <title>Business Analytics - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="adminHeader.css">
+  <link rel="stylesheet" href="adminSidebar.css">
   <style>
     :root {
       --navy: #082f72;
@@ -18,7 +19,6 @@
       --accent-blue: #1d4ed8;
     }
     * { box-sizing: border-box; }
-    .sidebar { display: none; }
     body {
       margin: 0;
       min-height: 100vh;
@@ -28,55 +28,6 @@
       font-family: 'Inter', Arial, sans-serif;
     }
     button, input, select { font: inherit; }
-
-    /* Shared Standard Sidebar */
-    .sidebar {
-      width: 260px;
-      background: #fff;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      height: 100vh;
-      position: sticky;
-      top: 0;
-    }
-    .brand {
-      height: 105px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 28px;
-      border-bottom: 1px solid #edf0f4;
-    }
-    .brand img { width: 38px; height: 38px; object-fit: contain; }
-    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
-
-    .nav-list {
-      list-style: none;
-      padding: 22px 16px;
-      margin: 0;
-      display: grid;
-      gap: 8px;
-      flex: 1;
-      align-content: start;
-    }
-    .nav-item {
-      min-height: 48px;
-      padding: 0 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 9px;
-      color: #586579;
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.15s, color 0.15s;
-    }
-    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
-    .nav-item:hover { background: #f1f4f9; }
-    .nav-item.active { color: #fff; background: var(--navy); }
 
     /* Main Container with Admin Header */
     .main {
@@ -383,46 +334,7 @@
 <body>
 
   <!-- Shared Sidebar -->
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
-      <span>ReByte</span>
-    </div>
-    <nav class="nav-list" aria-label="Admin navigation">
-      <a href="../adminModule/adminDashboard.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Listings</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>System Config</span>
-      </a>
-      <a href="../financeModule/financialManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        <span>Finance</span>
-      </a>
-      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-        <span>Analytics</span>
-      </a>
-      <a href="../adminModule/taskAssignment.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Task Assignment</span>
-      </a>
-      <a href="../adminModule/customerManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>User</span>
-      </a>
-      <a href="../adminModule/staffManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Staff Management</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>Communication</span>
-      </a>
-    </nav>
-  </aside>
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
 
   <!-- Main Container -->
   <main class="main">
@@ -545,7 +457,7 @@
           <thead>
             <tr>
               <th>Phone Brand</th>
-              <th class="num">Units Processed</th>
+              <th class="num" title="Distinct Firebase product records with listingStatus Sold, assigned to their latest linked order month; only Fail and Cancelled orders are excluded">Units Processed</th>
               <th class="num">Gross Revenue</th>
               <th class="num">Collect Cost</th>
               <th class="num">Net Margin</th>
@@ -567,6 +479,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
+  <script src="adminSidebar.js"></script>
   <script>
     let yearSelector;
     let monthSelector;
@@ -623,12 +536,49 @@
         .sort((a, b) => b.localeCompare(a));
     }
 
-    function recentCalendarMonths(count = 120) {
-      const now = new Date();
-      return Array.from({ length: count }, (_, offset) => {
-        const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      });
+    function transactionDateValue(transaction) {
+      const value = transaction?.transactionDate || transaction?.dateTime || transaction?.createdAt || transaction?.created_at;
+      if (!value) return null;
+      if (typeof value.toDate === 'function') return value.toDate();
+      if (typeof value === 'object') {
+        const seconds = Number(value.seconds ?? value._seconds);
+        if (Number.isFinite(seconds) && seconds > 0) return new Date(seconds * 1000);
+        return null;
+      }
+      if (typeof value === 'number' || /^\d{10,13}$/.test(String(value))) {
+        const numeric = Number(value);
+        return new Date(numeric < 1e12 ? numeric * 1000 : numeric);
+      }
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    async function fetchMonthsFromTransactions() {
+      const attempts = [];
+      for (const base of ANALYTICS_API_BASES) {
+        const transactions = [];
+        try {
+          for (let page = 1; page <= 200; page += 1) {
+            const query = new URLSearchParams({ category: 'all', page: String(page), limit: '100' });
+            const url = `${base}/api/transaction-management/transactions?${query}`;
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
+            const data = await readAnalyticsResponse(response, 'Transaction list');
+            if (!Array.isArray(data.transactions)) throw new Error('The transaction list did not include a transactions array.');
+            transactions.push(...data.transactions);
+            const totalPages = Number(data.totalPages || data.pagination?.totalPages || 0);
+            if ((totalPages && page >= totalPages) || (!totalPages && data.transactions.length < 100) || !data.transactions.length) break;
+            if (page === 200) throw new Error('Transaction month lookup reached the 20,000-record limit before all pages were read.');
+          }
+          const months = [...new Set(transactions.map(transaction => {
+            const date = transactionDateValue(transaction);
+            return date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` : '';
+          }).filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)))].sort((a, b) => b.localeCompare(a));
+          return months;
+        } catch (error) {
+          attempts.push(error.message || `${base} could not return transactions.`);
+        }
+      }
+      throw new Error(`Could not find report months in Firebase transaction records. ${attempts.join('; ')}`);
     }
 
     function getSelectedMonthKey() {
@@ -661,8 +611,8 @@
 
     function renderChart(rows) {
       const values = rows.flatMap(row => [Number(row.revenue) || 0, Number(row.cost) || 0]);
-      const maxValue = Math.max(500000, ...values);
-      const axisMax = Math.ceil(maxValue / 500000) * 500000;
+      const maxValue = Math.max(0, ...values);
+      const axisMax = Math.max(10000, Math.ceil(maxValue / 10000) * 10000);
       const xValues = [100, 230, 360, 500];
       const yFor = value => 165 - ((Number(value) || 0) / axisMax) * 135;
       document.getElementById('revenueLine').setAttribute('points', rows.map((row, i) => `${xValues[i]},${yFor(row.revenue)}`).join(' '));
@@ -678,15 +628,20 @@
       });
     }
 
-    function renderBrandSales(rows) {
+    function renderBrandSales(rows, breakdownRows = []) {
       const list = document.getElementById('brandList');
       if (!rows.length) {
         list.innerHTML = '<div class="brand-meta">No completed sales for this month.</div>';
         return;
       }
+      const breakdownByBrand = new Map(breakdownRows.map(row => [String(row.brand || '').trim().toLowerCase(), Number(row.grossRevenue) || 0]));
+      const totalGrossRevenue = [...breakdownByBrand.values()].reduce((sum, value) => sum + value, 0);
       list.innerHTML = rows.map(row => {
-        const share = Math.max(0, Math.min(100, Number(row.share) || 0));
-        return `<div class="brand-item"><div class="brand-meta"><span>${escapeHtml(row.brand)}</span><span>${share.toFixed(1)}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${share}%;"></div></div></div>`;
+        const brandRevenue = Number(row.grossRevenue) || breakdownByBrand.get(String(row.brand || '').trim().toLowerCase()) || 0;
+        const rawShare = totalGrossRevenue > 0 ? (brandRevenue / totalGrossRevenue) * 100 : Number(row.share) || 0;
+        const share = Math.max(0, Math.min(100, rawShare));
+        const displayShare = share > 0 ? Math.max(0.01, share) : 0;
+        return `<div class="brand-item"><div class="brand-meta"><span>${escapeHtml(row.brand)}</span><span>${displayShare.toFixed(2)}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${displayShare}%;"></div></div></div>`;
       }).join('');
     }
 
@@ -708,11 +663,7 @@
         return `<tr><td>${escapeHtml(row.brand)}</td><td class="num">${numberFormat.format(row.processed || 0)}</td><td class="num"><strong>${moneyFormat(row.grossRevenue)}</strong></td><td class="num">${moneyFormat(row.collectionCost)}</td><td class="num"><span class="margin-val">${margin == null || !Number.isFinite(margin) ? '—' : `${margin.toFixed(1)}%`}</span></td></tr>`;
       }).join('') : '<tr><td colspan="5" class="num">No completed sales for this month.</td></tr>';
       tbody.innerHTML = `${detailRows}<tr class="total-row"><td>Total (${escapeHtml(data.monthLabel)})</td><td class="num">${numberFormat.format(totalUnits)}</td><td class="num"><strong>${moneyFormat(totalRevenue)}</strong></td><td class="num">${moneyFormat(totalCost)}</td><td class="num"><span class="margin-val">${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</span></td></tr>`;
-      const coveredUnits = Math.max(0, totalUnits - missingCostUnits);
-      const costCoverage = missingCostUnits > 0
-        ? `Collect cost found for ${numberFormat.format(coveredUnits)} of ${numberFormat.format(totalUnits)} sold units; margin is unavailable until missing costs are recorded.`
-        : `Collect cost found for all ${numberFormat.format(totalUnits)} sold units.`;
-      document.getElementById('coverageNote').textContent = `${costCoverage} ${data.business.allocationNote || ''}`;
+      document.getElementById('coverageNote').textContent = 'Units count distinct products currently marked Sold, assigned to their latest linked order month. Only Fail and Cancelled orders are excluded; statuses such as Delivering and Delivered count. Revenue is from purchase orders only.';
     }
 
     function getCollectionCost(business) {
@@ -760,7 +711,7 @@
         if (business.profitMargin == null) document.getElementById('valMarginTrend').textContent = business.missingCostUnits ? 'Missing collect cost data' : 'No revenue to calculate margin';
         else setTrend('valMarginTrend', business.profitMarginGrowthTrend, ' pp');
         renderChart(business.historicalBars || []);
-        renderBrandSales(business.brandSales || []);
+        renderBrandSales(business.brandSales || [], business.detailedBreakdown || []);
         renderBreakdown(business.detailedBreakdown || [], data);
         document.getElementById('reportGenerated').textContent = `Live Firebase report • Generated ${new Date().toLocaleDateString()}`;
       } catch (error) {
@@ -786,13 +737,33 @@
       monthSelector.innerHTML = '<option value="">Loading…</option>';
       const requestedMonth = new URLSearchParams(window.location.search).get('month');
       let availableMonths = [];
+      let monthLookupError = '';
       try {
         const response = await fetchAnalytics('/api/transaction-management/analytics/months');
         const data = await readAnalyticsResponse(response, 'Available analytics months');
         availableMonths = normalizeAvailableMonths(data);
-      } catch (_) { /* Fall back to recent calendar months when this optional endpoint is unavailable. */ }
-
-      reportMonths = availableMonths.length ? availableMonths : recentCalendarMonths();
+      } catch (error) { monthLookupError = error.message || 'The available-months endpoint failed.'; }
+      if (!availableMonths.length) {
+        try {
+          availableMonths = await fetchMonthsFromTransactions();
+        } catch (error) {
+          const errorElement = document.getElementById('reportError');
+          errorElement.textContent = `Could not load available report months. Why: ${error.message}${monthLookupError ? ` The analytics months endpoint also failed: ${monthLookupError}` : ''}`;
+          errorElement.hidden = false;
+          yearSelector.innerHTML = '<option value="">Unavailable</option>';
+          monthSelector.innerHTML = '<option value="">Unavailable</option>';
+          return;
+        }
+      }
+      if (!availableMonths.length) {
+        const errorElement = document.getElementById('reportError');
+        errorElement.textContent = 'No dated transaction records were found, so there are no report months to select.';
+        errorElement.hidden = false;
+        yearSelector.innerHTML = '<option value="">No records</option>';
+        monthSelector.innerHTML = '<option value="">No records</option>';
+        return;
+      }
+      reportMonths = availableMonths;
       const yearsToShow = [...new Set(reportMonths.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
       const selectedMonth = reportMonths.includes(requestedMonth) ? requestedMonth : reportMonths[0];
       yearSelector.replaceChildren();
