@@ -755,6 +755,7 @@ router.patch("/update-status", async (req, res) => {
         const isCompleted = normalized === "Delivered" || normalized === "Completed" || normalized === "completed";
         const isTerminated = normalized === "Terminated" || normalized === "terminated";
         const isRejected = normalized === "Rejected" || normalized === "rejected";
+        const isInProgressStatus = ["in progress", "ongoing", "shipping"].includes(normalized.toLowerCase());
 
         // Pre-fetch task & schedule records to accurately resolve IDs and roles
         let effectiveTaskID = taskID || null;
@@ -838,6 +839,9 @@ router.patch("/update-status", async (req, res) => {
                 taskStatus: isTerminated ? "Rejected" : normalized,
                 updatedAt: new Date()
             };
+            if (isInProgressStatus && !(taskData && taskData.startAt)) {
+                taskUpdate.startAt = FieldValue.serverTimestamp();
+            }
             if (isCompleted) {
                 taskUpdate.completedAt = FieldValue.serverTimestamp();
             }
@@ -953,8 +957,6 @@ router.patch("/update-status", async (req, res) => {
                 console.error("Error creating delivery notification:", notifErr);
             }
         }
-
-        const isInProgressStatus = normalized === "In Progress" || normalized === "Ongoing" || normalized === "Shipping";
 
         if (isInProgressStatus) {
             if (apptID) {
@@ -2450,7 +2452,7 @@ router.get("/track-delivery/:orderID", async (req, res) => {
         // Resolve customer address & destination coordinates
         let address = {};
         const addressID = orderData.addressID || tradeInAppt.addressID || tradeInReq.addressID || taskData.addressID;
-        if (addressID) {
+        if (addressID && includeOrderDetails) {
             const aDoc = await db.collection("address").doc(addressID).get();
             if (aDoc.exists) {
                 address = aDoc.data() || {};
@@ -2678,30 +2680,33 @@ function getOrderTimestamp(d) {
 let taskCache = {
     data: null,
     counts: null,
-    timestamp: 0
+    timestamp: 0,
+    detailsLoaded: false
 };
 const CACHE_TTL_MS = 30000; // 30 seconds cache
 let lastAutoResolveTime = 0;
 const AUTO_RESOLVE_THROTTLE_MS = 60000; // 1 minute throttle for auto overdue check
 
 function invalidateTaskCache() {
-    taskCache = { data: null, counts: null, timestamp: 0 };
+    taskCache = { data: null, counts: null, timestamp: 0, detailsLoaded: false };
 }
 
 /**
  * Helper to fetch and build tasks dataset with caching
  */
-async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
+async function getOrBuildTasksDataset({ forceRefresh = false, includeOrderDetails = true } = {}) {
     const now = Date.now();
-    if (!forceRefresh && taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS)) {
-        return { taskList: taskCache.data, counts: taskCache.counts };
+    if (!forceRefresh && taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS) && (!includeOrderDetails || taskCache.detailsLoaded)) {
+        return { taskList: taskCache.data, counts: taskCache.counts, detailsLoaded: taskCache.detailsLoaded };
     }
 
-    // 1. Fetch orders
-    const ordersSnap = await db.collection("order").get();
-
-    // 2. Fetch tasks
-    const tasksSnap = await db.collection("task").get();
+    // Fetch independent collections in parallel before building the combined task view.
+    const [ordersSnap, tasksSnap, schedSnap, staffSnap] = await Promise.all([
+        db.collection("order").get(),
+        db.collection("task").get(),
+        db.collection("schedule").get(),
+        db.collection("users").where("role", "==", "Staff").get()
+    ]);
     const tasksByOrderId = new Map();
     const tasksById = new Map();
     tasksSnap.forEach(doc => {
@@ -2713,8 +2718,6 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         }
     });
 
-    // 3. Fetch schedules
-    const schedSnap = await db.collection("schedule").get();
     const schedMap = new Map();
     schedSnap.forEach(doc => {
         const data = doc.data();
@@ -2725,8 +2728,6 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         }
     });
 
-    // 4. Fetch staff members
-    const staffSnap = await db.collection("users").where("role", "==", "Staff").get();
     const staffMap = new Map();
     staffSnap.forEach(doc => {
         const data = doc.data();
@@ -2775,13 +2776,13 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         }
 
         // Resolve customer profile
-        let customerName = address.recipentName || address.recipientName || "";
+        let customerName = address.recipentName || address.recipientName || ordData.recipientName || ordData.customerName || ordData.name || "";
         let customerEmail = address.email || ordData.email || ordData.userEmail || "";
         let customerPhone = address.phoneNumber || ordData.phoneNumber || "";
         const customerID = ordData.customerID || ordData.userId || "";
 
         // If email or name is missing, look up customer in 'users' collection
-        if ((!customerEmail || !customerName || customerName === "Customer") && (customerID || customerPhone)) {
+        if (includeOrderDetails && (!customerEmail || !customerName || customerName === "Customer") && (customerID || customerPhone)) {
             let uData = null;
 
             // 1. Check cache by customerID
@@ -2851,58 +2852,62 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
         let deviceSummary = "";
         const items = [];
 
-        for (const pid of pIds) {
-            let p = productCache.get(pid);
-            if (!p) {
-                const pDoc = await db.collection("product").doc(pid).get();
-                if (pDoc.exists) {
-                    p = pDoc.data();
-                    productCache.set(pid, p);
-                }
-            }
-            if (p) {
-                let brand = p.brand || "";
-                let model = p.model || "";
-                let storage = p.storage || p.storageCapacity || "";
-                let color = p.color || p.colour || "";
-
-                if (p.deviceID) {
-                    try {
-                        const devDoc = await db.collection("devices").doc(p.deviceID).get();
-                        if (devDoc.exists) {
-                            const devData = devDoc.data();
-                            brand = brand || devData.brand || "";
-                            model = model || devData.model || "";
-                            storage = storage || devData.storageCapacity || devData.storage || "";
-                            color = color || devData.colour || devData.color || "";
-                        }
-                    } catch (_) {}
-                }
-
-                if (!model && p.description) {
-                    const parenIdx = p.description.indexOf("(");
-                    if (parenIdx > -1) {
-                        model = p.description.substring(0, parenIdx).trim();
-                        const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
-                        if (!storage) storage = inParen.trim();
-                    } else {
-                        model = p.description.split(" - ")[0].trim();
+        if (includeOrderDetails) {
+            for (const pid of pIds) {
+                let p = productCache.get(pid);
+                if (!p) {
+                    const pDoc = await db.collection("product").doc(pid).get();
+                    if (pDoc.exists) {
+                        p = pDoc.data();
+                        productCache.set(pid, p);
                     }
                 }
+                if (p) {
+                    let brand = p.brand || "";
+                    let model = p.model || "";
+                    let storage = p.storage || p.storageCapacity || "";
+                    let color = p.color || p.colour || "";
 
-                const itemSummary = [brand, model].filter(Boolean).join(" ") + (storage ? ` • ${storage}` : "");
-                if (!deviceSummary && itemSummary) deviceSummary = itemSummary;
+                    if (p.deviceID) {
+                        try {
+                            const devDoc = await db.collection("devices").doc(p.deviceID).get();
+                            if (devDoc.exists) {
+                                const devData = devDoc.data();
+                                brand = brand || devData.brand || "";
+                                model = model || devData.model || "";
+                                storage = storage || devData.storageCapacity || devData.storage || "";
+                                color = color || devData.colour || devData.color || "";
+                            }
+                        } catch (_) {}
+                    }
 
-                items.push({
-                    productID: pid,
-                    brand,
-                    model,
-                    storage,
-                    color,
-                    price: p.price || 0,
-                    imageUrl: p.imageUrl || ""
-                });
+                    if (!model && p.description) {
+                        const parenIdx = p.description.indexOf("(");
+                        if (parenIdx > -1) {
+                            model = p.description.substring(0, parenIdx).trim();
+                            const inParen = p.description.substring(parenIdx + 1, p.description.indexOf(")", parenIdx));
+                            if (!storage) storage = inParen.trim();
+                        } else {
+                            model = p.description.split(" - ")[0].trim();
+                        }
+                    }
+
+                    const itemSummary = [brand, model].filter(Boolean).join(" ") + (storage ? ` • ${storage}` : "");
+                    if (!deviceSummary && itemSummary) deviceSummary = itemSummary;
+
+                    items.push({
+                        productID: pid,
+                        brand,
+                        model,
+                        storage,
+                        color,
+                        price: p.price || 0,
+                        imageUrl: p.imageUrl || ""
+                    });
+                }
             }
+        } else {
+            deviceSummary = ordData.deviceSummary || ordData.productSummary || "Electronics Device";
         }
 
         if (!deviceSummary) {
@@ -2953,6 +2958,8 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             staffID: staffID || null,
             staffName: staffName || "Unassigned",
             customerID,
+            addressID: addressID || null,
+            productIDs: pIds,
             customerName,
             customerEmail,
             customerPhone,
@@ -2975,6 +2982,7 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             proofOfDeliveryUrl: taskData.proofOfDeliveryUrl || "",
             estimatedDistance: taskData.estimatedDistance || 0,
             estimatedDuration: taskData.estimatedDuration || 0,
+            startAt: taskData.startAt || null,
             completedAt: taskData.completedAt || null,
             pickedAt: ordData.pickedAt || null,
             createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : new Date().toISOString(),
@@ -2984,13 +2992,15 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
 
     // 5. Fetch and include Trade-In Inspection and Collection tasks for Admin View
     const processedTaskIds = new Set(taskList.map(t => t.taskID));
-    for (const tDoc of tasksSnap.docs) {
+    const tradeInConcurrency = 8;
+    for (let offset = 0; offset < tasksSnap.docs.length; offset += tradeInConcurrency) {
+      const tradeInRows = await Promise.all(tasksSnap.docs.slice(offset, offset + tradeInConcurrency).map(async tDoc => {
         const tData = tDoc.data();
         const tid = tData.taskID || tDoc.id;
-        if (processedTaskIds.has(tid)) continue;
+        if (processedTaskIds.has(tid)) return null;
 
         const isTradeInTask = Boolean(tData.appointmentID || tData.taskType === "inspect" || tData.taskType === "collect");
-        if (!isTradeInTask) continue;
+        if (!isTradeInTask) return null;
         processedTaskIds.add(tid);
 
         const appointmentID = tData.appointmentID || (tData.tradeInRequestID ? null : tid.replace(/^TSK-/, ''));
@@ -3126,6 +3136,9 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             displayStatus = "Assigned";
         }
 
+        const statusBadge = taskType === "Inspect" && displayStatus === "Cancelled" ? "Cancelled" : displayStatus;
+        if (taskType === "Inspect" && displayStatus === "Cancelled") displayStatus = "Terminated";
+
         // Resolve device details from devices record
         const deviceBrand = devData.brand || trData.deviceBrand || trData.brand || "Apple";
         let deviceModel = devData.model || devData.name || trData.deviceModel || trData.model || "Device";
@@ -3217,7 +3230,7 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             if (!isNaN(cd.getTime())) createdAtMs = cd.getTime();
         }
 
-        taskList.push({
+        return {
             taskID: tid,
             orderID: tradeInRequestID || appointmentID || tid,
             scheduleID: scheduleID || null,
@@ -3274,6 +3287,7 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             taskStatus: tData.taskStatus || "Ongoing",
             fulfillmentType: taskType,
             displayStatus,
+            statusBadge,
             totalAmount: tradeInEstimate,
             estimatedValue: trData.estimatedValue || { min: 2340.50, max: 2355.30 },
             estimatedValueRange,
@@ -3282,10 +3296,13 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
             proofOfDeliveryUrl: tData.proofOfDeliveryUrl || aData.proofOfCollectionUrl || trData.proofOfCollectionUrl || "",
             estimatedDistance: tData.estimatedDistance || 0,
             estimatedDuration: tData.estimatedDuration || 0,
+            startAt: tData.startAt || null,
             completedAt: tData.completedAt || null,
             createdAt: new Date(createdAtMs).toISOString(),
             createdAtMs
-        });
+        };
+      }));
+      taskList.push(...tradeInRows.filter(Boolean));
     }
 
     // Sort strictly based on order/task createdAt date time (newest first)
@@ -3315,10 +3332,111 @@ async function getOrBuildTasksDataset({ forceRefresh = false } = {}) {
     taskCache = {
         data: taskList,
         counts,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        detailsLoaded: includeOrderDetails
     };
 
-    return { taskList, counts };
+    return { taskList, counts, detailsLoaded: includeOrderDetails };
+}
+
+// Hydrate only the requested order rows. Keep list construction and collection
+// counts lightweight, then batch the related Firestore reads for this page.
+async function hydrateAdminOrderTaskPage(tasks) {
+    const orderTasks = tasks.filter(task => task && task.taskType === "Deliver");
+    if (!orderTasks.length) return;
+
+    const uniqueIds = values => [...new Set(values.filter(Boolean).map(value => String(value)))];
+    const addressIDs = uniqueIds(orderTasks.map(task => task.addressID));
+    const productIDs = uniqueIds(orderTasks.flatMap(task => Array.isArray(task.productIDs) ? task.productIDs : []));
+    const customerIDs = uniqueIds(orderTasks.map(task => task.customerID));
+    const [addressDocs, productDocs, userDocs] = await Promise.all([
+        addressIDs.length ? db.getAll(...addressIDs.map(id => db.collection("address").doc(id))) : [],
+        productIDs.length ? db.getAll(...productIDs.map(id => db.collection("product").doc(id))) : [],
+        customerIDs.length ? db.getAll(...customerIDs.map(id => db.collection("users").doc(id))) : []
+    ]);
+    const addressMap = new Map(addressDocs.filter(doc => doc.exists).map(doc => [doc.id, doc.data()]));
+    const productMap = new Map(productDocs.filter(doc => doc.exists).map(doc => [doc.id, doc.data()]));
+    const userMap = new Map(userDocs.filter(doc => doc.exists).map(doc => [doc.id, doc.data()]));
+
+    const deviceIDs = uniqueIds([...productMap.values()].map(product => product.deviceID));
+    const deviceDocs = deviceIDs.length
+        ? await db.getAll(...deviceIDs.map(id => db.collection("devices").doc(id)))
+        : [];
+    const deviceMap = new Map(deviceDocs.filter(doc => doc.exists).map(doc => [doc.id, doc.data()]));
+
+    await Promise.all(orderTasks.map(async task => {
+        const address = addressMap.get(String(task.addressID || "")) || {};
+        let user = userMap.get(String(task.customerID || "")) || null;
+        let customerName = address.recipientName || address.recipentName || task.customerName || "Customer";
+        let customerEmail = address.email || task.customerEmail || "";
+        let customerPhone = address.phoneNumber || task.customerPhone || "";
+
+        if ((!customerEmail || !customerName || customerName === "Customer") && task.customerID && !user) {
+            try {
+                const userSnap = await db.collection("users").where("userId", "==", task.customerID).limit(1).get();
+                if (!userSnap.empty) user = userSnap.docs[0].data();
+            } catch (_) {}
+        }
+        if ((!user || !user.email) && customerPhone) {
+            const cleanPhone = String(customerPhone).trim();
+            const phoneVariants = [...new Set([
+                cleanPhone,
+                cleanPhone.replace(/^\+60/, "0"),
+                cleanPhone.replace(/^0/, "+60"),
+                cleanPhone.replace(/\D/g, "")
+            ].filter(Boolean))];
+            const phoneSnapshots = await Promise.all(phoneVariants.map(value =>
+                db.collection("users").where("phoneNumber", "==", value).limit(1).get().catch(() => null)
+            ));
+            for (const snapshot of phoneSnapshots) {
+                if (!snapshot || snapshot.empty) continue;
+                user = user || snapshot.docs[0].data();
+                if (snapshot.docs[0].data().email) {
+                    user = snapshot.docs[0].data();
+                    break;
+                }
+            }
+        }
+        if (user) {
+            if (!customerName || customerName === "Customer") customerName = user.fullName || user.name || customerName;
+            if (!customerEmail) customerEmail = user.email || "";
+            if (!customerPhone) customerPhone = user.phoneNumber || user.phone || "";
+        }
+
+        task.customerName = customerName || "Customer";
+        task.customerEmail = customerEmail;
+        task.customerPhone = customerPhone;
+        task.deliveryAddress = [address.addressLine, address.postcode, address.city, address.state].filter(Boolean).join(", ") || task.deliveryAddress;
+
+        const items = [];
+        for (const productID of Array.isArray(task.productIDs) ? task.productIDs : []) {
+            const product = productMap.get(String(productID));
+            if (!product) continue;
+            const device = deviceMap.get(String(product.deviceID || "")) || {};
+            let brand = product.brand || device.brand || "";
+            let model = product.model || device.model || "";
+            let storage = product.storage || product.storageCapacity || device.storageCapacity || device.storage || "";
+            let color = product.color || product.colour || device.colour || device.color || "";
+            if (!model && product.description) {
+                const parenIndex = product.description.indexOf("(");
+                if (parenIndex > -1) {
+                    model = product.description.substring(0, parenIndex).trim();
+                    const inParen = product.description.substring(parenIndex + 1, product.description.indexOf(")", parenIndex));
+                    if (!storage) storage = inParen.trim();
+                } else {
+                    model = product.description.split(" - ")[0].trim();
+                }
+            }
+            items.push({ productID, brand, model, storage, color, price: product.price || 0, imageUrl: product.imageUrl || "" });
+        }
+        task.items = items;
+        const firstItem = items.find(item => item.brand || item.model);
+        task.deviceSummary = firstItem
+            ? `${[firstItem.brand, firstItem.model].filter(Boolean).join(" ")}${firstItem.storage ? ` • ${firstItem.storage}` : ""}`
+            : "Electronics Device";
+        delete task.addressID;
+        delete task.productIDs;
+    }));
 }
 
 /**
@@ -3339,14 +3457,14 @@ router.get("/admin/tasks", async (req, res) => {
             autoResolveOverdueTradeInTasks().catch(() => {});
         }
         const forceRefresh = req.query.refresh === "true" || req.query.refresh === true;
-        const { taskList, counts } = await getOrBuildTasksDataset({ forceRefresh });
-
         const tab = String(req.query.tab || "").trim().toLowerCase();
         const typeFilter = String(req.query.type || "").trim().toLowerCase();
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
         const search = String(req.query.search || "").trim().toLowerCase();
         const sortOrder = String(req.query.sort || "desc").trim().toLowerCase();
+        const includeOrderDetails = Boolean(search);
+        const { taskList, counts, detailsLoaded } = await getOrBuildTasksDataset({ forceRefresh, includeOrderDetails });
 
         // 1. Filter by Tab
         let filtered = taskList;
@@ -3387,7 +3505,12 @@ router.get("/admin/tasks", async (req, res) => {
         const totalPages = Math.max(1, Math.ceil(total / limit));
         const safePage = Math.min(page, totalPages);
         const startIndex = (safePage - 1) * limit;
-        const paginatedTasks = filtered.slice(startIndex, startIndex + limit);
+        const paginatedTasks = filtered.slice(startIndex, startIndex + limit).map(task => ({ ...task }));
+        if (!detailsLoaded) await hydrateAdminOrderTaskPage(paginatedTasks);
+        paginatedTasks.forEach(task => {
+            delete task.addressID;
+            delete task.productIDs;
+        });
 
         return res.json({
             success: true,

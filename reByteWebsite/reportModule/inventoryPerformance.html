@@ -109,10 +109,10 @@
     }
     .export-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
 
-    /* 4 Summary Stat Cards */
+    /* Summary Stat Cards */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 18px;
       margin-bottom: 24px;
     }
@@ -420,7 +420,7 @@
       <!-- Charts Row -->
       <div class="charts-row">
         <div class="chart-box">
-          <h3>Products Added by Week</h3>
+          <h3>Inventory Added by Week</h3>
           <div class="flow-canvas" id="inventoryFlowChart"></div>
           <div style="display:flex; justify-content:center; gap:20px; font-size:12px; font-weight:600; color:#64748b; margin-top:8px;">
             <div style="display:flex; align-items:center; gap:6px;"><span style="width:12px; height:3px; background:#082f72;"></span> Firebase product records</div>
@@ -445,7 +445,7 @@
             <tr>
               <th>Product Model</th>
               <th class="num">Opening Stock</th>
-              <th class="num">Added</th>
+              <th class="num" title="New Firebase product records plus returned products in the selected month">Added</th>
               <th class="num">Sold</th>
               <th class="num">Lost</th>
               <th class="num">Sell-Through Rate</th>
@@ -461,7 +461,7 @@
             <tr>
               <th>Product Model</th>
               <th class="num">Opening Stock</th>
-              <th class="num">Added</th>
+              <th class="num" title="New Firebase product records plus returned products in the selected month">Added</th>
               <th class="num">Sold</th>
               <th class="num">Lost</th>
               <th class="num">Sell-Through Rate</th>
@@ -581,7 +581,7 @@
       document.getElementById('invOpening').textContent = summary.openingInventory == null ? `${fmt(summary.knownOpeningInventory)} + ?` : fmt(summary.openingInventory);
       document.getElementById('invOpeningNote').textContent = `At the start of ${month}`;
       document.getElementById('invAdded').textContent = fmt(summary.totalAdded);
-      document.getElementById('invAddedNote').textContent = `${month} Firebase product records`;
+      document.getElementById('invAddedNote').textContent = `${month} new product records + returned products`;
       document.getElementById('invSold').textContent = summary.soldDuringMonth == null ? '—' : fmt(summary.soldDuringMonth);
       document.getElementById('invSoldNote').textContent = summary.soldDuringMonth == null ? 'No monthly unit total returned by the transaction API' : 'Successful purchase units from transactions';
       document.getElementById('invClosing').textContent = summary.closingInventory == null ? `${fmt(summary.knownClosingInventory)} + ?` : fmt(summary.closingInventory);
@@ -608,7 +608,7 @@
       const exitCountsKnown = exitStatuses.every(([, value]) => value != null);
       const totalExitCount = exitStatuses.reduce((sum, [, value]) => sum + (Number(value) || 0), 0);
       document.getElementById('inventoryExitStatus').innerHTML = exitStatuses.map(([label, value], index) => {
-        const color = index ? 'fill-orange' : 'fill-blue';
+        const color = ['fill-blue', 'fill-orange'][index];
         const percent = value == null || !exitCountsKnown || !totalExitCount ? 0 : Math.max(0, Number(value)) / totalExitCount * 100;
         const shareLabel = value == null || !exitCountsKnown ? '—' : `${percent.toFixed(1)}%`;
         return `<div class="velocity-item"><div class="velocity-meta"><span>${label}</span><span class="exit-values"><span class="exit-count">${value == null ? '—' : fmt(value)}</span><small class="exit-share">${shareLabel}</small></span></div><div class="v-track"><div class="v-fill ${color}" style="width:${percent}%;"></div></div></div>`;
@@ -631,7 +631,7 @@
           ? `${fmt(row.unknownOpening)} product(s) have no status history at the start of this month.`
           : 'Stock carried into the selected month.';
         const sellThrough = row.sellThroughRate == null ? '—' : `${row.sellThroughRate.toFixed(1)}%`;
-        return `<tr><td>${inventoryEscape(row.model)}</td><td class="num" title="${openingTitle}">${fmt(row.openingStock)}${row.unknownOpening ? ' + ?' : ''}</td><td class="num">${fmt(row.added)}</td><td class="num" title="${soldTitle}">${row.soldDuringMonth == null ? '—' : fmt(row.soldDuringMonth)}</td><td class="num" title="${lostTitle}${overlapTitle ? ` ${overlapTitle}` : ''}">${row.lostDuringMonth == null ? '—' : fmt(row.lostDuringMonth)}${row.unknownLostDuringMonth && row.lostDuringMonth != null ? ' + ?' : ''}</td><td class="num" title="Sold ÷ (opening stock + added)">${sellThrough}</td><td class="num" title="${row.unknownClosing ? `${fmt(row.unknownClosing)} product(s) have no status history for this period` : 'Historical stock status is known for this model'}">${fmt(row.closingStock)}${row.unknownClosing ? ' + ?' : ''}</td></tr>`;
+        return `<tr><td>${inventoryEscape(row.model)}</td><td class="num" title="${openingTitle}">${fmt(row.openingStock)}${row.unknownOpening ? ' + ?' : ''}</td><td class="num" title="New Firebase product records plus returned products in the selected month">${fmt(row.added)}</td><td class="num" title="${soldTitle}">${row.soldDuringMonth == null ? '—' : fmt(row.soldDuringMonth)}</td><td class="num" title="${lostTitle}${overlapTitle ? ` ${overlapTitle}` : ''}">${row.lostDuringMonth == null ? '—' : fmt(row.lostDuringMonth)}${row.unknownLostDuringMonth && row.lostDuringMonth != null ? ' + ?' : ''}</td><td class="num" title="Sold ÷ (opening stock + added)">${sellThrough}</td><td class="num" title="${row.unknownClosing ? `${fmt(row.unknownClosing)} product(s) have no status history for this period` : 'Historical stock status is known for this model'}">${fmt(row.closingStock)}${row.unknownClosing ? ' + ?' : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="7">No products found for this month.</td></tr>';
       document.getElementById('inventoryTopModels').innerHTML = renderRows(summary.topFive);
       document.getElementById('inventoryBottomModels').innerHTML = renderRows(summary.bottomFive);
@@ -661,7 +661,7 @@
           window.inventorySaleEvents = [];
           window.inventoryTransactionWarning = `Purchase transaction dates could not be loaded from the backend. ${transactionError.message}`;
         }
-        const months = InventoryAnalytics.availableMonths(window.inventoryProducts);
+        const months = InventoryAnalytics.availableMonths(window.inventoryProducts, window.inventorySaleEvents);
         if (!months.length) throw new Error('The product API returned records, but none has a usable dateAdded or createdAt date.');
         populateInventoryPicker(months);
         renderInventory();

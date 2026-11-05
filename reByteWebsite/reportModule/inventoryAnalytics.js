@@ -110,6 +110,11 @@
     return '';
   }
 
+  function isInventoryReturn(transaction) {
+    const reason = String(transaction.refundReason || transaction.refund_reason || transaction.reason || '').toLowerCase();
+    return inventoryTransactionStatus(transaction) === 'Listed' && reason.includes('customer cancelled order');
+  }
+
   function isSuccessfulInventoryTransaction(transaction) {
     if (!inventoryTransactionStatus(transaction)) return false;
     if (inventoryTransactionStatus(transaction) === 'Sold' && transaction.isNegative === true) return false;
@@ -158,21 +163,33 @@
     const knownProductIds = new Set(productById.keys());
     const inventoryEvents = [];
     let unlinkedPurchases = 0;
+    const productsByOrder = new Map();
+    transactions.forEach(transaction => {
+      if (inventoryTransactionStatus(transaction) !== 'Sold') return;
+      const orderID = cleanId(transaction.orderID || transaction.orderId);
+      if (!orderID) return;
+      const ids = transactionProductIds(transaction).filter(id => !knownProductIds.size || knownProductIds.has(id));
+      if (!productsByOrder.has(orderID)) productsByOrder.set(orderID, new Set());
+      ids.forEach(id => productsByOrder.get(orderID).add(id));
+    });
     transactions.forEach(transaction => {
       const date = transactionDate(transaction);
       if (!date) return;
+      const orderID = cleanId(transaction.orderID || transaction.orderId);
       const productIds = transactionProductIds(transaction);
       const status = inventoryTransactionStatus(transaction);
-      if (status === 'Sold' && !productIds.length && transaction.orderID) unlinkedPurchases += 1;
-      productIds.forEach(productID => {
+      if (status === 'Sold' && !productIds.length && orderID) unlinkedPurchases += 1;
+      const linkedProductIds = productIds.length ? productIds : (status === 'Listed' ? [...(productsByOrder.get(orderID) || [])] : []);
+      linkedProductIds.forEach(productID => {
         if (knownProductIds.size && !knownProductIds.has(productID)) return;
         const transactionID = cleanId(transaction.transactionID || transaction.id || transaction.documentID);
         inventoryEvents.push({
           productID,
           date,
           status,
+          movement: status === 'Listed' && isInventoryReturn(transaction) ? 'Returned' : status,
           previousStatus: status === 'Listed' ? 'Sold' : 'Listed',
-          orderID: cleanId(transaction.orderID),
+          orderID,
           transactionID
         });
       });
@@ -201,8 +218,10 @@
     return sales;
   }
 
-  function availableMonths(products) {
-    return [...new Set(products.map(getMonthKey).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+  function availableMonths(products, saleEvents = []) {
+    const productMonths = products.map(getMonthKey);
+    const returnMonths = saleEvents.filter(event => event.movement === 'Returned').map(event => monthKey(event.date));
+    return [...new Set([...productMonths, ...returnMonths].filter(Boolean))].sort((a, b) => b.localeCompare(a));
   }
 
   function getStatus(product) {
@@ -306,6 +325,40 @@
     return endOfMonth ? new Date(year, number, 0, 23, 59, 59, 999) : new Date(year, number - 1, 1, 0, 0, 0, 0);
   }
 
+  function sameMonthPurchaseReturnPairs(events) {
+    const purchasesByOrderProductMonth = new Map();
+    const returnsByOrderProductMonth = new Map();
+    const pairKey = event => {
+      const orderID = cleanId(event.orderID);
+      const productID = cleanId(event.productID);
+      const period = monthKey(event.date);
+      return orderID && productID && period ? `${orderID}|${productID}|${period}` : '';
+    };
+
+    events.forEach(event => {
+      const key = pairKey(event);
+      if (!key) return;
+      if (event.status === 'Sold') {
+        if (!purchasesByOrderProductMonth.has(key)) purchasesByOrderProductMonth.set(key, []);
+        purchasesByOrderProductMonth.get(key).push(event);
+      } else if (event.movement === 'Returned') {
+        if (!returnsByOrderProductMonth.has(key)) returnsByOrderProductMonth.set(key, []);
+        returnsByOrderProductMonth.get(key).push(event);
+      }
+    });
+
+    const excluded = new Set();
+    returnsByOrderProductMonth.forEach((returns, key) => {
+      const purchases = purchasesByOrderProductMonth.get(key) || [];
+      const pairCount = Math.min(purchases.length, returns.length);
+      for (let index = 0; index < pairCount; index += 1) {
+        excluded.add(purchases[index]);
+        excluded.add(returns[index]);
+      }
+    });
+    return excluded;
+  }
+
   function inventoryAt(products, cutoff, selectedMonthIsCurrent, salesByProductId) {
     const statusCounts = Object.fromEntries(STATUS_LABELS.map(label => [label, 0]));
     let unknown = 0;
@@ -333,6 +386,7 @@
       salesByProductId.get(key).push(event);
     });
     salesByProductId.forEach(events => events.sort((a, b) => a.date - b.date || String(a.transactionID || '').localeCompare(String(b.transactionID || ''))));
+    const sameMonthCancelledMovements = sameMonthPurchaseReturnPairs(saleEvents);
     const openingSnapshot = inventoryAt(products, openingCutoff, false, salesByProductId);
     const closingSnapshot = inventoryAt(products, closingCutoff, selectedMonthIsCurrent, salesByProductId);
     const modelMap = new Map();
@@ -367,32 +421,49 @@
     });
 
     const soldByModel = new Map();
+    const returnedByModel = new Map();
     const lostByModel = new Map();
     const unknownSoldByModel = new Set();
     const unknownLostByModel = new Set();
-    const soldInPeriod = new Set();
+    const soldProductIdsInPeriod = new Set();
     const lostInPeriod = new Set();
     const transactionEventsInPeriod = new Set();
-    const latestPeriodEventByProductId = new Map();
     saleEvents.forEach(event => {
       if (monthKey(event.date) !== selectedMonth || !['Sold', 'Listed'].includes(event.status)) return;
       const id = cleanId(event.productID);
       if (!id) return;
       transactionEventsInPeriod.add(id);
-      const previous = latestPeriodEventByProductId.get(id);
-      if (!previous || event.date > previous.date || (event.date.getTime() === previous.date.getTime() && String(event.transactionID || '').localeCompare(String(previous.transactionID || '')) > 0)) {
-        latestPeriodEventByProductId.set(id, event);
-      }
-    });
-    latestPeriodEventByProductId.forEach((event, id) => {
+      if (sameMonthCancelledMovements.has(event)) return;
       if (event.status !== 'Sold') return;
+      if (soldProductIdsInPeriod.has(id)) return;
+      soldProductIdsInPeriod.add(id);
       const product = products.find(item => productId(item) === cleanId(event.productID));
       if (!product) return;
-      if (soldInPeriod.has(id)) return;
-      soldInPeriod.add(id);
       const model = getModel(product);
       ensureModel(model);
       soldByModel.set(model, (soldByModel.get(model) || 0) + 1);
+    });
+    const returnedInPeriod = new Map();
+    saleEvents.forEach(event => {
+      if (event.movement !== 'Returned' || monthKey(event.date) !== selectedMonth) return;
+      if (sameMonthCancelledMovements.has(event)) return;
+      const id = cleanId(event.productID);
+      if (!id) return;
+      const returnID = cleanId(event.transactionID) || `${cleanId(event.orderID)}|${event.date.getTime()}|${id}`;
+      returnedInPeriod.set(returnID, event);
+      const product = products.find(item => productId(item) === id);
+      if (!product) return;
+      const model = getModel(product);
+      ensureModel(model);
+      if (!returnedByModel.has(model)) returnedByModel.set(model, new Set());
+      returnedByModel.get(model).add(returnID);
+    });
+    returnedInPeriod.forEach(event => {
+      const weekIndex = Math.min(4, Math.floor((event.date.getDate() - 1) / 7));
+      weeklyAdded[weekIndex] += 1;
+      const product = products.find(item => productId(item) === cleanId(event.productID));
+      const brand = String(product?.brand || product?.brandName || product?.manufacturer || 'Other').trim() || 'Other';
+      weeklyBrandCounts[weekIndex].set(brand, (weeklyBrandCounts[weekIndex].get(brand) || 0) + 1);
     });
     products.forEach(product => {
       const model = getModel(product);
@@ -407,8 +478,8 @@
         if (event.status === 'Sold') {
           const id = productId(product);
           if (id && transactionEventsInPeriod.has(id)) return;
-          if (!id || !soldInPeriod.has(id)) {
-            if (id) soldInPeriod.add(id);
+          if (!id || !soldProductIdsInPeriod.has(id)) {
+            if (id) soldProductIdsInPeriod.add(id);
             soldByModel.set(model, (soldByModel.get(model) || 0) + 1);
           }
         }
@@ -429,7 +500,7 @@
     });
 
     const overlappingExitByModel = new Map();
-    soldInPeriod.forEach(id => {
+    soldProductIdsInPeriod.forEach(id => {
       if (!lostInPeriod.has(id)) return;
       const product = products.find(item => productId(item) === id);
       if (!product) return;
@@ -441,13 +512,16 @@
       const soldDuringMonth = soldByModel.has(row.model)
         ? soldByModel.get(row.model)
         : (unknownSoldByModel.has(row.model) ? null : 0);
+      const addedDuringMonth = row.added + (returnedByModel.get(row.model)?.size || 0);
       const lostDuringMonth = unknownLostByModel.has(row.model) && !lostByModel.has(row.model)
         ? null
         : (lostByModel.get(row.model) || 0);
-      const availableForSale = row.openingStock + row.added;
+      const availableForSale = row.openingStock + addedDuringMonth;
       return {
         ...row,
+        added: addedDuringMonth,
         soldDuringMonth,
+        returnedDuringMonth: returnedByModel.get(row.model)?.size || 0,
         lostDuringMonth,
         sellThroughRate: soldDuringMonth == null || row.unknownOpening
           ? null
@@ -470,7 +544,7 @@
     models.sort((a, b) => b.added - a.added || compareModelRank(a, b));
     const bottomFive = [...models].sort((a, b) => a.added - b.added || compareModelRank(a, b)).slice(0, 5);
     const topFive = models.slice(0, 5);
-    const soldEvents = soldInPeriod.size || [...soldByModel.values()].reduce((sum, value) => sum + value, 0);
+    const soldEvents = [...soldByModel.values()].reduce((sum, value) => sum + value, 0);
     const soldDuringMonth = unknownSoldByModel.size ? null : soldEvents;
     const statusCounts = closingSnapshot.statusCounts;
     const lostDuringMonth = [...lostByModel.values()].reduce((sum, value) => sum + value, 0);
@@ -480,13 +554,13 @@
     const openingInventory = openingSnapshot.complete
       ? openingSnapshot.carried
       : (selectedMonthIsCurrent && closingSnapshot.complete && soldDuringMonth != null && knownLostDuringMonth != null
-        ? closingSnapshot.carried + soldDuringMonth + knownLostDuringMonth - records.length
+        ? closingSnapshot.carried + soldDuringMonth + knownLostDuringMonth - returnedInPeriod.size - records.length
         : null);
     const inventoryPeriodComplete = closingSnapshot.complete && (openingSnapshot.complete || openingInventory != null);
 
     return {
       month: selectedMonth,
-      totalAdded: records.length,
+      totalAdded: records.length + returnedInPeriod.size,
       openingInventory,
       knownOpeningInventory: openingSnapshot.carried,
       closingInventory,
@@ -498,6 +572,8 @@
       unknownSnapshotRecords: Math.max(openingSnapshot.unknown, closingSnapshot.unknown),
       soldDuringMonth,
       sold: soldDuringMonth,
+      returnedDuringMonth: returnedInPeriod.size,
+      returned: returnedInPeriod.size,
       lostDuringMonth: knownLostDuringMonth,
       overlappingExitUnits: [...overlappingExitByModel.values()].reduce((sum, value) => sum + value, 0),
       availableStock: closingInventory,
@@ -505,6 +581,7 @@
       topModelShare: records.length && models[0] ? (models[0].added / records.length) * 100 : 0,
       statusCounts,
       carryStatusCounts: { Draft: statusCounts.Draft, Listed: statusCounts.Listed, Hidden: statusCounts.Hidden, Rented: statusCounts.Rented, 'Unknown Carried': statusCounts['Unknown Carried'] || 0 },
+      movementStatusCounts: { Returned: returnedInPeriod.size, Sold: soldDuringMonth, Lost: knownLostDuringMonth },
       exitStatusCounts: { Sold: soldDuringMonth, Lost: knownLostDuringMonth },
       models,
       topFive,

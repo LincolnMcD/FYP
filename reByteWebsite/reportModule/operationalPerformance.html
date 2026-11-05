@@ -316,7 +316,7 @@
       margin-left: 4px;
     }
 
-    /* Resource Allocation by Stage Section */
+    /* Resource Allocation Section */
     .section-title {
       font-size: 18px;
       font-weight: 700;
@@ -436,45 +436,45 @@
 
       <!-- 4 KPI Cards -->
       <div class="kpi-grid">
-        <!-- Avg Inspection -->
+        <!-- Average delivery duration per kilometer -->
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span>TASKS CREATED</span>
+            <span>AVG. DELIVERY TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsTasks">—</span>
-            <span class="kpi-unit">tasks</span>
+            <span class="kpi-num" id="opsAvgDelivery">—</span>
+            <span class="kpi-unit">min/km</span>
           </div>
           <div class="kpi-trend trend-down">
-            <span id="opsTasksNote">Selected month</span>
+            <span id="opsAvgDeliveryNote">Completed delivery tasks</span>
           </div>
         </div>
 
-        <!-- Collection -->
+        <!-- Average inspection duration per task -->
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <span>COLLECTION TASKS</span>
+            <span>AVG. INSPECTION TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsCollection">—</span>
-            <span class="kpi-unit">tasks</span>
+            <span class="kpi-num" id="opsAvgInspection">—</span>
+            <span class="kpi-unit">min/task</span>
           </div>
           <div class="kpi-trend trend-neutral">
             <span>Firebase task records</span>
           </div>
         </div>
 
-        <!-- Avg Delivery -->
+        <!-- Average collection duration per task -->
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-            <span>DELIVERY TASKS</span>
+            <span>AVG. COLLECTION TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsDelivery">—</span>
-            <span class="kpi-unit">tasks</span>
+            <span class="kpi-num" id="opsAvgCollection">—</span>
+            <span class="kpi-unit">min/task</span>
           </div>
           <div class="kpi-trend trend-down">
             <span>Firebase task records</span>
@@ -500,7 +500,7 @@
       <!-- Monthly Firebase task summaries -->
       <div class="mid-grid">
         <div class="chart-card">
-          <h2 class="chart-title">Tasks Created by Week</h2>
+          <h2 class="chart-title">Task Volume by Type</h2>
           <div id="opsWeeklyTasks" class="cat-cycle-list"></div>
         </div>
         <div class="chart-card">
@@ -509,7 +509,7 @@
         </div>
       </div>
 
-      <h2 class="section-title">Task Volume by Type</h2>
+      <h2 class="section-title">Resource Allocation</h2>
       <div id="opsTypeBreakdown" class="resource-grid"></div>
 
       <div class="page-footer">
@@ -519,6 +519,9 @@
     </main>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
   <script src="adminSidebar.js"></script>
   <script src="operationsAnalytics.js"></script>
@@ -556,38 +559,60 @@
       if (!window.operationTasks) return;
       const month = selectedOpsMonth();
       const summary = OperationsAnalytics.summarize(window.operationTasks, month);
-      document.getElementById('opsTasks').textContent = opsCount(summary.totalTasks);
-      document.getElementById('opsTasksNote').textContent = `${month} task records`;
-      document.getElementById('opsCollection').textContent = opsCount(summary.collection);
-      document.getElementById('opsDelivery').textContent = opsCount(summary.delivery);
+      const displayAverage = value => value === null ? '—' : value.toFixed(1);
+      document.getElementById('opsAvgDelivery').textContent = displayAverage(summary.averageDeliveryMinutesPerKm);
+      document.getElementById('opsAvgDeliveryNote').textContent = `${opsCount(summary.averageDeliverySamples)} completed delivery tasks with distance`;
+      document.getElementById('opsAvgInspection').textContent = displayAverage(summary.averageInspectionMinutes);
+      document.getElementById('opsAvgInspection').parentElement.nextElementSibling.textContent = `${opsCount(summary.averageInspectionSamples)} completed inspection tasks`;
+      document.getElementById('opsAvgCollection').textContent = displayAverage(summary.averageCollectionMinutes);
+      document.getElementById('opsAvgCollection').parentElement.nextElementSibling.textContent = `${opsCount(summary.averageCollectionSamples)} completed collection tasks`;
       document.getElementById('opsCompletionRate').textContent = summary.totalTasks ? summary.completionRate.toFixed(1) : '—';
       document.getElementById('opsCompletedNote').textContent = `${opsCount(summary.completed)} completed of ${opsCount(summary.totalTasks)} tasks`;
 
-      const maxWeekly = Math.max(1, ...summary.weeklyTasks);
-      document.getElementById('opsWeeklyTasks').innerHTML = summary.weeklyTasks.map((count, index) => {
-        const percent = count / maxWeekly * 100;
-        return `<div class="cat-cycle-item"><div class="cat-cycle-info"><span class="cat-name">Week ${index + 1}</span><span class="cat-days">${opsCount(count)} tasks</span></div><div class="cat-progress-track"><div class="cat-progress-bar" style="width:${percent}%;"></div></div></div>`;
-      }).join('') || '<div>No task records for this month.</div>';
+      const taskTypeOrder = ['Collection', 'Inspection', 'Delivery'];
+      const maxTypeCount = Math.max(1, ...taskTypeOrder.map(type => summary.typeCounts[type]));
+      document.getElementById('opsWeeklyTasks').innerHTML = taskTypeOrder.map(type => {
+        const count = summary.typeCounts[type];
+        const percent = count / maxTypeCount * 100;
+        return `<div class="cat-cycle-item"><div class="cat-cycle-info"><span class="cat-name">${type}</span><span class="cat-days">${opsCount(count)} tasks</span></div><div class="cat-progress-track"><div class="cat-progress-bar" style="width:${percent}%;"></div></div></div>`;
+      }).join('');
 
       const statuses = Object.entries(summary.statusCounts).sort((a, b) => b[1] - a[1]);
       document.getElementById('opsStatusList').innerHTML = statuses.map(([status, count], index) => `<div class="stage-item"><div class="stage-num-badge">${index + 1}</div><div class="stage-body"><div class="stage-top"><span class="stage-name">${opsEscape(status)}</span><span class="stage-status-badge" style="background:#eef2f7;color:#475569;">${opsCount(count)}</span></div><div class="stage-metric-label">${summary.totalTasks ? (count / summary.totalTasks * 100).toFixed(1) : '0.0'}% of this month’s tasks</div></div></div>`).join('') || '<div>No task records for this month.</div>';
 
-      const types = ['Collection', 'Inspection', 'Delivery', 'Other'];
-      document.getElementById('opsTypeBreakdown').innerHTML = types.map((type, index) => {
-        const count = summary.typeCounts[type];
-        const percent = summary.totalTasks ? count / summary.totalTasks * 100 : 0;
-        return `<div class="resource-card"><div class="resource-header">${type.toUpperCase()}</div><div class="resource-val-row"><span class="resource-count">${opsCount(count)}</span><span class="resource-role">Tasks</span></div><div class="resource-track"><div class="resource-bar" style="width:${percent}%;"></div></div><div class="resource-pct">${percent.toFixed(1)}% of this month’s tasks</div></div>`;
-      }).join('');
+      const resourceCards = document.getElementById('opsTypeBreakdown');
+      if (Array.isArray(window.operationStaff)) {
+        const resources = OperationsAnalytics.summarizeResources(window.operationStaff);
+        const entries = [
+          ['Deliverer', resources.counts.Deliverer],
+          ['Inspector', resources.counts.Inspector],
+          ['Inspector & Collector', resources.counts['Inspector & Collector']]
+        ];
+        resourceCards.innerHTML = entries.map(([role, count]) => {
+          const percent = resources.total ? count / resources.total * 100 : 0;
+          return `<div class="resource-card"><div class="resource-header">${opsEscape(role)}</div><div class="resource-val-row"><span class="resource-count">${opsCount(count)}</span><span class="resource-role">Staff members</span></div><div class="resource-track"><div class="resource-bar" style="width:${percent}%;"></div></div><div class="resource-pct">${percent.toFixed(1)}% of active staff</div></div>`;
+        }).join('');
+      } else {
+        const reason = window.operationStaffError ? ` ${opsEscape(window.operationStaffError)}` : '';
+        resourceCards.innerHTML = `<div class="resource-card" style="grid-column:1/-1"><div class="resource-header">Resource allocation unavailable</div><div class="resource-pct">Staff counts could not be loaded from the user collection via the staff list API.${reason}</div></div>`;
+      }
 
       document.getElementById('opsGeneratedNote').textContent = `Selected task period: ${month} · grouped by task creation date`;
       document.getElementById('operationsExportLink').href = `exportReport.html?type=operations&month=${encodeURIComponent(month)}`;
-      document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Statuses are current task status; historical stage timing is not available in the task records.` : `No task records have a creation date in ${month}.`;
+      document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Average durations use completedAt − startAt; tasks missing either timestamp are excluded.` : `No task records have a creation date in ${month}.`;
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
       const error = document.getElementById('operationsError');
       try {
-        window.operationTasks = await OperationsAnalytics.fetchTasks();
+        [window.operationTasks, window.operationStaff] = await Promise.all([
+          OperationsAnalytics.fetchTasks(),
+          OperationsAnalytics.fetchStaff().catch(error => {
+            window.operationStaffError = error.message;
+            console.warn('Staff resource counts unavailable:', error.message);
+            return null;
+          })
+        ]);
         const months = OperationsAnalytics.availableMonths(window.operationTasks);
         if (!months.length) throw new Error('The task API returned records, but none has a usable createdAt, createdAtMs, or orderDate.');
         populateOpsPicker(months);

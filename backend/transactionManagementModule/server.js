@@ -386,7 +386,8 @@ router.get("/transactions", async (req, res) => {
                 })(),
                 tradeInRequestID: t.tradeInRequestID || null,
                 rentalID: t.rentalID || null,
-                gatewayTransactionID: t.gatewayTransactionID || null
+                gatewayTransactionID: t.gatewayTransactionID || null,
+                refundReason: t.refundReason || null
             });
         }
 

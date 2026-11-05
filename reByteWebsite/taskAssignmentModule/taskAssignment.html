@@ -469,7 +469,7 @@
     }
     th {
       height: 54px;
-      padding: 0 16px;
+      padding: 0 12px;
       text-align: left;
       color: #555b68;
       font-size: 12px;
@@ -480,26 +480,40 @@
       white-space: nowrap;
     }
     th:first-child, td:first-child {
-      padding-left: 20px;
-      width: 14%;
+      padding-left: 14px;
+      width: 16%;
     }
     th:nth-child(2), td:nth-child(2) {
       width: 12%;
     }
     th:nth-child(3), td:nth-child(3) {
-      width: 26%;
+      width: 19%;
     }
     th:nth-child(4), td:nth-child(4) {
-      width: 18%;
+      width: 14%;
     }
     th:nth-child(5), td:nth-child(5) {
-      width: 14%;
+      width: 16%;
+      padding-left: 6px;
+      padding-right: 6px;
       text-align: left;
+      white-space: normal;
     }
     th:last-child, td:last-child {
-      width: 16%;
-      padding-right: 20px;
+      width: 23%;
+      padding-right: 14px;
       text-align: left;
+    }
+    th:nth-child(n+4) {
+      text-indent: 50px;
+    }
+    td:nth-child(4) .appointment-cell,
+    td:nth-child(5) .status-inline,
+    td:nth-child(6) .action-group {
+      transform: translateX(50px);
+    }
+    td:nth-child(6) .action-group {
+      max-width: calc(100% - 50px);
     }
 
     tbody tr {
@@ -509,10 +523,23 @@
     }
     tbody tr:hover { background: #f7f9fd; }
     tbody tr:last-child { border-bottom: none; }
+    tbody tr.task-loading-row { cursor: default; }
+    tbody tr.task-loading-row:hover { background: #fff; }
+    .task-loading-bar {
+      height: 11px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #edf1f7 25%, #f7f9fc 50%, #edf1f7 75%);
+      background-size: 200% 100%;
+      animation: task-skeleton-shimmer 1.25s ease-in-out infinite;
+    }
+    @keyframes task-skeleton-shimmer {
+      from { background-position: 100% 0; }
+      to { background-position: -100% 0; }
+    }
 
     td {
       height: 76px;
-      padding: 0 16px;
+      padding: 0 12px;
       font-size: 14px;
       color: #6b7180;
       border-bottom: 1px solid #e9ebf0;
@@ -576,11 +603,32 @@
     .status-pill {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      padding: 7px 14px;
+      gap: 6px;
+      padding: 6px 10px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
+      white-space: nowrap;
+    }
+    .status-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    td:nth-child(5) .status-pill {
+      gap: 4px;
+      padding: 5px 7px;
+      font-size: 10.5px;
+    }
+    td:nth-child(5) .status-pill::before {
+      width: 6px;
+      height: 6px;
+    }
+    td:nth-child(5) .sublabel-badge {
+      padding: 1px 4px;
+      font-size: 9px;
+      white-space: nowrap;
     }
     .status-pill::before {
       content: '';
@@ -632,14 +680,15 @@
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
-      gap: 8px;
-      flex-wrap: nowrap;
+      gap: 6px;
+      flex-wrap: wrap;
+      max-width: 100%;
     }
     .btn-act {
       min-height: 34px;
-      padding: 0 14px;
+      padding: 0 10px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
@@ -1253,7 +1302,7 @@
           <div class="toolbar-right">
             <div class="search-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="search" id="searchInput" placeholder="Search Task ID, Customer, Device..." aria-label="Search tasks">
+              <input type="search" id="searchInput" placeholder="Search Order or Trade-In ID, Customer, Device..." aria-label="Search tasks">
             </div>
           </div>
         </div>
@@ -1263,7 +1312,7 @@
           <table>
             <thead>
               <tr>
-                <th>TASK ID</th>
+                <th>ORDER / TRADE-IN ID</th>
                 <th>TASK TYPE</th>
                 <th>CUSTOMER &amp; DEVICE</th>
                 <th>APPOINTMENT</th>
@@ -1313,7 +1362,7 @@
       </div>
       <div class="modal-body">
         <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px; margin-bottom: 18px;">
-          <div style="font-weight: 700; color: #1e40af; margin-bottom: 2px;" id="reassignTargetTitle">Task #TSK-XXXX</div>
+          <div style="font-weight: 700; color: #1e40af; margin-bottom: 2px;" id="reassignTargetTitle">Order / Trade-In Reference</div>
           <div style="font-size: 13px; color: #3b82f6;" id="reassignTargetSubtitle">Customer &bull; Device</div>
         </div>
 
@@ -1840,6 +1889,8 @@
     let sortAsc = false;
     let selectedTaskForAction = null;
     let staffList = [];
+    let staffLoaded = false;
+    let staffLoadPromise = null;
 
     function initApp() {
       if (typeof ReByteAuth !== 'undefined') {
@@ -1853,7 +1904,6 @@
 
       initEvents();
       loadTasks();
-      loadStaff();
     }
 
     if (document.readyState === 'loading') {
@@ -1949,6 +1999,13 @@
         });
       }
 
+      const assignMethodSelect = document.getElementById('assignMethodSelect');
+      if (assignMethodSelect) {
+        assignMethodSelect.addEventListener('change', () => {
+          if (assignMethodSelect.value === 'manual') loadStaff();
+        });
+      }
+
       // Confirm Reassign
       const btnConfirmReassign = document.getElementById('btnConfirmReassign');
       if (btnConfirmReassign) {
@@ -1993,7 +2050,6 @@
 
       try {
         await loadTasks(true);
-        await loadStaff();
       } catch (err) {
         console.error('Refresh error:', err);
         showToastBanner('Failed to refresh tasks', 'error');
@@ -2015,29 +2071,50 @@
     let resolvedApiBase = null;
     const taskDataCache = new Map();
     const TAB_CACHE_TTL = 30000; // 30s client tab cache for instant switching
+    const PERSISTED_TASK_CACHE_PREFIX = 'rebyte:task-assignment:cache:v1:';
+    const PERSISTED_TASK_CACHE_TTL = 5 * 60 * 1000;
 
-    // Helper to get active working backend API URL without repeated candidate trial timeouts
-    async function getWorkingApiBase() {
-      if (resolvedApiBase) return resolvedApiBase;
-      const candidates = [
-        API_BASE,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000'
-      ].filter((v, i, arr) => arr.indexOf(v) === i);
+    function getTaskApiCandidates() {
+      return [resolvedApiBase, API_BASE, 'http://localhost:3000', 'http://127.0.0.1:3000']
+        .filter((value, index, list) => value && list.indexOf(value) === index);
+    }
 
-      for (const base of candidates) {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 1200);
-          const res = await fetch(`${base}/api/task-assignment/admin/tasks?limit=1`, { signal: controller.signal });
-          clearTimeout(timer);
-          if (res.ok) {
-            resolvedApiBase = base;
-            return resolvedApiBase;
-          }
-        } catch (_) {}
+    function readPersistedTaskCache(cacheKey) {
+      try {
+        const storageKey = PERSISTED_TASK_CACHE_PREFIX + cacheKey;
+        const cached = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+        if (!cached || !cached.data || Date.now() - cached.timestamp > PERSISTED_TASK_CACHE_TTL) {
+          sessionStorage.removeItem(storageKey);
+          return null;
+        }
+        return cached;
+      } catch (_) {
+        return null;
       }
-      return API_BASE;
+    }
+
+    function persistTaskCache(cacheKey, data) {
+      try {
+        sessionStorage.setItem(PERSISTED_TASK_CACHE_PREFIX + cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+      } catch (_) {}
+    }
+
+    function clearPersistedTaskCache() {
+      try {
+        for (let index = sessionStorage.length - 1; index >= 0; index--) {
+          const key = sessionStorage.key(index);
+          if (key && key.startsWith(PERSISTED_TASK_CACHE_PREFIX)) sessionStorage.removeItem(key);
+        }
+      } catch (_) {}
+    }
+
+    function renderTaskLoadingRows() {
+      const tbody = document.getElementById('taskTableBody');
+      if (!tbody) return;
+      const widths = ['66%', '72%', '86%', '78%', '58%', '64%'];
+      tbody.innerHTML = Array.from({ length: PAGE_SIZE }, () =>
+        `<tr class="task-loading-row">${widths.map(width => `<td><div class="task-loading-bar" style="width:${width};"></div></td>`).join('')}</tr>`
+      ).join('');
     }
 
     // Load Tasks from Backend API (with server-side pagination & filtering + client instant cache)
@@ -2063,10 +2140,26 @@
         }
       }
 
+      if (!forceRefresh) {
+        const persisted = readPersistedTaskCache(cacheKey);
+        if (persisted) {
+          taskDataCache.set(cacheKey, persisted);
+          allTasks = persisted.data.tasks || [];
+          if (persisted.data.pagination) {
+            serverPagination = persisted.data.pagination;
+            currentPage = persisted.data.pagination.page;
+          }
+          updateCounts(persisted.data.counts || {});
+          renderTable();
+          loadTasksBackground(cacheKey);
+          return;
+        }
+      }
+
       // Show light loading indicator on table body if currently empty
       const tbody = document.getElementById('taskTableBody');
       if (tbody && (!allTasks || allTasks.length === 0)) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 36px; color: #64748b; font-size: 14px;">Loading task records...</td></tr>`;
+        renderTaskLoadingRows();
       }
 
       const params = {
@@ -2082,18 +2175,13 @@
         params.refresh = 'true';
         params._t = Date.now();
         taskDataCache.clear();
+        clearPersistedTaskCache();
       }
 
       const queryParams = new URLSearchParams(params);
       let data = null;
 
-      const baseToUse = resolvedApiBase || await getWorkingApiBase();
-      const candidates = [
-        baseToUse,
-        API_BASE,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000'
-      ].filter((v, i, arr) => arr.indexOf(v) === i);
+      const candidates = getTaskApiCandidates();
 
       for (const base of candidates) {
         try {
@@ -2112,6 +2200,7 @@
 
       if (data && data.success && Array.isArray(data.tasks)) {
         taskDataCache.set(cacheKey, { data, timestamp: Date.now() });
+        persistTaskCache(cacheKey, data);
         allTasks = data.tasks;
         if (data.pagination) {
           serverPagination = data.pagination;
@@ -2134,59 +2223,67 @@
 
     // Silent background refresh for seamless responsiveness
     async function loadTasksBackground(cacheKey) {
-      try {
-        const base = resolvedApiBase || API_BASE;
-        const params = new URLSearchParams({
-          tab: activeTab,
-          page: currentPage,
-          limit: PAGE_SIZE,
-          search: searchQuery,
-          sort: sortAsc ? 'asc' : 'desc',
-          type: selectedTypeFilter
-        });
-        const res = await fetch(`${base}/api/task-assignment/admin/tasks?${params.toString()}`);
-        if (res.ok) {
+      const params = new URLSearchParams({
+        tab: activeTab,
+        page: currentPage,
+        limit: PAGE_SIZE,
+        search: searchQuery,
+        sort: sortAsc ? 'asc' : 'desc',
+        type: selectedTypeFilter
+      });
+      for (const base of getTaskApiCandidates()) {
+        try {
+          const res = await fetch(`${base}/api/task-assignment/admin/tasks?${params.toString()}`);
+          if (!res.ok) continue;
           const data = await res.json();
-          if (data && data.success && Array.isArray(data.tasks)) {
-            taskDataCache.set(cacheKey, { data, timestamp: Date.now() });
-            // Only re-render if active tab hasn't switched away
-            const currentKey = `${activeTab}_${currentPage}_${PAGE_SIZE}_${searchQuery}_${sortAsc ? 'asc' : 'desc'}_${selectedTypeFilter}`;
-            if (currentKey === cacheKey) {
-              allTasks = data.tasks;
-              if (data.pagination) {
-                serverPagination = data.pagination;
-                currentPage = data.pagination.page;
-              }
-              updateCounts(data.counts || {});
-              renderTable();
+          if (!data || !data.success || !Array.isArray(data.tasks)) continue;
+          resolvedApiBase = base;
+          taskDataCache.set(cacheKey, { data, timestamp: Date.now() });
+          persistTaskCache(cacheKey, data);
+          // Only re-render if active tab hasn't switched away
+          const currentKey = `${activeTab}_${currentPage}_${PAGE_SIZE}_${searchQuery}_${sortAsc ? 'asc' : 'desc'}_${selectedTypeFilter}`;
+          if (currentKey === cacheKey) {
+            allTasks = data.tasks;
+            if (data.pagination) {
+              serverPagination = data.pagination;
+              currentPage = data.pagination.page;
             }
+            updateCounts(data.counts || {});
+            renderTable();
           }
-        }
-      } catch (_) {}
+          break;
+        } catch (_) {}
+      }
     }
 
     // Load Available Staff for Reassign Modal
     async function loadStaff() {
-      const candidates = [
-        API_BASE,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000'
-      ].filter((v, i, arr) => arr.indexOf(v) === i);
-
-      for (const base of candidates) {
-        try {
-          const res = await fetch(`${base}/api/task-assignment/admin/staff`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && Array.isArray(data.staff)) {
-              staffList = data.staff;
-              populateStaffSelect();
-              break;
+      if (staffLoaded) return staffList;
+      if (staffLoadPromise) return staffLoadPromise;
+      staffLoadPromise = (async () => {
+        for (const base of getTaskApiCandidates()) {
+          try {
+            const res = await fetch(`${base}/api/task-assignment/admin/staff`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success && Array.isArray(data.staff)) {
+                resolvedApiBase = base;
+                staffList = data.staff;
+                staffLoaded = true;
+                populateStaffSelect();
+                return staffList;
+              }
             }
+          } catch (err) {
+            console.warn(`Could not load staff from ${base}:`, err.message);
           }
-        } catch (err) {
-          console.warn(`Could not load staff from ${base}:`, err.message);
         }
+        return staffList;
+      })();
+      try {
+        return await staffLoadPromise;
+      } finally {
+        staffLoadPromise = null;
       }
     }
 
@@ -2251,9 +2348,15 @@
       allTasks.forEach(task => {
         const tr = document.createElement('tr');
 
-        // Column 1: Task ID
+        // Column 1: Order, trade-in request, or appointment reference
         const tdId = document.createElement('td');
-        tdId.innerHTML = `<a href="javascript:void(0)" class="task-id-link" onclick="openTaskDetails('${task.orderID}')">#${task.taskID}</a>`;
+        const referenceID = getTaskReferenceID(task);
+        const referenceLink = document.createElement('a');
+        referenceLink.href = 'javascript:void(0)';
+        referenceLink.className = 'task-id-link';
+        referenceLink.textContent = referenceID ? `#${referenceID}` : '—';
+        referenceLink.addEventListener('click', () => openTaskDetails(referenceID));
+        tdId.appendChild(referenceLink);
 
         // Column 2: Task Type
         const tdType = document.createElement('td');
@@ -2306,10 +2409,11 @@
         const isSelfPickupCompleted = (task.displayStatus || '').toLowerCase() === 'completed' &&
           (Boolean(task.pickedAt) || String(task.fulfillmentType || '').toLowerCase().includes('pickup') || String(task.fulfillmentType || '').toLowerCase().includes('self'));
 
-        let statusHtml = `<span class="status-pill ${pillClass}">${escapeHtml(displayStatusText)}</span>`;
+        let statusHtml = `<div class="status-inline"><span class="status-pill ${pillClass}">${escapeHtml(displayStatusText)}</span>`;
         if (isSelfPickupCompleted) {
-          statusHtml += `<div class="sublabel-badge">Self Pickup</div>`;
+          statusHtml += `<span class="sublabel-badge">Self Pickup</span>`;
         }
+        statusHtml += '</div>';
         tdStatus.innerHTML = statusHtml;
 
         // Column 6: Actions
@@ -2326,7 +2430,7 @@
         // Row click opens details
         tr.addEventListener('click', (e) => {
           if (!e.target.closest('button') && !e.target.closest('a')) {
-            openTaskDetails(task.orderID);
+            openTaskDetails(getTaskReferenceID(task));
           }
         });
 
@@ -2375,7 +2479,7 @@
       } else if (status === 'assigned') {
         // Assigned tab: Details only, no reassign button
         btns += `
-          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${getTaskReferenceID(task)}')">Details</button>
         `;
       } else if (status === 'cancelled') {
         const rawTaskType = (task.taskType || 'Deliver').toLowerCase();
@@ -2395,7 +2499,7 @@
       } else if (status === 'refunded') {
         // Refunded tab: Details button to inspect customer cancellation
         btns += `
-          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+          <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${getTaskReferenceID(task)}')">Details</button>
         `;
       } else if (status === 'inspecting' || status === 'inspected') {
         const rawTaskType = String(task.taskType || task.fulfillmentType || '').toLowerCase();
@@ -2457,14 +2561,14 @@
           if (pod) {
             btns += `<button type="button" class="btn-act btn-pod" onclick="openPodModal('${escapeHtml(pod)}', '${task.orderID}')">View POD</button>`;
           }
-          btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>`;
+          btns += `<button type="button" class="btn-act btn-details" onclick="openTaskDetails('${getTaskReferenceID(task)}')">Details</button>`;
         }
       } else {
         // Terminated tab
         if (task.isTerminatedNoAddress) {
           // Requirement: For cancelled/pending order without address ID moved to terminated tab: detail BUTTON ONLY
           btns += `
-            <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+            <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${getTaskReferenceID(task)}')">Details</button>
           `;
         } else {
           const rawTrStatus = String(task.status || task.requestStatus || '').toLowerCase();
@@ -2487,7 +2591,7 @@
               `;
             }
             btns += `
-              <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${task.orderID}')">Details</button>
+              <button type="button" class="btn-act btn-details" onclick="openTaskDetails('${getTaskReferenceID(task)}')">Details</button>
             `;
           }
         }
@@ -2517,12 +2621,26 @@
       }
     }
 
+    function getTaskReferenceID(task) {
+      return String(task.tradeInRequestID || task.orderID || task.appointmentID || '').trim();
+    }
+
+    function getTaskReferenceLabel(task) {
+      if (task.tradeInRequestID) return 'Trade-In';
+      if (task.orderID) return 'Order';
+      if (task.appointmentID) return 'Appointment';
+      return 'Task';
+    }
+
     // Open Task Details Modal
-    function openTaskDetails(orderID) {
-      const task = allTasks.find(t => t.orderID === orderID);
+    function openTaskDetails(referenceID) {
+      const normalizedReferenceID = String(referenceID || '').trim();
+      if (!normalizedReferenceID) return;
+      const task = allTasks.find(t => [t.tradeInRequestID, t.orderID, t.appointmentID]
+        .some(value => String(value || '').trim() === normalizedReferenceID));
       if (!task) return;
 
-      document.getElementById('modalTaskTitle').textContent = `Task #${task.taskID}`;
+      document.getElementById('modalTaskTitle').textContent = `${getTaskReferenceLabel(task)} #${getTaskReferenceID(task)}`;
       let modalStatusText = task.statusBadge || task.displayStatus || 'Unassigned';
       if (task.isTerminatedNoAddress) {
         modalStatusText = 'Cancelled';
@@ -2630,7 +2748,7 @@
           <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #eef2f6;">
             <div>
               <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">${refTitle}</div>
-              <div style="font-size: 20px; font-weight: 800; color: #10264b; margin-top: 2px;">#${task.orderID}</div>
+              <div style="font-size: 20px; font-weight: 800; color: #10264b; margin-top: 2px;">#${escapeHtml(getTaskReferenceID(task) || '—')}</div>
               <div style="font-size: 13px; color: #475569; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 <span><strong>${dateLabel}</strong> ${orderDateTimeFormatted}</span>
@@ -2992,7 +3110,7 @@
         el.style.backgroundColor = isViewOnly ? '#f8fafc' : (el.tagName === 'SELECT' ? '#fff' : '');
       });
 
-      document.getElementById('quoteModalOrderID').textContent = task.tradeInRequestID || task.orderID || `#${task.taskID}`;
+      document.getElementById('quoteModalOrderID').textContent = getTaskReferenceID(task) || '—';
       document.getElementById('quoteModalCustomer').textContent = task.customerName || 'Customer';
 
       // Prefill values
