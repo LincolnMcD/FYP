@@ -1,5 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' as ui;
+
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'welcome_page.dart';
 import 'profile_page.dart';
 import 'services/auth_service.dart';
@@ -362,6 +368,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       appBar: _buildAppBar(),
       body: Stack(
         children: [
+          if (_selectedIndex == 0) const Positioned.fill(child: _CustomerHomeBackground()),
           IndexedStack(
             index: _selectedIndex,
             children: [
@@ -1906,4 +1913,140 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       ],
     );
   }
+}
+
+
+class _CustomerHomeBackground extends StatefulWidget {
+  const _CustomerHomeBackground();
+
+  @override
+  State<_CustomerHomeBackground> createState() => _CustomerHomeBackgroundState();
+}
+
+class _CustomerHomeBackgroundState extends State<_CustomerHomeBackground> {
+  final StreamController<Map<String, dynamic>?> _configUpdates =
+      StreamController<Map<String, dynamic>?>.broadcast();
+  socket_io.Socket? _socket;
+
+  @override
+  void initState() {
+    super.initState();
+    _socket = socket_io.io(
+      AuthService.baseUrl,
+      socket_io.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .enableAutoConnect()
+          .enableReconnection()
+          .build(),
+    );
+    _socket!.onConnect((_) => _loadCurrentBackground());
+    _socket!.on('customer-home-background-updated', (data) {
+      if (data is Map) {
+        _configUpdates.add(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
+  Future<void> _loadCurrentBackground() async {
+    try {
+      final response = await http
+          .get(Uri.parse('${AuthService.baseUrl}/api/system-config/customer-home-background'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return;
+      final payload = jsonDecode(response.body);
+      final config = payload is Map ? payload['config'] : null;
+      _configUpdates.add(config is Map ? Map<String, dynamic>.from(config) : null);
+    } catch (_) {
+      // Retain the current view if the backend is temporarily unavailable.
+    }
+  }
+
+  @override
+  void dispose() {
+    _socket?.dispose();
+    _configUpdates.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _configUpdates.stream,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.expand();
+
+        final config = snapshot.data;
+        final imageUrl = config?['imageUrl']?.toString().trim() ?? '';
+        if (config == null || config['isDefault'] == true || imageUrl.isEmpty) {
+          return const SizedBox.expand();
+        }
+
+        final rawAdjustments = config['adjustments'];
+        final adjustments = rawAdjustments is Map
+            ? Map<String, dynamic>.from(rawAdjustments)
+            : const <String, dynamic>{};
+        final brightness = _adjustmentValue(adjustments['brightness'], 100);
+        final contrast = _adjustmentValue(adjustments['contrast'], 100);
+        final saturation = _adjustmentValue(adjustments['saturation'], 100);
+        final whiteFilter = _adjustmentValue(adjustments['whiteFilter'], 0).clamp(0, 80);
+        final blur = _adjustmentValue(adjustments['blur'], 0).clamp(0, 20);
+
+        Widget image = Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
+        );
+        image = ColorFiltered(
+          colorFilter: ColorFilter.matrix(
+            _backgroundAdjustmentMatrix(brightness, contrast, saturation),
+          ),
+          child: image,
+        );
+        if (blur > 0) {
+          image = ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: blur.toDouble(), sigmaY: blur.toDouble()),
+            child: image,
+          );
+        }
+
+        return ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              image,
+              if (whiteFilter > 0)
+                ColoredBox(color: Colors.white.withValues(alpha: whiteFilter / 100)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+int _adjustmentValue(dynamic value, int fallback) {
+  if (value is num) return value.round();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+List<double> _backgroundAdjustmentMatrix(int brightness, int contrast, int saturation) {
+  final b = brightness.clamp(0, 200) / 100.0;
+  final c = contrast.clamp(0, 200) / 100.0;
+  final s = saturation.clamp(0, 200) / 100.0;
+  final offset = (0.5 - 0.5 * c) * 255;
+  const redLuminance = 0.2126;
+  const greenLuminance = 0.7152;
+  const blueLuminance = 0.0722;
+  final inverseSaturation = 1 - s;
+  final r = redLuminance * inverseSaturation;
+  final g = greenLuminance * inverseSaturation;
+  final bl = blueLuminance * inverseSaturation;
+
+  return <double>[
+    (r + s) * c * b, g * c * b, bl * c * b, 0, offset,
+    r * c * b, (g + s) * c * b, bl * c * b, 0, offset,
+    r * c * b, g * c * b, (bl + s) * c * b, 0, offset,
+    0, 0, 0, 1, 0,
+  ];
 }

@@ -6,6 +6,10 @@
   <title>ReByte - Smart Recommerce for Smartphones</title>
   <meta name="description" content="Buy, trade-in, and rent certified smartphones sustainably with ReByte.">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .main-content { position:relative; isolation:isolate; }
+    .customer-home-background { position:absolute; inset:-8px; z-index:-1; pointer-events:none; background-position:center; background-size:cover; background-repeat:no-repeat; filter:brightness(100%) contrast(100%) saturate(100%) blur(0px); }
+  </style>
 </head>
 <body>
 
@@ -48,6 +52,7 @@
 
   <!-- Main Content Area -->
   <main class="main-content">
+    <div class="customer-home-background" id="customerHomeBackground" aria-hidden="true"></div>
     <div class="container">
 
       <!-- Hero Banner Card -->
@@ -374,6 +379,35 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        ReByteAuth.initFirebase();
+        const background = document.getElementById('customerHomeBackground');
+        firebase.firestore().collection('systemSettings').doc('customerHomeBackground').onSnapshot(snapshot => {
+          const config = snapshot.exists ? snapshot.data() : null;
+          if (!config || config.isDefault === true || !config.imageUrl) {
+            background.style.backgroundImage = '';
+            background.style.filter = 'brightness(100%) contrast(100%) saturate(100%) blur(0px)';
+            return;
+          }
+          const adjustments = config.adjustments || {};
+          const whiteTint = Math.max(0, Math.min(80, Number(adjustments.whiteFilter ?? 0))) / 100;
+          background.style.backgroundImage =
+            'linear-gradient(rgba(255,255,255,' + whiteTint + '), rgba(255,255,255,' + whiteTint + ')), ' +
+            'linear-gradient(180deg, #ffffff22, #082f7226), url(\"' + config.imageUrl + '\")';
+          background.style.filter =
+            'brightness(' + Number(adjustments.brightness ?? 100) + '%) ' +
+            'contrast(' + Number(adjustments.contrast ?? 100) + '%) ' +
+            'saturate(' + Number(adjustments.saturation ?? 100) + '%) ' +
+            'blur(' + Math.max(0, Math.min(8, Number(adjustments.blur ?? 0))) + 'px)';
+        }, error => console.warn('Customer home background settings could not be loaded:', error));
+      } catch (error) {
+        console.warn('Customer home background settings could not be loaded:', error);
+      }
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interface Background Settings - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root { --navy:#082f72; --blue:#0646a5; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#626b7d; }
+    * { box-sizing:border-box; }
+    body { display:flex; min-height:100vh; margin:0; background:var(--page); color:var(--text); font-family:Inter,Arial,sans-serif; }
+    .sidebar { width:260px; flex:0 0 260px; display:flex; flex-direction:column; background:#fff; border-right:1px solid var(--border); }
+    .brand { height:105px; flex:0 0 105px; display:flex; align-items:center; gap:10px; padding:0 28px; border-bottom:1px solid #edf0f4; }
+    .brand img { width:38px; height:38px; object-fit:contain; }
+    .brand span { color:#10264b; font-size:25px; font-weight:700; letter-spacing:-1px; }
+    .nav-list { flex:1; display:grid; align-content:start; gap:8px; margin:0; padding:22px 16px; list-style:none; overflow:hidden; }
+    .nav-item { min-height:48px; display:flex; align-items:center; gap:12px; padding:0 14px; border-radius:9px; color:#586579; text-decoration:none; font-size:14px; font-weight:500; }
+    .nav-item:hover { background:#f1f4f9; }
+    .nav-item.active { background:var(--navy); color:#fff; font-weight:600; }
+    .nav-item svg { width:20px; height:20px; flex:0 0 auto; }
+    .main { min-width:0; flex:1; display:flex; flex-direction:column; }
+    .main-content { flex:1; overflow:auto; }
+    .content { max-width:1600px; margin:0 auto; padding:30px 40px 56px; }
+    .back { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; margin:0 0 22px -8px; border-radius:8px; color:#596579; text-decoration:none; }
+    .back:hover { background:#e9edf4; }
+    .back svg { width:20px; height:20px; }
+    .page-heading { margin-bottom:28px; }
+    .page-heading h1 { margin:0 0 8px; color:#0f172a; font-size:26px; font-weight:800; line-height:1.2; letter-spacing:-0.5px; }
+    .page-heading p { margin:0; color:#5d6472; font-size:14.5px; line-height:1.5; }
+    .settings-layout { display:grid; grid-template-columns:minmax(280px,340px) minmax(0,1fr); gap:24px; align-items:start; }
+    .control-column,.preview-column { display:grid; gap:20px; }
+    .preview-column { position:sticky; top:16px; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+    .panel { padding:24px; border:1px solid #e5e9f0; border-radius:20px; background:#fff; box-shadow:0 5px 18px #1a2b4510; }
+    .panel h2 { margin:0; color:#14284c; font-size:16px; line-height:1.35; }
+    .panel-subtitle { margin:6px 0 0; color:#778195; font-size:12.5px; line-height:1.5; }
+    .upload-zone { min-height:190px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; margin-top:18px; padding:22px; border:2px dashed #c7d0df; border-radius:14px; background:#f5f7fb; color:#263246; text-align:center; cursor:pointer; transition:border-color .15s,background .15s,box-shadow .15s; }
+    .upload-zone:hover,.upload-zone.dragover { border-color:#3670c4; background:#f2f6ff; }
+    .upload-zone.has-image { border:2px solid #16805d; background:#edfaf4; box-shadow:inset 0 0 0 1px #16805d20; }
+    .upload-zone.has-image svg { color:#16805d; }
+    .upload-zone.has-image strong { color:#075f43; }
+    .upload-zone.is-applied { border-color:#0b57cd; background:#edf4ff; }
+    .upload-zone.is-applied svg,.upload-zone.is-applied strong { color:#0b438f; }
+    .upload-zone.is-error { border:2px solid #dc2626; background:#fff1f2; box-shadow:0 0 0 3px #dc262610; }
+    .upload-zone.is-error svg,.upload-zone.is-error strong { color:#b42318; }
+    .upload-zone svg { width:34px; height:34px; color:var(--blue); }
+    .upload-zone strong { color:#172033; font-size:15px; }
+    .upload-zone span { max-width:100%; overflow-wrap:anywhere; color:#344054; font-size:13px; line-height:1.5; }
+    .upload-zone input { position:absolute; width:1px; height:1px; opacity:0; }
+    .file-status { min-height:38px; display:flex; align-items:center; margin:12px 0 0; padding:9px 11px; border:1px solid #d7deea; border-radius:9px; background:#f4f6fa; color:#202b3b; font-size:12px; font-weight:600; line-height:1.45; overflow-wrap:anywhere; }
+    .file-status.is-error { border-color:#f1a3a3; background:#fff1f2; color:#b42318; }
+    .file-status.is-success { border-color:#9dd8be; background:#effaf4; color:#125c42; }
+    .adjustment-grid { display:grid; gap:16px; margin-top:18px; }
+    .adjustment-control { display:grid; grid-template-columns:1fr auto; gap:8px 12px; align-items:center; }
+    .adjustment-control label { color:#243044; font-size:13px; font-weight:600; }
+    .adjustment-control output { min-width:55px; color:#082f72; font-size:12px; font-weight:700; text-align:right; }
+    .adjustment-control input[type="range"] { grid-column:1 / -1; width:100%; accent-color:#0b57cd; }
+    .adjustment-help { margin:12px 0 0; color:#667085; font-size:12px; line-height:1.5; }
+    .adjustment-controls { min-width:0; margin:18px 0 0; padding:0; border:0; }
+    .adjustment-controls:disabled { opacity:.42; }
+    .adjustment-controls:disabled::after { position:absolute; inset:0; display:grid; place-items:center; padding:18px; border:1px dashed #c5ccd7; border-radius:12px; background:#f1f3f6e8; color:#5d6675; content:'Upload a valid image to enable adjustments'; font-size:13px; font-weight:700; line-height:1.5; text-align:center; }
+    .adjustment-controls-wrap { position:relative; }
+    .action-stack { display:grid; gap:10px; margin-top:20px; }
+    .action-button { min-height:46px; display:inline-flex; align-items:center; justify-content:center; gap:9px; padding:0 16px; border:1px solid #cad3e2; border-radius:11px; background:#fff; color:#39445a; font:600 14px Inter,Arial,sans-serif; cursor:pointer; }
+    .action-button svg { width:18px; height:18px; }
+    .action-button.primary { border-color:var(--blue); background:var(--blue); color:#fff; }
+    .action-button:disabled { opacity:.48; cursor:not-allowed; }
+    .preview-heading { box-sizing:border-box; height:56px; display:flex; justify-content:space-between; align-items:center; gap:16px; padding-bottom:17px; border-bottom:1px solid #e9edf3; }
+    .preview-heading-label { display:flex; align-items:center; gap:10px; }
+    .preview-heading-label svg { width:22px; height:22px; color:var(--navy); }
+    .preview-state { color:#19875f; font-size:13px; font-weight:700; white-space:nowrap; }
+    .preview-state.pending { color:#9a6700; }
+    .staged-preview-actions { display:flex; align-items:center; gap:12px; }
+    .staged-preview-panel .preview-heading { align-items:center; gap:10px; }
+    .staged-preview-panel .preview-heading-label { min-width:0; flex:1 1 auto; }
+    .staged-preview-panel .preview-heading-label h2 { white-space:nowrap; }
+    .staged-preview-actions { flex:0 0 auto; gap:8px; }
+    .clear-staged-button { min-height:32px; display:inline-flex; align-items:center; gap:5px; padding:0 9px; border:1px solid #f0b4b4; border-radius:8px; background:#fff5f5; color:#b42318; font:600 11px Inter,Arial,sans-serif; white-space:nowrap; cursor:pointer; transition:background .15s,border-color .15s,color .15s; }
+    .clear-staged-button:hover:not(:disabled) { border-color:#dc6b66; background:#fee4e2; color:#912018; }
+    .clear-staged-button svg { width:13px; height:13px; }
+    .clear-staged-button:disabled { opacity:.55; cursor:not-allowed; }
+    .phones { display:grid; grid-template-columns:1fr; justify-items:center; padding:18px 0 0; }
+    .phone-wrap { width:100%; display:grid; justify-items:center; gap:10px; }
+    .phone-label { color:#526077; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .phone { width:min(100%,300px); aspect-ratio:9/19.5; position:relative; overflow:hidden; padding:9px; border:3px solid #202b3d; border-radius:34px; background:#18253b; box-shadow:0 12px 30px #12284a24; }
+    .phone-screen { position:relative; width:100%; height:100%; overflow:hidden; border-radius:24px; background:#f8fafc; }
+    .customer-preview-scroll { position:absolute; top:0; left:0; width:390px; height:890px; overflow:hidden; transform:scale(var(--preview-scale,.605)); transform-origin:top left; background:#f7f8fb; }
+    .customer-preview-site { width:390px; height:890px; position:relative; display:flex; flex-direction:column; overflow:hidden; color:#1b2431; background:#f7f8fb; font:14px/1.45 Inter,Arial,sans-serif; }
+    .customer-preview-site * { box-sizing:border-box; }
+    .customer-preview-bg { position:absolute; z-index:0; inset:94px 0 90px; background-position:center; background-size:cover; background-repeat:no-repeat; filter:brightness(100%) contrast(100%) saturate(100%) blur(0px); transition:filter .12s ease; }
+    .customer-preview-status { position:relative; z-index:1; height:28px; flex:0 0 28px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; background:#f1f2f6; color:#30343c; font-size:13px; font-weight:600; }
+    .customer-preview-status-icons { display:flex; align-items:center; gap:5px; color:#222833; font-size:11px; }
+    .customer-preview-app-header { position:relative; z-index:1; height:66px; flex:0 0 66px; display:grid; grid-template-columns:42px 1fr 42px; align-items:center; padding:0 18px; background:#f1f2f6; }
+    .customer-preview-menu,.customer-preview-notification { display:grid; place-items:center; color:#161b23; }
+    .customer-preview-menu svg,.customer-preview-notification svg { width:24px; height:24px; }
+    .customer-preview-brand { display:flex; align-items:center; justify-content:center; gap:8px; color:#171b22; font-size:21px; font-weight:700; }
+    .customer-preview-brand img { width:40px; height:40px; object-fit:contain; }
+    .customer-preview-notification { position:relative; justify-self:end; }
+    .customer-preview-notification::after { position:absolute; top:0; right:0; width:9px; height:9px; border:1px solid #f1f2f6; border-radius:50%; background:#f97316; content:''; }
+    .customer-preview-content { position:relative; z-index:1; min-height:0; flex:1; overflow-y:auto; overflow-x:hidden; padding:16px 16px 28px; background:transparent; scrollbar-width:thin; scrollbar-color:#b8bec8 transparent; }
+    .customer-preview-content::-webkit-scrollbar { width:4px; }
+    .customer-preview-content::-webkit-scrollbar-thumb { border-radius:4px; background:#b8bec8; }
+    .customer-preview-search { height:50px; display:flex; align-items:center; gap:14px; margin:4px 0 16px; padding:0 16px; border:1px solid #e0e3e9; border-radius:28px; background:#fff; color:#999faa; font-size:13px; letter-spacing:.3px; }
+    .customer-preview-search svg { width:19px; height:19px; flex:0 0 auto; }
+    .customer-preview-hero { min-height:0; margin:0 0 34px; padding:27px 24px 26px; border-radius:20px; background:#0b57cd; color:#fff; }
+    .customer-preview-hero h2 { margin:0 0 20px; color:#fff; font-size:32px; font-weight:700; line-height:1.2; letter-spacing:-.5px; }
+    .customer-preview-hero p { margin:0 0 24px; color:#e7efff; font-size:13.5px; line-height:1.6; }
+    .customer-preview-hero-action { min-height:48px; display:inline-flex; align-items:center; gap:12px; padding:0 20px; border-radius:10px; background:#fff; color:#0750b7; font-size:14px; font-weight:700; }
+    .customer-preview-section-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 15px; color:#202938; font-size:17px; font-weight:700; line-height:1.3; }
+    .customer-preview-view-all { color:#0758c8; font-size:12px; font-weight:600; white-space:nowrap; }
+    .customer-preview-quick-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 29px; }
+    .customer-preview-quick-card { min-height:116px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:12px 5px; border-radius:16px; background:#fff; text-align:center; box-shadow:0 2px 8px #20304a08; }
+    .customer-preview-quick-icon { width:44px; height:44px; display:grid; place-items:center; border-radius:50%; background:#e6ecff; color:#1764c7; }
+    .customer-preview-quick-icon svg { width:22px; height:22px; }
+    .customer-preview-quick-card:nth-child(2) .customer-preview-quick-icon { background:#fff4e9; color:#e27b23; }
+    .customer-preview-quick-card:nth-child(4) .customer-preview-quick-icon { background:#e6efff; color:#1764c7; }
+    .customer-preview-quick-card:nth-child(5) .customer-preview-quick-icon { background:#f3eaff; color:#8655c7; }
+    .customer-preview-quick-card:nth-child(6) .customer-preview-quick-icon { background:#e9f8ef; color:#239b68; }
+    .customer-preview-quick-card span:last-child { max-width:100%; color:#222a36; font-size:11.5px; font-weight:600; line-height:1.3; }
+    .customer-preview-activity-empty { min-height:78px; display:grid; place-items:center; margin:0 0 30px; padding:14px 24px; border:1px solid #e0e3e9; border-radius:16px; background:#fff; color:#77818e; font-size:13px; line-height:1.55; text-align:center; }
+    .customer-preview-product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:0 0 30px; }
+    .customer-preview-product { min-width:0; min-height:218px; position:relative; display:flex; flex-direction:column; padding:13px; border-radius:16px; background:#fff; box-shadow:0 2px 9px #20304a0b; }
+    .customer-preview-product-badge { align-self:flex-start; margin-bottom:9px; padding:4px 7px; border-radius:5px; background:#e8edff; color:#2158b5; font-size:8px; font-weight:700; }
+    .customer-preview-product-image { height:82px; display:grid; place-items:center; margin-bottom:10px; background:#f3f3f4; color:#b7b9bd; }
+    .customer-preview-product-image svg { width:38px; height:48px; }
+    .customer-preview-product-brand { color:#9a9ca2; font-size:10px; }
+    .customer-preview-product-name { margin:2px 0 10px; color:#20232b; font-size:11px; font-weight:700; line-height:1.35; }
+    .customer-preview-product-price { margin-top:auto; color:#20232b; font-size:12px; font-weight:700; }
+    .customer-preview-add { position:absolute; right:12px; bottom:12px; width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#e5eaff; color:#1260c7; font-size:19px; font-weight:400; }
+    .customer-preview-benefits { overflow:hidden; margin-bottom:18px; border-radius:16px; background:#fff; }
+    .customer-preview-benefit { min-height:78px; display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:1px solid #eef0f3; }
+    .customer-preview-benefit:last-child { border-bottom:0; }
+    .customer-preview-benefit-icon { width:38px; height:38px; flex:0 0 38px; display:grid; place-items:center; border-radius:50%; background:#e8eeff; color:#135fc4; }
+    .customer-preview-benefit-icon svg { width:20px; height:20px; }
+    .customer-preview-benefit strong { display:block; color:#252a33; font-size:12px; }
+    .customer-preview-benefit small { display:block; margin-top:3px; color:#9198a3; font-size:10px; line-height:1.35; }
+    .customer-preview-bottom-tabs { position:relative; z-index:1; height:60px; flex:0 0 60px; display:grid; grid-template-columns:repeat(5,1fr); align-items:center; border-top:1px solid #ebedf0; background:#fff; }
+    .customer-preview-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; color:#999da5; font-size:9px; }
+    .customer-preview-tab svg { width:20px; height:20px; }
+    .customer-preview-tab.active { color:#0b57cd; font-weight:600; }
+    .customer-preview-android-nav { position:relative; z-index:1; height:30px; flex:0 0 30px; display:flex; align-items:center; justify-content:space-around; background:#303030; color:#f0f0f0; }
+    .customer-preview-android-nav i { width:16px; height:16px; border:2px solid currentColor; border-radius:50%; }
+    .customer-preview-android-nav span { width:15px; height:15px; border-left:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(45deg); }
+    .customer-preview-android-nav b { width:2px; height:15px; position:relative; background:currentColor; }
+    .customer-preview-android-nav b::before,.customer-preview-android-nav b::after { position:absolute; left:-6px; width:2px; height:15px; background:currentColor; content:''; }
+    .customer-preview-android-nav b::after { left:6px; }
+    @media(max-width:1100px) { .content{padding:26px 24px 44px}.settings-layout{grid-template-columns:minmax(245px,310px) minmax(0,1fr)}.phone{width:min(100%,225px)} }
+    @media(max-width:820px) { .settings-layout{grid-template-columns:1fr}.control-column{grid-row:2}.preview-column{position:static;grid-row:1}.phone{width:min(100%,225px)} }
+    @media(max-width:650px) { body{display:block}.sidebar{width:100%;height:auto}.brand{height:72px;flex-basis:72px}.nav-list{display:flex;overflow:hidden;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 16px 36px}.page-heading p{font-size:14.5px}.panel{padding:18px;border-radius:16px}.preview-column{grid-template-columns:1fr}.phones{gap:10px}.phone{width:min(100%,190px);border-radius:28px}.phone-screen{border-radius:19px} }
+    @media(max-width:400px) { .phones{grid-template-columns:1fr}.phone{width:210px} }
+  </style>
+  <style id="background-revert-confirmation-style">
+    .background-confirm[hidden] { display:none !important; }
+    .background-confirm { position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center; padding:20px; background:#0f172a99; opacity:0; visibility:hidden; transition:all .2s ease; }
+    .background-confirm.show { opacity:1; visibility:visible; }
+    .background-confirm-card { width:min(100%,440px); overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 20px 40px #0f172a33; transform:scale(.96); transition:transform .2s ease; }
+    .background-confirm.show .background-confirm-card { transform:scale(1); }
+    .background-confirm-head { display:flex; align-items:center; gap:14px; padding:20px 22px 16px; border-bottom:1px solid #e7eaf0; }
+    .background-confirm-icon { width:38px; height:38px; flex:0 0 38px; display:grid; place-items:center; border-radius:50%; background:#fff4db; color:#a15c00; }
+    .background-confirm-icon svg { width:20px; height:20px; }
+    .background-confirm-head h2 { margin:0 0 4px; color:#10264b; font-size:16px; }
+    .background-confirm-head p { margin:0; color:#566174; font-size:12px; }
+    .background-confirm-body { padding:18px 22px; color:#51596a; font-size:13px; line-height:1.55; }
+    .background-confirm-actions { display:flex; justify-content:flex-end; gap:10px; padding:12px 22px 18px; border-top:1px solid #e7eaf0; }
+    .background-confirm-actions button { min-height:40px; padding:0 16px; border:1px solid #d4d9e3; border-radius:22px; background:#fff; color:#344054; font:600 13px Inter,Arial,sans-serif; cursor:pointer; }
+    .background-confirm-actions .confirm-revert { border-color:#0c5ad2; background:#0c5ad2; color:#fff; }
+    .background-confirm-actions button:disabled { opacity:.6; cursor:wait; }
+  </style>
+<style id="sysconfig-sticky-sidebar">
+  body { height:100vh; min-height:0; overflow:hidden; }
+  body > .sidebar { position:sticky; top:0; align-self:flex-start; height:100vh; max-height:100vh; overflow:hidden; }
+  body > .main { height:100vh; min-height:0; }
+  body > .main > .main-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+  @media(max-width:650px) {
+    body { height:auto; min-height:100vh; overflow:auto; }
+    body > .sidebar { position:relative; height:auto; max-height:none; }
+    body > .main { height:auto; min-height:0; }
+    body > .main > .main-content { overflow:visible; }
+  }
+</style>
+<style id="listing-tab-title-style">h1 { font-family:Inter,Arial,sans-serif !important; font-size:26px !important; font-weight:800 !important; color:#0f172a !important; letter-spacing:-0.5px !important; line-height:1.2 !important; }</style>
+</head>
+<body><aside class="sidebar">
+    <div class="brand"><img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte"><span>ReByte</span></div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
+      <a href="../listingModule/listing.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>Listing</a>
+      <a href="index.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
+      <a href="../transactionManagementModule/index.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
+      <a href="../adminModule/customerManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
+      <a href="../adminModule/staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
+    </nav>
+  </aside>  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
+    <div class="main-content">
+      <section class="content">
+        <a class="back" href="index.html" aria-label="Back to system configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
+        <div class="page-heading"><h1>Interface Background Settings</h1><p>Preview a dashboard background at mobile screen size.</p></div>
+        <template id="customerHomeTemplate">
+          <div class="customer-preview-site">
+            <div class="customer-preview-bg" aria-hidden="true"></div>
+            <div class="customer-preview-status"><span>23:01</span><span class="customer-preview-status-icons">◉　▰ 5G ▴ ▣ 41</span></div>
+            <header class="customer-preview-app-header"><span class="customer-preview-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"></path></svg></span><div class="customer-preview-brand"><img src="../accountManagementModule/assets/images/rebyte_logo.png" alt=""><span>ReByte</span></div><span class="customer-preview-notification"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></span></header>
+            <div class="customer-preview-content">
+              <div class="customer-preview-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><span>Search for devices, brands, or models...</span></div>
+              <section class="customer-preview-hero"><h2>Buy, Trade-In,<br>Rent Smartphones</h2><p>Upgrade your mobile experience sustainably. Get premium certified smartphones, turn old phones into cash, or rent the latest model when you need it.</p><span class="customer-preview-hero-action">Get Started&nbsp; →</span></section>
+              <section><h3 class="customer-preview-section-heading">Quick Actions</h3><div class="customer-preview-quick-grid">
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><path d="M3 6h18M16 10a4 4 0 0 1-8 0"></path></svg></span><span>Shop Smartphones</span></div>
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.5 9a9 9 0 0 1 15-3L23 10M1 14l4.5 4a9 9 0 0 0 15-3"></path></svg></span><span>Trade-In Phone</span></div>
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M8 6h8M8 10h8M8 14h4"></path></svg></span><span>Rent Smartphone</span></div>
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="M9 6h6M9 10h6"></path></svg></span><span>My Rentals</span></div>
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="5"></circle><path d="M16 11h6M19 8v6M2 21a7 7 0 0 1 14 0"></path></svg></span><span>Compare Phones</span></div>
+                <div class="customer-preview-quick-card"><span class="customer-preview-quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="m9 12 2 2 4-4M9 7h6"></path></svg></span><span>Test My Device</span></div>
+              </div></section>
+              <section><h3 class="customer-preview-section-heading">Active Activity</h3><div class="customer-preview-activity-empty">No active rental or trade-in activities at this moment.</div></section>
+              <section><h3 class="customer-preview-section-heading"><span>Recommended Certified Smartphones</span><span class="customer-preview-view-all">View All &gt;</span></h3><div class="customer-preview-product-grid">
+                <article class="customer-preview-product"><span class="customer-preview-product-badge">PERFECT</span><div class="customer-preview-product-image"><svg viewBox="0 0 32 42" fill="none" stroke="currentColor" stroke-width="3"><rect x="6" y="2" width="20" height="36" rx="3"></rect><circle cx="16" cy="33" r="1"></circle></svg></div><span class="customer-preview-product-brand">Apple</span><strong class="customer-preview-product-name">iPhone 14, 128GB</strong><span class="customer-preview-product-price">RM599.00</span><span class="customer-preview-add">+</span></article>
+                <article class="customer-preview-product"><span class="customer-preview-product-badge">EXCELLENT</span><div class="customer-preview-product-image"><svg viewBox="0 0 32 42" fill="none" stroke="currentColor" stroke-width="3"><rect x="6" y="2" width="20" height="36" rx="3"></rect><circle cx="16" cy="33" r="1"></circle></svg></div><span class="customer-preview-product-brand">Samsung</span><strong class="customer-preview-product-name">Galaxy S23, 256GB</strong><span class="customer-preview-product-price">RM499.00</span><span class="customer-preview-add">+</span></article>
+              </div></section>
+              <section><h3 class="customer-preview-section-heading">Recently Viewed Smartphones</h3><div class="customer-preview-product-grid">
+                <article class="customer-preview-product"><div class="customer-preview-product-image"><svg viewBox="0 0 32 42" fill="none" stroke="currentColor" stroke-width="3"><rect x="6" y="2" width="20" height="36" rx="3"></rect><circle cx="16" cy="33" r="1"></circle></svg></div><span class="customer-preview-product-brand">Samsung</span><strong class="customer-preview-product-name">Galaxy S22, 128GB</strong><span class="customer-preview-product-price">RM349.00</span><span class="customer-preview-add">+</span></article>
+                <article class="customer-preview-product"><div class="customer-preview-product-image"><svg viewBox="0 0 32 42" fill="none" stroke="currentColor" stroke-width="3"><rect x="6" y="2" width="20" height="36" rx="3"></rect><circle cx="16" cy="33" r="1"></circle></svg></div><span class="customer-preview-product-brand">Apple</span><strong class="customer-preview-product-name">iPhone 12, 64GB</strong><span class="customer-preview-product-price">RM299.00</span><span class="customer-preview-add">+</span></article>
+              </div></section>
+              <section><h3 class="customer-preview-section-heading">Why Choose ReByte?</h3><div class="customer-preview-benefits">
+                <article class="customer-preview-benefit"><span class="customer-preview-benefit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg></span><span><strong>Verified Condition</strong><small>Every device is rigorously tested and certified.</small></span></article>
+                <article class="customer-preview-benefit"><span class="customer-preview-benefit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.5 9a9 9 0 0 1 15-3L23 10M1 14l4.5 4a9 9 0 0 0 15-3"></path></svg></span><span><strong>Transparent Pricing</strong><small>No hidden fees, what you see is what you pay.</small></span></article>
+                <article class="customer-preview-benefit"><span class="customer-preview-benefit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span><span><strong>Secure Payment</strong><small>Your transactions are fully protected and encrypted.</small></span></article>
+              </div></section>
+            </div>
+            <nav class="customer-preview-bottom-tabs"><span class="customer-preview-tab active"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m3 11 9-8 9 8v10h-6v-6H9v6H3z"></path></svg>Home</span><span class="customer-preview-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7h12l1 14H5zM9 8V5a3 3 0 0 1 6 0v3"></path></svg>Shop</span><span class="customer-preview-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.5 9a9 9 0 0 1 15-3L23 10M1 14l4.5 4a9 9 0 0 0 15-3"></path></svg>Trade-In</span><span class="customer-preview-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>Rentals</span><span class="customer-preview-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Account</span></nav>
+            <div class="customer-preview-android-nav"><b></b><i></i><span></span></div>
+          </div>
+        </template>        <div class="settings-layout">
+          <div class="control-column">
+            <section class="panel" aria-labelledby="uploadHeading">
+              <h2 id="uploadHeading">Upload New Background</h2>
+              <p class="panel-subtitle">Choose a JPG, PNG, or WebP image up to 15 MB.</p>
+              <label class="upload-zone" id="uploadZone" for="backgroundFile">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"></path><path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"></path></svg>
+                <strong id="uploadPrimaryText">Drag &amp; drop an image</strong><span id="uploadSecondaryText">or click to browse</span>
+                <input id="backgroundFile" type="file" accept="image/jpeg,image/png,image/webp">
+              </label>
+              <p class="file-status" id="fileStatus" aria-live="polite">No new image selected.</p>
+              <div class="action-stack">
+                <button class="action-button primary" id="applyBackground" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"></path><circle cx="12" cy="12" r="10"></circle></svg>Apply Background</button>
+                <button class="action-button" id="revertBackground" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path><path d="M3 3v5h5"></path></svg>Revert to Default</button>
+              </div>
+            </section>
+            <section class="panel" aria-labelledby="adjustmentHeading">
+              <h2 id="adjustmentHeading">Image Adjustments</h2>
+              <p class="panel-subtitle">Adjust the background live in both phone previews.</p>
+              <div class="adjustment-controls-wrap">
+                <fieldset class="adjustment-controls" id="adjustmentControlsSet" disabled>
+                  <div class="adjustment-grid">
+                    <div class="adjustment-control"><label for="brightnessControl">Brightness</label><output id="brightnessValue" for="brightnessControl">100%</output><input id="brightnessControl" type="range" min="50" max="150" value="100"></div>
+                    <div class="adjustment-control"><label for="contrastControl">Contrast</label><output id="contrastValue" for="contrastControl">100%</output><input id="contrastControl" type="range" min="50" max="150" value="100"></div>
+                    <div class="adjustment-control"><label for="whiteFilterControl">White Filter</label><output id="whiteFilterValue" for="whiteFilterControl">0%</output><input id="whiteFilterControl" type="range" min="0" max="80" value="0"></div>
+                    <div class="adjustment-control"><label for="saturationControl">Saturation</label><output id="saturationValue" for="saturationControl">100%</output><input id="saturationControl" type="range" min="0" max="200" value="100"></div>
+                    <div class="adjustment-control"><label for="blurControl">Blur</label><output id="blurValue" for="blurControl">0 px</output><input id="blurControl" type="range" min="0" max="8" value="0"></div>
+                  </div>
+                  <p class="adjustment-help">Reset returns all image controls to their default values.</p>
+                  <div class="action-stack"><button class="action-button" id="resetAdjustments" type="button">Reset Adjustments</button></div>
+                </fieldset>
+              </div>
+            </section>
+          </div>
+          <div class="preview-column">
+            <section class="panel" aria-labelledby="currentHeading">
+  <div class="preview-heading"><div class="preview-heading-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.2 1.2 2.5-.2 1.2 2.2 2.2 1.2-.2 2.5L21 12l-1.2 2.2.2 2.5-2.2 1.2-1.2 2.2-2.5-.2L12 21l-2.2-1.2-2.5.2-1.2-2.2-2.2-1.2.2-2.5L3 12l1.2-2.2L4 7.3l2.2-1.2 1.2-2.2 2.5.2z"></path><path d="m8.5 12 2.2 2.2 4.8-5"></path></svg><h2 id="currentHeading">Current Live Background</h2></div><span class="preview-state" id="currentState">Default</span></div>
+  <div class="phones"><div class="phone-wrap"><span class="phone-label">Customer home page</span><div class="phone"><div class="phone-screen" id="currentScreen"><div class="customer-preview-scroll" id="currentPreview" role="region" aria-label="Scrollable customer home page preview" tabindex="0" title="Scroll to view the customer home page"></div></div></div></div></div>
+</section>
+            <section class="panel staged-preview-panel" aria-labelledby="stagedHeading">
+  <div class="preview-heading"><div class="preview-heading-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="12" cy="12" r="3"></circle><path d="m5 20 5-5 3 3 2-2 4 4"></path></svg><h2 id="stagedHeading">Staged Preview</h2></div><div class="staged-preview-actions"><button class="clear-staged-button" id="clearStagedBackground" type="button" disabled><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"></path></svg>Clear staged</button><span class="preview-state pending" id="stagedState">No image</span></div></div>
+  <div class="phones"><div class="phone-wrap"><span class="phone-label">Customer home page</span><div class="phone"><div class="phone-screen" id="stagedScreen"><div class="customer-preview-scroll" id="stagedPreview" role="region" aria-label="Scrollable staged customer home page preview" tabindex="0" title="Scroll to view the customer home page"></div></div></div></div></div>
+</section>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="background-confirm" id="revertConfirm" hidden>
+    <section class="background-confirm-card" role="dialog" aria-modal="true" aria-labelledby="revertConfirmTitle" aria-describedby="revertConfirmMessage">
+      <header class="background-confirm-head">
+        <span class="background-confirm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01"></path><path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg></span>
+        <div><h2 id="revertConfirmTitle">Revert customer background?</h2><p>This changes the background customers see.</p></div>
+      </header>
+      <div class="background-confirm-body" id="revertConfirmMessage">The current live background will be removed and the customer home page will return to its default background.</div>
+      <footer class="background-confirm-actions">
+        <button type="button" id="cancelRevert">Cancel</button>
+        <button type="button" class="confirm-revert" id="confirmRevert">Revert Background</button>
+      </footer>
+    </section>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    const currentAdmin = ReByteAuth.getUser();
+    if (!currentAdmin || String(currentAdmin.role || '').toLowerCase() !== 'admin') window.location.href = '../accountManagementModule/login.html';
+    ReByteAuth.initFirebase();
+    const fileInput = document.getElementById('backgroundFile');
+    const uploadZone = document.getElementById('uploadZone');
+    const fileStatus = document.getElementById('fileStatus');
+    const applyButton = document.getElementById('applyBackground');
+    const uploadPrimaryText = document.getElementById('uploadPrimaryText');
+    const uploadSecondaryText = document.getElementById('uploadSecondaryText');
+    const adjustmentControlsSet = document.getElementById('adjustmentControlsSet');
+    const currentPreview = document.getElementById('currentPreview');
+    const stagedPreview = document.getElementById('stagedPreview');
+    const clearStagedButton = document.getElementById('clearStagedBackground');
+    document.getElementById('currentState').textContent = 'Loading…';
+    const customerHomeTemplate = document.getElementById('customerHomeTemplate');
+    currentPreview.appendChild(customerHomeTemplate.content.cloneNode(true));
+    stagedPreview.appendChild(customerHomeTemplate.content.cloneNode(true));
+    function resizePhonePreviews() {
+      [currentPreview, stagedPreview].forEach(preview => {
+        const screen = preview.parentElement;
+        const scale = Math.min(screen.clientWidth / 390, screen.clientHeight / 890);
+        preview.style.setProperty('--preview-scale', String(scale));
+      });
+    }
+    requestAnimationFrame(resizePhonePreviews);
+    window.addEventListener('resize', resizePhonePreviews);
+    let stagedUrl = '';
+    let currentUrl = '';
+    let stagedFile = null;
+    let uploadValidationToken = 0;
+    let needsUpload = false;
+    let backgroundIsDefault = true;
+    let backgroundConfigLoaded = false;
+    let isSavingBackground = false;
+    const adjustmentControls = {
+      brightness: document.getElementById('brightnessControl'),
+      contrast: document.getElementById('contrastControl'),
+      whiteFilter: document.getElementById('whiteFilterControl'),
+      saturation: document.getElementById('saturationControl'),
+      blur: document.getElementById('blurControl')
+    };
+    const defaultAdjustments = { brightness: 100, contrast: 100, whiteFilter: 0, saturation: 100, blur: 0 };
+    let currentBackgroundAdjustments = { ...defaultAdjustments };
+    function setAdjustmentValues(values) {
+      Object.entries(adjustmentControls).forEach(([key, control]) => {
+        control.value = values[key] ?? defaultAdjustments[key];
+      });
+    }
+    function getAdjustmentFilter() {
+      return 'brightness(' + adjustmentControls.brightness.value + '%) contrast(' + adjustmentControls.contrast.value + '%) saturate(' + adjustmentControls.saturation.value + '%) blur(' + adjustmentControls.blur.value + 'px)';
+    }
+    function updateAdjustments(markChanged = true) {
+      document.getElementById('brightnessValue').textContent = adjustmentControls.brightness.value + '%';
+      document.getElementById('contrastValue').textContent = adjustmentControls.contrast.value + '%';
+      document.getElementById('whiteFilterValue').textContent = adjustmentControls.whiteFilter.value + '%';
+      document.getElementById('saturationValue').textContent = adjustmentControls.saturation.value + '%';
+      document.getElementById('blurValue').textContent = adjustmentControls.blur.value + ' px';
+      if (stagedUrl) {
+        applyPreviewBackground(stagedPreview, stagedUrl);
+      } else {
+        applyPreviewBackground(currentPreview, currentUrl);
+        applyPreviewBackground(stagedPreview, '');
+      }
+      if (markChanged && backgroundConfigLoaded && (currentUrl || stagedUrl)) {
+        applyButton.disabled = isSavingBackground;
+        applyButton.lastChild.textContent = needsUpload ? 'Apply Background' : 'Save Image Adjustments';
+      }
+    }
+    function clearUploadState() {
+      uploadZone.classList.remove('is-error', 'has-image', 'is-applied');
+      fileStatus.classList.remove('is-error', 'is-success');
+      uploadPrimaryText.textContent = 'Drag & drop an image';
+      uploadSecondaryText.textContent = 'or click to browse';
+    }
+    function showUploadError(message) {
+      uploadValidationToken += 1;
+      if (stagedUrl) URL.revokeObjectURL(stagedUrl);
+      stagedUrl = '';
+      stagedFile = null;
+      needsUpload = false;
+      clearStagedButton.disabled = true;
+      if (currentUrl) setAdjustmentValues(currentBackgroundAdjustments);
+      else setAdjustmentValues(defaultAdjustments);
+      adjustmentControlsSet.disabled = !currentUrl;
+      updateAdjustments(false);
+      applyPreviewBackground(stagedPreview, '');
+      document.getElementById('stagedState').textContent = 'No image';
+      uploadZone.classList.remove('has-image', 'is-applied');
+      uploadZone.classList.add('is-error');
+      fileStatus.classList.remove('is-success');
+      fileStatus.classList.add('is-error');
+      fileStatus.textContent = message;
+      uploadPrimaryText.textContent = 'Image not accepted';
+      uploadSecondaryText.textContent = 'Choose a JPG, PNG, or WebP image up to 15 MB.';
+      fileInput.value = '';
+      applyButton.disabled = !currentUrl;
+      applyButton.lastChild.textContent = currentUrl ? 'Save Image Adjustments' : 'Apply Background';
+    }
+    function applyPreviewBackground(preview, imageUrl) {
+      const content = preview.querySelector('.customer-preview-bg');
+      if (!content) return;
+      const whiteTint = Number(adjustmentControls.whiteFilter.value) / 100;
+      content.style.backgroundImage = imageUrl ? `linear-gradient(rgba(255,255,255,${whiteTint}), rgba(255,255,255,${whiteTint})), linear-gradient(180deg, #ffffff22, #082f7226), url("${imageUrl}")` : '';
+      content.style.backgroundSize = imageUrl ? 'cover' : '';
+      content.style.backgroundPosition = imageUrl ? 'center' : '';
+      content.style.filter = getAdjustmentFilter();
+    }
+    function selectImage(file) {
+      if (!file) return;
+      const validationToken = ++uploadValidationToken;
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      const extensionAllowed = /\.(jpe?g|png|webp)$/i.test(file.name || '');
+      const validType = file.type ? allowed.includes(file.type) : extensionAllowed;
+      if (file.size > 15 * 1024 * 1024) {
+        showUploadError('Image exceeds the 15 MB limit. Choose a smaller file.');
+        return;
+      }
+      if (!validType) {
+        showUploadError('Unsupported image format. Choose a JPG, PNG, or WebP image.');
+        return;
+      }
+      const candidateUrl = URL.createObjectURL(file);
+      const imageCheck = new Image();
+      imageCheck.onload = () => {
+        if (validationToken !== uploadValidationToken) {
+          URL.revokeObjectURL(candidateUrl);
+          return;
+        }
+        if (!imageCheck.naturalWidth || !imageCheck.naturalHeight) {
+          URL.revokeObjectURL(candidateUrl);
+          showUploadError('This file could not be read as a valid image. Choose a JPG, PNG, or WebP image.');
+          return;
+        }
+        if (stagedUrl) URL.revokeObjectURL(stagedUrl);
+        stagedFile = file;
+        stagedUrl = candidateUrl;
+        needsUpload = true;
+        clearStagedButton.disabled = false;
+        clearUploadState();
+        uploadZone.classList.add('has-image');
+        uploadPrimaryText.textContent = 'Image selected';
+        uploadSecondaryText.textContent = file.name + ' · ready to preview';
+        applyPreviewBackground(stagedPreview, stagedUrl);
+        adjustmentControlsSet.disabled = false;
+        document.getElementById('stagedState').textContent = 'Unsaved';
+        fileStatus.classList.add('is-success');
+        fileStatus.textContent = file.name + ' ready to preview.';
+        applyButton.lastChild.textContent = 'Apply Background';
+        applyButton.disabled = false;
+      };
+      imageCheck.onerror = () => {
+        URL.revokeObjectURL(candidateUrl);
+        if (validationToken === uploadValidationToken) showUploadError('This file could not be read as a valid image. Choose a JPG, PNG, or WebP image.');
+      };
+      imageCheck.src = candidateUrl;
+    }
+    function currentAdjustments() {
+      return {
+        brightness: Number(adjustmentControls.brightness.value),
+        contrast: Number(adjustmentControls.contrast.value),
+        whiteFilter: Number(adjustmentControls.whiteFilter.value),
+        saturation: Number(adjustmentControls.saturation.value),
+        blur: Number(adjustmentControls.blur.value)
+      };
+    }
+    function showToast(message, type) {
+      if (typeof ReByteAuth?.showToast === 'function') ReByteAuth.showToast(message, type || 'success');
+      else console[type === 'error' ? 'error' : 'log'](message);
+    }
+    async function loadSavedBackground() {
+      try {
+        const response = await ReByteAuth.authFetch('http://localhost:3000/api/system-config/customer-home-background', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok || payload.success !== true) {
+          throw new Error(payload.error || 'Could not load customer background settings.');
+        }
+        const config = payload.config || null;
+        backgroundIsDefault = !config || config.isDefault === true || !config.imageUrl;
+        if (!backgroundIsDefault) {
+          currentUrl = config.imageUrl;
+          const saved = config.adjustments || {};
+          currentBackgroundAdjustments = { ...defaultAdjustments, ...saved };
+          setAdjustmentValues(currentBackgroundAdjustments);
+          adjustmentControlsSet.disabled = false;
+          uploadZone.classList.remove('is-error', 'has-image');
+          uploadZone.classList.add('is-applied');
+          uploadPrimaryText.textContent = 'Background currently applied';
+          uploadSecondaryText.textContent = 'Upload another image to replace it';
+          applyPreviewBackground(currentPreview, currentUrl);
+          document.getElementById('currentState').textContent = 'Live';
+          fileStatus.classList.add('is-success');
+          fileStatus.textContent = 'Current customer background loaded.';
+        } else {
+          currentBackgroundAdjustments = { ...defaultAdjustments };
+          setAdjustmentValues(currentBackgroundAdjustments);
+          clearUploadState();
+          document.getElementById('currentState').textContent = 'Default';
+          adjustmentControlsSet.disabled = true;
+          fileStatus.textContent = 'No custom customer background is applied.';
+        }
+        backgroundConfigLoaded = true;
+        updateAdjustments(false);
+      } catch (error) {
+        backgroundConfigLoaded = false;
+        document.getElementById('currentState').textContent = 'Could not load';
+        adjustmentControlsSet.disabled = true;
+        fileStatus.classList.add('is-error');
+        fileStatus.textContent = 'Could not load the saved customer background: ' + (error.message || 'Firebase access failed.');
+        console.error('Could not load saved customer background:', error);
+      }
+    }
+    async function saveBackgroundSettings(settings) {
+      const response = await ReByteAuth.authFetch('http://localhost:3000/api/system-config/customer-home-background', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.success !== true) {
+        throw new Error(payload.error || 'Could not save customer background settings.');
+      }
+    }
+    async function storeBackground(imageUrl) {
+      await saveBackgroundSettings({ isDefault: false, imageUrl, adjustments: currentAdjustments() });
+    }
+    Object.values(adjustmentControls).forEach(control => control.addEventListener('input', updateAdjustments));
+    document.getElementById('resetAdjustments').addEventListener('click', () => {
+      setAdjustmentValues(defaultAdjustments);
+      updateAdjustments();
+    });
+    clearStagedButton.addEventListener('click', () => {
+      if (!stagedUrl || isSavingBackground) return;
+      URL.revokeObjectURL(stagedUrl);
+      stagedUrl = '';
+      stagedFile = null;
+      needsUpload = false;
+      fileInput.value = '';
+      clearStagedButton.disabled = true;
+      applyPreviewBackground(stagedPreview, '');
+      document.getElementById('stagedState').textContent = 'No image';
+      setAdjustmentValues(currentUrl ? currentBackgroundAdjustments : defaultAdjustments);
+      adjustmentControlsSet.disabled = !currentUrl;
+      clearUploadState();
+      if (currentUrl) {
+        uploadZone.classList.add('is-applied');
+        uploadPrimaryText.textContent = 'Background currently applied';
+        uploadSecondaryText.textContent = 'Upload another image to replace it';
+        fileStatus.textContent = 'Staged image cleared. Current background is unchanged.';
+      } else {
+        fileStatus.textContent = 'Staged image cleared. No background is applied.';
+      }
+      updateAdjustments(false);
+      applyButton.disabled = true;
+      applyButton.lastChild.textContent = currentUrl ? 'Save Image Adjustments' : 'Apply Background';
+    });
+    fileInput.addEventListener('change', () => selectImage(fileInput.files[0]));
+    uploadZone.addEventListener('dragover', event => { event.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', event => { event.preventDefault(); uploadZone.classList.remove('dragover'); selectImage(event.dataTransfer.files[0]); });
+    applyButton.addEventListener('click', async () => {
+      if (isSavingBackground || (!stagedUrl && !currentUrl)) return;
+      isSavingBackground = true;
+      let saveSucceeded = false;
+      applyButton.disabled = true;
+      clearStagedButton.disabled = true;
+      applyButton.lastChild.textContent = needsUpload ? 'Uploading…' : 'Saving…';
+      fileStatus.classList.remove('is-error');
+      fileStatus.textContent = needsUpload ? 'Uploading the background to Cloudinary…' : 'Saving background adjustments…';
+      try {
+        let imageUrl = currentUrl;
+        if (needsUpload) {
+          const formData = new FormData();
+          formData.append('image', stagedFile, stagedFile.name || 'customer-home-background');
+          const response = await ReByteAuth.authFetch('http://localhost:3000/api/system-config/customer-home-background/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const payload = await response.json();
+          if (!response.ok || payload.success !== true || !payload.imageUrl) {
+            throw new Error(payload.error || 'Cloudinary could not save the background image.');
+          }
+          imageUrl = payload.imageUrl;
+        }
+        await storeBackground(imageUrl);
+        saveSucceeded = true;
+        if (currentUrl.startsWith('blob:')) URL.revokeObjectURL(currentUrl);
+        currentUrl = imageUrl;
+        backgroundIsDefault = false;
+        currentBackgroundAdjustments = currentAdjustments();
+        applyPreviewBackground(currentPreview, currentUrl);
+        if (stagedUrl) URL.revokeObjectURL(stagedUrl);
+        stagedUrl = '';
+        stagedFile = null;
+        needsUpload = false;
+        clearStagedButton.disabled = true;
+        fileInput.value = '';
+        applyPreviewBackground(stagedPreview, '');
+        uploadZone.classList.remove('has-image', 'is-error');
+        uploadZone.classList.add('is-applied');
+        uploadPrimaryText.textContent = 'Background applied';
+        uploadSecondaryText.textContent = 'Saved and live on the customer home page';
+        fileStatus.classList.remove('is-error');
+        fileStatus.classList.add('is-success');
+        document.getElementById('currentState').textContent = 'Live';
+        document.getElementById('stagedState').textContent = 'No image';
+        fileStatus.textContent = 'Customer home background updated successfully.';
+        applyButton.disabled = true;
+        applyButton.lastChild.textContent = 'Apply Background';
+        showToast('Customer home background updated successfully.', 'success');
+      } catch (error) {
+        const errorMessage = error?.message || 'Unknown upload or save error.';
+        fileStatus.classList.add('is-error');
+        fileStatus.textContent = 'Could not save the customer background: ' + errorMessage;
+        showToast('Could not update customer home background: ' + errorMessage, 'error');
+        console.error('Could not save customer background:', error);
+      } finally {
+        isSavingBackground = false;
+        clearStagedButton.disabled = !stagedUrl;
+        applyButton.disabled = saveSucceeded || !(needsUpload || currentUrl);
+        applyButton.lastChild.textContent = needsUpload ? 'Apply Background' : 'Save Image Adjustments';
+      }
+    });
+    const revertConfirm = document.getElementById('revertConfirm');
+    const confirmRevertButton = document.getElementById('confirmRevert');
+    function openRevertConfirm() {
+      revertConfirm.hidden = false;
+      requestAnimationFrame(() => revertConfirm.classList.add('show'));
+      confirmRevertButton.focus();
+    }
+    function closeRevertConfirm() {
+      revertConfirm.classList.remove('show');
+      setTimeout(() => { revertConfirm.hidden = true; }, 200);
+    }
+    function resetLocalBackgroundPreview() {
+      if (stagedUrl) URL.revokeObjectURL(stagedUrl);
+      if (currentUrl.startsWith('blob:')) URL.revokeObjectURL(currentUrl);
+      stagedUrl = '';
+      currentUrl = '';
+      stagedFile = null;
+      needsUpload = false;
+      clearStagedButton.disabled = true;
+      fileInput.value = '';
+      clearUploadState();
+      adjustmentControlsSet.disabled = true;
+      applyPreviewBackground(currentPreview, "");
+      applyPreviewBackground(stagedPreview, "");
+      document.getElementById('currentState').textContent = 'Default';
+      document.getElementById('stagedState').textContent = 'No image';
+      fileStatus.textContent = 'Reverted to the default preview.';
+      currentBackgroundAdjustments = { ...defaultAdjustments };
+      setAdjustmentValues(defaultAdjustments);
+      updateAdjustments(false);
+      applyButton.disabled = true;
+      applyButton.lastChild.textContent = 'Apply Background';
+    }
+    document.getElementById('revertBackground').addEventListener('click', () => {
+      if (!backgroundConfigLoaded) {
+        showToast('The current customer background is not loaded yet. Please try again shortly.', 'error');
+        return;
+      }
+      if (backgroundIsDefault) {
+        resetLocalBackgroundPreview();
+        document.getElementById('currentState').textContent = 'Default';
+        document.getElementById('stagedState').textContent = 'No image';
+        fileStatus.textContent = 'Customer background is set to default.';
+        showToast('Background preview reset to default.', 'success');
+        return;
+      }
+      openRevertConfirm();
+    });
+    document.getElementById('cancelRevert').addEventListener('click', closeRevertConfirm);
+    revertConfirm.addEventListener('click', event => {
+      if (event.target === revertConfirm) closeRevertConfirm();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !revertConfirm.hidden) closeRevertConfirm();
+    });
+    confirmRevertButton.addEventListener('click', async () => {
+      if (confirmRevertButton.disabled) return;
+      confirmRevertButton.disabled = true;
+      confirmRevertButton.textContent = 'Reverting…';
+      try {
+        await saveBackgroundSettings({
+          isDefault: true,
+          adjustments: { brightness: 100, contrast: 100, whiteFilter: 0, saturation: 100, blur: 0 }
+        });
+        backgroundIsDefault = true;
+        resetLocalBackgroundPreview();
+        document.getElementById('currentState').textContent = 'Default';
+        document.getElementById('stagedState').textContent = 'No image';
+        fileStatus.textContent = 'Customer home background reverted to default.';
+        closeRevertConfirm();
+        showToast('Customer home background reverted to default successfully.', 'success');
+      } catch (error) {
+        console.error('Could not revert customer background:', error);
+        showToast('Could not revert customer home background: ' + (error.message || 'Firebase access failed.'), 'error');
+      } finally {
+        confirmRevertButton.disabled = false;
+        confirmRevertButton.textContent = 'Revert Background';
+      }
+    });
+    loadSavedBackground();
+  </script>
+  <script src="../adminModule/adminHeader.js"></script>
+</body>
+</html>

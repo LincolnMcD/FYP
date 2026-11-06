@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Booking Policies - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root { --navy:#082f72; --blue:#0646a5; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#687184; }
+    * { box-sizing:border-box; }
+    body { display:flex; min-height:100vh; margin:0; background:var(--page); color:var(--text); font-family:Inter,Arial,sans-serif; }
+    .sidebar { width:260px; flex:0 0 260px; display:flex; flex-direction:column; background:#fff; border-right:1px solid var(--border); }
+    .brand { height:105px; flex:0 0 105px; display:flex; align-items:center; gap:10px; padding:0 28px; border-bottom:1px solid #edf0f4; }
+    .brand img { width:38px; height:38px; object-fit:contain; }
+    .brand span { color:#10264b; font-size:25px; font-weight:700; letter-spacing:-1px; }
+    .nav-list { flex:1; display:grid; align-content:start; gap:8px; margin:0; padding:22px 16px; list-style:none; overflow:hidden; }
+    .nav-item { min-height:48px; display:flex; align-items:center; gap:12px; padding:0 14px; border-radius:9px; color:#586579; text-decoration:none; font-size:14px; font-weight:500; }
+    .nav-item:hover { background:#f1f4f9; }
+    .nav-item.active { background:var(--navy); color:#fff; font-weight:600; }
+    .nav-item svg { width:20px; height:20px; flex:0 0 auto; }
+    .main { min-width:0; flex:1; display:flex; flex-direction:column; }
+    .main-content { flex:1; overflow:auto; }
+    .content { max-width:1540px; margin:0 auto; padding:30px 40px 56px; }
+    .back { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; margin:0 0 24px -8px; border-radius:8px; color:#596579; text-decoration:none; }
+    .back:hover { background:#e9edf4; }
+    .back svg { width:20px; height:20px; }
+    .page-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:28px; margin-bottom:30px; }
+    .page-heading h1 { margin:0 0 20px; color:#0f172a; font-size:26px; font-weight:800; line-height:1.2; letter-spacing:-0.5px; }
+    .page-heading p { margin:0; color:#596273; font-size:14.5px; line-height:1.5; }
+    .policy-panel { margin:0 0 30px 60px; padding:30px; border:1px solid #edf0f4; border-radius:20px; background:#fff; box-shadow:0 7px 24px #1a2b4510; }
+    .panel-heading { display:flex; align-items:center; gap:15px; padding-bottom:22px; border-bottom:1px solid #e5e9f0; }
+    .panel-icon { width:50px; height:50px; display:grid; place-items:center; flex:0 0 50px; border-radius:12px; background:#e8eef8; color:#0646a5; }
+    .panel-icon svg { width:27px; height:27px; }
+    .panel-heading h2 { margin:0 0 5px; color:#14284c; font-size:18px; }
+    .panel-heading p { margin:0; color:#7a8292; font-size:14px; }
+    .policy-row { display:grid; grid-template-columns:minmax(260px,1fr) minmax(240px,1fr); align-items:center; gap:34px; min-height:118px; padding:22px 0; border-bottom:1px solid #eef0f4; }
+    .policy-row:last-child { border-bottom:0; padding-bottom:0; }
+    .policy-label { color:#14284c; font-size:16px; font-weight:700; }
+    .policy-help { max-width:440px; margin-top:8px; color:#626b7d; font-size:15px; line-height:1.5; }
+    .field-with-unit { display:flex; align-items:center; gap:12px; }
+    .field-with-unit input,.policy-select { width:100%; height:54px; padding:0 17px; border:1px solid #d9deea; border-radius:12px; outline:0; background:#fafaff; box-shadow:0 1px 3px #0f172a0a; color:#263654; font:15px Inter,Arial,sans-serif; }
+    .policy-value { min-height:54px; display:flex; align-items:center; padding:0 17px; border:1px solid #d9deea; border-radius:12px; background:#fafaff; box-shadow:0 1px 3px #0f172a0a; color:#263654; font-size:15px; font-weight:500; }
+    .policy-actions { display:flex; justify-content:flex-end; gap:12px; padding-top:18px; }
+    .policy-actions button { min-height:44px; padding:0 20px; border:1px solid #ccd5e4; border-radius:10px; background:#fff; color:#263654; font:600 14px Inter,Arial,sans-serif; cursor:pointer; }
+    .policy-actions .primary { border-color:var(--navy); background:var(--navy); color:#fff; }
+    .policy-actions button:disabled { opacity:.6; cursor:wait; }
+    .field-with-unit input { max-width:100%; }
+    .policy-source { margin:16px 0 0; color:#64748b; font-size:12px; line-height:1.5; }
+    .field-with-unit input:focus,.policy-select:focus { border-color:#6b8ac6; box-shadow:0 0 0 3px #0646a51a; }
+    .field-with-unit span { color:#7b8290; font-size:15px; white-space:nowrap; }
+    .policy-select { appearance:auto; }
+    .hours-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .hours-label { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:999px; background:#eaf7f1; color:#20966b; font-size:12px; font-weight:700; white-space:nowrap; }
+    .hours-label::before { width:7px; height:7px; border-radius:50%; background:#31b783; content:''; }
+    .week-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:16px; padding-top:25px; }
+    .day-card { min-height:172px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; padding:16px 8px; border:1px solid #e3e6f2; border-radius:12px; background:#fafaff; text-align:center; }
+    .day-name { color:#14284c; font-size:14px; font-weight:700; letter-spacing:.5px; }
+    .day-time { color:#0646a5; font-size:16px; font-weight:700; }
+    .day-to { color:#8a91a0; font-size:12px; }
+    .day-status { margin-top:3px; padding:5px 10px; border-radius:999px; background:#e6f5ef; color:#24996e; font-size:11px; font-weight:700; }
+    @media(max-width:1100px) { .content{padding:25px 24px 40px}.policy-panel{margin-left:0}.week-grid{gap:9px}.day-card{padding:12px 4px} }
+    @media(max-width:760px) { body{display:block}.sidebar{width:100%;height:auto}.brand{height:72px;flex-basis:72px}.nav-list{display:flex;overflow:hidden;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 16px 36px}.page-heading{align-items:flex-start;flex-direction:column;margin-bottom:22px}.page-heading h1{margin-bottom:10px}.page-heading p{font-size:14.5px}.heading-actions{align-self:flex-end}.button{min-height:44px;padding:0 16px;border-radius:13px;font-size:14px}.policy-panel{padding:20px;border-radius:16px;margin-bottom:18px}.policy-row{grid-template-columns:1fr;gap:12px;padding:18px 0;min-height:auto}.week-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.day-card{min-height:142px}.hours-heading{align-items:flex-start} }
+  </style>
+<style id="sysconfig-sticky-sidebar">
+  body { height:100vh; min-height:0; overflow:hidden; }
+  body > .sidebar { position:sticky; top:0; align-self:flex-start; height:100vh; max-height:100vh; overflow:hidden; }
+  body > .main { height:100vh; min-height:0; }
+  body > .main > .main-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+  @media(max-width:760px) {
+    body { height:auto; min-height:100vh; overflow:auto; }
+    body > .sidebar { position:relative; height:auto; max-height:none; }
+    body > .main { height:auto; min-height:0; }
+    body > .main > .main-content { overflow:visible; }
+  }
+</style>
+<style id="listing-tab-title-style">h1 { font-family:Inter,Arial,sans-serif !important; font-size:26px !important; font-weight:800 !important; color:#0f172a !important; letter-spacing:-0.5px !important; line-height:1.2 !important; }</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte"><span>ReByte</span></div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
+      <a href="../listingModule/listing.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>Listing</a>
+      <a href="index.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
+      <a href="../transactionManagementModule/index.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
+      <a href="../adminModule/customerManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
+      <a href="../adminModule/staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
+    <div class="main-content">
+      <section class="content">
+        <a class="back" href="index.html" aria-label="Back to system configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
+        <div class="page-heading"><div><h1>Inspection Booking Policies</h1><p>Current rules used for hardware assessment scheduling.</p></div></div>
+        <section class="policy-panel" aria-labelledby="timingHeading">
+          <header class="panel-heading"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span><div><h2 id="timingHeading">Timing &amp; Duration</h2><p>Current values read from the task assignment scheduler</p></div></header>
+          <div class="policy-row">
+            <div><div class="policy-label">Minimum Advance Notice</div><div class="policy-help">Minimum lead time before a customer can book an appointment.</div></div>
+            <div class="field-with-unit"><input id="minimumNotice" type="number" min="24" max="168" step="1" value="24" aria-label="Minimum advance notice in hours" required><span>Hours minimum</span></div>
+          </div>
+          <div class="policy-row">
+            <div><div class="policy-label">Collection Buffer Time</div><div class="policy-help">Task time block used by the scheduler for a collection appointment.</div></div>
+            <div class="field-with-unit"><input id="collectionBufferTime" type="number" min="5" max="360" step="1" value="30" aria-label="Collection task duration in minutes" required><span>Minutes</span></div>
+          </div>
+          <div class="policy-row">
+            <div><div class="policy-label">Inspection Buffer Time</div><div class="policy-help">Task time block used by the scheduler for an inspection appointment.</div></div>
+            <div class="field-with-unit"><input id="inspectionBufferTime" type="number" min="5" max="360" step="1" value="90" aria-label="Inspection task duration in minutes" required><span>Minutes</span></div>
+          </div>
+          <div class="policy-actions"><button type="button" id="cancelPolicyChanges">Cancel</button><button type="button" class="primary" id="savePolicyChanges">Save Changes</button></div>
+          <p class="policy-source" id="policySourceStatus" aria-live="polite">Reading the current task assignment rules…</p>
+        </section>
+        <section class="policy-panel" aria-labelledby="hoursHeading">
+          <header class="panel-heading hours-heading"><div style="display:flex;align-items:center;gap:15px"><span class="panel-icon" style="background:#e0e7ff;color:#082f72"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 2-2"></path></svg></span><div><h2 id="hoursHeading">Standard Operating Hours</h2><p>Global availability for the inspection center</p></div></div><span class="hours-label">Fixed schedule</span></header>
+          <div class="week-grid" aria-label="Weekly operating hours">
+            <article class="day-card"><span class="day-name">MON</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">TUE</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">WED</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">THU</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">FRI</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">SAT</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+            <article class="day-card"><span class="day-name">SUN</span><span class="day-time">09:00</span><span class="day-to">to</span><span class="day-time">17:00</span><span class="day-status">Active</span></article>
+          </div>
+        </section>
+      </section>
+    </div>
+  </main>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    const currentAdmin = ReByteAuth.getUser();
+    if (!currentAdmin || String(currentAdmin.role || '').toLowerCase() !== 'admin') window.location.href = '../accountManagementModule/login.html';
+    const policyInputs = {
+      minimumAdvanceNoticeHours: document.getElementById('minimumNotice'),
+      collectionTaskDurationMinutes: document.getElementById('collectionBufferTime'),
+      inspectionTaskDurationMinutes: document.getElementById('inspectionBufferTime')
+    };
+    const saveButton = document.getElementById('savePolicyChanges');
+    const cancelButton = document.getElementById('cancelPolicyChanges');
+    const status = document.getElementById('policySourceStatus');
+    let savedPolicy = null;
+    function applyPolicy(criteria) {
+      policyInputs.minimumAdvanceNoticeHours.value = criteria.minimumAdvanceNoticeHours;
+      policyInputs.collectionTaskDurationMinutes.value = criteria.collectionTaskDurationMinutes;
+      policyInputs.inspectionTaskDurationMinutes.value = criteria.inspectionTaskDurationMinutes;
+      savedPolicy = {
+        minimumAdvanceNoticeHours: Number(criteria.minimumAdvanceNoticeHours),
+        collectionTaskDurationMinutes: Number(criteria.collectionTaskDurationMinutes),
+        inspectionTaskDurationMinutes: Number(criteria.inspectionTaskDurationMinutes)
+      };
+    }
+    async function loadSchedulerDurations() {
+      status.textContent = 'Loading the task assignment rules…';
+      try {
+        const response = await ReByteAuth.authFetch('http://localhost:3000/api/task-assignment/admin/criteria', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok || payload.success !== true) throw new Error(payload.error || 'Could not read task assignment rules.');
+        const criteria = payload.criteria || {};
+        if (![criteria.minimumAdvanceNoticeHours, criteria.collectionTaskDurationMinutes, criteria.inspectionTaskDurationMinutes].every(value => Number.isFinite(Number(value)))) {
+          throw new Error('The task assignment API did not return booking notice and task durations.');
+        }
+        applyPolicy(criteria);
+        status.textContent = 'Loaded from the task assignment scheduler. Changes are applied to future task assignments and available slots.';
+      } catch (error) {
+        status.textContent = error.message || 'Could not load the current task assignment settings.';
+      }
+    }
+    cancelButton.addEventListener('click', () => {
+      if (savedPolicy) applyPolicy(savedPolicy);
+      status.textContent = 'Unsaved changes were discarded.';
+    });
+    saveButton.addEventListener('click', async () => {
+      const values = Object.fromEntries(Object.entries(policyInputs).map(([key, input]) => [key, Number(input.value)]));
+      const valid = Object.entries(policyInputs).every(([key, input]) => input.reportValidity() && Number.isInteger(values[key]));
+      if (!valid) return;
+      saveButton.disabled = true;
+      cancelButton.disabled = true;
+      status.textContent = 'Saving booking policy settings…';
+      try {
+        const response = await ReByteAuth.authFetch('http://localhost:3000/api/task-assignment/admin/criteria', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.success !== true) throw new Error(payload.error || 'Could not save booking policy settings.');
+        applyPolicy(payload.criteria);
+        status.textContent = 'Saved. The task assignment scheduler will use these values for future slots and assignments.';
+      } catch (error) {
+        status.textContent = error.message || 'Could not save booking policy settings.';
+      } finally {
+        saveButton.disabled = false;
+        cancelButton.disabled = false;
+      }
+    });
+    loadSchedulerDurations();
+  </script>
+  <script src="../adminModule/adminHeader.js"></script>
+</body>
+</html>

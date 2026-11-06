@@ -1,12 +1,33 @@
 const express = require("express");
+const { getAuth } = require("firebase-admin/auth");
 const axios = require("axios");
 const router = express.Router();
+async function requireBookingPolicyAdmin(req, res, next) {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ success: false, error: "Please sign in as an administrator." });
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken);
+        let userDoc = await db.collection("users").doc(decoded.uid).get();
+        let user = userDoc.exists ? userDoc.data() : null;
+        if (!user && decoded.email) {
+            const matches = await db.collection("users").where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+            if (!matches.empty) user = matches.docs[0].data();
+        }
+        if (String(user?.systemRole || user?.role || "").trim().toLowerCase() !== "admin") {
+            return res.status(403).json({ success: false, error: "Administrator access is required." });
+        }
+        req.adminUid = decoded.uid;
+        return next();
+    } catch (error) {
+        return res.status(401).json({ success: false, error: "Your admin session has expired. Please sign in again." });
+    }
+}
 const db = require("../config/firebase");
 const { FieldValue } = require("firebase-admin/firestore");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-const { assignDeliveryTask, assignTradeInTask, getStaffIDsOnApprovedLeave, parseLeaveDate, handleFailedTradeInReassignment } = require("./taskAssignmentService");
+const { assignDeliveryTask, assignTradeInTask, getStaffIDsOnApprovedLeave, parseLeaveDate, handleFailedTradeInReassignment, TRADE_IN_TASK_DURATION_CONFIG, getTradeInTaskDurationConfig, saveTradeInTaskDurationConfig } = require("./taskAssignmentService");
 const { getOsrmRoute, COMPANY_LOCATION } = require("./osrmService");
 const { getDeliveryRoomsStatus } = require("./deliverySocket");
 const {
@@ -4485,7 +4506,8 @@ router.post("/admin/self-pickup-completed", async (req, res) => {
  * GET /api/task-assignment/admin/criteria
  * Returns the task assignment rules and criteria
  */
-router.get("/admin/criteria", (req, res) => {
+router.get("/admin/criteria", async (req, res) => {
+    const durationConfig = await getTradeInTaskDurationConfig();
     return res.json({
         success: true,
         criteria: {
@@ -4494,11 +4516,46 @@ router.get("/admin/criteria", (req, res) => {
             slotInterval: "1 hour per task slot",
             defaultBuffer: "15 minutes between consecutive tasks",
             shortDistanceBuffer: "10 minutes if travel distance < 500m (0.5 km)",
+            minimumAdvanceNoticeHours: durationConfig.minimumAdvanceNoticeHours,
+            collectionTaskDurationMinutes: durationConfig.collectionMinutes,
+            inspectionTaskDurationMinutes: durationConfig.inspectionMinutes,
             maxDeliveriesPerDay: 8,
             routingEngine: "OpenStreetMap OSRM with live traffic routing",
             geocoding: "Nominatim exact coordinates resolution"
         }
     });
+});
+
+router.put("/admin/criteria", requireBookingPolicyAdmin, async (req, res) => {
+    const values = {
+        minimumAdvanceNoticeHours: Number(req.body.minimumAdvanceNoticeHours),
+        collectionMinutes: Number(req.body.collectionTaskDurationMinutes),
+        inspectionMinutes: Number(req.body.inspectionTaskDurationMinutes)
+    };
+    const limits = [
+        ["Minimum advance notice", values.minimumAdvanceNoticeHours, 24, 168],
+        ["Collection buffer time", values.collectionMinutes, 5, 360],
+        ["Inspection buffer time", values.inspectionMinutes, 5, 360]
+    ];
+    for (const [label, value, min, max] of limits) {
+        if (!Number.isInteger(value) || value < min || value > max) {
+            return res.status(400).json({ success: false, error: `${label} must be a whole number from ${min} to ${max}.` });
+        }
+    }
+    try {
+        const saved = await saveTradeInTaskDurationConfig(values);
+        return res.json({
+            success: true,
+            criteria: {
+                minimumAdvanceNoticeHours: saved.minimumAdvanceNoticeHours,
+                collectionTaskDurationMinutes: saved.collectionMinutes,
+                inspectionTaskDurationMinutes: saved.inspectionMinutes
+            }
+        });
+    } catch (error) {
+        console.error("Could not save booking policy config:", error);
+        return res.status(500).json({ success: false, error: "Booking policy settings could not be saved." });
+    }
 });
 
 /**

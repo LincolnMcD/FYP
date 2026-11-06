@@ -201,6 +201,126 @@ async function requireAdmin(req, res, next) {
     }
 }
 
+const multer = require("multer");
+const cloudinary = require("../config/cloudinary");
+const customerBackgroundUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }
+});
+
+router.post("/api/system-config/customer-home-background/upload", requireAdmin, (req, res, next) => {
+    customerBackgroundUpload.single("image")(req, res, (err) => {
+        if (!err) return next();
+        const message = err.code === "LIMIT_FILE_SIZE"
+            ? "Image must be 15 MB or smaller."
+            : "The image upload could not be processed.";
+        return res.status(400).json({ success: false, error: message });
+    });
+}, async (req, res) => {
+    try {
+        const file = req.file;
+        const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+        if (!file || !allowedTypes.has(file.mimetype)) {
+            return res.status(400).json({ success: false, error: "Choose a JPG, PNG, or WebP image." });
+        }
+
+        const result = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream({
+                folder: "customer-home-background",
+                public_id: "live-background",
+                overwrite: true,
+                invalidate: true,
+                resource_type: "image",
+                allowed_formats: ["jpg", "jpeg", "png", "webp"]
+            }, (error, uploaded) => error ? reject(error) : resolve(uploaded));
+            stream.end(file.buffer);
+        });
+
+        return res.json({ success: true, imageUrl: result.secure_url, publicId: result.public_id });
+    } catch (err) {
+        console.error("Customer home background Cloudinary upload failed:", err.message);
+        return res.status(502).json({ success: false, error: "Cloudinary could not save the background image." });
+    }
+});
+
+router.get("/api/system-config/customer-home-background", async (req, res) => {
+    try {
+        const snapshot = await db.collection("systemSettings").doc("customerHomeBackground").get();
+        const saved = snapshot.exists ? snapshot.data() : null;
+        return res.json({
+            success: true,
+            config: saved ? {
+                isDefault: saved.isDefault === true,
+                imageUrl: saved.imageUrl || null,
+                adjustments: saved.adjustments || { brightness: 100, contrast: 100, whiteFilter: 0, saturation: 100, blur: 0 }
+            } : null
+        });
+    } catch (err) {
+        console.error("Customer home background settings read failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not load customer background settings." });
+    }
+});
+
+router.put("/api/system-config/customer-home-background", requireAdmin, async (req, res) => {
+    try {
+        const isDefault = req.body?.isDefault === true;
+        const imageUrl = String(req.body?.imageUrl || "").trim();
+        const rawAdjustments = req.body?.adjustments || {};
+        const adjustmentRanges = {
+            brightness: [0, 200, 100],
+            contrast: [0, 200, 100],
+            whiteFilter: [0, 80, 0],
+            saturation: [0, 200, 100],
+            blur: [0, 20, 0]
+        };
+        const adjustments = {};
+
+        for (const [key, [minimum, maximum, fallback]] of Object.entries(adjustmentRanges)) {
+            const value = rawAdjustments[key] === undefined ? fallback : Number(rawAdjustments[key]);
+            if (!Number.isFinite(value) || value < minimum || value > maximum) {
+                return res.status(400).json({ success: false, error: `Invalid ${key} adjustment.` });
+            }
+            adjustments[key] = value;
+        }
+
+        if (!isDefault) {
+            let parsedUrl;
+            try { parsedUrl = new URL(imageUrl); } catch (_) {}
+            if (!parsedUrl || parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "res.cloudinary.com") {
+                return res.status(400).json({ success: false, error: "A valid Cloudinary background image URL is required." });
+            }
+        }
+
+        const updates = {
+            isDefault,
+            adjustments,
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: req.adminUid
+        };
+        if (isDefault) {
+            updates.imageUrl = FieldValue.delete();
+            updates.imageProvider = FieldValue.delete();
+        } else {
+            updates.imageUrl = imageUrl;
+            updates.imageProvider = "cloudinary";
+        }
+
+        await db.collection("systemSettings").doc("customerHomeBackground").set(updates, { merge: true });
+        const io = req.app.get("io");
+        if (io) {
+            io.emit("customer-home-background-updated", {
+                isDefault,
+                imageUrl: isDefault ? null : imageUrl,
+                adjustments
+            });
+        }
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("Customer home background settings save failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not save customer background settings." });
+    }
+});
+
 function registeredAccountType(userData = {}) {
     const roles = [userData.systemRole, userData.role, userData.accountType, userData.userType]
         .filter(value => typeof value === "string")

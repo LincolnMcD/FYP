@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>System Configuration - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <style>
+    :root { --navy:#082f72; --blue:#0646a5; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#626b7d; }
+    * { box-sizing:border-box; }
+    body { display:flex; min-height:100vh; margin:0; background:var(--page); color:var(--text); font-family:Inter,Arial,sans-serif; }
+    .sidebar { width:260px; flex:0 0 260px; display:flex; flex-direction:column; background:#fff; border-right:1px solid var(--border); }
+    .brand { height:105px; flex:0 0 105px; display:flex; align-items:center; gap:10px; padding:0 28px; border-bottom:1px solid #edf0f4; }
+    .brand img { width:38px; height:38px; object-fit:contain; }
+    .brand span { color:#10264b; font-size:25px; font-weight:700; letter-spacing:-1px; }
+    .nav-list { flex:1; display:grid; align-content:start; gap:8px; margin:0; padding:22px 16px; list-style:none; overflow:hidden; }
+    .nav-item { min-height:48px; display:flex; align-items:center; gap:12px; padding:0 14px; border-radius:9px; color:#586579; text-decoration:none; font-size:14px; font-weight:500; }
+    .nav-item:hover { background:#f1f4f9; }
+    .nav-item.active { background:var(--navy); color:#fff; font-weight:600; }
+    .nav-item svg { width:20px; height:20px; flex:0 0 auto; }
+    .main { min-width:0; flex:1; display:flex; flex-direction:column; }
+    .main-content { flex:1; overflow:auto; }
+    .content { padding:30px 40px 56px; }
+    .back { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; margin:0 0 24px -8px; border-radius:8px; color:#596579; text-decoration:none; }
+    .back:hover { background:#e9edf4; }
+    .back svg { width:20px; height:20px; }
+    h1 { margin:0 0 22px; color:#0f172a; font-size:26px; font-weight:800; line-height:1.2; letter-spacing:-0.5px; }
+    .intro { margin:0 0 58px; color:#596273; font-size:14.5px; line-height:1.5; }
+    .settings-grid { width:min(100%,1280px); margin:0 auto; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:34px 30px; }
+    .setting-card { min-height:310px; display:flex; flex-direction:column; padding:30px; border:1px solid #e5e9f0; border-radius:30px; background:#fff; box-shadow:0 1px 2px #0f172a05; }
+    .setting-card-top { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .setting-icon { width:64px; height:64px; display:grid; place-items:center; border-radius:50%; color:#0753ac; background:#e8eef8; }
+    .setting-icon svg { width:32px; height:32px; }
+    .setting-card:nth-child(2) .setting-icon { color:#087d80; background:#e7f1f1; }
+    .setting-card:nth-child(3) .setting-icon { color:#8c4b08; background:#f2ece6; }
+    .setting-card:nth-child(4) .setting-icon { color:#0a3675; background:#e0e7ff; }
+    .setting-tag { padding:8px 16px; border-radius:999px; background:#edf0ff; color:#536079; font-size:13px; font-weight:600; white-space:nowrap; }
+    .setting-card h2 { margin:25px 0 12px; color:#14284c; font-size:20px; line-height:1.3; }
+    .setting-card p { max-width:620px; margin:0; color:#5b6272; font-size:14.5px; line-height:1.55; }
+    .setting-action { align-self:flex-start; display:inline-flex; align-items:center; gap:10px; margin-top:auto; padding-top:24px; border:0; background:transparent; color:var(--blue); font:600 14.5px Inter,Arial,sans-serif; cursor:pointer; text-decoration:none; }
+    .setting-action svg { width:20px; height:20px; transition:transform .15s ease; }
+    .setting-action:hover svg { transform:translateX(3px); }
+    @media(max-width:1050px) { .content{padding:26px 24px 44px}.settings-grid{gap:20px}.setting-card{min-height:290px;padding:24px;border-radius:24px}.setting-card h2{font-size:20px} }
+    @media(max-width:720px) { body{display:block}.sidebar{width:100%;height:auto}.brand{height:72px;flex-basis:72px}.nav-list{display:flex;overflow:hidden;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 16px 36px}.back{margin-bottom:14px}.intro{margin-bottom:28px;font-size:14.5px}.settings-grid{grid-template-columns:1fr}.setting-card{min-height:260px;padding:22px}.setting-icon{width:54px;height:54px}.setting-card h2{margin-top:20px;font-size:20px}.setting-card p{font-size:14px} }
+  </style>
+<style id="sysconfig-sticky-sidebar">
+  body { height:100vh; min-height:0; overflow:hidden; }
+  body > .sidebar { position:sticky; top:0; align-self:flex-start; height:100vh; max-height:100vh; overflow:hidden; }
+  body > .main { height:100vh; min-height:0; }
+  body > .main > .main-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+  @media(max-width:760px) {
+    body { height:auto; min-height:100vh; overflow:auto; }
+    body > .sidebar { position:relative; height:auto; max-height:none; }
+    body > .main { height:auto; min-height:0; }
+    body > .main > .main-content { overflow:visible; }
+  }
+</style>
+<style id="listing-tab-title-style">h1 { font-family:Inter,Arial,sans-serif !important; font-size:26px !important; font-weight:800 !important; color:#0f172a !important; letter-spacing:-0.5px !important; line-height:1.2 !important; }</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte"><span>ReByte</span></div>
+    <nav class="nav-list" aria-label="Admin navigation">
+      <a href="../adminModule/adminDashboard.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Dashboard</a>
+      <a href="../listingModule/listing.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>Listing</a>
+      <a href="index.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42L9.2 5.33c-.59.22-1.13.53-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.85a.5.5 0 0 0 .12.63l2.03 1.58a6.2 6.2 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.03.72 1.62.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.59-.22 1.13-.53 1.62-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>System Config</a>
+      <a href="../transactionManagementModule/index.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Finance</a>
+      <a href="../adminModule/analyticsHub.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path></svg>Analytics</a>
+      <a href="../taskAssignmentModule/taskAssignment.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"></path></svg>Task Assignment</a>
+      <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
+      <a href="../adminModule/customerManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
+      <a href="../adminModule/staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
+      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
+    <div class="main-content">
+      <section class="content">
+        <a class="back" href="../adminModule/adminDashboard.html" aria-label="Back to admin dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
+        <h1>System Configuration</h1>
+        <p class="intro">Manage core operational policies, inspection protocols, and interface settings for the ReByte platform.</p>
+        <section class="settings-grid" aria-label="Configuration categories">
+          <article class="setting-card">
+            <div class="setting-card-top"><span class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M7 11h3M7 15h3M14 11l1.5 1.5L19 9"></path></svg></span><span class="setting-tag">Core System</span></div>
+            <h2>Inspection Standards</h2><p>Configure diagnostic criteria, hardware grading rubrics, and automated testing thresholds for incoming devices.</p>
+            <button class="setting-action" type="button" data-coming-soon="Inspection Standards">Open Settings <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"></path></svg></button>
+          </article>
+          <article class="setting-card">
+            <div class="setting-card-top"><span class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 1.5-3.3 1.8 1.8 0 0 1 1.4-3h1.1A3.8 3.8 0 0 0 21 10.9C21 6.5 17 3 12 3Z"></path><circle cx="7.5" cy="11" r="1"></circle><circle cx="10" cy="7.5" r="1"></circle><circle cx="15" cy="7.5" r="1"></circle></svg></span><span class="setting-tag">UI / UX</span></div>
+            <h2>Interface Settings</h2><p>Customize dashboard layouts, visual themes, typography scaling, and localization preferences for admin views.</p>
+            <a class="setting-action" href="interfaceSettings.html">Manage <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"></path></svg></a>
+          </article>
+          <article class="setting-card">
+            <div class="setting-card-top"><span class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v17H4zM8 2v4M16 2v4M4 9h16"></path><path d="M8 13h3M8 17h3M14 13h2"></path></svg></span><span class="setting-tag">Business Logic</span></div>
+            <h2>Rental Policies</h2><p>Define leasing durations, late fee structures, security deposit requirements, and automated renewal triggers.</p>
+            <button class="setting-action" type="button" data-coming-soon="Rental Policies">Open Settings <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"></path></svg></button>
+          </article>
+          <article class="setting-card">
+            <div class="setting-card-top"><span class="setting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 2-2"></path></svg></span><span class="setting-tag">Operations</span></div>
+            <h2>Booking Policies</h2><p>Set operational hours, concurrent inspection capacities, cancellation windows, and technician assignment rules.</p>
+            <a class="setting-action" href="bookingPolicies.html">Manage <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"></path></svg></a>
+          </article>
+        </section>
+      </section>
+    </div>
+  </main>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    const currentAdmin = ReByteAuth.getUser();
+    if (!currentAdmin || currentAdmin.role !== 'Admin') window.location.href = '../accountManagementModule/login.html';
+    document.querySelectorAll('[data-coming-soon]').forEach(button => button.addEventListener('click', () => {
+      ReByteAuth.showToast(`${button.dataset.comingSoon} settings are not available yet.`, 'info');
+    }));
+  </script>
+  <script src="../adminModule/adminHeader.js"></script>
+</body>
+</html>
