@@ -6,6 +6,7 @@
   <title>Export Report - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="adminHeader.css">
+  <link rel="stylesheet" href="adminSidebar.css">
   <style>
     :root {
       --navy: #082f72;
@@ -29,55 +30,6 @@
       font-family: 'Inter', Arial, sans-serif;
     }
     button, input, select { font: inherit; }
-
-    /* Shared Sidebar */
-    .sidebar {
-      width: 260px;
-      background: #fff;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      height: 100vh;
-      position: sticky;
-      top: 0;
-    }
-    .brand {
-      height: 105px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 28px;
-      border-bottom: 1px solid #edf0f4;
-    }
-    .brand img { width: 38px; height: 38px; object-fit: contain; }
-    .brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
-
-    .nav-list {
-      list-style: none;
-      padding: 22px 16px;
-      margin: 0;
-      display: grid;
-      gap: 8px;
-      flex: 1;
-      align-content: start;
-    }
-    .nav-item {
-      min-height: 48px;
-      padding: 0 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 9px;
-      color: #586579;
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.15s, color 0.15s;
-    }
-    .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
-    .nav-item:hover { background: #f1f4f9; }
-    .nav-item.active { color: #fff; background: var(--navy); }
 
     /* Main Container with Admin Header */
     .main-wrap {
@@ -170,10 +122,16 @@
     .form-select {
       width: 100%;
       height: 42px;
-      padding: 0 12px;
+      padding: 0 40px 0 12px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: #fff;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 16px 16px;
+      appearance: none;
+      -webkit-appearance: none;
       color: #0f172a;
       font-size: 14px;
       outline: none;
@@ -183,6 +141,24 @@
     .form-select:focus {
       border-color: #082f72;
       box-shadow: 0 0 0 3px rgba(8, 47, 114, 0.1);
+    }
+    .form-select:disabled {
+      background-color: #e2e8f0;
+      color: #64748b;
+      opacity: 1;
+      cursor: not-allowed;
+    }
+    .report-type-group.is-locked { position: relative; }
+    .report-type-group.is-locked::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 29px;
+      height: 42px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.24);
+      pointer-events: none;
     }
     .form-row {
       display: grid;
@@ -208,6 +184,11 @@
     }
     .btn-generate:hover {
       background: #062254;
+    }
+    .btn-generate:disabled {
+      background: #94a3b8;
+      cursor: wait;
+      box-shadow: none;
     }
 
     /* Right Panel: Report Preview */
@@ -302,22 +283,25 @@
       color: #64748b;
       text-transform: uppercase;
       margin-top: 3px;
+      display: none;
     }
 
     /* 4 Summary Mini KPI Cards inside preview */
     .sheet-kpis {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 26px;
+      gap: 12px;
+      margin-bottom: 22px;
     }
+    .sheet-kpis.operations-sheet-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
     .sheet-kpi-card {
       background: #fff;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
-      padding: 14px 16px;
+      padding: 16px 18px;
       display: flex;
       flex-direction: column;
+      min-height: 116px;
     }
     .sheet-kpi-card.highlight {
       background: #082f72;
@@ -327,30 +311,68 @@
     .sheet-kpi-top {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
+      align-items: flex-start;
+      font-size: 12px;
+      line-height: 1.2;
       font-weight: 700;
       color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.3px;
-      margin-bottom: 8px;
+      height: 34px;
+      margin-bottom: 6px;
     }
     .sheet-kpi-card.highlight .sheet-kpi-top {
       color: #cbd5e1;
     }
     .sheet-kpi-val {
-      font-size: 22px;
+      font-size: 23px;
       font-weight: 800;
       color: #0f172a;
       line-height: 1.1;
       margin-bottom: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .business-sheet-kpis .sheet-kpi-val {
+      font-size: 18px;
+      letter-spacing: -0.35px;
+      white-space: nowrap;
+    }
+    .operations-sheet-kpis .sheet-kpi-val {
+      font-size: 18px;
+    }
+    .operations-sheet-kpis .sheet-kpi-card {
+      min-width: 0;
+      padding: 12px 10px;
+    }
+    .ops-sheet-kpi-val {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .ops-kpi-number { font-size: 16px; }
+    .ops-kpi-unit {
+      font-size: 9px;
+      font-weight: 700;
+      color: #64748b;
+    }
+    .sheet-kpi-card.highlight .ops-kpi-unit { color: #cbd5e1; }
+    .operations-sheet-kpis .sheet-kpi-top {
+      font-size: 10px;
+      letter-spacing: 0.15px;
+    }
+    .operations-sheet-kpis .sheet-kpi-trend {
+      font-size: 9px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
     }
     .sheet-kpi-card.highlight .sheet-kpi-val {
       color: #fff;
     }
     .sheet-kpi-trend {
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 600;
-      color: #10b981;
+      color: #64748b;
     }
     .sheet-kpi-card.highlight .sheet-kpi-trend {
       color: #93c5fd;
@@ -370,7 +392,7 @@
       background: #fff;
     }
     .sheet-chart-title {
-      font-size: 13.5px;
+      font-size: 15px;
       font-weight: 700;
       color: #0f172a;
       margin: 0 0 12px;
@@ -384,6 +406,15 @@
       height: 120px;
       padding: 10px 10px 0;
       border-bottom: 1px solid #cbd5e1;
+    }
+    .inventory-chart-box {
+      display: flex;
+      flex-direction: column;
+    }
+    .inventory-bars-container {
+      flex: 1;
+      min-height: 270px;
+      height: 270px;
     }
     .preview-bar-group {
       display: flex;
@@ -408,17 +439,45 @@
       color: #64748b;
       font-weight: 600;
     }
+    .business-trend-legend {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      margin: 10px 0 6px;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .business-trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .business-brand-box { display: flex; flex-direction: column; }
+    .legend-swatch { width: 10px; height: 10px; display: inline-block; border-radius: 2px; }
+    .legend-swatch.revenue { background: #082f72; }
+    .legend-swatch.cost { background: #cbd5e1; }
+    .trend-values { font-size: 11px; }
+    .trend-values th { font-size: 10px; padding: 5px 6px; }
+    .trend-values td { font-size: 11px; padding: 5px 6px; white-space: nowrap; }
+    .preview-inventory-bar-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    .preview-bar-value { color: #334155; font-size: 11px; font-weight: 700; line-height: 1; }
 
     /* Sales by Brand Mini List */
     .mini-brand-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      flex: 1;
+      justify-content: space-around;
+      gap: 4px;
     }
     .mini-brand-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
+      padding: 5px 0;
     }
     .mini-brand-top {
       display: flex;
@@ -429,7 +488,7 @@
     }
     .mini-brand-track {
       width: 100%;
-      height: 6px;
+      height: 8px;
       background: #e2e8f0;
       border-radius: 3px;
     }
@@ -438,6 +497,43 @@
       background: #082f72;
       border-radius: 3px;
     }
+    .mini-brand-revenue {
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .task-progress-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .task-progress-item { cursor: help; }
+    .task-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #334155;
+    }
+    .task-progress-meta strong { color: #0f172a; font-variant-numeric: tabular-nums; }
+    .task-progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+    .task-progress-fill {
+      height: 100%;
+      min-width: 0;
+      border-radius: inherit;
+      background: #082f72;
+      transition: filter 0.15s ease;
+    }
+    .task-progress-item:hover .task-progress-fill { filter: brightness(1.2); }
+    .staff-progress-fill { background: #082f72; }
 
     /* Detailed Table inside Preview */
     .sheet-table-card {
@@ -448,79 +544,62 @@
     .sheet-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12.5px;
+      font-size: 13.5px;
     }
+    .inventory-model-table { table-layout: fixed; }
+    .inventory-model-table th:nth-child(1), .inventory-model-table td:nth-child(1) { width: 28%; }
+    .inventory-model-table th:nth-child(2), .inventory-model-table td:nth-child(2) { width: 12%; }
+    .inventory-model-table th:nth-child(3), .inventory-model-table td:nth-child(3),
+    .inventory-model-table th:nth-child(4), .inventory-model-table td:nth-child(4),
+    .inventory-model-table th:nth-child(5), .inventory-model-table td:nth-child(5) { width: 8%; }
+    .inventory-model-table th:nth-child(6), .inventory-model-table td:nth-child(6) { width: 15%; }
+    .inventory-model-table th:nth-child(7), .inventory-model-table td:nth-child(7) { width: 21%; }
     .sheet-table th {
       text-align: left;
-      font-size: 10.5px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: #64748b;
-      padding: 8px 10px;
+      padding: 9px 11px;
       border-bottom: 1px solid #e2e8f0;
     }
     .sheet-table td {
-      padding: 9px 10px;
+      padding: 10px 11px;
       color: #1e293b;
       font-weight: 500;
       border-bottom: 1px solid #f1f5f9;
     }
 
+    @page { size: A4 portrait; margin: 10mm; }
     /* Print styles */
     @media print {
+      html, body, .report-sheet, .sheet-kpi-card, .sheet-chart-box, .sheet-table-card,
+      .preview-bar-rev, .preview-bar-cost, .mini-brand-track, .mini-brand-fill,
+      .task-progress-track, .task-progress-fill {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
       body { background: #fff; }
-      .sidebar, .admin-header, .back-btn-row, .config-card, .preview-header { display: none !important; }
+      .sidebar, .admin-header, .back-btn-row, .config-card, .preview-header, .page-title { display: none !important; }
+      .export-layout { display: block !important; }
       .main-wrap, .content { padding: 0 !important; margin: 0 !important; max-width: none !important; }
       .preview-wrapper { border: none !important; box-shadow: none !important; padding: 0 !important; }
       .report-sheet { border: none !important; padding: 0 !important; }
+      .sheet-kpi-card, .sheet-chart-box, .sheet-table-card { break-inside: avoid; }
+      .sheet-table tr { break-inside: avoid; }
+      .sheet-mid-grid { gap: 10px; margin-bottom: 14px; }
+      .sheet-chart-box { padding: 12px 14px; }
+      .inventory-bars-container { min-height: 255px; height: 255px; }
+      .task-progress-list { gap: 10px; }
+      .sheet-table-card { padding: 12px 14px; }
     }
   </style>
 </head>
 <body>
 
   <!-- Shared Sidebar -->
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="../accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
-      <span>ReByte</span>
-    </div>
-
-    <nav class="nav-list" aria-label="Admin navigation">
-      <a href="../adminModule/adminDashboard.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Listings</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>System Config</span>
-      </a>
-      <a href="../financeModule/financialManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-        <span>Finance</span>
-      </a>
-      <a href="../adminModule/analyticsHub.html" class="nav-item active" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-        <span>Analytics</span>
-      </a>
-      <a href="../adminModule/taskAssignment.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        <span>Task Assignment</span>
-      </a>
-      <a href="../adminModule/customerManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>User</span>
-      </a>
-      <a href="../adminModule/staffManagement.html" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Staff Management</span>
-      </a>
-      <a href="#" class="nav-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>Communication</span>
-      </a>
-    </nav>
-  </aside>
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
 
   <!-- Main Area -->
   <div class="main-wrap">
@@ -530,7 +609,7 @@
     <main class="content">
       <!-- Back Arrow Navigation -->
       <div class="back-btn-row">
-        <a href="../adminModule/analyticsHub.html" class="back-link" title="Back to Analytics Hub">
+        <a id="exportBackLink" href="../adminModule/analyticsHub.html" class="back-link" title="Back to Analytics Hub">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
@@ -548,9 +627,9 @@
           <p class="config-desc">Select parameters to compile a comprehensive data summary.</p>
 
           <form id="exportForm" onsubmit="handleGenerateReport(event)">
-            <div class="form-group">
+            <div class="form-group report-type-group" id="reportTypeGroup">
               <label class="form-label" for="reportType">Report Type</label>
-              <select id="reportType" class="form-select" onchange="updateReportPreview()">
+              <select id="reportType" class="form-select" onchange="handleReportTypeChange()">
                 <option value="business">Business Analytics Report</option>
                 <option value="inventory">Inventory Performance Report</option>
                 <option value="operations">Operational Efficiency Report</option>
@@ -565,26 +644,13 @@
 
               <div class="form-group">
                 <label class="form-label" for="reportMonth">Month</label>
-                <select id="reportMonth" class="form-select" onchange="updateReportDate()">
-                  <option value="January">January</option>
-                  <option value="February">February</option>
-                  <option value="March">March</option>
-                  <option value="April">April</option>
-                  <option value="May">May</option>
-                  <option value="June">June</option>
-                  <option value="July">July</option>
-                  <option value="August">August</option>
-                  <option value="September">September</option>
-                  <option value="October">October</option>
-                  <option value="November">November</option>
-                  <option value="December">December</option>
-                </select>
+              <select id="reportMonth" class="form-select" onchange="updateReportDate()"></select>
               </div>
             </div>
 
-            <button type="submit" class="btn-generate">
+            <button type="submit" class="btn-generate" id="generateReportButton" disabled>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Generate and Download Report</span>
+              <span>Preparing report…</span>
             </button>
           </form>
         </div>
@@ -597,9 +663,9 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 <span>Report Preview</span>
               </h3>
-              <span class="preview-id" id="reportPreviewId">ID: REP-2023-10-8891</span>
+              
             </div>
-            <span class="draft-badge">DRAFT</span>
+            
           </div>
 
           <!-- Dynamic Report Sheet Container -->
@@ -615,6 +681,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
+  <script src="adminSidebar.js"></script>
+  <script src="reportSnapshots.js"></script>
   <script src="inventoryAnalytics.js"></script>
   <script src="operationsAnalytics.js"></script>
   <script>
@@ -639,7 +707,7 @@
         const rawShare = totalGross > 0 ? (brandRevenue / totalGross) * 100 : Number(row.share) || 0;
         const share = Math.max(0, Math.min(100, rawShare));
         const displayShare = share > 0 ? Math.max(0.01, share) : 0;
-        return `<div class="mini-brand-item"><div class="mini-brand-top"><span>${reportEscape(row.brand)}</span><span>${displayShare.toFixed(2)}%</span></div><div class="mini-brand-track"><div class="mini-brand-fill" style="width:${displayShare}%;"></div></div></div>`;
+        return `<div class="mini-brand-item"><div class="mini-brand-top"><span>${reportEscape(row.brand)}</span><span>${displayShare.toFixed(2)}%</span></div><div class="mini-brand-revenue">${reportMoney(brandRevenue)}</div><div class="mini-brand-track"><div class="mini-brand-fill" style="width:${displayShare}%;min-width:${displayShare > 0 ? '2px' : '0'};"></div></div></div>`;
       }).join('') || '<div>No completed sales for this month.</div>';
       const tableRows = breakdown.map(row => `<tr><td>${reportEscape(row.brand)}</td><td>${reportNumber(row.processed)}</td><td>${reportMoney(row.grossRevenue)}</td><td>${reportMoney(row.collectionCost)}</td><td style="color:#10b981;font-weight:700;">${row.margin == null ? '—' : `${Number(row.margin).toFixed(1)}%`}</td></tr>`).join('') || '<tr><td colspan="5">No completed sales for this month.</td></tr>';
       const barsMarkup = bars.map(row => {
@@ -648,65 +716,79 @@
         return `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${revenueHeight}px;"></div><div class="preview-bar-cost" style="height:${costHeight}px;"></div></div>`;
       }).join('');
       const labels = bars.map(row => `<span>${reportEscape(row.label)}</span>`).join('');
+      const trendRows = bars.map(row => `<tr><td>${reportEscape(row.label)}</td><td>${reportMoney(row.revenue)}</td><td>${reportMoney(row.cost)}</td></tr>`).join('');
       return `
         <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Business Analytics Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
-        <div class="sheet-kpis">
+        <div class="sheet-kpis business-sheet-kpis">
           <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Total Sales Revenue</span></div><div class="sheet-kpi-val">${reportMoney(business.totalSalesRevenue)}</div><div class="sheet-kpi-trend">${reportEscape(business.revenueGrowthTrend || 'No prior month comparison')}</div></div>
           <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Rental Revenue</span></div><div class="sheet-kpi-val">${reportMoney(business.rentalRevenue)}</div><div class="sheet-kpi-trend">${reportEscape(business.rentalGrowthTrend || 'No prior month comparison')}</div></div>
           <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Trade-In Volume</span></div><div class="sheet-kpi-val">${reportNumber(business.tradeInVolume)}</div><div class="sheet-kpi-trend">${reportEscape(business.tradeInGrowthTrend || 'No prior month comparison')}</div></div>
-          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Profit Margin</span></div><div class="sheet-kpi-val">${business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`}</div><div class="sheet-kpi-trend">Revenue less collect cost</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Profit Margin</span></div><div class="sheet-kpi-val">${business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`}</div></div>
         </div>
         <div class="sheet-mid-grid">
-          <div class="sheet-chart-box"><h4 class="sheet-chart-title">Revenue vs. Collect Cost Trends</h4><div class="preview-bars-container">${barsMarkup}</div><div class="bar-labels">${labels}</div></div>
-          <div class="sheet-chart-box"><h4 class="sheet-chart-title">Sales by Brand</h4><div class="mini-brand-list">${brandRows}</div></div>
+          <div class="sheet-chart-box"><h4 class="sheet-chart-title">Revenue vs. Collect Cost Trends</h4><div class="preview-bars-container">${barsMarkup}</div><div class="bar-labels">${labels}</div><div class="business-trend-legend"><span><i class="legend-swatch revenue"></i>Sales revenue</span><span><i class="legend-swatch cost"></i>Collect cost</span></div><table class="sheet-table trend-values"><thead><tr><th>Month</th><th>Sales revenue</th><th>Collect cost</th></tr></thead><tbody>${trendRows}</tbody></table></div>
+          <div class="sheet-chart-box business-brand-box"><h4 class="sheet-chart-title">Sales by Brand</h4><div class="mini-brand-list">${brandRows}</div></div>
         </div>
         <div class="sheet-table-card"><table class="sheet-table"><thead><tr><th>Hardware Category</th><th title="Distinct Firebase product records with listingStatus Sold, assigned to their latest linked order month; only Fail and Cancelled orders are excluded">Units Processed</th><th>Gross Revenue</th><th>Collect Cost</th><th>Net Margin</th></tr></thead><tbody>${tableRows}<tr><td><strong>Total (${reportEscape(period)})</strong></td><td><strong>${reportNumber(totalUnits)}</strong></td><td><strong>${reportMoney(totalGross)}</strong></td><td><strong>${reportMoney(totalCost)}</strong></td><td><strong>${totalMargin == null ? '—' : `${totalMargin.toFixed(1)}% avg`}</strong></td></tr></tbody></table></div>
-        <p>Units count distinct products currently marked Sold, assigned to their latest linked order month. Only Fail and Cancelled orders are excluded; statuses such as Delivering and Delivered count. Revenue is from purchase orders only.</p>
       `;
     }
 
     function renderInventoryReport(period, summary) {
+      const rankedModels = InventoryAnalytics.rankModels(summary.models || []);
       const maxWeekly = Math.max(1, ...summary.weeklyAdded);
-      const weekBars = summary.weeklyAdded.map((count, index) => `<div class="preview-bar-group"><div class="preview-bar-rev" style="height:${Math.max(2, count / maxWeekly * 105)}px;"></div></div>`).join('');
+      const weekBars = summary.weeklyAdded.map((count, index) => `<div class="preview-inventory-bar-group"><span class="preview-bar-value">${reportNumber(count)}</span><div class="preview-bar-rev" style="height:${Math.max(2, count / maxWeekly * 230)}px;"></div></div>`).join('');
       const weekLabels = summary.weeklyAdded.map((_, index) => `<span>W${index + 1}</span>`).join('');
-      const carryRows = ['Draft', 'Listed', 'Hidden', 'Rented'].map(label => `<tr><td>${label}</td><td>${reportNumber(summary.carryStatusCounts[label])}</td><td>Carried forward</td></tr>`).join('') + (summary.carryStatusCounts['Unknown Carried'] ? `<tr><td>Status changed after this month</td><td>${reportNumber(summary.carryStatusCounts['Unknown Carried'])}</td><td>Carried forward</td></tr>` : '') + (summary.unknownSnapshotRecords ? `<tr><td>Unclassified status history</td><td>${reportNumber(summary.unknownSnapshotRecords)}</td><td>Unknown</td></tr>` : '');
-      const exitRows = [['Sold', summary.soldDuringMonth], ['Lost', summary.lostDuringMonth]].map(([label, value]) => `<tr><td>${label}</td><td>${value == null ? '—' : reportNumber(value)}</td><td>Exit during month</td></tr>`).join('');
+      const carryRows = ['Draft', 'Listed', 'Hidden', 'Rented'].map(label => `<tr><td>${label}</td><td>${reportNumber(summary.carryStatusCounts[label])}</td></tr>`).join('') + (summary.carryStatusCounts['Unknown Carried'] ? `<tr><td>Status changed after this month</td><td>${reportNumber(summary.carryStatusCounts['Unknown Carried'])}</td></tr>` : '') + (summary.unknownSnapshotRecords ? `<tr><td>Unclassified status history</td><td>${reportNumber(summary.unknownSnapshotRecords)}</td></tr>` : '');
+      const exitRows = [['Sold', summary.soldDuringMonth], ['Lost', summary.lostDuringMonth]].map(([label, value]) => `<tr><td>${label}</td><td>${value == null ? '—' : reportNumber(value)}</td></tr>`).join('');
       const modelRows = rows => rows.map(row => `<tr><td>${reportEscape(row.model)}</td><td>${reportNumber(row.openingStock)}${row.unknownOpening ? ' + ?' : ''}</td><td>${reportNumber(row.added)}</td><td>${row.soldDuringMonth == null ? '—' : reportNumber(row.soldDuringMonth)}</td><td>${row.lostDuringMonth == null ? '—' : reportNumber(row.lostDuringMonth)}${row.unknownLostDuringMonth && row.lostDuringMonth != null ? ' + ?' : ''}</td><td>${row.sellThroughRate == null ? '—' : `${row.sellThroughRate.toFixed(1)}%`}</td><td>${reportNumber(row.closingStock)}${row.unknownClosing ? ' + ?' : ''}</td></tr>`).join('') || '<tr><td colspan="7">No products found for this month.</td></tr>';
-      const modelTable = rows => `<table class="sheet-table"><thead><tr><th>Product Model</th><th>Opening Stock</th><th title="New Firebase product records plus returned products in the selected month">Added</th><th>Sold</th><th>Lost</th><th>Sell-Through Rate</th><th>Current / Month-End Stock</th></tr></thead><tbody>${modelRows(rows)}</tbody></table>`;
+      const modelTable = rows => `<table class="sheet-table inventory-model-table"><thead><tr><th>Product Model</th><th>Opening Stock</th><th title="New Firebase product records plus returned products in the selected month">Added</th><th>Sold</th><th>Lost</th><th>Sell-Through Rate</th><th>Current / Month-End Stock</th></tr></thead><tbody>${modelRows(rows)}</tbody></table>`;
       const currentMonth = getSelectedMonthKey() === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
       const closingLabel = currentMonth ? 'Current Inventory' : 'Closing Inventory';
       const stockValue = summary.closingInventory == null ? '—' : reportNumber(summary.closingInventory);
       return `
         <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Inventory Performance Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
         <div class="sheet-kpis">
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Opening Inventory</span></div><div class="sheet-kpi-val">${summary.openingInventory == null ? `${reportNumber(summary.knownOpeningInventory)} + ?` : reportNumber(summary.openingInventory)}</div><div class="sheet-kpi-trend">At start of month</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Products Added</span></div><div class="sheet-kpi-val">${reportNumber(summary.totalAdded)}</div><div class="sheet-kpi-trend">New product records + returns</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Sold During Month</span></div><div class="sheet-kpi-val">${summary.soldDuringMonth == null ? '—' : reportNumber(summary.soldDuringMonth)}</div><div class="sheet-kpi-trend">Successful purchase transactions</div></div>
-          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>${closingLabel}</span></div><div class="sheet-kpi-val">${summary.closingInventory == null ? `${reportNumber(summary.knownClosingInventory)} + ?` : stockValue}</div><div class="sheet-kpi-trend">Draft, listed, hidden, and rented stock</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Opening Inventory</span></div><div class="sheet-kpi-val">${summary.openingInventory == null ? `${reportNumber(summary.knownOpeningInventory)} + ?` : reportNumber(summary.openingInventory)}</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Products Added</span></div><div class="sheet-kpi-val">${reportNumber(summary.totalAdded)}</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Sold During Month</span></div><div class="sheet-kpi-val">${summary.soldDuringMonth == null ? '—' : reportNumber(summary.soldDuringMonth)}</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>${closingLabel}</span></div><div class="sheet-kpi-val">${summary.closingInventory == null ? `${reportNumber(summary.knownClosingInventory)} + ?` : stockValue}</div></div>
         </div>
-        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Inventory Added by Week</h4><div class="preview-bars-container">${weekBars}</div><div class="bar-labels">${weekLabels}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">${currentMonth ? 'Inventory Status' : 'Month-End Inventory Status'}</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Products</th><th>Movement</th></tr></thead><tbody>${carryRows}${exitRows}</tbody></table></div></div>
-        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Most Added Models</h4>${modelTable(summary.topFive)}</div>
-        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Least Added Models</h4>${modelTable(summary.bottomFive)}</div>
-        <p>Sell-through rate = sold ÷ (opening stock + added) × 100. “+ ?” means some product status history is unavailable for the selected period.</p>
-        ${summary.historicalSnapshotAvailable || currentMonth ? '' : `<p>Known stock counts are shown with + ? where status history is incomplete. ${reportNumber(summary.unknownSnapshotRecords)} products have no status timestamp for this period.</p>`}
-        ${summary.overlappingExitUnits ? `<p>${reportNumber(summary.overlappingExitUnits)} product(s) are recorded as both sold and lost in ${reportEscape(period)}; exit counts overlap, so subtracting both counts from additions will not produce closing stock.</p>` : ''}
+        <div class="sheet-mid-grid"><div class="sheet-chart-box inventory-chart-box"><h4 class="sheet-chart-title">Inventory Added by Week</h4><div class="preview-bars-container inventory-bars-container">${weekBars}</div><div class="bar-labels">${weekLabels}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">${currentMonth ? 'Inventory Status' : 'Month-End Inventory Status'}</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Products</th></tr></thead><tbody>${carryRows}${exitRows}</tbody></table></div></div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Most Added Models</h4>${modelTable(rankedModels.topFive)}</div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title" style="margin-bottom:12px;">Least Added Models</h4>${modelTable(rankedModels.bottomFive)}</div>
       `;
     }
 
-    function renderOperationsReport(period, summary) {
+    function renderOperationsReport(period, summary, staffSummary) {
       const statuses = Object.entries(summary.statusCounts).sort((a, b) => b[1] - a[1]).map(([status, count]) => `<tr><td>${reportEscape(status)}</td><td>${reportNumber(count)}</td><td>${summary.totalTasks ? `${(count / summary.totalTasks * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('') || '<tr><td colspan="3">No task records for this month.</td></tr>';
-      const types = ['Collection', 'Inspection', 'Delivery'].map(type => `<tr><td>${type}</td><td>${reportNumber(summary.typeCounts[type])}</td><td>${summary.totalTasks ? `${(summary.typeCounts[type] / summary.totalTasks * 100).toFixed(1)}%` : '0.0%'}</td></tr>`).join('');
-      const avg = value => value === null ? '—' : `${value.toFixed(1)} min`;
+      const metric = (value, unit) => value == null
+        ? '—'
+        : `<span class="ops-kpi-number">${value.toFixed(2)}</span><span class="ops-kpi-unit">${unit}</span>`;
+      const taskProgressTypes = ['Collection', 'Inspection', 'Delivery'];
+      const displayedTaskTotal = taskProgressTypes.reduce((total, type) => total + (Number(summary.typeCounts[type]) || 0), 0);
+      const taskProgress = taskProgressTypes.map(type => {
+        const count = Number(summary.typeCounts[type]) || 0;
+        const share = displayedTaskTotal ? count / displayedTaskTotal * 100 : 0;
+        return `<div class="task-progress-item" title="${type}: ${reportNumber(count)} tasks, ${share.toFixed(1)}% of the displayed task types"><div class="task-progress-meta"><span>${type}</span><strong>${reportNumber(count)} · ${share.toFixed(1)}%</strong></div><div class="task-progress-track"><div class="task-progress-fill" style="width:${share}%;min-width:${share > 0 ? '2px' : '0'};"></div></div></div>`;
+      }).join('');
+      const staffProgress = staffSummary
+        ? [['Deliverer', staffSummary.counts.Deliverer], ['Inspector', staffSummary.counts.Inspector], ['Inspector & Collector', staffSummary.counts['Inspector & Collector']]]
+            .map(([role, count]) => {
+              const share = staffSummary.total ? count / staffSummary.total * 100 : 0;
+              return `<div class="task-progress-item" title="${role}: ${reportNumber(count)} active staff, ${share.toFixed(1)}% of active staff"><div class="task-progress-meta"><span>${role}</span><strong>${reportNumber(count)} · ${share.toFixed(1)}%</strong></div><div class="task-progress-track"><div class="task-progress-fill staff-progress-fill" style="width:${share}%;min-width:${share > 0 ? '2px' : '0'};"></div></div></div>`;
+            }).join('')
+        : '<div class="staff-progress-unavailable">Staff counts unavailable</div>';
       return `
         <div class="sheet-brand-row"><div><div class="sheet-brand-title">ReByte</div><div class="sheet-sub-title">Operational Performance Report</div></div><div class="sheet-meta"><div class="sheet-date">${reportEscape(period)}</div><div class="sheet-confidential">CONFIDENTIAL</div></div></div>
-        <div class="sheet-kpis">
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Delivery Time</span></div><div class="sheet-kpi-val">${summary.averageDeliveryMinutesPerKm === null ? '—' : `${summary.averageDeliveryMinutesPerKm.toFixed(1)} min/km`}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageDeliverySamples)} completed tasks with distance</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Inspection Time</span></div><div class="sheet-kpi-val">${avg(summary.averageInspectionMinutes)}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageInspectionSamples)} completed tasks</div></div>
-          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Collection Time</span></div><div class="sheet-kpi-val">${avg(summary.averageCollectionMinutes)}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageCollectionSamples)} completed tasks</div></div>
-          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Completion Rate</span></div><div class="sheet-kpi-val">${summary.totalTasks ? `${summary.completionRate.toFixed(1)}%` : '—'}</div><div class="sheet-kpi-trend">Completed / created</div></div>
+        <div class="sheet-kpis operations-sheet-kpis">
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Delivery Time</span></div><div class="sheet-kpi-val ops-sheet-kpi-val">${metric(summary.averageDeliveryMinutesPerTask, 'min/task')}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageDeliverySamples)} timed · ${reportNumber(summary.selfPickupExcludedCount)} Self Pickup excluded</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Inspection Time</span></div><div class="sheet-kpi-val ops-sheet-kpi-val">${metric(summary.averageInspectionMinutes, 'min/task')}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageInspectionSamples)} completed tasks</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Collection Time</span></div><div class="sheet-kpi-val ops-sheet-kpi-val">${metric(summary.averageCollectionMinutes, 'min/task')}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageCollectionSamples)} completed tasks</div></div>
+          <div class="sheet-kpi-card"><div class="sheet-kpi-top"><span>Avg. Distance</span></div><div class="sheet-kpi-val ops-sheet-kpi-val">${metric(summary.averageDeliveryDistanceKm, 'km/task')}</div><div class="sheet-kpi-trend">${reportNumber(summary.averageDeliveryDistanceSamples)} with distance · ${reportNumber(summary.selfPickupExcludedCount)} Self Pickup excluded</div></div>
+          <div class="sheet-kpi-card highlight"><div class="sheet-kpi-top"><span>Completion Rate</span></div><div class="sheet-kpi-val ops-sheet-kpi-val"><span class="ops-kpi-number">${summary.totalTasks ? summary.completionRate.toFixed(2) : '—'}</span><span class="ops-kpi-unit">%</span></div></div>
         </div>
-        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Task Volume by Type</h4><table class="sheet-table"><thead><tr><th>Task Type</th><th>Tasks</th><th>Share</th></tr></thead><tbody>${types}</tbody></table></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">Current Task Status</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Tasks</th><th>Share</th></tr></thead><tbody>${statuses}</tbody></table></div></div>
-        <p>Tasks are grouped by Firebase task creation date in ${reportEscape(period)}. Status values reflect current task status. Average durations use completedAt − startAt; tasks missing either timestamp are excluded.</p>
+        <div class="sheet-mid-grid"><div class="sheet-chart-box"><h4 class="sheet-chart-title">Task Volume by Type</h4><div class="task-progress-list">${taskProgress}</div></div><div class="sheet-chart-box"><h4 class="sheet-chart-title">Staff Availability</h4><div class="task-progress-list">${staffProgress}</div></div></div>
+        <div class="sheet-table-card"><h4 class="sheet-chart-title">Current Task Status</h4><table class="sheet-table"><thead><tr><th>Status</th><th>Tasks</th><th>Share</th></tr></thead><tbody>${statuses}</tbody></table></div>
       `;
     }
 
@@ -721,28 +803,322 @@
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
       ].indexOf(document.getElementById('reportMonth').value);
+      if (!document.getElementById('reportYear').value || monthIndex < 0) return '';
       return `${document.getElementById('reportYear').value}-${String(monthIndex + 1).padStart(2, '0')}`;
     }
 
+    const exportMonthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const exportPeriodsByType = new Map();
+    let exportPeriodRequest = 0;
+    let exportInventoryProducts = null;
+    let exportInventoryEvents = null;
+    let exportOperationTasks = null;
+
+    function currentReportMonth() {
+      const now = new Date();
+      return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    }
+
+    function reportMonthFromDateValue(value) {
+      if (!value) return '';
+      let date;
+      if (typeof value.toDate === 'function') date = value.toDate();
+      else if (typeof value === 'object') {
+        const seconds = Number(value.seconds ?? value._seconds);
+        date = Number.isFinite(seconds) ? new Date(seconds * 1000) : null;
+      } else date = new Date(value);
+      if (!date || Number.isNaN(date.getTime())) return '';
+      return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+    }
+
+    async function fetchBusinessMonthsForExport() {
+      const months = new Set();
+      for (const base of ['http://localhost:3000', 'http://127.0.0.1:3000']) {
+        let failed = false;
+        for (let page = 1; page <= 200; page += 1) {
+          try {
+            const query = new URLSearchParams({ category: 'all', page: String(page), limit: '100' });
+            const response = await fetch(`${base}/api/transaction-management/transactions?${query}`, { headers: { Accept: 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.success || !Array.isArray(data.transactions)) throw new Error(data.error || 'Transaction months could not be loaded.');
+            data.transactions.forEach(transaction => {
+              const month = reportMonthFromDateValue(transaction.transactionDate || transaction.dateTime || transaction.createdAt || transaction.created_at);
+              if (month) months.add(month);
+            });
+            const totalPages = Number(data.totalPages || data.pagination?.totalPages || 0);
+            if ((totalPages && page >= totalPages) || (!totalPages && data.transactions.length < 100) || !data.transactions.length) break;
+            if (page === 200) throw new Error('Transaction month lookup reached the 20,000-record limit.');
+          } catch (_) {
+            failed = true;
+            break;
+          }
+        }
+        if (!failed) return [...months];
+      }
+      return [];
+    }
+
+    async function fetchBusinessSummaryForExport(month) {
+      for (const base of ['http://localhost:3000', 'http://127.0.0.1:3000']) {
+        try {
+          const response = await fetch(`${base}/api/transaction-management/analytics/summary?month=${encodeURIComponent(month)}`, { headers: { Accept: 'application/json' } });
+          const data = await response.json();
+          if (!response.ok || !data.success) throw new Error(data.error || `Business summary returned HTTP ${response.status}.`);
+          return data;
+        } catch (error) {
+          if (base === 'http://127.0.0.1:3000') throw error;
+        }
+      }
+      throw new Error('Could not load the business report summary.');
+    }
+
+    async function currentBusinessMonthHasData(month) {
+      try {
+        const data = await fetchBusinessSummaryForExport(month);
+        return Number(data.transactionRecordCount ?? data.recordCount ?? 0) > 0 ||
+          [data.business?.totalSalesRevenue, data.business?.rentalRevenue, data.business?.tradeInVolume]
+            .some(value => value != null && Number.isFinite(Number(value)) && Number(value) !== 0);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function hasCurrentOperationsTasks(month) {
+      for (const base of ['http://localhost:3000', 'http://127.0.0.1:3000']) {
+        try {
+          const url = `${base}/api/task-assignment/admin/tasks?tab=all&page=1&limit=100`;
+          const response = await fetch(url, { headers: { Accept: 'application/json' } });
+          const data = await response.json();
+          if (response.ok && Array.isArray(data.tasks)) {
+            return data.tasks.some(task => OperationsAnalytics.taskMonth(task) === month);
+          }
+        } catch (_) {}
+      }
+      return false;
+    }
+
+    async function loadValidReportMonths(type) {
+      if (exportPeriodsByType.has(type)) return exportPeriodsByType.get(type);
+      const cached = await ReportSnapshots.months(type);
+      const months = new Set(cached);
+      const current = currentReportMonth();
+      if (cached.length) {
+        const validCached = [...months].filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)).sort((a, b) => b.localeCompare(a));
+        exportPeriodsByType.set(type, validCached);
+        return validCached;
+      }
+
+      if (type === 'business') {
+        if (!cached.length) {
+          const sourceMonths = await fetchBusinessMonthsForExport();
+          sourceMonths.forEach(month => months.add(month));
+        }
+        if (!months.has(current) && await currentBusinessMonthHasData(current)) months.add(current);
+      } else if (type === 'inventory') {
+        exportInventoryProducts = await InventoryAnalytics.fetchProducts();
+        if (!cached.length) {
+          exportInventoryEvents = await InventoryAnalytics.fetchSaleEvents(exportInventoryProducts);
+          InventoryAnalytics.availableMonths(exportInventoryProducts, exportInventoryEvents).forEach(month => months.add(month));
+        } else if (
+          InventoryAnalytics.availableMonths(exportInventoryProducts).includes(current) ||
+          Number((await InventoryAnalytics.fetchSalesSummary(current)).transactionRecordCount) > 0
+        ) {
+          months.add(current);
+        }
+      } else if (type === 'operations') {
+        if (!cached.length) {
+          exportOperationTasks = await OperationsAnalytics.fetchTasks();
+          OperationsAnalytics.availableMonths(exportOperationTasks).forEach(month => months.add(month));
+        } else if (await hasCurrentOperationsTasks(current)) {
+          months.add(current);
+        }
+      }
+
+      const valid = [...months].filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)).sort((a, b) => b.localeCompare(a));
+      exportPeriodsByType.set(type, valid);
+      return valid;
+    }
+
+    async function addCurrentExportPeriod(type, requestId) {
+      const current = currentReportMonth();
+      const periods = exportPeriodsByType.get(type) || [];
+      if (periods.includes(current)) return;
+      let hasCurrentData = false;
+      try {
+        if (type === 'business') {
+          hasCurrentData = await currentBusinessMonthHasData(current);
+        } else if (type === 'inventory') {
+          exportInventoryProducts = exportInventoryProducts || await InventoryAnalytics.fetchProducts();
+          hasCurrentData = InventoryAnalytics.availableMonths(exportInventoryProducts).includes(current);
+          if (!hasCurrentData) {
+            const sales = await InventoryAnalytics.fetchSalesSummary(current);
+            hasCurrentData = Number(sales.transactionRecordCount) > 0;
+          }
+        } else if (type === 'operations') {
+          exportOperationTasks = exportOperationTasks || await OperationsAnalytics.fetchTasks();
+          hasCurrentData = OperationsAnalytics.availableMonths(exportOperationTasks).includes(current);
+        }
+      } catch (error) {
+        console.warn(`Could not verify current ${type} report period:`, error.message);
+      }
+      if (!hasCurrentData || requestId !== exportPeriodRequest || document.getElementById('reportType').value !== type) return;
+      const updated = [...periods, current].sort((a, b) => b.localeCompare(a));
+      exportPeriodsByType.set(type, updated);
+      const selected = getSelectedMonthKey();
+      const requested = new URLSearchParams(window.location.search).get('month') || '';
+      const yearSelect = document.getElementById('reportYear');
+      const monthSelect = document.getElementById('reportMonth');
+      const years = [...new Set(updated.map(month => month.slice(0, 4)))];
+      yearSelect.replaceChildren(...years.map(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        return option;
+      }));
+      const keepSelected = updated.includes(requested) ? requested : (updated.includes(selected) ? selected : current);
+      yearSelect.value = keepSelected.slice(0, 4);
+      populateExportMonths(keepSelected);
+      if (keepSelected !== selected) await updateReportPreview();
+    }
+
+    function populateExportMonths(preferredMonth = '') {
+      const yearSelect = document.getElementById('reportYear');
+      const monthSelect = document.getElementById('reportMonth');
+      const type = document.getElementById('reportType').value;
+      const periods = exportPeriodsByType.get(type) || [];
+      const monthsForYear = periods.filter(month => month.startsWith(yearSelect.value + '-')).map(month => month.slice(5));
+      monthSelect.replaceChildren();
+      monthsForYear.forEach(month => {
+        const option = document.createElement('option');
+        option.value = exportMonthNames[Number(month) - 1];
+        option.textContent = option.value;
+        monthSelect.appendChild(option);
+      });
+      const preferredNumber = preferredMonth.slice(5, 7);
+      monthSelect.value = monthsForYear.includes(preferredNumber)
+        ? exportMonthNames[Number(preferredNumber) - 1]
+        : (monthsForYear.length ? exportMonthNames[Number(monthsForYear[0]) - 1] : '');
+      monthSelect.disabled = monthsForYear.length === 0;
+    }
+
+    async function handleReportTypeChange() {
+      const requestId = ++exportPeriodRequest;
+      const type = document.getElementById('reportType').value;
+      const previousMonth = getSelectedMonthKey();
+      const yearSelect = document.getElementById('reportYear');
+      const monthSelect = document.getElementById('reportMonth');
+      if (!document.body.classList.contains('export-from-detail') || !document.querySelector('#reportSheetContainer .sheet-brand-row')) {
+        setReportExportReady(false);
+      }
+      yearSelect.disabled = true;
+      monthSelect.disabled = true;
+      yearSelect.innerHTML = '<option value="">Loading…</option>';
+      monthSelect.innerHTML = '<option value="">Loading…</option>';
+      try {
+        const months = await loadValidReportMonths(type);
+        if (requestId !== exportPeriodRequest) return;
+        yearSelect.replaceChildren();
+        const years = [...new Set(months.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+        years.forEach(year => {
+          const option = document.createElement('option');
+          option.value = year;
+          option.textContent = year;
+          yearSelect.appendChild(option);
+        });
+        if (!years.length) {
+          yearSelect.innerHTML = '<option value="">No valid periods</option>';
+          monthSelect.innerHTML = '<option value="">No valid periods</option>';
+          if (!document.body.classList.contains('export-from-detail')) {
+            document.getElementById('reportSheetContainer').innerHTML = '<p>No report data is available for this report type.</p>';
+          }
+          return;
+        }
+        const requested = new URLSearchParams(window.location.search).get('month') || '';
+        const preferred = months.includes(requested) ? requested : (months.includes(previousMonth) ? previousMonth : months[0]);
+        yearSelect.value = preferred.slice(0, 4);
+        populateExportMonths(preferred);
+        yearSelect.disabled = false;
+        await updateReportPreview();
+        void addCurrentExportPeriod(type, requestId);
+      } catch (error) {
+        if (requestId !== exportPeriodRequest) return;
+        yearSelect.innerHTML = '<option value="">Unavailable</option>';
+        monthSelect.innerHTML = '<option value="">Unavailable</option>';
+        if (!document.body.classList.contains('export-from-detail')) {
+          document.getElementById('reportSheetContainer').innerHTML = `<p>${reportEscape(error.message)}</p>`;
+        } else if (document.querySelector('#reportSheetContainer .sheet-brand-row')) {
+          setReportExportReady(true);
+        }
+      }
+    }
+
     let reportPreviewRequest = 0;
-    async function updateReportPreview() {
+    let reportPreviewReady = false;
+    function setReportExportReady(ready) {
+      reportPreviewReady = Boolean(ready);
+      const button = document.getElementById('generateReportButton');
+      if (!button) return;
+      button.disabled = !reportPreviewReady;
+      button.setAttribute('aria-busy', String(!reportPreviewReady));
+      const label = button.querySelector('span');
+      if (label) label.textContent = reportPreviewReady ? 'Generate and Download Report' : 'Preparing report…';
+    }
+
+    async function refreshCurrentExportReport(type, monthKey, reportTypeRequest) {
+      try {
+        let fresh;
+        if (type === 'business') {
+          fresh = await fetchBusinessSummaryForExport(monthKey);
+        } else if (type === 'inventory') {
+          const products = await InventoryAnalytics.fetchProducts();
+          exportInventoryProducts = products;
+          const events = await InventoryAnalytics.fetchSaleEvents(products);
+          exportInventoryEvents = events;
+          const sales = await InventoryAnalytics.fetchSalesSummary(monthKey);
+          fresh = InventoryAnalytics.summarize(products, monthKey, sales, events);
+        } else {
+          const tasks = await OperationsAnalytics.fetchTasks();
+          exportOperationTasks = tasks;
+          fresh = OperationsAnalytics.summarize(tasks, monthKey);
+        }
+        await ReportSnapshots.save(type, monthKey, fresh);
+        if (reportTypeRequest === exportPeriodRequest && document.getElementById('reportType').value === type && getSelectedMonthKey() === monthKey) {
+          await updateReportPreview(true);
+        }
+      } catch (error) {
+        console.warn(`Could not refresh current ${type} report:`, error.message);
+      }
+    }
+
+    async function updateReportPreview(skipCurrentRefresh = false) {
       const requestId = ++reportPreviewRequest;
+      setReportExportReady(false);
       const type = document.getElementById('reportType').value;
       const period = getCurrentPeriod();
       const container = document.getElementById('reportSheetContainer');
-      const year = document.getElementById('reportYear').value;
-      const month = document.getElementById('reportMonth').value.substring(0, 3).toUpperCase();
-      document.getElementById('reportPreviewId').innerText = `ID: REP-${year}-${month}-8891`;
-
+      const monthKey = getSelectedMonthKey();
+      if (!monthKey) {
+        container.innerHTML = '<p>No valid report months are available for this report type.</p>';
+        return;
+      }
       if (type === 'inventory') {
         container.innerHTML = '<p>Loading live Firebase product report…</p>';
         try {
-          const products = await InventoryAnalytics.fetchProducts();
-          const saleEvents = await InventoryAnalytics.fetchSaleEvents(products);
-          const salesSummary = await InventoryAnalytics.fetchSalesSummary(getSelectedMonthKey());
+          let summary = await ReportSnapshots.get('inventory', monthKey);
+          const hasSavedSummary = Boolean(summary);
+          if (!summary) {
+            const products = exportInventoryProducts || await InventoryAnalytics.fetchProducts();
+            exportInventoryProducts = products;
+            const saleEvents = exportInventoryEvents || await InventoryAnalytics.fetchSaleEvents(products);
+            exportInventoryEvents = saleEvents;
+            const salesSummary = await InventoryAnalytics.fetchSalesSummary(monthKey);
+            summary = InventoryAnalytics.summarize(products, monthKey, salesSummary, saleEvents);
+            summary = await ReportSnapshots.save('inventory', monthKey, summary) || summary;
+          }
           if (requestId === reportPreviewRequest) {
-            const summary = InventoryAnalytics.summarize(products, getSelectedMonthKey(), salesSummary, saleEvents);
             container.innerHTML = renderInventoryReport(period, summary);
+            setReportExportReady(true);
+            if (monthKey === currentReportMonth() && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentExportReport(type, monthKey, exportPeriodRequest);
           }
         } catch (error) {
           if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
@@ -750,10 +1126,28 @@
       } else if (type === 'operations') {
         container.innerHTML = '<p>Loading live Firebase task report…</p>';
         try {
-          const tasks = await OperationsAnalytics.fetchTasks();
+          const staffPromise = OperationsAnalytics.fetchStaffSummary()
+            .catch(error => {
+              console.warn('Could not load staff availability for export:', error.message);
+              return null;
+            });
+          let summary = await ReportSnapshots.get('operations', monthKey);
+          const hasSavedSummary = Boolean(summary);
+          if (!summary) {
+            const tasks = exportOperationTasks || await OperationsAnalytics.fetchTasks();
+            exportOperationTasks = tasks;
+            summary = OperationsAnalytics.summarize(tasks, monthKey);
+            summary = await ReportSnapshots.save('operations', monthKey, summary) || summary;
+          }
           if (requestId === reportPreviewRequest) {
-            const summary = OperationsAnalytics.summarize(tasks, getSelectedMonthKey());
-            container.innerHTML = renderOperationsReport(period, summary);
+            container.innerHTML = renderOperationsReport(period, summary, null);
+            staffPromise.then(staffSummary => {
+              if (requestId === reportPreviewRequest) {
+                container.innerHTML = renderOperationsReport(period, summary, staffSummary);
+                setReportExportReady(true);
+              }
+            });
+            if (monthKey === currentReportMonth() && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentExportReport(type, monthKey, exportPeriodRequest);
           }
         } catch (error) {
           if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
@@ -761,11 +1155,17 @@
       } else {
         container.innerHTML = '<p>Loading live Firebase report…</p>';
         try {
-          const monthKey = getSelectedMonthKey();
-          const response = await fetch(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(monthKey)}`);
-          const data = await response.json();
-          if (!response.ok || !data.success) throw new Error(data.error || 'Could not load the business report.');
-          if (requestId === reportPreviewRequest) container.innerHTML = renderBusinessReport(period, data);
+          let data = await ReportSnapshots.get('business', monthKey);
+          const hasSavedSummary = Boolean(data);
+          if (!data) {
+            data = await fetchBusinessSummaryForExport(monthKey);
+            data = await ReportSnapshots.save('business', monthKey, data) || data;
+          }
+          if (requestId === reportPreviewRequest) {
+            container.innerHTML = renderBusinessReport(period, data);
+            setReportExportReady(true);
+            if (monthKey === currentReportMonth() && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentExportReport(type, monthKey, exportPeriodRequest);
+          }
         } catch (error) {
           if (requestId === reportPreviewRequest) container.innerHTML = `<p>${reportEscape(error.message)}</p>`;
         }
@@ -773,51 +1173,85 @@
     }
 
     function updateReportDate() {
+      const selected = getSelectedMonthKey();
+      const periods = exportPeriodsByType.get(document.getElementById('reportType').value) || [];
+      if (!periods.includes(selected)) populateExportMonths('');
       updateReportPreview();
     }
 
     function handleGenerateReport(e) {
       e.preventDefault();
-      // Trigger native print / PDF export dialog
+      if (!reportPreviewReady) return;
+      const type = document.getElementById('reportType').value;
+      const typeNames = {
+        business: 'Business_Analytics',
+        inventory: 'Inventory_Performance',
+        operations: 'Operational_Performance'
+      };
+      const month = getSelectedMonthKey();
+      const fileName = `ReByte_${typeNames[type] || 'Report'}_${month}_Report`;
+      document.title = fileName;
+      const titleElement = document.querySelector('head title');
+      if (titleElement) titleElement.textContent = fileName;
+      // The browser uses the document title as the suggested PDF filename.
       window.print();
     }
 
     // Read the selected report type and month from the URL.
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       const params = new URLSearchParams(window.location.search);
       const requestedType = params.get('type');
+      const reportTypeSelect = document.getElementById('reportType');
+      const detailTargets = {
+        'businessAnalytics.html': 'businessAnalytics.html',
+        'inventoryPerformance.html': 'inventoryPerformance.html',
+        'operationalPerformance.html': 'operationalPerformance.html'
+      };
+      let referrerPage = '';
+      let referrerMonth = '';
+      try {
+        const referrer = new URL(document.referrer);
+        referrerPage = referrer.pathname.split('/').pop();
+        referrerMonth = referrer.searchParams.get('month') || '';
+      } catch (_) {}
+      const fromDetail = params.get('source') === 'detail' || Boolean(detailTargets[params.get('returnTo')]) || Boolean(detailTargets[referrerPage]);
+      document.body.classList.toggle('export-from-detail', fromDetail);
       if (requestedType && ['business', 'inventory', 'operations'].includes(requestedType)) {
-        document.getElementById('reportType').value = requestedType;
+        reportTypeSelect.value = requestedType;
       }
-      const yearSelect = document.getElementById('reportYear');
-      const currentYear = new Date().getFullYear();
-      for (let year = currentYear; year >= currentYear - 10; year--) {
-        const option = document.createElement('option');
-        option.value = String(year);
-        option.textContent = String(year);
-        yearSelect.appendChild(option);
+      reportTypeSelect.disabled = fromDetail;
+      document.getElementById('reportTypeGroup').classList.toggle('is-locked', fromDetail);
+      const fallbackDetail = {
+        business: 'businessAnalytics.html',
+        inventory: 'inventoryPerformance.html',
+        operations: 'operationalPerformance.html'
+      }[reportTypeSelect.value];
+      const backLink = document.getElementById('exportBackLink');
+      if (fromDetail) {
+        const target = detailTargets[params.get('returnTo')] || detailTargets[referrerPage] || fallbackDetail;
+        const returnUrl = new URL(target, window.location.href);
+        const month = params.get('month') || referrerMonth;
+        if (month) returnUrl.searchParams.set('month', month);
+        backLink.href = returnUrl.toString();
+        backLink.title = 'Back to report';
+      } else {
+        backLink.href = '../adminModule/analyticsHub.html';
+        backLink.title = 'Back to Analytics Hub';
       }
-      const now = new Date();
-      yearSelect.value = String(now.getFullYear());
-      document.getElementById('reportMonth').value = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ][now.getMonth()];
-      const requestedMonth = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(params.get('month') || '');
-      if (requestedMonth) {
-        if (![...yearSelect.options].some(option => option.value === requestedMonth[1])) {
-          const option = document.createElement('option');
-          option.value = requestedMonth[1];
-          option.textContent = requestedMonth[1];
-          yearSelect.add(option);
-        }
-        yearSelect.value = requestedMonth[1];
-        document.getElementById('reportMonth').value = [
-          'January', 'February', 'March', 'April', 'May', 'June',
-          'July', 'August', 'September', 'October', 'November', 'December'
-        ][Number(requestedMonth[2]) - 1];
+      const requestedMonth = params.get('month') || '';
+      if (fromDetail && /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth)) {
+        const yearSelect = document.getElementById('reportYear');
+        const monthSelect = document.getElementById('reportMonth');
+        yearSelect.innerHTML = `<option value="${requestedMonth.slice(0, 4)}">${requestedMonth.slice(0, 4)}</option>`;
+        yearSelect.value = requestedMonth.slice(0, 4);
+        const monthNumber = Number(requestedMonth.slice(5, 7));
+        monthSelect.innerHTML = `<option value="${exportMonthNames[monthNumber - 1]}">${exportMonthNames[monthNumber - 1]}</option>`;
+        monthSelect.value = exportMonthNames[monthNumber - 1];
+        await updateReportPreview();
+        void handleReportTypeChange();
+      } else {
+        await handleReportTypeChange();
       }
-      updateReportPreview();
     });
   </script>
 </body>

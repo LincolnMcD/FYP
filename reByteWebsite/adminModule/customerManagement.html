@@ -36,24 +36,24 @@
     .search { height:44px; width:min(350px,40vw); display:flex; align-items:center; gap:12px; padding:0 14px; border:1px solid #c9cddd; border-radius:14px; background:#fafaff; color:#7d8493; }
     .search svg { width:18px; height:18px; flex:0 0 auto; }
     .search input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:var(--text); font-size:14px; }
-    .table-wrap { overflow-x:auto; }
-    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:900px; }
-    th { height:54px; padding:0 20px; text-align:left; color:#555b68; font-size:12px; letter-spacing:.3px; font-weight:700; border-bottom:1px solid #cfd4df; white-space:nowrap; }
-    th:nth-child(1),td:nth-child(1) { width:145px; }
-    th:nth-child(2),td:nth-child(2) { width:220px; }
-    th:nth-child(3),td:nth-child(3) { width:270px; }
-    th:nth-child(4),td:nth-child(4) { width:180px; }
-    th:nth-child(5),td:nth-child(5) { width:155px; }
-    th:nth-child(6),td:nth-child(6) { width:125px; padding-left:4px; padding-right:10px; text-align:left; }
+    .table-wrap { width:100%; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:0; }
+    th { height:54px; padding:0 10px; text-align:left; color:#555b68; font-size:11px; letter-spacing:.25px; font-weight:700; border-bottom:1px solid #cfd4df; white-space:nowrap; }
+    th:nth-child(1),td:nth-child(1) { width:150px; }
+    th:nth-child(2),td:nth-child(2) { width:18%; }
+    th:nth-child(3),td:nth-child(3) { width:26%; }
+    th:nth-child(4),td:nth-child(4) { width:14%; }
+    th:nth-child(5),td:nth-child(5) { width:18%; }
+    th:nth-child(6),td:nth-child(6) { width:150px; padding-left:6px; padding-right:6px; text-align:left; }
     .sort-button { display:inline-flex; align-items:center; gap:6px; padding:8px 0; border:0; background:transparent; color:inherit; font:inherit; letter-spacing:inherit; cursor:pointer; }
     .sort-arrow { color:#8a93a3; font-size:14px; line-height:1; }
     .sort-arrow.active { color:#0646a5; }
-    td { height:76px; padding:0 20px; color:#6b7180; font-size:14px; border-bottom:1px solid #e9ebf0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    td { height:76px; padding:0 10px; color:#6b7180; font-size:13px; border-bottom:1px solid #e9ebf0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     tbody tr:last-child td { border-bottom:0; }
     tbody tr[data-customer-id] { cursor:pointer; }
     tbody tr[data-customer-id]:hover { background:#f7f9fd; }
     tbody tr[data-customer-id]:focus-visible { outline:2px solid #0b4fb3; outline-offset:-2px; }
-    td:first-child { color:#596274; font-family:ui-monospace,Consolas,monospace; }
+    td:first-child { color:#596274; font-family:ui-monospace,Consolas,monospace; font-size:11px; }
     td:nth-child(2) { color:#25344f; font-weight:600; }
     .status { display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:20px; font-size:12px; font-weight:700; }
     .status::before { content:''; width:8px; height:8px; border-radius:50%; background:currentColor; }
@@ -103,7 +103,7 @@
     .confirm-actions .confirm-submit.success:hover { background:#15803d; }
     .confirm-actions .confirm-submit:disabled { opacity:.6; cursor:wait; }
     @media(max-width:900px) { .sidebar{width:220px}.content{padding:24px 20px 36px}.title-row,.customer-card{margin-left:0;margin-right:0}.toolbar{padding:12px 18px} }
-    @media(max-width:650px) { body{display:block}.sidebar{width:100%}.brand{height:72px}.nav-list{display:flex;overflow-x:auto;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 12px}.toolbar{align-items:stretch;flex-direction:column}.search{width:100%}.card-footer{align-items:flex-start;flex-direction:column} }
+    @media(max-width:650px) { body{display:block}.sidebar{width:100%}.brand{height:72px}.nav-list{display:flex;overflow-x:auto;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 12px}.toolbar{align-items:stretch;flex-direction:column}.search{width:100%}.card-footer{align-items:flex-start;flex-direction:column}th,td{padding-left:6px;padding-right:6px;font-size:11px}th:nth-child(1),td:nth-child(1){width:22%}th:nth-child(2),td:nth-child(2){width:22%}th:nth-child(3),td:nth-child(3){width:28%}th:nth-child(4),td:nth-child(4){width:16%}th:nth-child(5),td:nth-child(5){display:none}th:nth-child(6),td:nth-child(6){width:12%}.action-buttons{gap:0}.icon-action{width:28px;height:32px}.restore-action{min-height:32px;padding:0 6px;font-size:10px} }
   </style>
 </head>
 <body>
@@ -178,12 +178,30 @@
     const sortButtons = [...document.querySelectorAll('.sort-button[data-sort]')];
     const PAGE_SIZE = 5;
     let customers = [];
+    let customerTotal = 0;
+    let customerTotalPages = 1;
     let activeFilter = 'all';
     let currentPage = 1;
     let sortKey = 'id';
     let sortDirection = 'asc';
+    let customerRequestId = 0;
+    let customerSearchTimer = null;
     let pendingCustomer = null;
     let pendingStatus = '';
+
+    function customerListCacheKey() {
+      const accountKey = adminUser.uid || adminUser.userId || adminUser.email || 'admin';
+      return `customer-management:${accountKey}:${JSON.stringify({ page: currentPage, status: activeFilter, search: customerSearch.value.trim(), sort: sortKey, direction: sortDirection })}`;
+    }
+
+    function applyCustomerListData(data) {
+      customers = Array.isArray(data) ? data : (Array.isArray(data?.customers) ? data.customers : []);
+      const paging = Array.isArray(data) ? { page: 1, total: data.length, totalPages: 1 } : (data?.pagination || {});
+      currentPage = Number(paging.page) || currentPage;
+      customerTotal = Number(paging.total) || 0;
+      customerTotalPages = Math.max(1, Number(paging.totalPages) || 1);
+      renderCustomers();
+    }
 
     function dateLabel(value) {
       const seconds = value?._seconds ?? value?.seconds;
@@ -211,9 +229,10 @@
     }
 
     function customerKey(customer) { return String(customer.id || customer.userId || ''); }
+    function customerRawId(customer) { return String(customer.userId || customer.id || ''); }
     function customerDisplayId(customer) {
-      const raw = String(customer.userId || customer.id || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
-      return `#USR-${raw.slice(-6) || 'UNKNOWN'}`;
+      const id = customerRawId(customer);
+      return id ? `${id.slice(0, 8)}…` : 'Unknown';
     }
 
     function createActionButton(label, className, icon, customer, targetStatus) {
@@ -247,34 +266,16 @@
       return actions;
     }
 
-    function filteredCustomers() {
-      const query = customerSearch.value.trim().toLowerCase();
-      return customers.filter(customer => {
-        const status = String(customer.status || 'Active').toLowerCase();
-        const matchesStatus = activeFilter === 'all' || status === activeFilter;
-        const searchable = `${customerDisplayId(customer)} ${customer.userId || ''} ${customer.id || ''} ${customer.fullName || ''} ${customer.email || ''}`.toLowerCase();
-        return matchesStatus && searchable.includes(query);
-      }).sort((a, b) => {
-        const valueA = sortKey === 'id' ? customerDisplayId(a) : String(a.fullName || 'Customer');
-        const valueB = sortKey === 'id' ? customerDisplayId(b) : String(b.fullName || 'Customer');
-        const comparison = valueA.localeCompare(valueB, undefined, { numeric:true, sensitivity:'base' });
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-    }
-
     function renderCustomers() {
-      const result = filteredCustomers();
-      const pageCount = Math.max(1, Math.ceil(result.length / PAGE_SIZE));
-      currentPage = Math.min(currentPage, pageCount);
-      const start = result.length ? (currentPage - 1) * PAGE_SIZE : 0;
-      const page = result.slice(start, start + PAGE_SIZE);
+      const pageCount = Math.max(1, customerTotalPages);
+      const start = customerTotal ? (currentPage - 1) * PAGE_SIZE : 0;
       customerRows.replaceChildren();
-      page.forEach(customer => {
+      customers.forEach(customer => {
         const status = String(customer.status || 'Active');
         const row = document.createElement('tr');
-        const idCell = document.createElement('td'); idCell.textContent = customerDisplayId(customer);
-        const nameCell = document.createElement('td'); nameCell.textContent = customer.fullName || 'Customer';
-        const emailCell = document.createElement('td'); emailCell.textContent = customer.email || '—';
+        const idCell = document.createElement('td'); idCell.textContent = customerDisplayId(customer); idCell.title = customerRawId(customer);
+        const nameCell = document.createElement('td'); nameCell.textContent = customer.fullName || 'Customer'; nameCell.title = nameCell.textContent;
+        const emailCell = document.createElement('td'); emailCell.textContent = customer.email || '—'; emailCell.title = emailCell.textContent;
         const statusCell = document.createElement('td');
         const badge = document.createElement('span'); badge.className = `status status-${status.toLowerCase()}`; badge.textContent = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
         statusCell.append(badge);
@@ -294,9 +295,9 @@
         });
         customerRows.append(row);
       });
-      document.getElementById('emptyState').style.display = result.length ? 'none' : 'block';
-      document.getElementById('resultCount').textContent = result.length
-        ? `Showing ${start + 1} to ${Math.min(start + PAGE_SIZE, result.length)} of ${result.length} entries`
+      document.getElementById('emptyState').style.display = customerTotal ? 'none' : 'block';
+      document.getElementById('resultCount').textContent = customerTotal
+        ? `Showing ${start + 1} to ${Math.min(start + customers.length, customerTotal)} of ${customerTotal} entries`
         : 'Showing 0 entries';
       customerPagination.innerHTML = [
         `<button class="page-button" type="button" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`,
@@ -371,13 +372,33 @@
     }
 
     async function loadCustomers() {
-      const result = await ReByteAuth.getCustomerList();
+      const requestId = ++customerRequestId;
+      const query = {
+        page: currentPage,
+        limit: PAGE_SIZE,
+        status: activeFilter,
+        search: customerSearch.value.trim(),
+        sort: sortKey,
+        direction: sortDirection
+      };
+      const cacheKey = customerListCacheKey();
+      let cachedDisplayed = false;
+      try {
+        const cachedData = sessionStorage.getItem(cacheKey);
+        if (cachedData) {
+          applyCustomerListData(JSON.parse(cachedData));
+          cachedDisplayed = true;
+        }
+      } catch (_) {}
+
+      const result = await ReByteAuth.getCustomerList(query);
+      if (requestId !== customerRequestId) return;
       if (!result.success) {
-        ReByteAuth.showToast(result.error || 'Could not load customer records.', 'error');
+        ReByteAuth.showToast(cachedDisplayed ? 'Could not refresh customer records. Showing the last loaded results.' : (result.error || 'Could not load customer records.'), 'error');
         return;
       }
-      customers = Array.isArray(result.data) ? result.data : [];
-      renderCustomers();
+      applyCustomerListData(result.data || {});
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(result.data || {})); } catch (_) {}
     }
 
     document.querySelectorAll('.tab[data-status]').forEach(tab => tab.addEventListener('click', () => {
@@ -388,9 +409,12 @@
         item.classList.toggle('active', selected);
         item.setAttribute('aria-selected', String(selected));
       });
-      renderCustomers();
+      loadCustomers();
     }));
-    customerSearch.addEventListener('input', () => { currentPage = 1; renderCustomers(); });
+    customerSearch.addEventListener('input', () => {
+      clearTimeout(customerSearchTimer);
+      customerSearchTimer = setTimeout(() => { currentPage = 1; loadCustomers(); }, 250);
+    });
     sortButtons.forEach(button => button.addEventListener('click', () => {
       if (sortKey === button.dataset.sort) {
         sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -407,13 +431,13 @@
         arrow.textContent = active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
         arrow.classList.toggle('active', active);
       });
-      renderCustomers();
+      loadCustomers();
     }));
     customerPagination.addEventListener('click', event => {
       const button = event.target.closest('button[data-page]');
       if (!button || button.disabled) return;
       currentPage = Number(button.dataset.page);
-      renderCustomers();
+      loadCustomers();
     });
     document.getElementById('cancelCustomerAction').addEventListener('click', closeConfirmation);
     const confirmReasonInput = document.getElementById('confirmReason');

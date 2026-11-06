@@ -1324,14 +1324,39 @@ router.get("/staff-list", requireAdmin, async (req, res) => {
             }
         }
         
-        // Sort by created date descending (newest first)
-        staffList.sort((a, b) => {
-           const timeA = a.createdAt ? a.createdAt._seconds : 0;
-           const timeB = b.createdAt ? b.createdAt._seconds : 0;
-           return timeB - timeA;
+        const hasPaging = ["page", "limit", "status", "search", "sort", "direction"].some(key => req.query[key] != null);
+        if (!hasPaging) {
+            staffList.sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+            return res.status(200).json(staffList);
+        }
+
+        const search = String(req.query.search || "").trim().toLowerCase();
+        const requestedStatus = String(req.query.status || "active").trim().toLowerCase();
+        const sortKey = ["staffNo", "fullName", "createdAt"].includes(req.query.sort) ? req.query.sort : "staffNo";
+        const sortDirection = String(req.query.direction || "asc").toLowerCase() === "desc" ? -1 : 1;
+        const pageSize = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 5));
+        const filtered = staffList.filter(staff => {
+            const staffStatus = String(staff.status || "active").trim().toLowerCase();
+            const matchesStatus = requestedStatus === "all" || staffStatus === requestedStatus;
+            const searchable = `${staff.staffNo || ""} ${staff.fullName || ""} ${staff.email || ""} ${staff.position || ""}`.toLowerCase();
+            return matchesStatus && searchable.includes(search);
         });
-        
-        return res.status(200).json(staffList);
+        const valueOf = staff => sortKey === "createdAt"
+            ? (staff.createdAt?._seconds || staff.createdAt?.seconds || 0)
+            : String(staff[sortKey] || "");
+        filtered.sort((a, b) => {
+            const aValue = valueOf(a);
+            const bValue = valueOf(b);
+            const comparison = typeof aValue === "number" && typeof bValue === "number"
+                ? aValue - bValue
+                : String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: "base" });
+            return comparison * sortDirection;
+        });
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+        const staff = filtered.slice((page - 1) * pageSize, page * pageSize);
+        return res.status(200).json({ success: true, staff, pagination: { page, limit: pageSize, total, totalPages } });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: "Internal Server Error" });
@@ -1557,6 +1582,148 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
+router.get("/customers/:customerId/records", requireAdmin, async (req, res) => {
+    try {
+        const requestedId = String(req.params.customerId || "").trim();
+        const type = String(req.query.type || "history").trim().toLowerCase();
+        if (!["history", "orders", "rentals", "tradeins"].includes(type)) {
+            return res.status(400).json({ error: "Choose a valid customer activity tab." });
+        }
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(10, Math.max(1, parseInt(req.query.limit, 10) || 10));
+        let customerDoc = await db.collection("users").doc(requestedId).get();
+        if (!customerDoc.exists) {
+            const matches = await db.collection("users").where("userId", "==", requestedId).limit(1).get();
+            if (!matches.empty) customerDoc = matches.docs[0];
+        }
+        if (!customerDoc.exists) return res.status(404).json({ error: "Customer account not found." });
+
+        const customer = customerDoc.data() || {};
+        const role = String(customer.role || customer.systemRole || "").trim().toLowerCase();
+        if (role !== "customer") return res.status(404).json({ error: "Customer account not found." });
+
+        const unique = values => [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))];
+        const customerIds = unique([customerDoc.id, customer.userId, customer.uid]);
+        const customerEmails = unique([
+            customer.email,
+            customer.userEmail,
+            String(customer.email || "").toLowerCase(),
+            String(customer.userEmail || "").toLowerCase()
+        ]);
+        const collectMatches = async (collectionName, fields, values) => {
+            const entries = new Map();
+            await Promise.all(fields.flatMap(field => {
+                const matches = [];
+                for (let offset = 0; offset < values.length; offset += 10) {
+                    const batch = values.slice(offset, offset + 10);
+                    if (!batch.length) continue;
+                    const query = batch.length === 1
+                        ? db.collection(collectionName).where(field, "==", batch[0])
+                        : db.collection(collectionName).where(field, "in", batch);
+                    matches.push(query.get().then(snapshot => snapshot.docs.forEach(doc => entries.set(doc.id, doc))));
+                }
+                return matches;
+            }));
+            return [...entries.values()];
+        };
+        const combineMatches = async (collectionName, criteria) => {
+            const batches = await Promise.all(criteria.map(([field, values]) => collectMatches(collectionName, [field], values)));
+            const docs = new Map();
+            batches.flat().forEach(doc => docs.set(doc.id, doc));
+            return [...docs.values()];
+        };
+        const serialize = (docs, idField) => docs.map(doc => {
+            const data = doc.data() || {};
+            return { ...data, [idField]: data[idField] || doc.id, documentID: doc.id };
+        });
+        const timeValue = value => {
+            if (!value) return 0;
+            if (typeof value.toMillis === "function") return value.toMillis();
+            if (typeof value.toDate === "function") return value.toDate().getTime();
+            if (value._seconds != null || value.seconds != null) return Number(value._seconds ?? value.seconds) * 1000;
+            const parsed = new Date(value).getTime();
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const dateOf = (record, fields) => {
+            for (const field of fields) if (record[field]) return record[field];
+            return null;
+        };
+        const money = value => {
+            const amount = typeof value === "object" && value !== null
+                ? value.amount ?? value.value ?? value.total
+                : value;
+            const number = Number(amount);
+            return Number.isFinite(number) ? `RM ${number.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
+        };
+        const toActivity = (records, selectedType) => records.map(record => {
+            if (selectedType === "orders") return {
+                type: "Order",
+                id: record.orderID || record.documentID,
+                status: record.orderStatus || record.status || "—",
+                date: dateOf(record, ["orderDate", "createdAt", "updatedAt"]),
+                details: [Array.isArray(record.productIDs) ? `${record.productIDs.length} product(s)` : "", record.fulfillmentType, money(record.totalAmount ?? record.totalPrice ?? record.amount)].filter(Boolean).join(" · ")
+            };
+            if (selectedType === "rentals") return {
+                type: "Rental",
+                id: record.rentalID || record.documentID,
+                status: record.rentalStatus || record.status || record.listingStatus || "—",
+                date: dateOf(record, ["rentalDate", "startDate", "createdAt", "updatedAt"]),
+                details: [record.productID, money(record.totalAmount ?? record.rentalAmount ?? record.monthlyPayment)].filter(Boolean).join(" · ")
+            };
+            if (selectedType === "tradeins") return {
+                type: "Trade-in",
+                id: record.tradeInRequestID || record.documentID,
+                status: record.requestStatus || record.status || "—",
+                date: dateOf(record, ["submittedAt", "createdAt", "updatedAt"]),
+                details: [record.deviceID, money(record.finalQuotation?.finalOfferPrice ?? record.finalOfferPrice ?? record.quotedValue)].filter(Boolean).join(" · ")
+            };
+            if (selectedType === "transactions") return {
+                type: record.transactionType ? `Transaction · ${record.transactionType}` : "Transaction",
+                id: record.transactionID || record.documentID,
+                status: record.transactionStatus || record.status || "—",
+                date: dateOf(record, ["transactionDate", "createdAt"]),
+                details: [record.orderID, record.rentalID, record.tradeInRequestID, money(record.transactionAmount)].filter(Boolean).join(" · ")
+            };
+            return {
+                type: "Account access",
+                id: "",
+                status: record.action || "Updated",
+                date: dateOf(record, ["createdAt"]),
+                details: record.reason ? `Reason: ${record.reason}` : "Account status updated"
+            };
+        });
+
+        const [orderDocs, rentalDocs, tradeInDocs] = await Promise.all([
+            type === "orders"
+                ? combineMatches("order", [["customerID", customerIds], ["userId", customerIds], ["uid", customerIds], ["email", customerEmails], ["customerEmail", customerEmails]])
+                : Promise.resolve([]),
+            type === "rentals"
+                ? combineMatches("rental", [["customerID", customerIds], ["userId", customerIds], ["uid", customerIds], ["email", customerEmails], ["customerEmail", customerEmails]])
+                : Promise.resolve([]),
+            type === "tradeins"
+                ? combineMatches("tradeInRequests", [["customerID", customerIds], ["userId", customerIds], ["uid", customerIds], ["userEmail", customerEmails], ["email", customerEmails]])
+                : Promise.resolve([])
+        ]);
+        let activityRecords = [];
+        if (type === "orders") activityRecords.push(...toActivity(serialize(orderDocs, "orderID"), "orders"));
+        if (type === "rentals") activityRecords.push(...toActivity(serialize(rentalDocs, "rentalID"), "rentals"));
+        if (type === "tradeins") activityRecords.push(...toActivity(serialize(tradeInDocs, "tradeInRequestID"), "tradeins"));
+        if (type === "history") {
+            const auditDocs = await combineMatches("customerAccountAudit", [["customerId", customerIds], ["userId", customerIds], ["email", customerEmails]]);
+            activityRecords.push(...toActivity(serialize(auditDocs, "auditID"), "audit"));
+        }
+
+        activityRecords.sort((a, b) => timeValue(b.date) - timeValue(a.date));
+        const total = activityRecords.length;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const records = activityRecords.slice((page - 1) * limit, page * limit);
+        return res.json({ success: true, records, pagination: { page, limit, total, totalPages } });
+    } catch (err) {
+        console.error("Could not load customer account records:", err);
+        return res.status(500).json({ error: "Could not load this customer’s account records." });
+    }
+});
+
 router.get("/customer-list", requireAdmin, async (req, res) => {
     try {
         const customerDocuments = await queryUsersByRole("Customer");
@@ -1567,12 +1734,42 @@ router.get("/customer-list", requireAdmin, async (req, res) => {
             if (role !== "customer") continue;
             customers.push({ ...data, id: doc.id });
         }
-        customers.sort((a, b) => {
-            const timeA = a.createdAt?._seconds || 0;
-            const timeB = b.createdAt?._seconds || 0;
-            return timeB - timeA;
+        const hasPaging = ["page", "limit", "status", "search", "sort", "direction"].some(key => req.query[key] != null);
+        if (!hasPaging) {
+            customers.sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+            return res.status(200).json(customers);
+        }
+
+        const search = String(req.query.search || "").trim().toLowerCase();
+        const requestedStatus = String(req.query.status || "all").trim().toLowerCase();
+        const sortKey = ["id", "name", "createdAt"].includes(req.query.sort) ? req.query.sort : "id";
+        const sortDirection = String(req.query.direction || "asc").toLowerCase() === "desc" ? -1 : 1;
+        const pageSize = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 5));
+        const filtered = customers.filter(customer => {
+            const status = String(customer.status || "Active").trim().toLowerCase();
+            const matchesStatus = requestedStatus === "all" || status === requestedStatus;
+            const uid = String(customer.userId || customer.id || "");
+            const searchable = `${uid} ${customer.id || ""} ${customer.fullName || ""} ${customer.email || ""}`.toLowerCase();
+            return matchesStatus && searchable.includes(search);
         });
-        return res.status(200).json(customers);
+        const valueOf = customer => sortKey === "id"
+            ? String(customer.userId || customer.id || "")
+            : sortKey === "name"
+                ? String(customer.fullName || "Customer")
+                : (customer.createdAt?._seconds || customer.createdAt?.seconds || 0);
+        filtered.sort((a, b) => {
+            const aValue = valueOf(a);
+            const bValue = valueOf(b);
+            const comparison = typeof aValue === "number" && typeof bValue === "number"
+                ? aValue - bValue
+                : String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: "base" });
+            return comparison * sortDirection;
+        });
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+        const pageCustomers = filtered.slice((page - 1) * pageSize, page * pageSize);
+        return res.status(200).json({ success: true, customers: pageCustomers, pagination: { page, limit: pageSize, total, totalPages } });
     } catch (err) {
         console.error("Could not load customer records:", err);
         return res.status(500).json({ error: "Could not load customer records." });
@@ -1708,4 +1905,78 @@ const suspensionExpiryTimer = setInterval(() => {
 suspensionExpiryTimer.unref?.();
 void reactivateExpiredCustomerSuspensions();
 
+router.get("/api/report-cache/:type/:month", requireAdmin, async (req, res) => {
+    try {
+        const type = String(req.params.type || "").trim().toLowerCase();
+        const month = String(req.params.month || "").trim();
+        if (!["business", "inventory", "operations"].includes(type) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+            return res.status(400).json({ success: false, error: "A valid report type and YYYY-MM month are required." });
+        }
+        const snapshot = await db.collection("report").doc(`snapshot_${type}_${month}`).get();
+        return res.json({ success: true, found: snapshot.exists, report: snapshot.exists ? snapshot.data() : null });
+    } catch (err) {
+        console.error("Could not read report snapshot:", err);
+        return res.status(500).json({ success: false, error: "Could not read the saved report." });
+    }
+});
+
+router.get("/api/report-cache/:type", requireAdmin, async (req, res) => {
+    try {
+        const type = String(req.params.type || "").trim().toLowerCase();
+        if (!["business", "inventory", "operations"].includes(type)) {
+            return res.status(400).json({ success: false, error: "A valid report type is required." });
+        }
+        const snapshot = await db.collection("report").where("reportType", "==", type).get();
+        const months = [...new Set(snapshot.docs.map(doc => doc.data().month).filter(month => /^\d{4}-(0[1-9]|1[0-2])$/.test(month || "")))].sort((a, b) => b.localeCompare(a));
+        return res.json({ success: true, months });
+    } catch (err) {
+        console.error("Could not list report snapshots:", err);
+        return res.status(500).json({ success: false, error: "Could not list saved report months." });
+    }
+});
+
+router.put("/api/report-cache", requireAdmin, async (req, res) => {
+    try {
+        const type = String(req.body?.reportType || "").trim().toLowerCase();
+        const month = String(req.body?.month || "").trim();
+        const data = req.body?.data;
+        if (!["business", "inventory", "operations"].includes(type) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !data || typeof data !== "object" || Array.isArray(data)) {
+            return res.status(400).json({ success: false, error: "Report type, YYYY-MM month, and report data are required." });
+        }
+        const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+        const currentMonth = `${parts.find(part => part.type === "year").value}-${parts.find(part => part.type === "month").value}`;
+        if (month > currentMonth) return res.status(400).json({ success: false, error: "Future months cannot be saved as report snapshots." });
+        if (Buffer.byteLength(JSON.stringify(data), "utf8") > 900000) return res.status(413).json({ success: false, error: "The report snapshot is too large to save." });
+        const ref = db.collection("report").doc(`snapshot_${type}_${month}`);
+        const existing = await ref.get();
+        if (month === currentMonth) {
+            const now = Timestamp.now();
+            const report = {
+                reportType: type,
+                month,
+                data,
+                createdAt: existing.exists ? existing.data().createdAt || now : now,
+                updatedAt: now,
+                updatedBy: req.adminUid
+            };
+            await ref.set(report);
+            return res.json({ success: true, created: !existing.exists, updated: existing.exists, report });
+        }
+        if (existing.exists) return res.json({ success: true, created: false, report: existing.data() });
+        const report = { reportType: type, month, data, createdAt: Timestamp.now(), createdBy: req.adminUid };
+        try {
+            await ref.create(report);
+            return res.status(201).json({ success: true, created: true, report });
+        } catch (err) {
+            if (err.code === 6 || err.code === "already-exists") {
+                const winner = await ref.get();
+                return res.json({ success: true, created: false, report: winner.data() });
+            }
+            throw err;
+        }
+    } catch (err) {
+        console.error("Could not save report snapshot:", err);
+        return res.status(500).json({ success: false, error: "Could not save the report snapshot." });
+    }
+});
 module.exports = router;

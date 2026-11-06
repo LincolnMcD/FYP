@@ -431,6 +431,7 @@
   <main class="main">
     <header class="admin-header" data-admin-header data-page-title="Staff Management"></header>
     <section class="content">
+      <a class="back" href="adminDashboard.html" aria-label="Back to admin dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
       <div class="title-row">
         <div><h1>Staff Account Management</h1><p class="subtitle">Overview and management of active ReByte staff.</p></div>
         <button class="add-button" type="button" onclick="window.location.href='createStaffAccount.html'"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#fff"></circle><path d="M12 7v10M7 12h10" stroke="#0646a5" stroke-width="2.5"></path></svg>Add New Staff</button>
@@ -633,11 +634,29 @@
     let currentPage = 1;
     let sortKey = 'staffNo';
     let sortDirection = 'asc';
+    let totalStaff = 0;
+    let totalStaffPages = 1;
+    let staffRequestId = 0;
+    let staffSearchTimer = null;
     let editingStaffId = '';
     let editingOriginal = null;
     let archiveTarget = null;
     let staffActionTarget = null;
     let staffActionType = '';
+
+    function staffListCacheKey() {
+      const accountKey = user.uid || user.userId || user.email || 'admin';
+      return `staff-management:${accountKey}:${JSON.stringify({ page: currentPage, status, search: search.value.trim(), sort: sortKey, direction: sortDirection })}`;
+    }
+
+    function applyStaffListData(data) {
+      allStaffData = Array.isArray(data) ? data : (Array.isArray(data?.staff) ? data.staff : []);
+      const paging = Array.isArray(data) ? { page: 1, total: data.length, totalPages: 1 } : (data?.pagination || {});
+      currentPage = Number(paging.page) || currentPage;
+      totalStaff = Number(paging.total) || 0;
+      totalStaffPages = Math.max(1, Number(paging.totalPages) || 1);
+      renderRows();
+    }
 
     let editingWorkLocation = null;
     let editLeafletMap = null;
@@ -1215,19 +1234,40 @@
     });
 
     async function loadStaff() {
+        const requestId = ++staffRequestId;
+        const queryOptions = {
+          page: String(currentPage),
+          limit: String(PAGE_SIZE),
+          status,
+          search: search.value.trim(),
+          sort: sortKey,
+          direction: sortDirection
+        };
+        const cacheKey = staffListCacheKey();
+        let cachedDisplayed = false;
         try {
+          const cachedData = sessionStorage.getItem(cacheKey);
+          if (cachedData) {
+            applyStaffListData(JSON.parse(cachedData));
+            cachedDisplayed = true;
+          }
+        } catch (_) {}
+        try {
+            const query = new URLSearchParams({ ...queryOptions, _t: String(Date.now()) });
             const res = await (typeof ReByteAuth !== 'undefined' && ReByteAuth.authFetch
-              ? ReByteAuth.authFetch(`http://localhost:3000/staff-list?_t=${Date.now()}`)
-              : fetch(`http://localhost:3000/staff-list?_t=${Date.now()}`, {
+              ? ReByteAuth.authFetch(`http://localhost:3000/staff-list?${query}`)
+              : fetch(`http://localhost:3000/staff-list?${query}`, {
                   headers: { Authorization: `Bearer ${ReByteAuth.getUser()?.token || ''}` }
                 }));
             const data = await res.json();
             if(!res.ok) throw new Error(data.error || 'Could not load staff records.');
-            allStaffData = data;
-            renderRows();
+            if (requestId !== staffRequestId) return;
+            applyStaffListData(data);
+            try { sessionStorage.setItem(cacheKey, JSON.stringify(data)); } catch (_) {}
         } catch(e) {
+            if (requestId !== staffRequestId) return;
             console.error('Could not load staff records:', e);
-            if (typeof ReByteAuth !== 'undefined') ReByteAuth.showToast(e.message || 'Could not load staff records.', 'error');
+            if (typeof ReByteAuth !== 'undefined') ReByteAuth.showToast(cachedDisplayed ? 'Could not refresh staff records. Showing the last loaded results.' : (e.message || 'Could not load staff records.'), 'error');
         }
     }
 
@@ -1238,24 +1278,10 @@
     }
 
     function renderRows() {
-      const query = search.value.trim().toLowerCase();
-      const sortedStaff = [...allStaffData].sort((a, b) => {
-        const valueA = String(a[sortKey] || '');
-        const valueB = String(b[sortKey] || '');
-        const comparison = valueA.localeCompare(valueB, undefined, { numeric: true, sensitivity: 'base' });
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-      const filteredStaff = sortedStaff.filter(staff => {
-        const staffStatus = (staff.status || 'active').toLowerCase();
-        const textContent = `${staff.staffNo || ''} ${staff.fullName || ''} ${staff.email || ''} ${staff.position || ''}`.toLowerCase();
-        return staffStatus === status && textContent.includes(query);
-      });
-
-      const total = filteredStaff.length;
-      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-      currentPage = Math.min(currentPage, pageCount);
+      const total = totalStaff;
+      const pageCount = Math.max(1, totalStaffPages);
       const firstIndex = total ? (currentPage - 1) * PAGE_SIZE : 0;
-      const pageRecords = filteredStaff.slice(firstIndex, firstIndex + PAGE_SIZE);
+      const pageRecords = allStaffData;
       tbody.innerHTML = '';
 
       pageRecords.forEach(staff => {
@@ -1294,12 +1320,15 @@
       ].join('');
     }
 
-    search.addEventListener('input', () => { currentPage = 1; renderRows(); });
+    search.addEventListener('input', () => {
+      clearTimeout(staffSearchTimer);
+      staffSearchTimer = setTimeout(() => { currentPage = 1; loadStaff(); }, 250);
+    });
     pagination.addEventListener('click', event => {
       const button = event.target.closest('button[data-page]');
       if (!button || button.disabled) return;
       currentPage = Number(button.dataset.page);
-      renderRows();
+      loadStaff();
     });
     sortButtons.forEach(button => button.addEventListener('click', () => {
       if (sortKey === button.dataset.sort) {
@@ -1317,7 +1346,7 @@
         arrow.textContent = active ? (sortDirection === 'asc' ? '↑' : '↓') : '↕';
         arrow.classList.toggle('active', active);
       });
-      renderRows();
+      loadStaff();
     }));
     tabs.forEach((tab, index) => tab.addEventListener('click', () => {
       status = index ? 'archived' : 'active';
@@ -1326,7 +1355,7 @@
         item.classList.toggle('active', itemIndex === index);
         item.setAttribute('aria-selected', itemIndex === index ? 'true' : 'false');
       });
-      renderRows();
+      loadStaff();
     }));
     
     document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));

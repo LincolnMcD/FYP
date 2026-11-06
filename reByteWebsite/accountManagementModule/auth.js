@@ -985,9 +985,12 @@ const ReByteAuth = {
     }
   },
 
-  async getCustomerList() {
+  async getCustomerList(options = {}) {
     try {
-      const response = await this.authFetch(`${API_BASE_URL}/customer-list`);
+      const query = new URLSearchParams(Object.entries(options).filter(([, value]) => value != null).map(([key, value]) => [key, String(value)]));
+      const queryString = query.toString();
+      const suffix = queryString ? `?${queryString}` : '';
+      const response = await this.authFetch(`${API_BASE_URL}/customer-list${suffix}`);
       const data = await response.json();
       return response.ok ? { success: true, data } : { success: false, error: data.error || 'Could not load customer records.' };
     } catch (err) {

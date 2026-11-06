@@ -1,6 +1,9 @@
 (function () {
   const API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
   const PAGE_SIZE = 100;
+  const STAFF_SUMMARY_CACHE_KEY = 'rebyte:operations-staff-summary:v1';
+  const STAFF_SUMMARY_CACHE_MS = 5 * 60 * 1000;
+  let staffSummaryPromise = null;
 
   function toDate(value) {
     if (!value) return null;
@@ -40,6 +43,11 @@
     if (raw.includes('deliver')) return 'Delivery';
     if (raw.includes('inspect') || task.tradeInRequestID) return 'Inspection';
     return 'Other';
+  }
+
+  function isSelfPickup(task) {
+    const fulfillment = String(task.fulfillmentType || task.deliveryOption || '').trim().toLowerCase();
+    return fulfillment.includes('self pickup');
   }
 
   function isCompleted(task) {
@@ -110,7 +118,7 @@
     const errors = [];
     for (const base of API_BASES) {
       try {
-        const url = `${base}/staff-list?_t=${Date.now()}`;
+        const url = `${base}/staff-list`;
         const response = typeof ReByteAuth !== 'undefined' && typeof ReByteAuth.authFetch === 'function'
           ? await ReByteAuth.authFetch(url, { headers: { Accept: 'application/json' } })
           : await fetch(url, { headers: { Accept: 'application/json' } });
@@ -142,6 +150,24 @@
     return { counts, total };
   }
 
+  async function fetchStaffSummary() {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(STAFF_SUMMARY_CACHE_KEY) || 'null');
+      if (cached && Number.isFinite(cached.cachedAt) && Date.now() - cached.cachedAt < STAFF_SUMMARY_CACHE_MS && cached.summary?.counts) {
+        return cached.summary;
+      }
+    } catch (_) {}
+    if (!staffSummaryPromise) {
+      staffSummaryPromise = fetchStaff().then(staff => {
+        const summary = summarizeResources(staff);
+        try { sessionStorage.setItem(STAFF_SUMMARY_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), summary })); }
+        catch (_) {}
+        return summary;
+      }).finally(() => { staffSummaryPromise = null; });
+    }
+    return staffSummaryPromise;
+  }
+
   function availableMonths(tasks) {
     return [...new Set(tasks.map(taskMonth).filter(Boolean))].sort((a, b) => b.localeCompare(a));
   }
@@ -154,9 +180,9 @@
     let completed = 0;
     let active = 0;
     const durationSamples = { Collection: [], Inspection: [], Delivery: [] };
-    let deliveryTotalMinutes = 0;
-    let deliveryTotalDistanceKm = 0;
-    let deliveryTasksWithDistance = 0;
+    const deliveryDurationSamples = [];
+    const deliveryDistanceSamples = [];
+    let selfPickupExcludedCount = 0;
 
     records.forEach(task => {
       const status = normalizeStatus(task);
@@ -167,18 +193,18 @@
       else if (!['cancelled', 'terminated', 'refunded', 'declined', 'rejected'].includes(status.toLowerCase())) active += 1;
       const date = taskDate(task);
       if (date) weeklyTasks[Math.min(4, Math.floor((date.getDate() - 1) / 7))] += 1;
-      if (isCompleted(task) && Object.prototype.hasOwnProperty.call(durationSamples, type)) {
+      const taskIsCompleted = isCompleted(task);
+      const selfPickup = type === 'Delivery' && isSelfPickup(task);
+      if (taskIsCompleted && selfPickup) selfPickupExcludedCount += 1;
+      if (taskIsCompleted && type === 'Delivery' && !selfPickup) {
+        const distance = numericValue(task.estimatedDistance ?? task.estimatedDistanceinKM ?? task.distanceKm ?? task.distance);
+        if (distance !== null) deliveryDistanceSamples.push(distance);
+      }
+      if (taskIsCompleted && Object.prototype.hasOwnProperty.call(durationSamples, type) && !selfPickup) {
         const duration = taskDurationMinutes(task);
         if (duration !== null) {
           durationSamples[type].push(duration);
-          if (type === 'Delivery') {
-            const distance = numericValue(task.estimatedDistance ?? task.distanceKm ?? task.distance);
-            if (distance !== null && distance > 0) {
-              deliveryTotalMinutes += duration;
-              deliveryTotalDistanceKm += distance;
-              deliveryTasksWithDistance += 1;
-            }
-          }
+          if (type === 'Delivery') deliveryDurationSamples.push(duration);
         }
       }
     });
@@ -193,10 +219,13 @@
       collection: typeCounts.Collection,
       delivery: typeCounts.Delivery,
       typeCounts,
-      averageDeliveryMinutesPerKm: deliveryTotalDistanceKm ? deliveryTotalMinutes / deliveryTotalDistanceKm : null,
+      averageDeliveryMinutesPerTask: average(deliveryDurationSamples),
+      averageDeliveryDistanceKm: average(deliveryDistanceSamples),
       averageInspectionMinutes: average(durationSamples.Inspection),
       averageCollectionMinutes: average(durationSamples.Collection),
-      averageDeliverySamples: deliveryTasksWithDistance,
+      averageDeliverySamples: deliveryDurationSamples.length,
+      averageDeliveryDistanceSamples: deliveryDistanceSamples.length,
+      selfPickupExcludedCount,
       averageInspectionSamples: durationSamples.Inspection.length,
       averageCollectionSamples: durationSamples.Collection.length,
       statusCounts,
@@ -205,5 +234,5 @@
     };
   }
 
-  window.OperationsAnalytics = { fetchTasks, fetchStaff, summarizeResources, availableMonths, taskMonth, summarize };
+  window.OperationsAnalytics = { fetchTasks, fetchStaff, fetchStaffSummary, summarizeResources, availableMonths, taskMonth, summarize };
 })();

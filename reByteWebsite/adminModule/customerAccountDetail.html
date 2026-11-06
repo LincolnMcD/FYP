@@ -28,6 +28,7 @@
     .customer-id { margin:0 0 24px; color:#5d6472; font-size:16px; }
     .detail-layout { display:grid; grid-template-columns:minmax(300px,370px) minmax(0,1fr); gap:28px; align-items:start; }
     .profile-card,.history-card { background:#fff; border:1px solid #cfd4df; border-radius:16px; box-shadow:0 2px 5px #182b4510; overflow:hidden; }
+    .history-card { display:flex; flex-direction:column; }
     .profile-top { position:relative; padding:26px 24px 24px; text-align:center; }
     .avatar { width:112px; height:112px; margin:4px auto 18px; display:grid; place-items:center; border:5px solid #e9edff; border-radius:50%; background:#eef2ff; color:#315490; font-size:38px; font-weight:700; }
     .profile-name { margin:0 0 7px; color:#13264a; font-size:23px; line-height:1.2; }
@@ -55,15 +56,31 @@
     .account-meta { margin-top:20px; padding-top:17px; border-top:1px solid #d8dce5; color:#626b7d; font-size:13px; line-height:1.65; }
     .account-meta strong { color:#25344f; font-weight:600; }
     .history-card { min-height:620px; }
-    .detail-tabs { min-height:74px; display:flex; border-bottom:1px solid #cfd4df; overflow-x:auto; }
+    .detail-tabs { min-height:74px; display:flex; flex:0 0 auto; border-bottom:1px solid #cfd4df; overflow-x:auto; }
     .detail-tab { position:relative; min-width:132px; padding:0 18px; flex:1; border:0; background:#fff; color:#4e5564; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; }
     .detail-tab:hover { background:#f8f9fc; }
     .detail-tab.active { color:#0646a5; background:#f5f7ff; font-weight:700; }
     .detail-tab.active::after { position:absolute; right:0; bottom:0; left:0; height:2px; background:#0646a5; content:''; }
-    .tab-content { min-height:544px; }
+    .tab-content { min-height:544px; flex:1; display:flex; flex-direction:column; }
     .loading,.load-error { color:var(--muted); font-size:14px; }
     .loading { padding:28px 24px; }
     .load-error { margin:20px 16px; padding:16px; border:1px solid #fecaca; border-radius:10px; background:#fef2f2; color:#b4232f; }
+    .activity-list { display:grid; gap:0; padding:8px 24px 0; }
+    .activity-item { display:grid; grid-template-columns:140px minmax(0,1fr) 112px; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #edf0f4; }
+    .activity-date { color:#64748b; font-size:12px; line-height:1.45; }
+    .activity-main { min-width:0; }
+    .activity-heading { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; }
+    .activity-title { color:#173154; font-size:13px; font-weight:700; }
+    .activity-id { color:#64748b; font-family:ui-monospace,Consolas,monospace; font-size:11px; overflow-wrap:anywhere; }
+    .activity-details { margin-top:4px; color:#64748b; font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+    .activity-status { justify-self:end; max-width:112px; padding:5px 9px; border-radius:999px; background:#eef2ff; color:#173a75; font-size:11px; font-weight:600; text-align:center; overflow-wrap:anywhere; }
+    .activity-empty { padding:28px 24px; color:#64748b; font-size:14px; }
+    .activity-pagination { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:72px; margin-top:auto; padding:12px 24px; border-top:1px solid #edf0f4; color:#5d6472; font-size:14px; }
+    .activity-page-actions { display:flex; align-items:center; gap:8px; }
+    .activity-page-button { min-width:48px; height:48px; padding:0 14px; border:1px solid #cbd5e1; border-radius:15px; background:#fff; color:#475569; font-size:15px; font-weight:500; cursor:pointer; }
+    .activity-page-button.current { border-color:#0b4fb3; background:#0b4fb3; color:#fff; }
+    .activity-page-button:disabled { color:#a6b0bf; background:#fff; cursor:default; }
+    .activity-page-ellipsis { padding:0 4px; color:#64748b; }
     .confirm-backdrop[hidden] { display:none !important; }
     .confirm-backdrop { position:fixed; inset:0; z-index:1100; display:flex; align-items:center; justify-content:center; padding:20px; background:#0f172a99; opacity:0; visibility:hidden; transition:all .2s ease; }
     .confirm-backdrop.show { opacity:1; visibility:visible; }
@@ -95,7 +112,7 @@
     .confirm-actions .confirm-submit.success:hover { background:#15803d; }
     .confirm-actions .confirm-submit:disabled { opacity:.6; cursor:wait; }
     @media(max-width:1100px) { .content{padding:24px 22px 36px}.detail-layout{grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:18px}.detail-tab{min-width:115px;padding:0 12px} }
-    @media(max-width:760px) { body{display:block}.sidebar{width:100%}.brand{height:72px}.nav-list{display:flex;overflow-x:auto;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 14px}.detail-layout{grid-template-columns:1fr}.history-card{min-height:340px}.tab-content{min-height:264px}.detail-tabs{min-height:60px}.detail-tab{min-width:max-content;flex:0 0 auto}.profile-card{max-width:none} }
+    @media(max-width:760px) { body{display:block}.sidebar{width:100%}.brand{height:72px}.nav-list{display:flex;overflow-x:auto;padding:10px}.nav-item{flex:0 0 auto}.nav-list .nav-item:not(.active){display:none}.content{padding:18px 14px}.detail-layout{grid-template-columns:1fr}.history-card{min-height:340px}.tab-content{min-height:264px}.detail-tabs{min-height:60px}.detail-tab{min-width:max-content;flex:0 0 auto}.profile-card{max-width:none}.activity-list{padding-left:16px;padding-right:16px}.activity-item{grid-template-columns:1fr auto;gap:5px 10px}.activity-date{grid-column:1/-1}.activity-main{grid-column:1}.activity-status{grid-column:2;grid-row:2}.activity-pagination{padding:14px 16px;flex-wrap:wrap} }
   </style>
 </head>
 <body>
@@ -147,11 +164,11 @@
         </section>
         <section class="history-card" aria-label="Customer account activity">
           <div class="detail-tabs" role="tablist" aria-label="Customer details">
-            <button class="detail-tab active" type="button" role="tab" aria-selected="true">Account History</button>
-            <button class="detail-tab" type="button" role="tab" aria-selected="false">Orders</button>
-            <button class="detail-tab" type="button" role="tab" aria-selected="false">Rentals</button>
-            <button class="detail-tab" type="button" role="tab" aria-selected="false">Trade-ins</button>
-            <button class="detail-tab" type="button" role="tab" aria-selected="false">Complaints</button>
+            <button class="detail-tab active" type="button" role="tab" aria-selected="true" data-tab="history">Account History</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="orders">Orders</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="rentals">Rentals</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="tradeins">Trade-ins</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="complaints">Complaints</button>
           </div>
           <div class="tab-content" aria-live="polite"></div>
         </section>
@@ -178,11 +195,16 @@
     const customerId = new URLSearchParams(window.location.search).get('customerId');
     let customer = null;
     let pendingStatus = '';
+    const activityPageCache = new Map();
+    let activityRequestId = 0;
+    let activeDetailTab = 'history';
+    let activeActivityPage = 1;
+    const ACTIVITY_PAGE_SIZE = 10;
     const tabs = [...document.querySelectorAll('.detail-tab')];
 
     function displayId(record) {
-      const raw = String(record?.userId || record?.id || customerId || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
-      return `USR-${raw.slice(-6) || 'UNKNOWN'}`;
+      const id = String(record?.userId || record?.id || customerId || '');
+      return id ? `${id.slice(0, 8)}…` : 'Unknown';
     }
     function formatDate(value) {
       if (!value) return '—';
@@ -205,6 +227,59 @@
     function initials(name) {
       return String(name || 'Customer').trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase() || 'C';
     }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+    }
+    function dateMillis(value) {
+      if (!value) return 0;
+      if (typeof value.toDate === 'function') return value.toDate().getTime();
+      if (value._seconds != null || value.seconds != null) return Number(value._seconds ?? value.seconds) * 1000;
+      const parsed = new Date(value).getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    function recordDate(value) {
+      const millis = dateMillis(value);
+      return millis ? new Date(millis).toLocaleString('en-MY', { dateStyle:'medium', timeStyle:'short' }) : 'Date unavailable';
+    }
+    function renderActivityPage(records, pagination) {
+      const content = document.querySelector('.tab-content');
+      const rows = records.length
+        ? `<div class="activity-list">${records.map(record => `<article class="activity-item"><time class="activity-date">${escapeHtml(recordDate(record.date))}</time><div class="activity-main"><div class="activity-heading"><span class="activity-title">${escapeHtml(record.type || 'Activity')}</span>${record.id ? `<span class="activity-id">${escapeHtml(record.id)}</span>` : ''}</div><div class="activity-details">${escapeHtml(record.details || '—')}</div></div><span class="activity-status">${escapeHtml(record.status || '—')}</span></article>`).join('')}</div>`
+        : '<div class="activity-empty">No records found for this account.</div>';
+      const pageCount = Math.max(1, Number(pagination.totalPages) || 1);
+      const page = Math.max(1, Number(pagination.page) || 1);
+      const total = Math.max(0, Number(pagination.total) || 0);
+      const start = total ? (page - 1) * ACTIVITY_PAGE_SIZE + 1 : 0;
+      const end = Math.min(page * ACTIVITY_PAGE_SIZE, total);
+      const pageNumbers = pageCount <= 7
+        ? Array.from({ length: pageCount }, (_, index) => index + 1)
+        : [...new Set([1, Math.max(1, page - 1), page, Math.min(pageCount, page + 1), pageCount])].sort((a, b) => a - b);
+      const pageButtons = total ? pageNumbers.map((number, index) => {
+        const previous = pageNumbers[index - 1];
+        const gap = previous && number - previous > 1 ? '<span class="activity-page-ellipsis">…</span>' : '';
+        return `${gap}<button class="activity-page-button${number === page ? ' current' : ''}" type="button" data-activity-page="${number}"${number === page ? ' aria-current="page"' : ''}>${number}</button>`;
+      }).join('') : '';
+      const controls = `<div class="activity-pagination"><span>Showing ${start} to ${end} of ${total} entries</span><div class="activity-page-actions"><button class="activity-page-button" type="button" data-activity-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Previous</button>${pageButtons}<button class="activity-page-button" type="button" data-activity-page="${page + 1}" ${page >= pageCount ? 'disabled' : ''}>Next</button></div></div>`;
+      content.innerHTML = rows + controls;
+      content.querySelectorAll('[data-activity-page]').forEach(button => button.addEventListener('click', () => {
+        const requestedPage = Number(button.dataset.activityPage);
+        if (requestedPage >= 1 && requestedPage <= pageCount) loadCustomerActivity(requestedPage);
+      }));
+    }
+    function renderDetailTab() {
+      const content = document.querySelector('.tab-content');
+      if (activeDetailTab === 'complaints') {
+        content.innerHTML = '<div class="activity-empty">Complaints are on hold.</div>';
+        return;
+      }
+      const cacheKey = `${activeDetailTab}:${activeActivityPage}`;
+      const cached = activityPageCache.get(cacheKey);
+      if (cached) {
+        renderActivityPage(cached.records, cached.pagination);
+        return;
+      }
+      content.innerHTML = '<div class="loading">Loading this customer’s records…</div>';
+    }
     function showToast(message, type = 'error') {
       ReByteAuth.showToast(message, type);
     }
@@ -212,9 +287,12 @@
       if (!customer) return;
       const name = customer.fullName || 'Customer';
       const id = displayId(customer);
+      const fullId = String(customer.userId || customer.id || customerId || '');
       const status = String(customer.status || 'Active');
       document.getElementById('customerIdLabel').textContent = id;
       document.getElementById('customerProfileId').textContent = `ID: ${id}`;
+      document.getElementById('customerIdLabel').title = fullId;
+      document.getElementById('customerProfileId').title = fullId;
       document.getElementById('customerName').textContent = name;
       document.getElementById('customerAvatar').textContent = initials(name);
       document.getElementById('customerEmail').textContent = customer.email || '—';
@@ -251,6 +329,36 @@
         return;
       }
       renderCustomer();
+      activityPageCache.clear();
+      loadCustomerActivity(1);
+    }
+    async function loadCustomerActivity(page = 1) {
+      const content = document.querySelector('.tab-content');
+      if (activeDetailTab === 'complaints') return;
+      activeActivityPage = page;
+      const cacheKey = `${activeDetailTab}:${page}`;
+      if (activityPageCache.has(cacheKey)) {
+        renderDetailTab();
+        return;
+      }
+      const requestId = ++activityRequestId;
+      content.innerHTML = '<div class="loading">Loading this customer’s records…</div>';
+      try {
+        const recordId = String(customer.id || customer.userId || customerId);
+        const query = new URLSearchParams({ type: activeDetailTab, page: String(page), limit: String(ACTIVITY_PAGE_SIZE) });
+        const response = await ReByteAuth.authFetch(`http://localhost:3000/customers/${encodeURIComponent(recordId)}/records?${query}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load this customer’s account records.');
+        if (requestId !== activityRequestId) return;
+        activityPageCache.set(cacheKey, {
+          records: Array.isArray(data.records) ? data.records : [],
+          pagination: data.pagination || { page, total: 0, totalPages: 1 }
+        });
+        renderDetailTab();
+      } catch (error) {
+        if (requestId !== activityRequestId) return;
+        content.innerHTML = `<div class="load-error">${escapeHtml(error.message || 'Could not load this customer’s account records.')}</div>`;
+      }
     }
     function openAction(status) {
       pendingStatus = status;
@@ -355,11 +463,15 @@
       }
     });
     tabs.forEach(tab => tab.addEventListener('click', () => {
+      activeDetailTab = tab.dataset.tab || 'history';
+      activeActivityPage = 1;
       tabs.forEach(item => {
         const selected = item === tab;
         item.classList.toggle('active', selected);
         item.setAttribute('aria-selected', String(selected));
       });
+      renderDetailTab();
+      if (activeDetailTab !== 'complaints') loadCustomerActivity(1);
     }));
     document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));
     loadCustomer();

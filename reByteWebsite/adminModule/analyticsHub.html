@@ -24,6 +24,7 @@
       margin: 0;
       min-height: 100vh;
       display: flex;
+      align-items: stretch;
       background: var(--page);
       color: var(--text);
       font-family: 'Inter', Arial, sans-serif;
@@ -36,12 +37,10 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
     }
     .content {
       padding: 30px 40px 48px;
-      overflow-y: auto;
       flex: 1;
     }
     .analytics-data-error {
@@ -440,6 +439,10 @@
       .charts-split-row { grid-template-columns: 1fr; }
       .kpi-row { grid-template-columns: 1fr 1fr; }
     }
+    @media(max-width: 760px) {
+      body { display: block; }
+      .main { min-height: 0; }
+    }
   </style>
 </head>
 <body>
@@ -464,7 +467,7 @@
           <h1>Analytics Hub</h1>
           <p>Centralized command center for ReByte's operational, financial, and inventory metrics. Monitor real-time performance and access historical reports.</p>
         </div>
-        <a href="../reportModule/exportReport.html" class="export-btn" id="exportAllBtn" style="text-decoration: none;">
+        <a href="../reportModule/exportReport.html?source=hub" class="export-btn" id="exportAllBtn" style="text-decoration: none;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export Report
         </a>
@@ -771,6 +774,7 @@
   <script src="adminHeader.js"></script>
   <script src="../reportModule/adminSidebar.js"></script>
   <script src="../reportModule/inventoryAnalytics.js"></script>
+  <script src="../reportModule/operationsAnalytics.js"></script>
   <script>
     const ANALYTICS_API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
@@ -829,7 +833,7 @@
           document.getElementById('opsDelivery').textContent = data.operations.avgDeliveryTime || '—';
         }
       } catch (err) {
-        ['bizRevenue', 'bizMargin', 'kpiRevenue', 'kpiMargin', 'kpiCosts', 'kpiForecast', 'opsInspection', 'opsDelivery']
+        ['bizRevenue', 'bizMargin', 'kpiRevenue', 'kpiMargin', 'kpiCosts', 'kpiForecast']
           .forEach(id => { document.getElementById(id).textContent = '—'; });
         errorBanner.textContent = `Analytics data was not loaded. Why: ${err.message}`;
         errorBanner.hidden = false;
@@ -855,6 +859,23 @@
         const errorBanner = document.getElementById('analyticsDataError');
         errorBanner.textContent = `${errorBanner.hidden ? '' : `${errorBanner.textContent} `}Inventory data was not loaded. Why: ${err.message}`;
         errorBanner.hidden = false;
+      }
+    }
+
+    async function loadOperationsHubData() {
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      try {
+        const tasks = await OperationsAnalytics.fetchTasks();
+        const summary = OperationsAnalytics.summarize(tasks, currentMonth);
+        const delivery = summary.averageDeliveryMinutesPerTask;
+        const inspection = summary.averageInspectionMinutes;
+        document.getElementById('opsInspection').textContent = inspection == null ? '—' : `${Number(inspection).toFixed(2)} min/task`;
+        document.getElementById('opsDelivery').textContent = delivery == null ? '—' : `${Number(delivery).toFixed(2)} min/task`;
+      } catch (error) {
+        document.getElementById('opsInspection').textContent = '—';
+        document.getElementById('opsDelivery').textContent = '—';
+        console.warn('Operations summary could not be loaded for the Analytics Hub:', error.message);
       }
     }
 
@@ -890,6 +911,7 @@
       }
       loadAnalyticsData();
       loadInventoryHubData();
+      loadOperationsHubData();
     });
   </script>
 </body>

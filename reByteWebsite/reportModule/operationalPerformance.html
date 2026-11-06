@@ -128,18 +128,18 @@
       border-color: #cbd5e1;
     }
 
-    /* 4 KPI Cards Grid */
+    /* Operational KPI Cards */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
       margin-bottom: 26px;
     }
     .kpi-card {
       background: #fff;
       border-radius: 14px;
       border: 1px solid var(--border);
-      padding: 22px 24px;
+      padding: 20px 18px;
       display: flex;
       flex-direction: column;
       position: relative;
@@ -172,6 +172,20 @@
       color: #0f172a;
       line-height: 1;
     }
+    .kpi-num-delivery-rate {
+      font-size: 26px;
+      letter-spacing: -0.45px;
+      white-space: nowrap;
+    }
+    .kpi-unit-delivery-rate { font-size: 14px; }
+    .kpi-num-precision {
+      font-size: 26px;
+      letter-spacing: -0.45px;
+      white-space: nowrap;
+    }
+    .kpi-unit-precision { font-size: 14px; }
+    .kpi-num-distance { font-size: 26px; letter-spacing: -0.45px; white-space: nowrap; }
+    .kpi-unit-distance { font-size: 14px; }
     .kpi-unit {
       font-size: 18px;
       font-weight: 600;
@@ -187,6 +201,9 @@
     .trend-down { color: #10b981; } /* For operational cycle times, decrease is positive/green */
     .trend-neutral { color: #64748b; }
     .trend-up { color: #ef4444; } /* Increase in cycle time is warning/red */
+    @media (max-width: 1180px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 460px) { .kpi-grid { grid-template-columns: 1fr; } }
 
     /* Middle Row: Resale Cycle Time + Processing Time by Stage */
     .mid-grid {
@@ -434,20 +451,35 @@
       <div id="operationsError" class="operations-error" role="alert" aria-live="polite" hidden></div>
       <p id="operationsNote" class="operations-note">Loading task records from Firebase…</p>
 
-      <!-- 4 KPI Cards -->
+      <!-- 5 KPI Cards -->
       <div class="kpi-grid">
-        <!-- Average delivery duration per kilometer -->
+        <!-- Average delivery duration per completed delivery task -->
         <div class="kpi-card">
           <div class="kpi-header">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span>AVG. DELIVERY TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsAvgDelivery">—</span>
-            <span class="kpi-unit">min/km</span>
+            <span class="kpi-num kpi-num-precision" id="opsAvgDelivery">—</span>
+            <span class="kpi-unit kpi-unit-precision">min/task</span>
           </div>
           <div class="kpi-trend trend-down">
-            <span id="opsAvgDeliveryNote">Completed delivery tasks</span>
+            <span id="opsAvgDeliveryNote">Delivery tasks; Self Pickup excluded</span>
+          </div>
+        </div>
+
+        <!-- Average recorded distance across completed delivery tasks -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <span>AVG. DISTANCE</span>
+          </div>
+          <div class="kpi-value-row">
+            <span class="kpi-num kpi-num-distance" id="opsAvgDistance">—</span>
+            <span class="kpi-unit kpi-unit-distance">km/task</span>
+          </div>
+          <div class="kpi-trend trend-neutral">
+            <span id="opsAvgDistanceNote">Completed delivery tasks; Self Pickup excluded</span>
           </div>
         </div>
 
@@ -458,8 +490,8 @@
             <span>AVG. INSPECTION TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsAvgInspection">—</span>
-            <span class="kpi-unit">min/task</span>
+            <span class="kpi-num kpi-num-precision" id="opsAvgInspection">—</span>
+            <span class="kpi-unit kpi-unit-precision">min/task</span>
           </div>
           <div class="kpi-trend trend-neutral">
             <span>Firebase task records</span>
@@ -473,8 +505,8 @@
             <span>AVG. COLLECTION TIME</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsAvgCollection">—</span>
-            <span class="kpi-unit">min/task</span>
+            <span class="kpi-num kpi-num-precision" id="opsAvgCollection">—</span>
+            <span class="kpi-unit kpi-unit-precision">min/task</span>
           </div>
           <div class="kpi-trend trend-down">
             <span>Firebase task records</span>
@@ -488,7 +520,7 @@
             <span>COMPLETION RATE</span>
           </div>
           <div class="kpi-value-row">
-            <span class="kpi-num" id="opsCompletionRate">—</span>
+            <span class="kpi-num kpi-num-precision" id="opsCompletionRate">—</span>
             <span class="kpi-unit">%</span>
           </div>
           <div class="kpi-trend trend-up">
@@ -524,65 +556,127 @@
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
   <script src="adminSidebar.js"></script>
+  <script src="reportSnapshots.js"></script>
   <script src="operationsAnalytics.js"></script>
   <script>
     const opsMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const opsEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const opsCount = value => new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 }).format(Number(value) || 0);
+    let opsPickerMonths = [];
+    let opsRenderRequest = 0;
+    let operationTasksPromise = null;
+
+    async function ensureOperationTasks() {
+      if (Array.isArray(window.operationTasks)) return window.operationTasks;
+      if (!operationTasksPromise) {
+        operationTasksPromise = OperationsAnalytics.fetchTasks().then(tasks => {
+          window.operationTasks = tasks;
+          return tasks;
+        }).finally(() => { operationTasksPromise = null; });
+      }
+      return operationTasksPromise;
+    }
 
     function selectedOpsMonth() {
       return `${document.getElementById('operationsYear').value}-${document.getElementById('operationsMonth').value}`;
     }
 
-    function populateOpsPicker(months) {
+    function populateOpsPicker(months, preferredMonth = '') {
+      opsPickerMonths = [...months];
       const yearSelect = document.getElementById('operationsYear');
       const monthSelect = document.getElementById('operationsMonth');
       const years = [...new Set(months.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
       yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
       const updateMonths = preferred => {
-        const matches = months.filter(month => month.startsWith(`${yearSelect.value}-`));
+        const matches = opsPickerMonths.filter(month => month.startsWith(`${yearSelect.value}-`));
         monthSelect.innerHTML = matches.map(month => `<option value="${month.slice(5, 7)}">${opsMonths[Number(month.slice(5, 7)) - 1]}</option>`).join('');
         if (matches.includes(preferred)) monthSelect.value = preferred.slice(5, 7);
         else if (matches.length) monthSelect.value = matches[0].slice(5, 7);
       };
-      yearSelect.addEventListener('change', () => { updateMonths(''); renderOperations(); });
-      monthSelect.addEventListener('change', renderOperations);
+      if (yearSelect.dataset.listenersInitialized !== 'true') {
+        yearSelect.dataset.listenersInitialized = 'true';
+        yearSelect.addEventListener('change', () => { updateMonths(''); renderOperations(); });
+        monthSelect.addEventListener('change', renderOperations);
+      }
       const requested = new URLSearchParams(location.search).get('month');
-      const initial = months.includes(requested) ? requested : months[0];
+      const previousDate = new Date();
+      previousDate.setDate(1);
+      previousDate.setMonth(previousDate.getMonth() - 1);
+      const previousMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+      const initial = months.includes(requested) ? requested : (months.includes(previousMonth) ? previousMonth : (months.includes(preferredMonth) ? preferredMonth : months[0]));
       yearSelect.value = initial.slice(0, 4);
       updateMonths(initial);
       yearSelect.disabled = false;
       monthSelect.disabled = false;
     }
 
-    function renderOperations() {
-      if (!window.operationTasks) return;
+    async function refreshCurrentOperations(month) {
+      try {
+        const tasks = await OperationsAnalytics.fetchTasks();
+        const freshSummary = OperationsAnalytics.summarize(tasks, month);
+        await ReportSnapshots.save('operations', month, freshSummary);
+        if (selectedOpsMonth() === month) await renderOperations(true);
+      } catch (err) {
+        console.warn('Current operational report refresh failed; keeping the saved report visible:', err.message);
+      }
+    }
+
+    async function renderOperations(skipCurrentRefresh = false) {
+      const requestId = ++opsRenderRequest;
       const month = selectedOpsMonth();
-      const summary = OperationsAnalytics.summarize(window.operationTasks, month);
-      const displayAverage = value => value === null ? '—' : value.toFixed(1);
-      document.getElementById('opsAvgDelivery').textContent = displayAverage(summary.averageDeliveryMinutesPerKm);
-      document.getElementById('opsAvgDeliveryNote').textContent = `${opsCount(summary.averageDeliverySamples)} completed delivery tasks with distance`;
-      document.getElementById('opsAvgInspection').textContent = displayAverage(summary.averageInspectionMinutes);
+      let summary = await ReportSnapshots.get('operations', month);
+      if (requestId !== opsRenderRequest) return;
+      const hasSavedSummary = Boolean(summary);
+      if (!summary) {
+        if (!window.operationTasks) {
+          document.getElementById('operationsNote').textContent = 'Loading live task records for this month…';
+          await ensureOperationTasks();
+        }
+        if (requestId !== opsRenderRequest) return;
+        summary = OperationsAnalytics.summarize(window.operationTasks, month);
+        try { summary = await ReportSnapshots.save('operations', month, summary) || summary; }
+        catch (err) { console.warn('Could not save operational report snapshot:', err.message); }
+      }
+      if (requestId !== opsRenderRequest) return;
+      document.getElementById('opsAvgDelivery').textContent = summary.averageDeliveryMinutesPerTask === null ? '—' : summary.averageDeliveryMinutesPerTask.toFixed(2);
+      document.getElementById('opsAvgDeliveryNote').textContent = `${opsCount(summary.averageDeliverySamples)} timed · ${opsCount(summary.selfPickupExcludedCount)} Self Pickup excluded`;
+      document.getElementById('opsAvgDistance').textContent = summary.averageDeliveryDistanceKm === null ? '—' : summary.averageDeliveryDistanceKm.toFixed(2);
+      document.getElementById('opsAvgDistanceNote').textContent = `${opsCount(summary.averageDeliveryDistanceSamples)} with distance · ${opsCount(summary.selfPickupExcludedCount)} Self Pickup excluded`;
+      document.getElementById('opsAvgInspection').textContent = summary.averageInspectionMinutes === null ? '—' : summary.averageInspectionMinutes.toFixed(2);
       document.getElementById('opsAvgInspection').parentElement.nextElementSibling.textContent = `${opsCount(summary.averageInspectionSamples)} completed inspection tasks`;
-      document.getElementById('opsAvgCollection').textContent = displayAverage(summary.averageCollectionMinutes);
+      document.getElementById('opsAvgCollection').textContent = summary.averageCollectionMinutes === null ? '—' : summary.averageCollectionMinutes.toFixed(2);
       document.getElementById('opsAvgCollection').parentElement.nextElementSibling.textContent = `${opsCount(summary.averageCollectionSamples)} completed collection tasks`;
-      document.getElementById('opsCompletionRate').textContent = summary.totalTasks ? summary.completionRate.toFixed(1) : '—';
+      document.getElementById('opsCompletionRate').textContent = summary.totalTasks ? summary.completionRate.toFixed(2) : '—';
       document.getElementById('opsCompletedNote').textContent = `${opsCount(summary.completed)} completed of ${opsCount(summary.totalTasks)} tasks`;
 
       const taskTypeOrder = ['Collection', 'Inspection', 'Delivery'];
-      const maxTypeCount = Math.max(1, ...taskTypeOrder.map(type => summary.typeCounts[type]));
+      const displayedTaskTotal = taskTypeOrder.reduce((total, type) => total + (Number(summary.typeCounts[type]) || 0), 0);
       document.getElementById('opsWeeklyTasks').innerHTML = taskTypeOrder.map(type => {
-        const count = summary.typeCounts[type];
-        const percent = count / maxTypeCount * 100;
-        return `<div class="cat-cycle-item"><div class="cat-cycle-info"><span class="cat-name">${type}</span><span class="cat-days">${opsCount(count)} tasks</span></div><div class="cat-progress-track"><div class="cat-progress-bar" style="width:${percent}%;"></div></div></div>`;
+        const count = Number(summary.typeCounts[type]) || 0;
+        const percent = displayedTaskTotal ? count / displayedTaskTotal * 100 : 0;
+        const width = count > 0 ? Math.max(2, percent) : 0;
+        return `<div class="cat-cycle-item" title="${opsCount(count)} ${type.toLowerCase()} tasks · ${percent.toFixed(1)}% of the displayed task types"><div class="cat-cycle-info"><span class="cat-name">${type}</span><span class="cat-days">${opsCount(count)} tasks · ${percent.toFixed(1)}%</span></div><div class="cat-progress-track"><div class="cat-progress-bar" style="width:${width}%;"></div></div></div>`;
       }).join('');
 
       const statuses = Object.entries(summary.statusCounts).sort((a, b) => b[1] - a[1]);
       document.getElementById('opsStatusList').innerHTML = statuses.map(([status, count], index) => `<div class="stage-item"><div class="stage-num-badge">${index + 1}</div><div class="stage-body"><div class="stage-top"><span class="stage-name">${opsEscape(status)}</span><span class="stage-status-badge" style="background:#eef2f7;color:#475569;">${opsCount(count)}</span></div><div class="stage-metric-label">${summary.totalTasks ? (count / summary.totalTasks * 100).toFixed(1) : '0.0'}% of this month’s tasks</div></div></div>`).join('') || '<div>No task records for this month.</div>';
 
+      renderOperationResources();
+
+      document.getElementById('opsGeneratedNote').textContent = `Selected task period: ${month} · grouped by task creation date`;
+      document.getElementById('operationsExportLink').href = `exportReport.html?type=operations&month=${encodeURIComponent(month)}&source=detail&returnTo=operationalPerformance.html`;
+      document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Average durations use completed tasks with startAt and completedAt. Average delivery distance uses completed delivery tasks only, excluding Self Pickup orders; recorded 0 km distances are included.` : `No task records have a creation date in ${month}.`;
+      const currentDate = new Date();
+      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      if (month === currentMonth && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentOperations(month);
+    }
+
+    function renderOperationResources() {
       const resourceCards = document.getElementById('opsTypeBreakdown');
-      if (Array.isArray(window.operationStaff)) {
-        const resources = OperationsAnalytics.summarizeResources(window.operationStaff);
+      if (window.operationStaffLoading) {
+        resourceCards.innerHTML = '<div class="resource-card" style="grid-column:1/-1"><div class="resource-header">Loading staff availability…</div></div>';
+      } else if (window.operationStaffSummary) {
+        const resources = window.operationStaffSummary;
         const entries = [
           ['Deliverer', resources.counts.Deliverer],
           ['Inspector', resources.counts.Inspector],
@@ -596,27 +690,65 @@
         const reason = window.operationStaffError ? ` ${opsEscape(window.operationStaffError)}` : '';
         resourceCards.innerHTML = `<div class="resource-card" style="grid-column:1/-1"><div class="resource-header">Resource allocation unavailable</div><div class="resource-pct">Staff counts could not be loaded from the user collection via the staff list API.${reason}</div></div>`;
       }
+    }
 
-      document.getElementById('opsGeneratedNote').textContent = `Selected task period: ${month} · grouped by task creation date`;
-      document.getElementById('operationsExportLink').href = `exportReport.html?type=operations&month=${encodeURIComponent(month)}`;
-      document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Average durations use completedAt − startAt; tasks missing either timestamp are excluded.` : `No task records have a creation date in ${month}.`;
+    async function loadOperationStaffInBackground() {
+      window.operationStaffLoading = true;
+      renderOperationResources();
+      try {
+        window.operationStaffSummary = await OperationsAnalytics.fetchStaffSummary();
+        window.operationStaffError = '';
+      } catch (error) {
+        window.operationStaffError = error.message;
+        window.operationStaffSummary = null;
+      }
+      window.operationStaffLoading = false;
+      renderOperationResources();
+    }
+
+    async function cachePastOperationsReports(months) {
+      const pending = months.filter(month => ReportSnapshots.isPastMonth(month));
+      for (let offset = 0; offset < pending.length; offset += 4) {
+        await Promise.all(pending.slice(offset, offset + 4).map(async month => {
+          await ReportSnapshots.save('operations', month, OperationsAnalytics.summarize(window.operationTasks, month));
+        }));
+      }
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
       const error = document.getElementById('operationsError');
       try {
-        [window.operationTasks, window.operationStaff] = await Promise.all([
-          OperationsAnalytics.fetchTasks(),
-          OperationsAnalytics.fetchStaff().catch(error => {
-            window.operationStaffError = error.message;
-            console.warn('Staff resource counts unavailable:', error.message);
-            return null;
-          })
-        ]);
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const previousMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+        const requestedMonth = new URLSearchParams(location.search).get('month') || '';
+        const localMonths = ReportSnapshots.cachedMonths('operations');
+        const requestedPeriods = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth) ? [requestedMonth] : [];
+        const initialPeriods = [...new Set([...localMonths, ...requestedPeriods, previousMonth, currentMonth])].sort((a, b) => b.localeCompare(a));
+        populateOpsPicker(initialPeriods, requestedMonth || previousMonth);
+        window.operationTasks = null;
+        window.operationStaffSummary = null;
+        void loadOperationStaffInBackground();
+        const firstRender = renderOperations();
+        const savedMonths = await ReportSnapshots.months('operations');
+        await firstRender;
+        if (savedMonths.length) {
+          const selected = selectedOpsMonth();
+          const periods = [...new Set([...savedMonths, currentMonth])].sort((a, b) => b.localeCompare(a));
+          const preferred = periods.includes(requestedMonth) ? requestedMonth : (periods.includes(selected) ? selected : previousMonth);
+          populateOpsPicker(periods, preferred);
+          if (selectedOpsMonth() !== selected) await renderOperations();
+          return;
+        }
+        await ensureOperationTasks();
         const months = OperationsAnalytics.availableMonths(window.operationTasks);
         if (!months.length) throw new Error('The task API returned records, but none has a usable createdAt, createdAtMs, or orderDate.');
-        populateOpsPicker(months);
-        renderOperations();
+        const selected = selectedOpsMonth();
+        const periods = [...new Set([...months, currentMonth])].sort((a, b) => b.localeCompare(a));
+        populateOpsPicker(periods, periods.includes(selected) ? selected : previousMonth);
+        if (selectedOpsMonth() !== selected) await renderOperations();
+        void cachePastOperationsReports(months).catch(err => console.warn('Could not cache historical operational reports:', err.message));
       } catch (err) {
         error.textContent = `Operational data could not be loaded. ${err.message}`;
         error.hidden = false;

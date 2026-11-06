@@ -372,6 +372,37 @@
     return { statusCounts, carried, complete: unknown === 0, unknown };
   }
 
+  function rankModels(models = []) {
+    const compareDescNullsLast = (a, b) => {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return b - a;
+    };
+    const compareAscNullsLast = (a, b) => {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return a - b;
+    };
+    const modelName = (a, b) => String(a.model || '').localeCompare(String(b.model || ''));
+    const mostTieBreak = (a, b) =>
+      compareDescNullsLast(a.soldDuringMonth, b.soldDuringMonth) ||
+      compareDescNullsLast(a.sellThroughRate, b.sellThroughRate) ||
+      a.closingStock - b.closingStock ||
+      modelName(a, b);
+    const leastTieBreak = (a, b) =>
+      compareAscNullsLast(a.soldDuringMonth, b.soldDuringMonth) ||
+      compareAscNullsLast(a.sellThroughRate, b.sellThroughRate) ||
+      b.closingStock - a.closingStock ||
+      modelName(b, a);
+
+    return {
+      topFive: [...models].sort((a, b) => b.added - a.added || mostTieBreak(a, b)).slice(0, 5),
+      bottomFive: [...models].sort((a, b) => a.added - b.added || leastTieBreak(a, b)).slice(0, 5)
+    };
+  }
+
   function summarize(products, selectedMonth, _salesSummary, saleEvents = []) {
     const records = products.filter(product => getMonthKey(product) === selectedMonth);
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -530,20 +561,7 @@
         overlappingExitUnits: overlappingExitByModel.get(row.model) || 0
       };
     });
-    const compareDescNullsLast = (a, b) => {
-      if (a == null && b == null) return 0;
-      if (a == null) return 1;
-      if (b == null) return -1;
-      return b - a;
-    };
-    const compareModelRank = (a, b) =>
-      compareDescNullsLast(a.soldDuringMonth, b.soldDuringMonth) ||
-      compareDescNullsLast(a.sellThroughRate, b.sellThroughRate) ||
-      a.closingStock - b.closingStock ||
-      a.model.localeCompare(b.model);
-    models.sort((a, b) => b.added - a.added || compareModelRank(a, b));
-    const bottomFive = [...models].sort((a, b) => a.added - b.added || compareModelRank(a, b)).slice(0, 5);
-    const topFive = models.slice(0, 5);
+    const { topFive, bottomFive } = rankModels(models);
     const soldEvents = [...soldByModel.values()].reduce((sum, value) => sum + value, 0);
     const soldDuringMonth = unknownSoldByModel.size ? null : soldEvents;
     const statusCounts = closingSnapshot.statusCounts;
@@ -577,8 +595,8 @@
       lostDuringMonth: knownLostDuringMonth,
       overlappingExitUnits: [...overlappingExitByModel.values()].reduce((sum, value) => sum + value, 0),
       availableStock: closingInventory,
-      topModel: models[0] || null,
-      topModelShare: records.length && models[0] ? (models[0].added / records.length) * 100 : 0,
+      topModel: topFive[0] || null,
+      topModelShare: records.length && topFive[0] ? (topFive[0].added / records.length) * 100 : 0,
       statusCounts,
       carryStatusCounts: { Draft: statusCounts.Draft, Listed: statusCounts.Listed, Hidden: statusCounts.Hidden, Rented: statusCounts.Rented, 'Unknown Carried': statusCounts['Unknown Carried'] || 0 },
       movementStatusCounts: { Returned: returnedInPeriod.size, Sold: soldDuringMonth, Lost: knownLostDuringMonth },
@@ -604,5 +622,5 @@
     };
   }
 
-  window.InventoryAnalytics = { fetchProducts, fetchSalesSummary, fetchSaleEvents, availableMonths, getMonthKey, summarize, summarizeCurrentStock, historyEvents, STATUS_LABELS };
+  window.InventoryAnalytics = { fetchProducts, fetchSalesSummary, fetchSaleEvents, availableMonths, getMonthKey, summarize, summarizeCurrentStock, rankModels, historyEvents, STATUS_LABELS };
 })();

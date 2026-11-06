@@ -304,6 +304,14 @@
       font-size: 13px;
       margin-bottom: 24px;
     }
+    .inventory-model-table { table-layout: fixed; }
+    .inventory-model-table th:nth-child(1), .inventory-model-table td:nth-child(1) { width: 28%; }
+    .inventory-model-table th:nth-child(2), .inventory-model-table td:nth-child(2) { width: 12%; }
+    .inventory-model-table th:nth-child(3), .inventory-model-table td:nth-child(3),
+    .inventory-model-table th:nth-child(4), .inventory-model-table td:nth-child(4),
+    .inventory-model-table th:nth-child(5), .inventory-model-table td:nth-child(5) { width: 8%; }
+    .inventory-model-table th:nth-child(6), .inventory-model-table td:nth-child(6) { width: 15%; }
+    .inventory-model-table th:nth-child(7), .inventory-model-table td:nth-child(7) { width: 21%; }
     table:last-of-type { margin-bottom: 0; }
     th {
       text-align: left;
@@ -376,7 +384,7 @@
         </div>
       </div>
       <div id="inventoryError" class="inventory-error" role="alert" aria-live="polite" hidden></div>
-      <p id="inventoryNote" class="inventory-note">Loading product records from Firebase…</p>
+      <p id="inventoryNote" class="inventory-note">Loading saved inventory report…</p>
 
       <!-- Inventory movement for the selected month -->
       <div class="stats-row">
@@ -440,7 +448,7 @@
       <!-- Top & Bottom Performers Table -->
       <div class="table-section">
         <div class="table-title">Most Added Models</div>
-        <table>
+        <table class="inventory-model-table">
           <thead>
             <tr>
               <th>Product Model</th>
@@ -456,7 +464,7 @@
         </table>
 
         <div class="table-title" style="margin-top:28px;">Least Added Models</div>
-        <table>
+        <table class="inventory-model-table">
           <thead>
             <tr>
               <th>Product Model</th>
@@ -485,24 +493,27 @@
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
   <script src="adminSidebar.js"></script>
+  <script src="reportSnapshots.js"></script>
   <script src="inventoryAnalytics.js"></script>
   <script>
     const inventoryMonthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const inventoryNumber = value => new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 }).format(Number(value) || 0);
     const inventoryEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    let inventoryPickerMonths = [];
 
     function selectedInventoryMonth() {
       return `${document.getElementById('inventoryYear').value}-${document.getElementById('inventoryMonth').value}`;
     }
 
-    function populateInventoryPicker(months) {
+    function populateInventoryPicker(months, preferredMonth = '') {
+      inventoryPickerMonths = [...months];
       const yearSelect = document.getElementById('inventoryYear');
       const monthSelect = document.getElementById('inventoryMonth');
       const years = [...new Set(months.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
       yearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
       const refreshMonths = preferredMonth => {
         const year = yearSelect.value;
-        const yearMonths = months.filter(month => month.startsWith(`${year}-`));
+        const yearMonths = inventoryPickerMonths.filter(month => month.startsWith(`${year}-`));
         monthSelect.innerHTML = yearMonths.map(month => {
           const number = month.slice(5, 7);
           return `<option value="${number}">${inventoryMonthNames[Number(number) - 1]}</option>`;
@@ -510,10 +521,17 @@
         if (yearMonths.includes(preferredMonth)) monthSelect.value = preferredMonth.slice(5, 7);
         else if (yearMonths.length) monthSelect.value = yearMonths[0].slice(5, 7);
       };
-      yearSelect.addEventListener('change', () => { refreshMonths(''); renderInventory(); });
-      monthSelect.addEventListener('change', renderInventory);
+      if (yearSelect.dataset.listenersInitialized !== 'true') {
+        yearSelect.dataset.listenersInitialized = 'true';
+        yearSelect.addEventListener('change', () => { refreshMonths(''); renderInventory(); });
+        monthSelect.addEventListener('change', renderInventory);
+      }
       const requested = new URLSearchParams(location.search).get('month');
-      const initial = months.includes(requested) ? requested : months[0];
+      const previousDate = new Date();
+      previousDate.setDate(1);
+      previousDate.setMonth(previousDate.getMonth() - 1);
+      const previousMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+      const initial = months.includes(requested) ? requested : (months.includes(previousMonth) ? previousMonth : (months.includes(preferredMonth) ? preferredMonth : months[0]));
       yearSelect.value = initial.slice(0, 4);
       refreshMonths(initial);
       yearSelect.disabled = false;
@@ -560,21 +578,73 @@
     }
 
     let inventoryRenderRequest = 0;
-    async function renderInventory() {
-      if (!window.inventoryProducts) return;
+    let inventorySourcePromise = null;
+    async function ensureInventorySourceData() {
+      if (Array.isArray(window.inventoryProducts)) return;
+      if (!inventorySourcePromise) {
+        inventorySourcePromise = (async () => {
+          document.getElementById('inventoryNote').textContent = 'Loading Firebase product records…';
+          window.inventoryProducts = await InventoryAnalytics.fetchProducts();
+          try {
+            window.inventorySaleEvents = await InventoryAnalytics.fetchSaleEvents(window.inventoryProducts);
+            window.inventoryTransactionWarning = window.inventorySaleEvents.warning || '';
+          } catch (transactionError) {
+            window.inventorySaleEvents = [];
+            window.inventoryTransactionWarning = `Purchase transaction dates could not be loaded from the backend. ${transactionError.message}`;
+          }
+        })();
+      }
+      await inventorySourcePromise;
+    }
+
+    async function cachePastInventoryReports(months) {
+      const pending = months.filter(month => ReportSnapshots.isPastMonth(month));
+      for (let offset = 0; offset < pending.length; offset += 4) {
+        await Promise.all(pending.slice(offset, offset + 4).map(async month => {
+          const summary = InventoryAnalytics.summarize(window.inventoryProducts, month, null, window.inventorySaleEvents || []);
+          await ReportSnapshots.save('inventory', month, summary);
+        }));
+      }
+    }
+
+    async function refreshCurrentInventory(month) {
+      try {
+        window.inventoryProducts = null;
+        window.inventorySaleEvents = null;
+        inventorySourcePromise = null;
+        await ensureInventorySourceData();
+        const salesSummary = await InventoryAnalytics.fetchSalesSummary(month);
+        const freshSummary = InventoryAnalytics.summarize(window.inventoryProducts, month, salesSummary, window.inventorySaleEvents || []);
+        await ReportSnapshots.save('inventory', month, freshSummary);
+        if (selectedInventoryMonth() === month) await renderInventory(true);
+      } catch (err) {
+        console.warn('Current inventory report refresh failed; keeping the saved report visible:', err.message);
+      }
+    }
+
+    async function renderInventory(skipCurrentRefresh = false) {
       const requestId = ++inventoryRenderRequest;
       const month = selectedInventoryMonth();
       const error = document.getElementById('inventoryError');
-      let salesSummary = null;
+      let summary = await ReportSnapshots.get('inventory', month);
+      const hasSavedSummary = Boolean(summary);
       let salesSummaryError = '';
-      try {
-        salesSummary = await InventoryAnalytics.fetchSalesSummary(month);
-      } catch (err) {
-        salesSummaryError = `Monthly sold units could not be loaded. ${err.message}`;
+      if (!summary) {
+        await ensureInventorySourceData();
+        let salesSummary = null;
+        try {
+          salesSummary = await InventoryAnalytics.fetchSalesSummary(month);
+        } catch (err) {
+          salesSummaryError = `Monthly sold units could not be loaded. ${err.message}`;
+        }
+        if (requestId !== inventoryRenderRequest) return;
+        summary = InventoryAnalytics.summarize(window.inventoryProducts, month, salesSummary, window.inventorySaleEvents || []);
+        try { summary = await ReportSnapshots.save('inventory', month, summary) || summary; }
+        catch (err) { console.warn('Could not save inventory report snapshot:', err.message); }
       }
       if (requestId !== inventoryRenderRequest) return;
-      const summary = InventoryAnalytics.summarize(window.inventoryProducts, month, salesSummary, window.inventorySaleEvents || []);
       const fmt = inventoryNumber;
+      const rankedModels = InventoryAnalytics.rankModels(summary.models || []);
       const currentMonth = month === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
       document.getElementById('invClosingTitle').textContent = currentMonth ? 'Current Inventory' : 'Closing Inventory';
       document.getElementById('inventoryStatusTitle').textContent = currentMonth ? 'Inventory Status' : 'Month-End Inventory Status';
@@ -633,10 +703,10 @@
         const sellThrough = row.sellThroughRate == null ? '—' : `${row.sellThroughRate.toFixed(1)}%`;
         return `<tr><td>${inventoryEscape(row.model)}</td><td class="num" title="${openingTitle}">${fmt(row.openingStock)}${row.unknownOpening ? ' + ?' : ''}</td><td class="num" title="New Firebase product records plus returned products in the selected month">${fmt(row.added)}</td><td class="num" title="${soldTitle}">${row.soldDuringMonth == null ? '—' : fmt(row.soldDuringMonth)}</td><td class="num" title="${lostTitle}${overlapTitle ? ` ${overlapTitle}` : ''}">${row.lostDuringMonth == null ? '—' : fmt(row.lostDuringMonth)}${row.unknownLostDuringMonth && row.lostDuringMonth != null ? ' + ?' : ''}</td><td class="num" title="Sold ÷ (opening stock + added)">${sellThrough}</td><td class="num" title="${row.unknownClosing ? `${fmt(row.unknownClosing)} product(s) have no status history for this period` : 'Historical stock status is known for this model'}">${fmt(row.closingStock)}${row.unknownClosing ? ' + ?' : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="7">No products found for this month.</td></tr>';
-      document.getElementById('inventoryTopModels').innerHTML = renderRows(summary.topFive);
-      document.getElementById('inventoryBottomModels').innerHTML = renderRows(summary.bottomFive);
+      document.getElementById('inventoryTopModels').innerHTML = renderRows(rankedModels.topFive);
+      document.getElementById('inventoryBottomModels').innerHTML = renderRows(rankedModels.bottomFive);
       document.getElementById('inventoryReportGenerated').textContent = `Inventory movement period: ${month}`;
-      document.getElementById('inventoryExportLink').href = `exportReport.html?type=inventory&month=${encodeURIComponent(month)}`;
+      document.getElementById('inventoryExportLink').href = `exportReport.html?type=inventory&month=${encodeURIComponent(month)}&source=detail&returnTo=inventoryPerformance.html`;
       const note = summary.historicalSnapshotAvailable
         ? `Opening inventory, additions, exits, and ${currentMonth ? 'current' : 'month-end'} stock are shown for ${month}.`
         : `Known stock counts are shown with + ? where Firebase status history is incomplete. ${fmt(summary.unknownSnapshotRecords)} products have no status timestamp for this period.`;
@@ -647,24 +717,43 @@
       const warnings = [window.inventoryTransactionWarning, salesSummaryError].filter(Boolean);
       error.textContent = warnings.join('\n');
       error.hidden = warnings.length === 0;
+      if (currentMonth && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentInventory(month);
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
       const error = document.getElementById('inventoryError');
       try {
-        document.getElementById('inventoryNote').textContent = 'Loading Firebase product records…';
-        window.inventoryProducts = await InventoryAnalytics.fetchProducts();
-        try {
-          window.inventorySaleEvents = await InventoryAnalytics.fetchSaleEvents(window.inventoryProducts);
-          window.inventoryTransactionWarning = window.inventorySaleEvents.warning || '';
-        } catch (transactionError) {
-          window.inventorySaleEvents = [];
-          window.inventoryTransactionWarning = `Purchase transaction dates could not be loaded from the backend. ${transactionError.message}`;
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const previousMonth = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+        const requestedMonth = new URLSearchParams(location.search).get('month') || '';
+        const localMonths = ReportSnapshots.cachedMonths('inventory');
+        const requestedPeriods = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth) ? [requestedMonth] : [];
+        const initialPeriods = [...new Set([...localMonths, ...requestedPeriods, previousMonth, currentMonth])].sort((a, b) => b.localeCompare(a));
+        populateInventoryPicker(initialPeriods, requestedMonth || previousMonth);
+        const firstRender = renderInventory();
+
+        const cachedMonths = await ReportSnapshots.months('inventory');
+        if (cachedMonths.length) {
+          const selected = selectedInventoryMonth();
+          const periods = [...new Set([...cachedMonths, currentMonth])].sort((a, b) => b.localeCompare(a));
+          const preferred = periods.includes(requestedMonth) ? requestedMonth : (periods.includes(selected) ? selected : previousMonth);
+          populateInventoryPicker(periods, preferred);
+          if (selectedInventoryMonth() !== selected) await renderInventory();
+          await firstRender;
+          return;
         }
+
+        await firstRender;
+        await ensureInventorySourceData();
         const months = InventoryAnalytics.availableMonths(window.inventoryProducts, window.inventorySaleEvents);
         if (!months.length) throw new Error('The product API returned records, but none has a usable dateAdded or createdAt date.');
-        populateInventoryPicker(months);
-        renderInventory();
+        const selected = selectedInventoryMonth();
+        const periods = [...new Set([...months, currentMonth])].sort((a, b) => b.localeCompare(a));
+        populateInventoryPicker(periods, periods.includes(selected) ? selected : previousMonth);
+        if (selectedInventoryMonth() !== selected) await renderInventory();
+        void cachePastInventoryReports(months).catch(err => console.warn('Could not cache historical inventory reports:', err.message));
       } catch (err) {
         error.textContent = `Inventory data could not be loaded. ${err.message}`;
         error.hidden = false;

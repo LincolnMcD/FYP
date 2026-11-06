@@ -499,11 +499,14 @@
   <script src="../accountManagementModule/auth.js"></script>
   <script src="adminHeader.js"></script>
   <script src="adminSidebar.js"></script>
+  <script src="reportSnapshots.js"></script>
   <script>
     let yearSelector;
     let monthSelector;
     let reportMonths = [];
     let reportRequestVersion = 0;
+    let businessUserSelectedPeriod = false;
+    const prefetchedBusinessReports = new Map();
     const ANALYTICS_API_BASES = ['http://localhost:3000', 'http://127.0.0.1:3000'];
     const numberFormat = new Intl.NumberFormat('en-MY', { maximumFractionDigits: 0 });
     const moneyFormat = value => `RM ${new Intl.NumberFormat('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
@@ -732,6 +735,65 @@
       return (business.detailedBreakdown || []).reduce((sum, row) => sum + (Number(row.collectionCost) || 0), 0);
     }
 
+    async function cachePastBusinessReports(months, currentSelection) {
+      const cachedMonths = new Set(await ReportSnapshots.months('business'));
+      const pending = months.filter(month => month !== currentSelection && ReportSnapshots.isPastMonth(month) && !cachedMonths.has(month));
+      let next = 0;
+      const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
+        while (next < pending.length) {
+          const month = pending[next++];
+          try {
+            const response = await fetchAnalytics(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(month)}`);
+            const data = await readAnalyticsResponse(response, 'Business analytics summary');
+            if (data.success) await ReportSnapshots.save('business', month, data);
+          } catch (error) {
+            console.warn('Could not cache historical business report for ' + month + ':', error.message);
+          }
+        }
+      });
+      await Promise.all(workers);
+    }
+
+    function renderBusinessSummary(data, requestVersion, sourceLabel) {
+      if (requestVersion !== reportRequestVersion || !data?.success) return;
+      const errorElement = document.getElementById('reportError');
+      errorElement.hidden = true;
+      const business = data.business;
+      if (Number(data.transactionRecordCount) === 0) {
+        errorElement.textContent = `No transaction records were found for ${data.monthLabel}. Choose another month to view its report.`;
+        errorElement.hidden = false;
+      }
+      document.getElementById('valSales').textContent = moneyFormat(business.totalSalesRevenue);
+      document.getElementById('valRental').textContent = moneyFormat(business.rentalRevenue);
+      document.getElementById('valTradeIn').textContent = moneyFormat(getCollectionCost(business));
+      const successfulTradeIns = Number(business.tradeInVolume) || 0;
+      document.getElementById('valTradeInCount').textContent = numberFormat.format(successfulTradeIns) + ' successful trade-in' + (successfulTradeIns === 1 ? '' : 's');
+      document.getElementById('valMargin').textContent = business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`;
+      setTrend('valSalesTrend', business.revenueGrowthTrend);
+      setTrend('valRentalTrend', business.rentalGrowthTrend);
+      if (business.collectionCostGrowthTrend != null) setTrend('valTradeInTrend', business.collectionCostGrowthTrend);
+      else document.getElementById('valTradeInTrend').textContent = 'Collection cost for selected month';
+      if (business.profitMargin == null) document.getElementById('valMarginTrend').textContent = business.missingCostUnits ? 'Missing collect cost data' : 'No revenue to calculate margin';
+      else setTrend('valMarginTrend', business.profitMarginGrowthTrend, ' pp');
+      renderChart(business.historicalBars || []);
+      renderBrandSales(business.brandSales || [], business.detailedBreakdown || []);
+      renderBreakdown(business.detailedBreakdown || [], data);
+      document.getElementById('reportGenerated').textContent = `${sourceLabel} • Generated ${new Date().toLocaleDateString()}`;
+    }
+
+    async function refreshCurrentBusinessMonth(month, requestVersion) {
+      try {
+        const response = await fetchAnalytics(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(month)}`);
+        let data = await readAnalyticsResponse(response, 'Current month analytics summary');
+        if (!data.success) throw new Error('Business analytics summary returned no success flag.');
+        data = await ReportSnapshots.save('business', month, data) || data;
+        prefetchedBusinessReports.set(month, data);
+        if (requestVersion === reportRequestVersion && getSelectedMonthKey() === month) renderBusinessSummary(data, requestVersion, 'Updated live Firebase report');
+      } catch (error) {
+        console.warn('Current business report could not be refreshed:', error.message);
+      }
+    }
+
     async function loadData() {
       const requestVersion = ++reportRequestVersion;
       const month = getSelectedMonthKey();
@@ -741,39 +803,28 @@
       const exportUrl = new URL('exportReport.html', window.location.href);
       exportUrl.searchParams.set('type', 'business');
       exportUrl.searchParams.set('month', month);
+      exportUrl.searchParams.set('source', 'detail');
+      exportUrl.searchParams.set('returnTo', 'businessAnalytics.html');
       const pageUrl = new URL(window.location.href);
       pageUrl.searchParams.set('month', month);
       window.history.replaceState({}, '', pageUrl.toString());
       document.getElementById('exportReportLink').href = exportUrl.toString();
-      ['valSales', 'valRental', 'valTradeIn', 'valMargin'].forEach(id => {
-        document.getElementById(id).textContent = 'Loading…';
-      });
       try {
+        let data = prefetchedBusinessReports.get(month) || await ReportSnapshots.get('business', month);
+        const fromSnapshot = Boolean(data);
+        if (data) renderBusinessSummary(data, requestVersion, 'Saved Firebase snapshot');
+        if (data && ReportSnapshots.isPastMonth(month)) return;
+        if (!data) ['valSales', 'valRental', 'valTradeIn', 'valMargin'].forEach(id => { document.getElementById(id).textContent = 'Loading…'; });
+        if (data && !ReportSnapshots.isPastMonth(month)) {
+          void refreshCurrentBusinessMonth(month, requestVersion);
+          return;
+        }
         const res = await fetchAnalytics(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(month)}`);
-        const data = await readAnalyticsResponse(res, 'Business analytics summary');
+        data = await readAnalyticsResponse(res, 'Business analytics summary');
         if (!data.success) throw new Error('Business analytics summary returned no success flag. Check the API response format.');
         if (requestVersion !== reportRequestVersion) return;
-        const business = data.business;
-        if (Number(data.transactionRecordCount) === 0) {
-          errorElement.textContent = `No transaction records were found for ${data.monthLabel}. Choose another month to view its report.`;
-          errorElement.hidden = false;
-        }
-        document.getElementById('valSales').textContent = moneyFormat(business.totalSalesRevenue);
-        document.getElementById('valRental').textContent = moneyFormat(business.rentalRevenue);
-        document.getElementById('valTradeIn').textContent = moneyFormat(getCollectionCost(business));
-        const successfulTradeIns = Number(business.tradeInVolume) || 0;
-        document.getElementById('valTradeInCount').textContent = numberFormat.format(successfulTradeIns) + ' successful trade-in' + (successfulTradeIns === 1 ? '' : 's');
-        document.getElementById('valMargin').textContent = business.profitMargin == null ? '—' : `${Number(business.profitMargin).toFixed(1)}%`;
-        setTrend('valSalesTrend', business.revenueGrowthTrend);
-        setTrend('valRentalTrend', business.rentalGrowthTrend);
-        if (business.collectionCostGrowthTrend != null) setTrend('valTradeInTrend', business.collectionCostGrowthTrend);
-        else document.getElementById('valTradeInTrend').textContent = 'Collection cost for selected month';
-        if (business.profitMargin == null) document.getElementById('valMarginTrend').textContent = business.missingCostUnits ? 'Missing collect cost data' : 'No revenue to calculate margin';
-        else setTrend('valMarginTrend', business.profitMarginGrowthTrend, ' pp');
-        renderChart(business.historicalBars || []);
-        renderBrandSales(business.brandSales || [], business.detailedBreakdown || []);
-        renderBreakdown(business.detailedBreakdown || [], data);
-        document.getElementById('reportGenerated').textContent = `Live Firebase report • Generated ${new Date().toLocaleDateString()}`;
+        data = await ReportSnapshots.save('business', month, data) || data;
+        renderBusinessSummary(data, requestVersion, fromSnapshot ? 'Saved Firebase snapshot' : 'Live Firebase report');
       } catch (error) {
         if (requestVersion !== reportRequestVersion) return;
         ['valSales', 'valRental', 'valTradeIn', 'valMargin'].forEach(id => {
@@ -783,6 +834,76 @@
         errorElement.textContent = `Report data was not loaded. Why: ${error.message}`;
         errorElement.hidden = false;
       }
+    }
+
+    function previousBusinessMonth() {
+      const date = new Date();
+      date.setDate(1);
+      date.setMonth(date.getMonth() - 1);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function businessSummaryHasRecords(data) {
+      const business = data?.business || {};
+      const count = Number(data?.transactionRecordCount ?? data?.recordCount ?? 0);
+      return count > 0 || [business.totalSalesRevenue, business.rentalRevenue, business.tradeInVolume]
+        .some(value => value != null && Number.isFinite(Number(value)) && Number(value) !== 0);
+    }
+
+    function setBusinessPickerOptions(selectedMonth) {
+      const years = [...new Set(reportMonths.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+      yearSelector.replaceChildren();
+      years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelector.appendChild(option);
+      });
+      const selected = reportMonths.includes(selectedMonth) ? selectedMonth : (reportMonths.includes(previousBusinessMonth()) ? previousBusinessMonth() : reportMonths[0]);
+      yearSelector.value = selected.slice(0, 4);
+      populateMonthOptions(selected.slice(5));
+      yearSelector.disabled = false;
+      monthSelector.disabled = false;
+    }
+
+    async function refreshBusinessPeriodsInBackground(discoverTransactionMonths = false) {
+      let discoveredMonths = [];
+      if (discoverTransactionMonths) {
+        try {
+          const response = await fetchAnalytics('/api/transaction-management/analytics/months');
+          discoveredMonths = normalizeAvailableMonths(await readAnalyticsResponse(response, 'Available analytics months'));
+        } catch (error) { console.warn('Available analytics months endpoint could not be loaded:', error.message); }
+        if (!discoveredMonths.length) {
+          try { discoveredMonths = await fetchMonthsFromTransactions(); }
+          catch (error) { console.warn('Live transaction months could not be loaded:', error.message); }
+        }
+      }
+      const currentDate = new Date();
+      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      if (!discoveredMonths.includes(currentMonth)) {
+        try {
+          const response = await fetchAnalytics(`/api/transaction-management/analytics/summary?month=${encodeURIComponent(currentMonth)}`);
+          let data = await readAnalyticsResponse(response, 'Current month analytics summary');
+          if (businessSummaryHasRecords(data)) {
+            discoveredMonths.push(currentMonth);
+            data = await ReportSnapshots.save('business', currentMonth, data) || data;
+            prefetchedBusinessReports.set(currentMonth, data);
+          }
+        } catch (error) { console.warn('Could not check current month report availability:', error.message); }
+      }
+      const selectedBeforeRefresh = getSelectedMonthKey();
+      reportMonths = [...new Set([...reportMonths, ...discoveredMonths])].sort((a, b) => b.localeCompare(a));
+      const requestedMonth = new URLSearchParams(window.location.search).get('month');
+      const selectedAfterRefresh = reportMonths.includes(requestedMonth)
+        ? requestedMonth
+        : (!businessUserSelectedPeriod && reportMonths.includes(previousBusinessMonth())
+          ? previousBusinessMonth()
+          : (reportMonths.includes(selectedBeforeRefresh)
+          ? selectedBeforeRefresh
+          : (reportMonths.includes(previousBusinessMonth()) ? previousBusinessMonth() : reportMonths[0])));
+      setBusinessPickerOptions(selectedAfterRefresh);
+      if (selectedAfterRefresh !== selectedBeforeRefresh) await loadData();
+      void cachePastBusinessReports(reportMonths, selectedAfterRefresh);
     }
 
     async function initBusinessAnalytics() {
@@ -796,53 +917,31 @@
       yearSelector.innerHTML = '<option value="">Loading…</option>';
       monthSelector.innerHTML = '<option value="">Loading…</option>';
       const requestedMonth = new URLSearchParams(window.location.search).get('month');
-      let availableMonths = [];
-      let monthLookupError = '';
-      try {
-        const response = await fetchAnalytics('/api/transaction-management/analytics/months');
-        const data = await readAnalyticsResponse(response, 'Available analytics months');
-        availableMonths = normalizeAvailableMonths(data);
-      } catch (error) { monthLookupError = error.message || 'The available-months endpoint failed.'; }
-      if (!availableMonths.length) {
-        try {
-          availableMonths = await fetchMonthsFromTransactions();
-        } catch (error) {
-          const errorElement = document.getElementById('reportError');
-          errorElement.textContent = `Could not load available report months. Why: ${error.message}${monthLookupError ? ` The analytics months endpoint also failed: ${monthLookupError}` : ''}`;
-          errorElement.hidden = false;
-          yearSelector.innerHTML = '<option value="">Unavailable</option>';
-          monthSelector.innerHTML = '<option value="">Unavailable</option>';
-          return;
-        }
-      }
-      if (!availableMonths.length) {
-        const errorElement = document.getElementById('reportError');
-        errorElement.textContent = 'No dated transaction records were found, so there are no report months to select.';
-        errorElement.hidden = false;
-        yearSelector.innerHTML = '<option value="">No records</option>';
-        monthSelector.innerHTML = '<option value="">No records</option>';
-        return;
-      }
-      reportMonths = availableMonths;
-      const yearsToShow = [...new Set(reportMonths.map(month => month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
-      const selectedMonth = reportMonths.includes(requestedMonth) ? requestedMonth : reportMonths[0];
-      yearSelector.replaceChildren();
-      yearsToShow.forEach(year => {
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        yearSelector.appendChild(option);
-      });
-      yearSelector.value = selectedMonth.slice(0, 4);
-      populateMonthOptions(selectedMonth.slice(5));
-      yearSelector.disabled = false;
-      monthSelector.disabled = false;
+      const localMonths = ReportSnapshots.cachedMonths('business');
+      const requestedPeriods = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth || '') ? [requestedMonth] : [];
+      reportMonths = [...new Set([...localMonths, ...requestedPeriods, previousBusinessMonth()])].sort((a, b) => b.localeCompare(a));
+      const initialMonth = reportMonths.includes(requestedMonth) ? requestedMonth : previousBusinessMonth();
+      setBusinessPickerOptions(initialMonth);
       yearSelector.addEventListener('change', () => {
+        businessUserSelectedPeriod = true;
         populateMonthOptions();
         loadData();
       });
-      monthSelector.addEventListener('change', loadData);
-      loadData();
+      monthSelector.addEventListener('change', () => { businessUserSelectedPeriod = true; loadData(); });
+      const firstLoad = loadData();
+      const savedMonthsPromise = ReportSnapshots.months('business');
+      await firstLoad;
+      const savedMonths = await savedMonthsPromise;
+      if (savedMonths.length) {
+        const selected = getSelectedMonthKey();
+        reportMonths = [...new Set([...reportMonths, ...savedMonths])].sort((a, b) => b.localeCompare(a));
+        const preferred = reportMonths.includes(requestedMonth) ? requestedMonth : (reportMonths.includes(selected) ? selected : previousBusinessMonth());
+        setBusinessPickerOptions(preferred);
+        if (getSelectedMonthKey() !== selected) await loadData();
+        void refreshBusinessPeriodsInBackground();
+      } else {
+        void refreshBusinessPeriodsInBackground(true);
+      }
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initBusinessAnalytics, { once: true });
     else initBusinessAnalytics();
