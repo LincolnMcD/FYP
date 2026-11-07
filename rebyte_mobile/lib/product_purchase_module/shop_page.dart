@@ -8,6 +8,7 @@ import 'payment_required_page.dart';
 import '../../account_management_module/welcome_page.dart';
 import '../../account_management_module/services/xendit_service.dart';
 import '../device_tradein_module/data/phone_brands_data.dart';
+import '../rental_managment_module/services/rental_service.dart';
 
 enum PriceSortOption {
   none,
@@ -56,6 +57,7 @@ class ShopPageState extends State<ShopPage> {
   final Set<String> _addingProductIds = {};
   String? _toastMessage;
   bool _isToastError = false;
+  double _depositPercentage = 10;
 
   // Complete list of brands from trade-in options + 'All Brands'
   late final List<String> _allBrands;
@@ -68,6 +70,16 @@ class ShopPageState extends State<ShopPage> {
     _scrollController.addListener(_handleScroll);
 
     loadProducts();
+    if (widget.isRentalMode) _loadRentalDepositPolicy();
+  }
+
+
+  Future<void> _loadRentalDepositPolicy() async {
+    final result = await RentalService.getRentalPolicies();
+    if (!mounted || result['success'] != true) return;
+    final raw = result['baseDepositPercentage'];
+    final percentage = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 10;
+    setState(() => _depositPercentage = percentage.clamp(1, 100).toDouble());
   }
 
   @override
@@ -807,7 +819,7 @@ class ShopPageState extends State<ShopPage> {
                             ),
                             if (widget.isRentalMode && product.sellingPrice > 0)
                               Text(
-                                'Deposit: RM ${(product.sellingPrice * 0.2).toStringAsFixed(2)}',
+                                'Deposit: RM ${(product.sellingPrice * _depositPercentage / 100).toStringAsFixed(2)}',
                                 style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
                               ),
                           ],

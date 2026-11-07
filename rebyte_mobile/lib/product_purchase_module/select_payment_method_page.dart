@@ -21,11 +21,18 @@ class SelectPaymentMethodPage extends StatefulWidget {
 }
 
 class _SelectPaymentMethodPageState extends State<SelectPaymentMethodPage> {
+  final ScrollController _savedCardsScrollController = ScrollController();
   List<PaymentAccountModel> _savedCards = [];
   bool _isLoading = true;
   String? _selectedMethodId;
   String? _toastMessage;
   bool _isToastError = false;
+
+  @override
+  void dispose() {
+    _savedCardsScrollController.dispose();
+    super.dispose();
+  }
 
   // Single E-Wallet option - Xendit handles provider selection (Touch 'n Go, GrabPay, ShopeePay)
   final Map<String, String> _ewalletMethod = {
@@ -190,9 +197,12 @@ class _SelectPaymentMethodPageState extends State<SelectPaymentMethodPage> {
                       maxHeight: 255, // Height of 3 card items (including margins)
                     ),
                     child: Scrollbar(
+                      controller: _savedCardsScrollController,
                       thumbVisibility: true,
                       radius: const Radius.circular(8),
                       child: ListView.builder(
+                        controller: _savedCardsScrollController,
+                        primary: false,
                         shrinkWrap: true,
                         itemCount: _savedCards.length,
                         padding: const EdgeInsets.only(right: 6),

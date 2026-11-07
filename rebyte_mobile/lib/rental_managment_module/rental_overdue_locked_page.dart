@@ -38,6 +38,15 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
   bool _loadingBalance = true;
   int? _serverMonthsDue;
   double? _serverAmountDue;
+  double? _serverMonthlyRate;
+  double? _serverLockFee;
+  String? _serverProductID;
+  String? _serverProductName;
+  String? _serverImageUrl;
+  String? _serverStorage;
+  String? _serverColor;
+  String? _serverDeviceIdentifier;
+  String? _serverNextBillingDate;
   String? _balanceError;
   String? _toastMessage;
 
@@ -109,6 +118,15 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
       setState(() {
         _serverMonthsDue = (decoded['monthsDue'] as num).toInt();
         _serverAmountDue = (decoded['amountDue'] as num).toDouble();
+        _serverMonthlyRate = (decoded['monthlyRentalFee'] as num?)?.toDouble();
+        _serverLockFee = (decoded['lockFee'] as num?)?.toDouble();
+        _serverProductID = decoded['productID']?.toString();
+        _serverProductName = decoded['productName']?.toString();
+        _serverImageUrl = decoded['imageUrl']?.toString();
+        _serverStorage = decoded['storage']?.toString();
+        _serverColor = decoded['color']?.toString();
+        _serverDeviceIdentifier = decoded['deviceIdentifier']?.toString();
+        _serverNextBillingDate = decoded['nextBillingDate']?.toString();
         _balanceError = null;
         _loadingBalance = false;
       });
@@ -169,7 +187,7 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
         amount: totalDue,
         description: 'Overdue rental balance for $rentalID: $productName ($months month${months == 1 ? '' : 's'} + lock fee${widget.returnAfterPayment ? ', pay and return' : ''})',
         paymentMethodType: paymentType,
-        productIDs: [widget.rental['productID']?.toString() ?? rentalID],
+        productIDs: [_serverProductID ?? widget.rental['productID']?.toString() ?? rentalID],
       );
       if (invoice['success'] != true || invoice['invoiceUrl'] == null) {
         throw Exception(invoice['error']?.toString() ?? 'Unable to start Xendit payment.');
@@ -238,7 +256,7 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
         paidAt: DateTime.now(),
         isRental: true,
         items: [CartItemModel(
-          productID: widget.rental['productID']?.toString() ?? rentalID,
+          productID: _serverProductID ?? widget.rental['productID']?.toString() ?? rentalID,
           listingTitle: productName,
           description: 'Overdue rental payment ($months month${months == 1 ? '' : 's'} + lock fee)',
           sellingPrice: totalDue,
@@ -264,29 +282,47 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
     final product = (rental['product'] is Map)
         ? Map<String, dynamic>.from(rental['product'] as Map)
         : <String, dynamic>{};
-    String productName = product['title']?.toString() ??
-        rental['productName']?.toString() ??
-        rental['title']?.toString() ??
-        'iPhone 12';
+    final device = (rental['device'] is Map)
+        ? Map<String, dynamic>.from(rental['device'] as Map)
+        : <String, dynamic>{};
+    String firstValue(List<dynamic> values, {String fallback = ''}) {
+      for (final value in values) {
+        final text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+      }
+      return fallback;
+    }
+    final productName = firstValue([
+      _serverProductName,
+      product['listingTitle'], product['title'], product['productName'],
+      device['modelName'], device['model'], rental['productName'], rental['title'],
+    ], fallback: 'Rental device');
 
     // Image URL
-    String imageUrl = product['imageUrl']?.toString() ?? rental['imageUrl']?.toString() ?? '';
+    String imageUrl = firstValue([
+      _serverImageUrl, product['imageUrl'], rental['imageUrl'],
+    ]);
     if (imageUrl.isEmpty && product['images'] is List && (product['images'] as List).isNotEmpty) {
       imageUrl = product['images'][0].toString();
     }
 
     // Specs
     String specsText = '';
-    final storage = product['storage'] ?? rental['storage'] ?? '';
-    final color = product['color'] ?? rental['color'] ?? '';
+    final storage = firstValue([
+      _serverStorage, device['storageCapacity'], device['storage'], product['storage'], rental['storage'],
+    ]);
+    final color = firstValue([
+      _serverColor, device['colour'], device['color'], product['colour'], product['color'], rental['colour'], rental['color'],
+    ]);
+    final deviceIdentifier = firstValue([
+      _serverDeviceIdentifier, device['serialNumber'], device['imei'], device['imeiNum'], product['serialNumber'],
+    ]);
     if (storage.toString().isNotEmpty && color.toString().isNotEmpty) {
       specsText = '${storage} • ${color}';
     } else if (storage.toString().isNotEmpty) {
       specsText = storage.toString();
     } else if (color.toString().isNotEmpty) {
       specsText = color.toString();
-    } else {
-      specsText = '256GB • Graphite';
     }
 
     final now = DateTime.now();
@@ -348,6 +384,14 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
     // Timeline dates
     final String startDateStr = DateFormat('MMM dd, yyyy').format(startDate);
     final String dueDateStr = DateFormat('MMM dd, yyyy').format(expD);
+    DateTime? nextBillingDate;
+    try {
+      final value = _serverNextBillingDate;
+      if (value != null && value.isNotEmpty) nextBillingDate = DateTime.parse(value);
+    } catch (_) {}
+    final String needPayUntilDateStr = nextBillingDate == null
+        ? '—'
+        : DateFormat('MMM dd, yyyy').format(nextBillingDate);
     final String currentDateStr = DateFormat('MMM dd, yyyy').format(today);
 
     // 4. Financial calculation (no late fee):
@@ -355,8 +399,8 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
     // Total Due = (unpaidMonths * monthlyRate) + lock fee 50
     final rawFee = rental['monthlyRentalFee'] ?? rental['monthlyFee'];
     final feeNum = (rawFee is num) ? rawFee.toDouble() : double.tryParse(rawFee?.toString() ?? '');
-    final double monthlyRate = feeNum ?? 149.00;
-    const double adminLockFee = 50.00;
+    final double monthlyRate = _serverMonthlyRate ?? feeNum ?? 0;
+    final double adminLockFee = _serverLockFee ?? 0;
     final double unpaidMonthlyTotal = (unpaidMonths * monthlyRate * 100).round() / 100;
     final double totalDue = ((unpaidMonthlyTotal + adminLockFee) * 100).round() / 100;
     final displayMonths = _serverMonthsDue;
@@ -531,6 +575,13 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (deviceIdentifier.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Device ID: $deviceIdentifier',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                              ),
+                            ],
                             const SizedBox(height: 12),
 
                             // Tags row
@@ -653,6 +704,14 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
                       labelColor: const Color(0xFFDC2626),
                       dateStr: currentDateStr,
                       dateColor: const Color(0xFFDC2626),
+                      showBottomLine: true,
+                    ),
+                    _buildTimelineRow(
+                      dotColor: const Color(0xFFEAB308),
+                      label: 'Need Pay Until',
+                      labelColor: const Color(0xFFCA8A04),
+                      dateStr: needPayUntilDateStr,
+                      dateColor: const Color(0xFF0F172A),
                       showBottomLine: false,
                     ),
                   ],
@@ -746,7 +805,7 @@ class _RentalOverdueLockedPageState extends State<RentalOverdueLockedPage> {
                               : 'Standard Monthly Rate ($displayMonths month${displayMonths == 1 ? "" : "s"})',
                       _loadingBalance || displayTotalDue == null
                           ? '—'
-                          : 'RM${(displayTotalDue - adminLockFee).toStringAsFixed(2)}',
+                          : 'RM${(_serverMonthlyRate != null && displayMonths != null ? _serverMonthlyRate! * displayMonths : displayTotalDue - adminLockFee).toStringAsFixed(2)}',
                       const Color(0xFF0F172A),
                     ),
                     const SizedBox(height: 12),

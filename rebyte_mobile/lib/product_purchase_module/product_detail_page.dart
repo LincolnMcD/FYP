@@ -10,6 +10,7 @@ import 'payment_required_page.dart';
 import '../../account_management_module/welcome_page.dart';
 import '../../account_management_module/services/xendit_service.dart';
 import '../../device_tradein_module/services/trade_in_service.dart';
+import '../rental_managment_module/services/rental_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final ProductModel product;
@@ -48,7 +49,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Map<String, dynamic>? _evaluationData;
   Map<String, dynamic>? _diagnosticData;
   Map<String, dynamic>? _deviceRecordData;
-  bool _isLoadingInspection = false;
+  double _depositPercentage = 10;
 
   bool get _isRentalDevice {
     final st = _product.listingStatus.toLowerCase();
@@ -65,10 +66,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void initState() {
     super.initState();
     _product = widget.product;
+    if (_isRentalDevice) _loadRentalDepositPolicy();
     _modelCode = widget.product.modelCode;
     _deviceID = widget.product.deviceID;
     _checkCartStatus();
     _fetchFullProductAndSpecs();
+  }
+
+
+  Future<void> _loadRentalDepositPolicy() async {
+    final result = await RentalService.getRentalPolicies();
+    if (!mounted || result['success'] != true) return;
+    final raw = result['baseDepositPercentage'];
+    final percentage = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 10;
+    setState(() => _depositPercentage = percentage.clamp(1, 100).toDouble());
   }
 
   Future<void> _fetchFullProductAndSpecs() async {
@@ -96,8 +107,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final trId = _product.tradeInRequestID;
 
     if (devId.isEmpty && trId.isEmpty) return;
-
-    setState(() => _isLoadingInspection = true);
 
     try {
       // 1. Fetch device record by deviceID to resolve storage, color, and IMEI
@@ -132,10 +141,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       }
     } catch (e) {
       debugPrint('Error loading evaluation or diagnostic: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingInspection = false);
-      }
     }
   }
 
@@ -2499,7 +2504,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             const SizedBox(height: 4),
             Text(
               _product.sellingPrice > 0
-                  ? 'Security Deposit: RM${(_product.sellingPrice * 0.2).toStringAsFixed(2)} (Refundable upon return)'
+                  ? 'Security Deposit: RM${(_product.sellingPrice * _depositPercentage / 100).toStringAsFixed(2)} (Refundable upon return)'
                   : 'Professional verified • Free delivery & pickup',
               style: const TextStyle(
                 fontSize: 13,

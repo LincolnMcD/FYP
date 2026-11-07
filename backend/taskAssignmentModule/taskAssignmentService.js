@@ -244,7 +244,8 @@ const WORKING_HOUR_CONFIG = {
     defaultMaxTasks: 8            // Default max tasks cap
 };
 
-const TRADE_IN_TASK_CONFIG_DOC = "systemConfig/bookingPolicies";
+const TRADE_IN_TASK_CONFIG_DOC = "systemSettings/bookingPolicies";
+const LEGACY_TRADE_IN_TASK_CONFIG_DOC = "systemConfig/bookingPolicies";
 const TRADE_IN_TASK_DURATION_DEFAULTS = Object.freeze({
     collectionMinutes: 30,
     inspectionMinutes: 90,
@@ -260,7 +261,8 @@ async function getTradeInTaskDurationConfig(forceRefresh = false) {
         return tradeInTaskDurationConfigCache;
     }
     try {
-        const snapshot = await db.doc(TRADE_IN_TASK_CONFIG_DOC).get();
+        let snapshot = await db.doc(TRADE_IN_TASK_CONFIG_DOC).get();
+        if (!snapshot.exists) snapshot = await db.doc(LEGACY_TRADE_IN_TASK_CONFIG_DOC).get();
         const data = snapshot.exists ? snapshot.data() : {};
         tradeInTaskDurationConfigCache = {
             collectionMinutes: Number(data.collectionMinutes) || TRADE_IN_TASK_DURATION_DEFAULTS.collectionMinutes,
@@ -2165,29 +2167,27 @@ async function assignTradeInTask({
     };
 }
 
-const INSPECTION_SLOTS = [
-    '09:30 AM',
-    '11:00 AM',
-    '01:00 PM',
-    '01:30 PM',
-    '02:30 PM',
-    '03:00 PM',
-];
+function buildTradeInAppointmentSlots(durationMinutes) {
+    const duration = Math.max(1, Math.floor(Number(durationMinutes) || 30));
+    const workdayEnd = 17 * 60;
+    const startWindows = [
+        { start: 9 * 60 + 30, end: 12 * 60 },
+        { start: 13 * 60, end: 17 * 60 }
+    ];
+    const slots = [];
 
-const COLLECTION_SLOTS = [
-    '09:30 AM',
-    '10:00 AM',
-    '10:30 AM',
-    '11:00 AM',
-    '11:30 AM',
-    '01:00 PM',
-    '01:30 PM',
-    '02:00 PM',
-    '02:30 PM',
-    '03:00 PM',
-    '03:30 PM',
-    '04:00 PM',
-];
+    for (const window of startWindows) {
+        for (let start = window.start; start < window.end && start + duration <= workdayEnd; start += duration) {
+            const hour24 = Math.floor(start / 60);
+            const minute = start % 60;
+            const suffix = hour24 >= 12 ? "PM" : "AM";
+            const hour12 = hour24 % 12 || 12;
+            slots.push(`${String(hour12).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${suffix}`);
+        }
+    }
+
+    return slots;
+}
 
 /**
  * Check availability of appointment slots for a given date and method.
@@ -2199,7 +2199,7 @@ async function checkSlotAvailabilityForDate({ method = "On-Site Inspection", dat
     const isInspection = String(method).toLowerCase().includes("inspect");
     const durationConfig = await getTradeInTaskDurationConfig();
     const taskDurationMinutes = isInspection ? durationConfig.inspectionMinutes : durationConfig.collectionMinutes; // 1hr 30m for inspect, 30m for collect
-    const allSlots = isInspection ? INSPECTION_SLOTS : COLLECTION_SLOTS;
+    const allSlots = buildTradeInAppointmentSlots(taskDurationMinutes);
 
     // 1. Get eligible staff for this role who are not on approved leave on dateStr
     const staffOnLeave = await getStaffIDsOnApprovedLeave(dateStr);
@@ -2321,7 +2321,11 @@ async function checkMonthAvailabilityForTradeIn({ method = "On-Site Inspection",
     const isInspection = String(method).toLowerCase().includes("inspect");
     const durationConfig = await getTradeInTaskDurationConfig();
     const taskDurationMinutes = isInspection ? durationConfig.inspectionMinutes : durationConfig.collectionMinutes;
-    const allSlots = isInspection ? INSPECTION_SLOTS : COLLECTION_SLOTS;
+    const allSlots = buildTradeInAppointmentSlots(taskDurationMinutes);
+    const now = new Date();
+    const minimumNoticeDays = Math.max(1, Math.ceil(durationConfig.minimumAdvanceNoticeHours / 24));
+    const minBookDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + minimumNoticeDays, 0, 0, 0);
+    const minimumBookDate = `${minBookDate.getFullYear()}-${String(minBookDate.getMonth() + 1).padStart(2, "0")}-${String(minBookDate.getDate()).padStart(2, "0")}`;
 
     // 1. Get eligible staff
     const usersSnap = await db.collection("users")
@@ -2356,7 +2360,9 @@ async function checkMonthAvailabilityForTradeIn({ method = "On-Site Inspection",
             success: true,
             month: monthStr,
             disabledDates,
-            firstAvailableDate: null
+            firstAvailableDate: null,
+            minimumBookDate,
+            minimumAdvanceNoticeDays: minimumNoticeDays
         };
     }
 
@@ -2416,6 +2422,10 @@ async function checkMonthAvailabilityForTradeIn({ method = "On-Site Inspection",
         const dayStr = String(day).padStart(2, "0");
         const dateStr = `${yearStr}-${mStr.padStart(2, "0")}-${dayStr}`;
         const dayDate = new Date(year, month - 1, day, 0, 0, 0);
+        if (dayDate < minBookDate) {
+            disabledDates.push(dateStr);
+            continue;
+        }
 
         // Filter eligible staff not on leave on this date
         const staffAvailableOnDay = eligibleStaffIds.filter(sid => {
@@ -2454,10 +2464,6 @@ async function checkMonthAvailabilityForTradeIn({ method = "On-Site Inspection",
     }
 
     // Compute first available date starting from tomorrow (24h advance)
-    const now = new Date();
-    
-    const minimumNoticeDays = Math.ceil(durationConfig.minimumAdvanceNoticeHours / 24);
-    const minBookDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + minimumNoticeDays, 0, 0, 0);
     let firstAvailableDate = null;
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -2475,7 +2481,9 @@ async function checkMonthAvailabilityForTradeIn({ method = "On-Site Inspection",
         success: true,
         month: monthStr,
         disabledDates,
-        firstAvailableDate
+        firstAvailableDate,
+        minimumBookDate,
+        minimumAdvanceNoticeDays: minimumNoticeDays
     };
 }
 

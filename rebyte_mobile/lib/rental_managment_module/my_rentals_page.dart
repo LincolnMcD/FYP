@@ -28,7 +28,7 @@ class MyRentalsPage extends StatefulWidget {
 }
 
 class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProviderStateMixin {
-  static const int _rentalBufferDays = 3;
+  int _rentalBufferDays = 3;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late TabController _tabController;
   bool _isLoading = true;
@@ -46,6 +46,14 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
       if (mounted) setState(() {});
     });
     _loadRentals();
+    _loadReturnBufferPolicy();
+  }
+
+  Future<void> _loadReturnBufferPolicy() async {
+    final policy = await RentalService.getRentalPolicies();
+    final bufferDays = policy['returnBufferDays'];
+    if (!mounted || policy['success'] != true || bufferDays is! int || bufferDays < 0) return;
+    setState(() => _rentalBufferDays = bufferDays);
   }
 
   @override
@@ -1075,7 +1083,7 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                     ],
                   ),
                 ] else if (category == 'returning') ...[
-                  // Returning Banner: "Please return from [endDate] to [bufferDate (endDate + 3 days)]"
+                  // Returning Banner uses the configured rental return buffer.
                   Builder(
                     builder: (context) {
                       String startReturnStr = endFormatted.isNotEmpty ? endFormatted : 'today';
@@ -1086,13 +1094,13 @@ class _MyRentalsPageState extends State<MyRentalsPage> with SingleTickerProvider
                           baseDt = DateTime.tryParse(rental['endDate'].toString());
                         }
                         baseDt ??= DateTime.now();
-                        final bufferDt = baseDt.add(const Duration(days: 3));
+                        final bufferDt = baseDt.add(Duration(days: _rentalBufferDays));
                         bufferReturnStr = DateFormat('dd MMM yyyy').format(bufferDt);
                         if (rental['endDate'] != null) {
                           startReturnStr = DateFormat('dd MMM yyyy').format(baseDt);
                         }
                       } catch (_) {
-                        bufferReturnStr = 'within 3 days';
+                        bufferReturnStr = 'within $_rentalBufferDays days';
                       }
 
                       return Container(

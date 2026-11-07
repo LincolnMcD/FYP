@@ -2291,6 +2291,7 @@ router.get("/user-requests", async (req, res) => {
             if (appDoc) {
                 const app = appDoc.data();
                 appointmentID = app.appointmentID || appDoc.id;
+
                 const isCancelledAppt = app.appointmentStatus === "Cancelled" || app.bookingStatus === "Cancelled" || app.status === "Cancelled";
                 const isOnHold = !isCancelledAppt && (app.appointmentStatus === "On Hold" || data.requestStatus === "On Hold" || app.bookingStatus === "On Hold");
                 const isInProgress = !isCancelledAppt && !isOnHold && (app.appointmentStatus === "In Progress" || data.requestStatus === "In Progress" || app.bookingStatus === "In Progress");
@@ -2471,6 +2472,10 @@ router.get("/request-details", async (req, res) => {
         let appointmentID = data.appointmentID || null;
         let appointmentDate = data.appointmentDate || null;
         let appointmentTime = data.appointmentTime || null;
+        let scheduleID = data.scheduleID || null;
+        let scheduleDate = null;
+        let scheduleStartTime = null;
+        let scheduleEndTime = null;
         let appointmentLocation = null;
         let inspectionMethod = data.inspectionMethod || null;
         let bookingStatus = data.bookingStatus || null;
@@ -2544,6 +2549,51 @@ router.get("/request-details", async (req, res) => {
             }
         } catch (_) {}
 
+        // Resolve the real assigned task slot. appointmentTime on the request only
+        // stores the selected start time; the schedule document is authoritative for
+        // the actual start/end interval (which varies by inspection/collection policy).
+        try {
+            let taskDoc = null;
+            if (appointmentID) {
+                const taskByAppointment = await db.collection("task")
+                    .where("appointmentID", "==", appointmentID)
+                    .limit(1)
+                    .get();
+                if (!taskByAppointment.empty) taskDoc = taskByAppointment.docs[0];
+            }
+            if (!taskDoc) {
+                for (const candidateId of [cleanId, `#${cleanId}`, doc.id, data.tradeInRequestID].filter(Boolean)) {
+                    const taskByRequest = await db.collection("task")
+                        .where("tradeInRequestID", "==", candidateId)
+                        .limit(1)
+                        .get();
+                    if (!taskByRequest.empty) {
+                        taskDoc = taskByRequest.docs[0];
+                        break;
+                    }
+                }
+            }
+
+            const taskData = taskDoc ? taskDoc.data() : {};
+            scheduleID = taskData.scheduleID || scheduleID;
+            if (scheduleID) {
+                const scheduleDoc = await db.collection("schedule").doc(scheduleID).get();
+                if (scheduleDoc.exists) {
+                    const scheduleData = scheduleDoc.data() || {};
+                    scheduleDate = scheduleData.scheduleDate || null;
+                    scheduleStartTime = scheduleData.scheduleStartTime || null;
+                    scheduleEndTime = scheduleData.scheduleEndTime || null;
+                }
+            }
+            // Older task records can carry the schedule window themselves.
+            scheduleDate = scheduleDate || taskData.scheduleDate || null;
+            scheduleStartTime = scheduleStartTime || taskData.scheduleStartTime || taskData.taskStartTime || null;
+            scheduleEndTime = scheduleEndTime || taskData.scheduleEndTime || taskData.taskEndTime || null;
+            if (scheduleDate) appointmentDate = scheduleDate;
+        } catch (scheduleError) {
+            console.warn("request-details: could not resolve task schedule interval:", scheduleError.message);
+        }
+
         if (!appointmentLocation) {
             if (typeof data.address === 'string' && data.address.trim()) {
                 appointmentLocation = data.address.trim();
@@ -2563,6 +2613,10 @@ router.get("/request-details", async (req, res) => {
             appointmentID,
             appointmentDate,
             appointmentTime,
+            scheduleID,
+            scheduleDate,
+            scheduleStartTime,
+            scheduleEndTime,
             appointmentLocation,
             addressID: data.addressID || (appDoc ? appDoc.data().addressID : null) || null,
             inspectionMethod,

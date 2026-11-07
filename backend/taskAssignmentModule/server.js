@@ -4534,8 +4534,8 @@ router.put("/admin/criteria", requireBookingPolicyAdmin, async (req, res) => {
     };
     const limits = [
         ["Minimum advance notice", values.minimumAdvanceNoticeHours, 24, 168],
-        ["Collection buffer time", values.collectionMinutes, 5, 360],
-        ["Inspection buffer time", values.inspectionMinutes, 5, 360]
+        ["Collection buffer time", values.collectionMinutes, 30, 360],
+        ["Inspection buffer time", values.inspectionMinutes, 90, 360]
     ];
     for (const [label, value, min, max] of limits) {
         if (!Number.isInteger(value) || value < min || value > max) {

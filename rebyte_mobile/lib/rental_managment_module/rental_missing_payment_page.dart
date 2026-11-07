@@ -34,7 +34,10 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   SelectedPaymentMethod? _selectedPayment;
   bool _loadingMethod = true;
+  bool _loadingQuote = true;
   bool _processing = false;
+  String? _quoteError;
+  Map<String, dynamic> _quote = {};
   String? _toastMessage;
 
   void _showToast(String message) {
@@ -85,6 +88,28 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
   void initState() {
     super.initState();
     _loadDefaultPaymentMethod();
+    _loadMissingQuote();
+  }
+
+  Future<void> _loadMissingQuote() async {
+    final rentalID = widget.rental['rentalID']?.toString() ?? '';
+    try {
+      final uri = Uri.parse('${AuthService.baseUrl}/api/rental/missing-quote/${Uri.encodeComponent(rentalID)}')
+          .replace(queryParameters: {'email': widget.email});
+      final response = await http.get(uri).timeout(const Duration(seconds: 20));
+      final data = jsonDecode(response.body);
+      if (response.statusCode < 200 || response.statusCode >= 300 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? data['error']?.toString() ?? 'Unable to load the missing-device amount.' : 'Invalid server response.');
+      }
+      final quote = data['quote'];
+      if (!mounted) return;
+      setState(() {
+        _quote = quote is Map ? Map<String, dynamic>.from(quote) : <String, dynamic>{};
+        _loadingQuote = false;
+      });
+    } catch (error) {
+      if (mounted) setState(() { _quoteError = error.toString().replaceFirst('Exception: ', ''); _loadingQuote = false; });
+    }
   }
 
   Future<void> _loadDefaultPaymentMethod() async {
@@ -248,12 +273,12 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
     );
   }
 
-  Widget _summaryRow(String label, String amount, {bool total = false}) {
+  Widget _summaryRow(String label, String amount, {bool total = false, Color? valueColor}) {
     return Padding(
       padding: EdgeInsets.only(top: total ? 14 : 0),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: TextStyle(fontSize: total ? 16 : 14, fontWeight: total ? FontWeight.bold : FontWeight.w500, color: total ? _ink : const Color(0xFF475569))),
-        Text(amount, style: TextStyle(fontSize: total ? 20 : 14, fontWeight: FontWeight.bold, color: total ? _blue : _ink)),
+        Text(amount, style: TextStyle(fontSize: total ? 20 : 14, fontWeight: FontWeight.bold, color: total ? _blue : (valueColor ?? _ink))),
       ]),
     );
   }
@@ -278,13 +303,12 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
     final serial = (device['serialNumber'] ?? device['imei'] ?? product['serialNumber'] ?? '').toString().trim();
     final storage = (device['storage'] ?? product['storage'] ?? '').toString();
     final color = (device['color'] ?? product['color'] ?? '').toString();
-    final collectionPrice = _asDouble(
-      product['collectedPrice'] ?? product['collectionPrice'] ?? product['collection_price'] ?? rental['collectedPrice'],
-    );
-    final sellingPrice = _asDouble(product['sellingPrice'] ?? rental['sellingPrice']);
-    final deviceTotal = ((collectionPrice > 0 ? collectionPrice * 1.2 : sellingPrice) * 100).round() / 100;
-    const lossPenalty = 50.0;
-    final total = ((deviceTotal + lossPenalty) * 100).round() / 100;
+    final compensationRule = _quote['compensationRule']?.toString() ?? '';
+    final marketValue = _asDouble(_quote['marketValue']);
+    final rentalSpend = _asDouble(_quote['rentalFeePaid']);
+    final rentalSpendDeduction = rentalSpend > marketValue ? marketValue : rentalSpend;
+    final adminLockFee = _asDouble(_quote['adminLockFee']);
+    final total = _asDouble(_quote['total']);
     final money = NumberFormat('#,##0.00');
 
     return Scaffold(
@@ -402,20 +426,34 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
                 _section(
                   title: 'Payment Summary',
                   icon: Icons.receipt_long_outlined,
-                  child: Column(children: [
-                    _summaryRow('Device total price', 'RM ${money.format(deviceTotal)}'),
-                    const SizedBox(height: 12),
-                    _summaryRow('Loss penalty', 'RM ${money.format(lossPenalty)}'),
-                    const Divider(height: 25, color: Color(0xFFE2E8F0)),
-                    _summaryRow('Total', 'RM ${money.format(total)}', total: true),
-                  ]),
+                  child: _loadingQuote
+                      ? const Center(child: Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator()))
+                      : _quoteError != null
+                          ? Text(_quoteError!, style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13))
+                          : Column(children: [
+                              _summaryRow('Market value', 'RM ${money.format(marketValue)}'),
+                              if (compensationRule == 'remainingPlusLockFee') ...[
+                                const SizedBox(height: 10),
+                                _summaryRow(
+                                  'Rental spend deduction',
+                                  '-RM ${money.format(rentalSpendDeduction)}',
+                                  valueColor: const Color(0xFF16A765),
+                                ),
+                              ],
+                              if (compensationRule != 'marketValue') ...[
+                                const SizedBox(height: 10),
+                                _summaryRow('Admin lock fee', 'RM ${money.format(adminLockFee)}'),
+                              ],
+                              const Divider(height: 25, color: Color(0xFFE2E8F0)),
+                              _summaryRow('Total', 'RM ${money.format(total)}', total: true),
+                            ]),
                 ),
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: (_processing || _loadingMethod || _selectedPayment == null || deviceTotal <= 0)
+                    onPressed: (_processing || _loadingQuote || _quoteError != null || _loadingMethod || _selectedPayment == null || total <= 0)
                         ? null
                         : () => _payAndReport(
                               rentalID: rentalID,
@@ -437,7 +475,7 @@ class _RentalMissingPaymentPageState extends State<RentalMissingPaymentPage> {
                         : Text('Pay RM ${money.format(total)} & Report Missing', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
                   ),
                 ),
-                if (deviceTotal <= 0) ...[
+                if (!_loadingQuote && _quoteError == null && total <= 0) ...[
                   const SizedBox(height: 8),
                   const Text('Device price is unavailable. Please contact support.', style: TextStyle(fontSize: 12, color: Color(0xFFB91C1C))),
                 ],

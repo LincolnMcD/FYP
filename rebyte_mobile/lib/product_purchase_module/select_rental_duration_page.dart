@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'models/product_model.dart';
 import 'rental_checkout_page.dart';
 import '../account_management_module/welcome_page.dart';
+import '../rental_managment_module/services/rental_service.dart';
 
 class SelectRentalDurationPage extends StatefulWidget {
   final ProductModel product;
@@ -31,11 +32,34 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
   final TextEditingController _customMonthsController = TextEditingController(text: '3');
   String? _durationValidationError;
   bool _isCreatingRental = false;
+  List<int> _availableDurationMonths = [3, 12, 24];
+  double _depositPercentage = 10;
 
   @override
   void initState() {
     super.initState();
     _customMonthsController.text = '3';
+    _loadRentalPolicies();
+  }
+
+
+  Future<void> _loadRentalPolicies() async {
+    final result = await RentalService.getRentalPolicies();
+    if (!mounted || result['success'] != true) return;
+    final rawDurations = result['availableDurations'];
+    final durations = <int>{3, 12, 24};
+    if (rawDurations is List) {
+      for (final value in rawDurations) {
+        final months = value is num ? value.toInt() : int.tryParse('$value');
+        if (months != null && months >= 1 && months <= 60) durations.add(months);
+      }
+    }
+    final rawPercentage = result['baseDepositPercentage'];
+    final percentage = rawPercentage is num ? rawPercentage.toDouble() : double.tryParse('$rawPercentage') ?? 10;
+    setState(() {
+      _availableDurationMonths = durations.toList()..sort();
+      _depositPercentage = percentage.clamp(1, 100).toDouble();
+    });
   }
 
   @override
@@ -69,7 +93,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
         _durationValidationError = null;
         _customMonths = parsed;
         // Check if matches one of presets (3, 12, 24)
-        if (parsed == 3 || parsed == 12 || parsed == 24) {
+        if (_availableDurationMonths.contains(parsed)) {
           _selectedPresetMonths = parsed;
         } else {
           _selectedPresetMonths = 0; // custom value
@@ -86,7 +110,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
       _customMonths = next;
       _customMonthsController.text = next.toString();
       _durationValidationError = null;
-      if (next == 3 || next == 12 || next == 24) {
+      if (_availableDurationMonths.contains(next)) {
         _selectedPresetMonths = next;
       } else {
         _selectedPresetMonths = 0;
@@ -102,7 +126,7 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
       _customMonths = next;
       _customMonthsController.text = next.toString();
       _durationValidationError = null;
-      if (next == 3 || next == 12 || next == 24) {
+      if (_availableDurationMonths.contains(next)) {
         _selectedPresetMonths = next;
       } else {
         _selectedPresetMonths = 0;
@@ -120,11 +144,13 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
     return 50.0;
   }
 
-  double get _discountRate {
-    if (_effectiveDurationMonths >= 24) return 0.20;
-    if (_effectiveDurationMonths >= 12) return 0.10;
+  double _discountRateFor(int months) {
+    if (months >= 24) return 0.20;
+    if (months >= 12) return 0.10;
     return 0.0;
   }
+
+  double get _discountRate => _discountRateFor(_effectiveDurationMonths);
 
   double get _effectiveMonthlyRate {
     return _baseMonthlyRate * (1.0 - _discountRate);
@@ -141,20 +167,16 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
     return _effectiveMonthlyRate * _effectiveDurationMonths;
   }
 
-  /// Deposit amount: ceil(collectedPrice * 0.1)
-  /// fallback: ceil((sellingPrice / 1.2) * 0.1), or derived from rentalPrice (where rentalPrice = collectedPrice * 0.05)
+  /// Deposit is the configured percentage of the device selling value.
   double get _refundableDeposit {
-    double baseCollected = 0.0;
-    if (widget.product.collectedPrice > 0) {
-      baseCollected = widget.product.collectedPrice;
-    } else if (widget.product.sellingPrice > 0) {
-      baseCollected = widget.product.sellingPrice / 1.2;
-    } else if (widget.product.rentalPrice > 0) {
-      // Since monthly rental fee is collectedPrice * 0.05, collectedPrice = rentalPrice / 0.05
-      baseCollected = widget.product.rentalPrice / 0.05;
+    double deviceValue = widget.product.sellingPrice;
+    if (deviceValue <= 0 && widget.product.collectedPrice > 0) {
+      deviceValue = widget.product.collectedPrice;
+    } else if (deviceValue <= 0 && widget.product.rentalPrice > 0) {
+      deviceValue = widget.product.rentalPrice / 0.05;
     }
-    if (baseCollected > 0) {
-      return (baseCollected * 0.1).ceilToDouble();
+    if (deviceValue > 0) {
+      return ((deviceValue * _depositPercentage / 100) * 100).roundToDouble() / 100;
     }
     return 35.0;
   }
@@ -357,32 +379,26 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _buildPresetOption(
-                  months: 3,
-                  badgeText: null,
-                  isSelected: _selectedPresetMonths == 3,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPresetOption(
-                  months: 12,
-                  badgeText: '10% OFF',
-                  isSelected: _selectedPresetMonths == 12,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPresetOption(
-                  months: 24,
-                  badgeText: '20% OFF',
-                  isSelected: _selectedPresetMonths == 24,
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = (constraints.maxWidth - 24) / 3;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: _availableDurationMonths.map((months) {
+                  final discount = _discountRateFor(months);
+                  final badge = discount == 0 ? null : '${(discount * 100).round()}% OFF';
+                  return SizedBox(
+                    width: cardWidth,
+                    child: _buildPresetOption(
+                      months: months,
+                      badgeText: badge,
+                      isSelected: _selectedPresetMonths == months,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
         ],
       ),
@@ -903,33 +919,6 @@ class _SelectRentalDurationPageState extends State<SelectRentalDurationPage> {
                       ),
                     ),
                   ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Informational Notice
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: const [
-                Icon(Icons.info_outline, size: 18, color: Color(0xFF4338CA)),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Rentals require a credit check that will not impact your credit score.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: Color(0xFF4338CA),
-                      height: 1.3,
-                    ),
-                  ),
                 ),
               ],
             ),

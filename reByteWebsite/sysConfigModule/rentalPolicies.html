@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rental Policies - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
+  <style>
+    :root { --navy:#082f72; --blue:#0646a5; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#687184; }
+    * { box-sizing:border-box; }
+    body { display:flex; height:100vh; min-height:0; margin:0; overflow:hidden; background:var(--page); color:var(--text); font-family:Inter,Arial,sans-serif; }
+    body > .sidebar { position:sticky; top:0; align-self:flex-start; width:260px; height:100vh; max-height:100vh; flex:0 0 260px; overflow:hidden; }
+    .main { min-width:0; height:100vh; flex:1; display:flex; flex-direction:column; }
+    .main-content { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain; }
+    .content { max-width:1540px; margin:0 auto; padding:30px 40px 56px; }
+    .back { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; margin:0 0 24px -8px; border-radius:8px; color:#596579; text-decoration:none; }
+    .back:hover { background:#e9edf4; }
+    .back svg { width:20px; height:20px; }
+    .page-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:28px; margin-bottom:30px; }
+    h1 { margin:0 0 20px; color:#0f172a; font-size:26px; font-weight:800; line-height:1.2; letter-spacing:-.5px; }
+    .page-heading p { margin:0; color:#596273; font-size:14.5px; line-height:1.5; }
+    .heading-actions { display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+    .heading-actions button { min-height:44px; padding:0 20px; border:1px solid #ccd5e4; border-radius:12px; background:#fff; color:#263654; font:600 14px Inter,Arial,sans-serif; cursor:pointer; }
+    .heading-actions .primary { border-color:var(--navy); background:var(--navy); color:#fff; box-shadow:0 3px 7px #082f7225; }
+    .heading-actions button:disabled { opacity:1; border-color:#b8c2d1; background:#e5e9f0; color:#687184; cursor:not-allowed; }
+    .heading-actions .primary:disabled { border-color:#52698f; background:#52698f; color:#e8edf5; }
+    .policy-layout { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(270px,.72fr); gap:20px; align-items:stretch; }
+    .policy-card { min-width:0; padding:26px; border:1px solid #e3e8f0; border-radius:20px; background:#fff; box-shadow:0 3px 12px #13284b08; }
+    .policy-card.compliance { grid-column:1 / -1; }
+    .card-title { display:flex; align-items:center; gap:11px; margin:0 0 26px; color:#14284c; font-size:17px; font-weight:700; }
+    .card-title svg { width:34px; height:34px; padding:7px; border-radius:10px; color:#087d80; background:#e8f5f4; flex:0 0 auto; }
+    .policy-card.compliance .card-title svg { color:#d92d20; background:#fff0ee; }
+    .timeframes-content { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(0,1.3fr); align-items:center; gap:20px 36px; }
+    .timeframes-copy .card-title { margin:0 0 8px; }
+    .timeframes-copy p { margin:0; color:#788295; font-size:13px; line-height:1.5; }
+    .timeframes-options .field-label { margin-bottom:12px; }
+    .financial-content { display:flex; flex-direction:column; justify-content:center; }
+    .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 24px; }
+    .policy-card[aria-labelledby="financialHeading"] .field-grid { grid-template-columns:minmax(0,1fr); }
+    .field { min-width:0; }
+    .field-label { display:block; margin:0 0 12px; color:#525866; font-size:14px; font-weight:800; letter-spacing:.35px; text-transform:uppercase; }
+    #durationCount { display:block; margin-top:5px; font-size:12px; line-height:1.4; }
+    .select-wrap,.number-wrap { display:flex; align-items:center; min-height:52px; border:1px solid #d9deea; border-radius:14px; background:#f7f7fa; }
+    .select-wrap { position:relative; }
+    .select-wrap::after { position:absolute; top:50%; right:18px; width:9px; height:9px; border-right:2px solid #727c8e; border-bottom:2px solid #727c8e; content:''; pointer-events:none; transform:translateY(-70%) rotate(45deg); }
+    .select-wrap select,.number-wrap input { width:100%; min-width:0; height:50px; padding:0 16px; border:0; outline:0; background:transparent; color:#263654; font:500 15px Inter,Arial,sans-serif; }
+    .select-wrap select { padding-right:45px; appearance:none; cursor:pointer; }
+    .number-wrap input { appearance:textfield; }
+    .number-wrap input::-webkit-inner-spin-button,.number-wrap input::-webkit-outer-spin-button { margin:0; appearance:none; }
+    .number-wrap:has(input[aria-invalid="true"]) { border-color:#d92d20; background:#fff8f7; }
+    .unit { padding:0 15px 0 4px; color:#7b8290; font-size:14px; white-space:nowrap; }
+    .field-help { margin:9px 0 0; color:#8a91a0; font-size:12px; line-height:1.45; }
+    .field-error { display:none; margin:7px 0 0; color:#b42318; font-size:12px; line-height:1.4; }
+    .field-error.visible { display:block; }
+    .duration-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .duration-chip { min-height:42px; display:inline-flex; align-items:center; gap:9px; padding:0 14px; border:1px solid #e0e5f2; border-radius:12px; background:#f7f8fc; color:#263654; font-size:14px; cursor:pointer; user-select:none; }
+    .duration-chip:has(input:checked) { border-color:#b8c9f1; background:#eaf0ff; color:#082f72; font-weight:600; }
+    .duration-chip input { width:17px; height:17px; margin:0; accent-color:#0646a5; }
+    .duration-option { min-width:0; width:100%; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 5px 3px 3px; border:1px solid #e0e5f2; border-radius:14px; background:#f7f8fc; }
+    .duration-option:has(input:checked) { border-color:#b8c9f1; background:#eaf0ff; color:#082f72; }
+    .duration-option .duration-chip { min-width:0; flex:1; min-height:34px; justify-content:flex-start; gap:7px; padding:0 8px; border:0; background:transparent; font-size:13px; white-space:nowrap; }
+    .duration-option.fixed-duration-option { padding-right:10px; }
+    .fixed-duration-mark { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 18px; color:#687184; }
+    .fixed-duration-mark svg { width:13px; height:13px; }
+    .remove-custom-duration { width:25px; height:25px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#8b93a2; font-size:17px; cursor:pointer; }
+    .remove-custom-duration:hover { background:#fee4e2; color:#b42318; }
+    .add-duration { min-height:42px; padding:0 14px; border:1px dashed #9badce; border-radius:12px; background:#fff; color:#0646a5; font:600 13px Inter,Arial,sans-serif; cursor:pointer; }
+    .add-duration:hover { background:#f3f6ff; }
+    .add-duration:disabled { border-color:#d1d7e2; background:#f1f3f7; color:#8b93a2; cursor:not-allowed; }
+    .custom-duration-dialog { width:min(390px,calc(100% - 32px)); padding:0; border:0; border-radius:18px; background:#fff; color:var(--text); box-shadow:0 24px 70px #091a3540; }
+    .custom-duration-dialog::backdrop { background:#0f172a66; backdrop-filter:blur(2px); }
+    .dialog-inner { padding:24px; }
+    .dialog-inner h3 { margin:0 0 7px; color:#14284c; font-size:18px; }
+    .dialog-inner p { margin:0 0 18px; color:#687184; font-size:13px; line-height:1.5; }
+    .dialog-inner label { display:block; margin-bottom:8px; color:#475467; font-size:13px; font-weight:700; }
+    .dialog-inner input { width:100%; height:46px; padding:0 13px; border:1px solid #d9deea; border-radius:10px; outline:0; background:#fafaff; font:14px Inter,Arial,sans-serif; }
+    .dialog-inner input:focus { border-color:#6b8ac6; box-shadow:0 0 0 3px #0646a51a; }
+    .dialog-error { min-height:18px; margin:7px 0 0 !important; color:#b42318 !important; font-size:12px !important; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:16px; }
+    .dialog-actions button { min-height:40px; padding:0 14px; border:1px solid #ccd5e4; border-radius:9px; background:#fff; color:#263654; font:600 13px Inter,Arial,sans-serif; cursor:pointer; }
+    .dialog-actions .primary { border-color:var(--navy); background:var(--navy); color:#fff; }
+    .compliance-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px 22px; }
+    .compensation-row { display:flex; align-items:flex-start; gap:18px; margin-top:28px; padding-top:26px; border-top:1px solid #e8ebf1; }
+    .compensation-field { width:min(100%,440px); }
+    .save-status { min-height:18px; margin:18px 0 0; color:#687184; font-size:12px; }
+    @media(max-width:1280px) { .content{padding:26px 24px 44px}.policy-layout{grid-template-columns:1fr}.timeframes-content{grid-template-columns:minmax(190px,.65fr) minmax(0,1.35fr);gap:20px}.policy-card.compliance{grid-column:auto} }
+    @media(max-width:760px) { body{display:block;height:auto;min-height:100vh;overflow:auto}body>.sidebar{position:relative;width:100%;height:auto;max-height:none}.main{height:auto}.main-content{overflow:visible}.content{padding:18px 16px 36px}.page-heading{align-items:flex-start;flex-direction:column;margin-bottom:22px}.page-heading h1{margin-bottom:10px}.heading-actions{align-self:flex-end}.heading-actions button{min-height:44px;padding:0 16px}.policy-layout{grid-template-columns:1fr;gap:16px}.policy-card{padding:21px;border-radius:17px}.policy-card.compliance{grid-column:auto}.card-title{margin-bottom:21px}.timeframes-content{grid-template-columns:1fr;gap:20px}.timeframes-copy .card-title{margin-bottom:7px}.financial-content{min-height:0}.field-grid,.compliance-grid{grid-template-columns:1fr;gap:18px}.duration-list{grid-template-columns:repeat(2,minmax(0,1fr))}.compensation-row{flex-direction:column;gap:2px} }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
+    <div class="main-content">
+      <section class="content">
+        <a class="back" href="index.html" aria-label="Back to system configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path><path d="M9 12h12"></path></svg></a>
+        <div class="page-heading">
+          <div><h1>Rental Policies</h1><p>Configure global rules for device rentals, deposits, and penalties.</p></div>
+          <div class="heading-actions"><button type="button" id="cancelChanges" disabled>Cancel</button><button type="button" class="primary" id="saveChanges" disabled>Save Changes</button></div>
+        </div>
+
+        <div class="policy-layout">
+          <section class="policy-card timeframes" aria-labelledby="timeframesHeading">
+            <div class="timeframes-content">
+              <div class="timeframes-copy"><h2 class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l4 2"></path></svg><span id="timeframesHeading">Timeframes</span></h2><p>Choose the rental terms customers can select when they book a device.</p></div>
+              <div class="timeframes-options"><span class="field-label">Quick Select Durations <span id="durationCount" style="display:inline; margin:0 0 0 5px; font-weight:500;text-transform:none;letter-spacing:0;color:#8a91a0">3 selected · 3/6 options</span></span>
+              <div class="duration-list" id="durationList">
+              <div class="duration-option fixed-duration-option"><label class="duration-chip"><input type="checkbox" value="3" checked disabled>3 Months</label><span class="fixed-duration-mark" title="Required customer duration" aria-label="Required default duration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></span></div>
+              <div class="duration-option fixed-duration-option"><label class="duration-chip"><input type="checkbox" value="12" checked disabled>12 Months</label><span class="fixed-duration-mark" title="Required customer duration" aria-label="Required default duration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></span></div>
+              <div class="duration-option fixed-duration-option"><label class="duration-chip"><input type="checkbox" value="24" checked disabled>24 Months</label><span class="fixed-duration-mark" title="Required customer duration" aria-label="Required default duration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></span></div>
+              <button class="add-duration" id="addCustomDuration" type="button">＋ Add Custom</button>
+              </div>
+              <p class="field-help">Select up to six options.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="policy-card" aria-labelledby="financialHeading">
+            <h2 class="card-title" id="financialHeading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 5V3h8v2M8 10h8M8 14h5"></path></svg>Financial Requirements</h2>
+            <div class="financial-content"><div class="field-grid">
+              <div class="field"><label class="field-label" for="baseDepositRule">Base Deposit Rule</label><div class="number-wrap"><input id="baseDepositRule" type="number" min="1" max="100" step="1" value="10" required><span class="unit">%</span></div><p class="field-help">Enter a percentage from 1% to 100% of device value.</p><p class="field-error" id="baseDepositRuleError" role="alert" aria-live="polite"></p></div>
+            </div></div>
+          </section>
+
+          <section class="policy-card compliance" aria-labelledby="complianceHeading">
+            <h2 class="card-title" id="complianceHeading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 19 6v5c0 4.6-2.9 8.2-7 10-4.1-1.8-7-5.4-7-10V6l7-3z"></path><path d="m9 12 2 2 4-4"></path></svg>Compliance &amp; Penalties</h2>
+            <div class="compliance-grid">
+              <div class="field"><label class="field-label" for="dueReminder">Due Reminder Timing</label><div class="number-wrap"><input id="dueReminder" type="number" min="0" value="7" required><span class="unit">Days</span></div><p class="field-help">Send a reminder this many days before rental expiry.</p><p class="field-error" id="dueReminderError" role="alert" aria-live="polite"></p></div>
+              <div class="field"><label class="field-label" for="returnBuffer">Return Buffer</label><div class="number-wrap"><input id="returnBuffer" type="number" min="0" value="3" required><span class="unit">Days</span></div><p class="field-help">Grace period after expiry before the rental is marked overdue and the device is locked.</p><p class="field-error" id="returnBufferError" role="alert" aria-live="polite"></p></div>
+              <div class="field"><label class="field-label" for="adminLockFee">Admin Lock Fee</label><div class="number-wrap"><span class="unit">RM</span><input id="adminLockFee" type="number" min="0" value="15" required><span class="unit">/Lock</span></div><p class="field-help">Fee recorded when an administrator locks a rental device.</p><p class="field-error" id="adminLockFeeError" role="alert" aria-live="polite"></p></div>
+            </div>
+            <div class="compensation-row">
+              <div class="field compensation-field"><label class="field-label" for="missingCompensation">Missing Device Compensation</label><div class="select-wrap"><select id="missingCompensation"><option value="marketPlusLockFee">Charge market value + lock fee</option><option value="remainingPlusLockFee">Charge remaining value + lock fee</option><option value="marketValue">Charge market value</option></select></div><p class="field-help">Charge applied when a rental device is reported missing.</p></div>
+            </div>
+            <p class="save-status" id="saveStatus" aria-live="polite"></p>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+  <dialog class="custom-duration-dialog" id="customDurationDialog" aria-labelledby="customDurationTitle">
+    <form method="dialog" class="dialog-inner" id="customDurationForm" novalidate>
+      <h3 id="customDurationTitle">Add a custom duration</h3>
+      <p>Add a rental term to the quick-select list. You can have up to six options.</p>
+      <label for="customDurationMonths">Duration</label>
+      <div class="number-wrap"><input id="customDurationMonths" type="number" min="1" max="60" placeholder="e.g. 9" required><span class="unit">Months</span></div>
+      <p class="dialog-error" id="customDurationError" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancelCustomDuration">Cancel</button><button type="submit" class="primary">Add duration</button></div>
+    </form>
+  </dialog>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script src="../reportModule/adminSidebar.js"></script>
+  <script src="../adminModule/adminHeader.js"></script>
+  <script>
+    const currentAdmin = ReByteAuth.getUser();
+    if (!currentAdmin || String(currentAdmin.role || '').toLowerCase() !== 'admin') window.location.href = '../accountManagementModule/login.html';
+    ReByteAuth.initFirebase();
+
+    const storageKey = 'rebyte.rentalPoliciesDraft';
+    const fields = [...document.querySelectorAll('#baseDepositRule,#dueReminder,#returnBuffer,#adminLockFee,#missingCompensation')];
+    const durationList = document.getElementById('durationList');
+    const numericFields = [...document.querySelectorAll('#baseDepositRule,#dueReminder,#returnBuffer,#adminLockFee')];
+    const saveButton = document.getElementById('saveChanges');
+    const cancelButton = document.getElementById('cancelChanges');
+    const status = document.getElementById('saveStatus');
+    const durationCount = document.getElementById('durationCount');
+    const addCustomButton = document.getElementById('addCustomDuration');
+    const durationDialog = document.getElementById('customDurationDialog');
+    const durationForm = document.getElementById('customDurationForm');
+    const customDurationInput = document.getElementById('customDurationMonths');
+    const customDurationError = document.getElementById('customDurationError');
+    const requiredDurationMonths = [3, 12, 24];
+    function currentValues() {
+      return {
+        fields: Object.fromEntries(fields.map(control => [control.id, control.value])),
+        allowedDurations: [...durationList.querySelectorAll('input[type="checkbox"]')].map(input => ({ months: Number(input.value), enabled: input.checked }))
+      };
+    }
+    async function readPolicyResponse(response) {
+      const body = await response.text();
+      try {
+        return JSON.parse(body);
+      } catch (_) {
+        throw new Error(`The rental policy API on backend port 3000 returned a web page instead of JSON (HTTP ${response.status}). Restart the backend so it loads the rental policy routes.`);
+      }
+    }
+    function syncDurationSummary() {
+      const options = [...durationList.querySelectorAll('input[type="checkbox"]')];
+      const selectedCount = options.filter(input => input.checked).length;
+      durationCount.textContent = `${selectedCount} selected · ${options.length}/6 options`;
+      addCustomButton.disabled = options.length >= 6;
+      addCustomButton.hidden = options.length >= 6;
+    }
+    function bindDurationOption(option) {
+      option.querySelector('input[type="checkbox"]').addEventListener('change', () => { syncDurationSummary(); syncButtons(); });
+      option.querySelector('.remove-custom-duration').addEventListener('click', () => { option.remove(); syncDurationSummary(); syncButtons(); });
+    }
+    function addDurationChip(months, enabled = true) {
+      const option = document.createElement('div');
+      option.className = 'duration-option';
+      option.dataset.durationOption = 'true';
+      const chip = document.createElement('label');
+      chip.className = 'duration-chip';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = String(months);
+      checkbox.checked = enabled;
+      chip.append(checkbox, document.createTextNode(`${months} Month${months === 1 ? '' : 's'}`));
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'remove-custom-duration';
+      remove.setAttribute('aria-label', `Remove ${months}-month duration`);
+      remove.textContent = '×';
+      option.append(chip, remove);
+      bindDurationOption(option);
+      durationList.insertBefore(option, document.getElementById('addCustomDuration'));
+    }
+    function applyValues(values) {
+      if (!values) return;
+      fields.forEach(control => {
+        if (Object.prototype.hasOwnProperty.call(values.fields || {}, control.id)) {
+          const savedValue = values.fields[control.id];
+          if (control.id === 'baseDepositRule') {
+            const percentage = Number(savedValue);
+            control.value = Number.isFinite(percentage) && percentage >= 1 && percentage <= 100 ? String(percentage) : control.defaultValue;
+          } else {
+            if (control.id === 'missingCompensation') {
+              const legacyValues = { marketPlusPenalty: 'marketPlusLockFee', replacementValue: 'remainingPlusLockFee' };
+              const nextValue = legacyValues[savedValue] || savedValue;
+              control.value = [...control.options].some(option => option.value === nextValue) ? nextValue : 'marketPlusLockFee';
+            } else {
+              control.value = savedValue;
+            }
+          }
+        }
+      });
+      if (Array.isArray(values.allowedDurations)) {
+        durationList.querySelectorAll('[data-duration-option="true"]').forEach(option => option.remove());
+        durationList.querySelectorAll('.fixed-duration-option input[type="checkbox"]').forEach(input => { input.checked = true; });
+        const seenMonths = new Set(requiredDurationMonths);
+        for (const entry of values.allowedDurations) {
+          const months = Number(entry.months);
+        if (Number.isInteger(months) && months >= 1 && months <= 60 && !seenMonths.has(months) && seenMonths.size < 6) {
+            seenMonths.add(months);
+            addDurationChip(months, Boolean(entry.enabled));
+          }
+        }
+      }
+      syncDurationSummary();
+    }
+    function validateNumericFields() {
+      let valid = true;
+      numericFields.forEach(input => {
+        const error = document.getElementById(`${input.id}Error`);
+        let message = '';
+        if (input.value.trim() === '') message = 'Please enter a value.';
+        else if (!input.validity.valid) {
+          message = input.id === 'baseDepositRule'
+            ? 'Please enter a percentage from 1 to 100.'
+            : 'Please enter a whole number of 0 or more.';
+        }
+        error.textContent = message;
+        error.classList.toggle('visible', Boolean(message));
+        input.setAttribute('aria-invalid', String(Boolean(message)));
+        if (message) valid = false;
+      });
+      return valid;
+    }
+    let savedValues = currentValues();
+    let isSaving = false;
+    function syncButtons() {
+      const dirty = JSON.stringify(currentValues()) !== JSON.stringify(savedValues);
+      saveButton.disabled = !dirty || isSaving;
+      cancelButton.disabled = !dirty || isSaving;
+    }
+    fields.forEach(control => {
+      control.addEventListener('input', () => { validateNumericFields(); syncButtons(); });
+      control.addEventListener('change', () => { validateNumericFields(); syncButtons(); });
+    });
+    durationList.querySelectorAll('[data-duration-option="true"]').forEach(bindDurationOption);
+    addCustomButton.addEventListener('click', () => {
+      customDurationError.textContent = '';
+      durationForm.reset();
+      durationDialog.showModal();
+      customDurationInput.focus();
+    });
+    document.getElementById('cancelCustomDuration').addEventListener('click', () => durationDialog.close());
+    durationForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const months = Number(customDurationInput.value);
+      const options = [...durationList.querySelectorAll('input[type="checkbox"]')];
+      if (options.length >= 6) {
+        customDurationError.textContent = 'You can add up to six quick-select options.';
+        return;
+      }
+      if (!Number.isInteger(months) || months < 1 || months > 60) {
+        customDurationError.textContent = 'Enter a whole number from 1 to 60 months.';
+        customDurationInput.focus();
+        return;
+      }
+      if (options.some(item => Number(item.value) === months)) {
+        customDurationError.textContent = 'That duration is already in the quick-select list.';
+        customDurationInput.focus();
+        return;
+      }
+      addDurationChip(months);
+      durationDialog.close();
+      syncDurationSummary();
+      syncButtons();
+    });
+    cancelButton.addEventListener('click', () => {
+      applyValues(savedValues);
+      validateNumericFields();
+      status.textContent = '';
+      syncButtons();
+    });
+    saveButton.addEventListener('click', async () => {
+      if (!validateNumericFields()) return;
+      isSaving = true;
+      syncButtons();
+      status.textContent = 'Saving rental policies…';
+      try {
+        const response = await ReByteAuth.authFetch('http://localhost:3000/api/rental/admin/policies', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentValues())
+        });
+        const payload = await readPolicyResponse(response);
+        if (!response.ok || payload.success !== true) throw new Error(payload.error || 'Could not save rental policies.');
+        applyValues(payload.policy);
+        savedValues = currentValues();
+        localStorage.setItem(storageKey, JSON.stringify(savedValues));
+        status.textContent = 'Saved. Rental choices and deposit settings are available to customers.';
+        ReByteAuth.showToast('Rental policies saved successfully.', 'success');
+      } catch (error) {
+        status.textContent = `${error.message || 'Could not save rental policies. Please try again.'} Settings were not saved.`;
+      } finally {
+        isSaving = false;
+        syncButtons();
+      }
+    });
+    async function loadRentalPolicies() {
+      status.textContent = 'Loading rental policies…';
+      try {
+        const response = await ReByteAuth.authFetch('http://localhost:3000/api/rental/policies', { cache: 'no-store' });
+        const payload = await readPolicyResponse(response);
+        if (!response.ok || payload.success !== true || !payload.policy) throw new Error(payload.error || 'Could not load shared rental policies.');
+        applyValues(payload.policy);
+        savedValues = currentValues();
+        localStorage.setItem(storageKey, JSON.stringify(savedValues));
+        status.textContent = 'Loaded shared policies used by the customer rental page.';
+      } catch (error) {
+        try {
+          const cached = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (cached) applyValues(cached);
+        } catch (_) {}
+        savedValues = currentValues();
+        status.textContent = error.message || 'Could not load shared rental policies.';
+      }
+      syncDurationSummary();
+      validateNumericFields();
+      syncButtons();
+    }
+    syncDurationSummary();
+    validateNumericFields();
+    syncButtons();
+    loadRentalPolicies();
+  </script>
+</body>
+</html>

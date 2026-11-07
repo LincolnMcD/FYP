@@ -216,23 +216,43 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     return dateVal.toString();
   }
 
-  String _formatAppointmentTimeRange(String timeStr) {
-    if (timeStr.contains('-')) return timeStr;
-    try {
-      final parts = timeStr.trim().split(':');
-      if (parts.isNotEmpty) {
-        int hour = int.parse(parts[0].replaceAll(RegExp(r'\D'), ''));
-        int minute = parts.length > 1 ? int.parse(parts[1].replaceAll(RegExp(r'\D'), '')) : 0;
-        final startDt = DateTime(2023, 1, 1, hour, minute);
-        final endDt = startDt.add(const Duration(hours: 1));
-        final startFmt = DateFormat('h:mm a').format(startDt);
-        final endFmt = DateFormat('h:mm a').format(endDt);
-        return '$startFmt - $endFmt';
-      }
-    } catch (_) {}
-    return timeStr.contains('AM') || timeStr.contains('PM')
-        ? '$timeStr - 11:00 AM'
-        : '$timeStr:00 AM - 11:00 AM';
+  String _formatAppointmentTimeRange(String timeStr, {String? endTime}) {
+    final start = _formatAppointmentTime(timeStr);
+    if (start.isEmpty) return '';
+    if (endTime != null && endTime.trim().isNotEmpty) {
+      final end = _formatAppointmentTime(endTime);
+      if (end.isNotEmpty) return '$start - $end';
+    }
+    // Preserve an existing range supplied by the actual schedule record.
+    if (timeStr.contains('-')) return timeStr.trim();
+    // If only the booked start time is available, show only that time. Never
+    // infer a one-hour end time; task durations are configurable by schedule.
+    return start;
+  }
+
+  String _formatAppointmentTime(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return '';
+    for (final pattern in ['h:mm a', 'hh:mm a', 'HH:mm:ss', 'HH:mm']) {
+      try {
+        return DateFormat('h:mm a').format(DateFormat(pattern).parseStrict(text));
+      } catch (_) {}
+    }
+    return text;
+  }
+
+  String _resolveAppointmentTimeRange(Map<dynamic, dynamic> request) {
+    final start = request['scheduleStartTime'] ??
+        request['appointmentStartTime'] ??
+        request['appointmentTime'] ??
+        _request['scheduleStartTime'] ??
+        _request['appointmentStartTime'] ??
+        _request['appointmentTime'];
+    final end = request['scheduleEndTime'] ??
+        request['appointmentEndTime'] ??
+        _request['scheduleEndTime'] ??
+        _request['appointmentEndTime'];
+    return _formatAppointmentTimeRange(start?.toString() ?? '', endTime: end?.toString());
   }
 
   String _formatDateTime(dynamic dateVal) {
@@ -1853,8 +1873,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
 
     final dynamic rawDate = req['appointmentDate'] ?? _request['appointmentDate'] ?? req['scheduledAt'] ?? _request['scheduledAt'];
     final formattedDate = _formatAppointmentDate(rawDate);
-    final rawTime = (req['appointmentTime'] ?? _request['appointmentTime'])?.toString() ?? '10:00';
-    final formattedTime = _formatAppointmentTimeRange(rawTime);
+    final formattedTime = _resolveAppointmentTimeRange(req);
     final location = (req['appointmentLocation'] != null && req['appointmentLocation'].toString().trim().isNotEmpty)
         ? req['appointmentLocation'].toString().trim()
         : (_request['appointmentLocation'] != null && _request['appointmentLocation'].toString().trim().isNotEmpty)
@@ -2201,9 +2220,10 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     final bool isAgreed = !isPaid && !isAccepted && !isScheduled && !isInspected && !isInspecting && !isInProgress && !isCompletedRequest && (status.toLowerCase() == 'agreed' ||
         _request['status']?.toString().toLowerCase() == 'agreed' ||
         _request['requestStatus']?.toString().toLowerCase() == 'agreed');
-    final bool hasDateAndTime = _request['appointmentDate'] != null && _request['appointmentTime'] != null;
+    final bool hasDateAndTime = _request['appointmentDate'] != null &&
+        (_request['appointmentTime'] != null || _request['scheduleStartTime'] != null);
     final appointmentDate = hasDateAndTime ? _formatAppointmentDate(_request['appointmentDate']) : null;
-    final appointmentTime = hasDateAndTime ? _formatAppointmentTimeRange(_request['appointmentTime'].toString()) : null;
+    final appointmentTime = hasDateAndTime ? _resolveAppointmentTimeRange(_request) : null;
 
     final String statusBadgeText;
     if (isRejected) {

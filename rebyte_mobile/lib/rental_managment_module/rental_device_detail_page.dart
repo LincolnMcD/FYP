@@ -7,6 +7,7 @@ import 'rental_renew_page.dart';
 import 'rental_return_page.dart';
 import 'rental_missing_payment_page.dart';
 import 'rental_buyout_confirmation_page.dart';
+import 'services/rental_service.dart';
 
 class RentalDeviceDetailPage extends StatefulWidget {
   final Map<String, dynamic> rental;
@@ -26,6 +27,20 @@ class RentalDeviceDetailPage extends StatefulWidget {
 
 class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  int _rentalBufferDays = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReturnBufferPolicy();
+  }
+
+  Future<void> _loadReturnBufferPolicy() async {
+    final policy = await RentalService.getRentalPolicies();
+    final bufferDays = policy['returnBufferDays'];
+    if (!mounted || policy['success'] != true || bufferDays is! int || bufferDays < 0) return;
+    setState(() => _rentalBufferDays = bufferDays);
+  }
 
   String _formatDate(dynamic dateVal) {
     if (dateVal == null) return '';
@@ -369,13 +384,13 @@ class _RentalDeviceDetailPageState extends State<RentalDeviceDetailPage> {
                               baseDt = DateTime.tryParse(rental['endDate'].toString());
                             }
                             baseDt ??= DateTime.now();
-                            final bufferDt = baseDt.add(const Duration(days: 3));
+                            final bufferDt = baseDt.add(Duration(days: _rentalBufferDays));
                             bufferReturnStr = DateFormat('MMM dd, yyyy').format(bufferDt);
                             if (rental['endDate'] != null) {
                               startReturnStr = DateFormat('MMM dd, yyyy').format(baseDt);
                             }
                           } catch (_) {
-                            bufferReturnStr = 'within 3 days';
+                            bufferReturnStr = 'within $_rentalBufferDays days';
                           }
 
                           return Container(

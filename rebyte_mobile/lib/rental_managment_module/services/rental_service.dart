@@ -4,6 +4,33 @@ import 'package:http/http.dart' as http;
 import '../../account_management_module/services/auth_service.dart';
 
 class RentalService {
+
+  static Future<Map<String, dynamic>> getRentalPolicies() async {
+    try {
+      final response = await http
+          .get(Uri.parse('${AuthService.baseUrl}/api/rental/policies'))
+          .timeout(const Duration(seconds: 8));
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200 && body is Map<String, dynamic> && body['success'] == true) {
+        final policy = body['policy'] is Map
+            ? Map<String, dynamic>.from(body['policy'] as Map)
+            : <String, dynamic>{};
+        final fields = policy['fields'] is Map
+            ? Map<String, dynamic>.from(policy['fields'] as Map)
+            : <String, dynamic>{};
+        return {
+          'success': true,
+          'baseDepositPercentage': body['baseDepositPercentage'],
+          'returnBufferDays': int.tryParse(fields['returnBuffer']?.toString() ?? ''),
+          'availableDurations': body['availableDurations'] is List ? body['availableDurations'] : const [3, 12, 24],
+        };
+      }
+      return {'success': false, 'error': body is Map ? body['error'] : 'Could not load rental policies.'};
+    } catch (e) {
+      return {'success': false, 'error': 'Could not load rental policies: $e'};
+    }
+  }
+
   static Future<Map<String, dynamic>> registerRentalPhone({
     required String productID,
     required String fcmToken,

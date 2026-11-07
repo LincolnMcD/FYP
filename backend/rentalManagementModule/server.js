@@ -1,4 +1,5 @@
 const express = require("express");
+const { getAuth } = require("firebase-admin/auth");
 const { FieldValue } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
@@ -31,13 +32,15 @@ function calculateOverdueBillingWindow(lastPaidString, todayString) {
     const [paidYear, paidMonth, paidDay] = paidParts;
     const [todayYear, todayMonth, todayDay] = todayParts;
     const monthDifference = (todayYear - paidYear) * 12 + todayMonth - paidMonth;
-    // rentalExpiryDate already represents the coverage paid through, so count
-    // each monthly cycle after that date through the next billing date once.
-    const monthsDue = Math.max(1, monthDifference + 1);
     let nextBillingYear = todayYear;
     let nextBillingMonth = todayMonth;
     const currentMonthDays = new Date(Date.UTC(todayYear, todayMonth, 0)).getUTCDate();
-    if (todayDay >= Math.min(paidDay, currentMonthDays)) {
+    const billingDayThisMonth = Math.min(paidDay, currentMonthDays);
+    const currentCycleDue = todayDay >= billingDayThisMonth;
+    // Count cycles whose billing date has arrived, while keeping one month due
+    // when the rental is overdue but the next monthly billing day is still ahead.
+    const monthsDue = Math.max(1, monthDifference + (currentCycleDue ? 1 : 0));
+    if (currentCycleDue) {
         nextBillingMonth += 1;
         if (nextBillingMonth > 12) {
             nextBillingMonth = 1;
@@ -109,7 +112,6 @@ function createRecurringFailureMailer() {
 
 const recurringFailureMailer = createRecurringFailureMailer();
 
-const RENTAL_BUFFER_DAYS = Math.max(0, Number.parseInt(process.env.RENTAL_BUFFER_DAYS || "3", 10) || 0);
 const RENTAL_DATE_TIME_ZONE = "Asia/Kuala_Lumpur";
 let rentalExpiryMonitorStarted = false;
 let rentalExpirySweepRunning = false;
@@ -154,52 +156,83 @@ async function transitionRentalStatusOnce(rentalRef, expectedStatus, nextStatus)
     });
 }
 
-async function claimRentalExpiryNoticeOnce(rentalID) {
-    const markerRef = db.collection("rentalExpiryNotices").doc(rentalID);
-    return db.runTransaction(async transaction => {
-        const markerSnap = await transaction.get(markerRef);
-        if (markerSnap.exists) return false;
-        transaction.create(markerRef, {});
+async function claimRentalExpiryNoticeOnce(noticeID) {
+    const markerID = encodeURIComponent(noticeID).replace(/%/g, "_");
+    const ref = db.collection("rentalExpiryNotices").doc(markerID);
+    return db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (snap.exists) return false;
+        tx.create(ref, { noticeID, createdAt: new Date().toISOString() });
         return true;
     });
 }
-
-async function sendRentalExpiryNotice(rentalID, rentalData, sourceStatus, expiryDate, finalDate) {
-    let recipient = String(rentalData.email || rentalData.customerEmail || "").trim();
-    const customerID = String(rentalData.customerID || "").trim();
-    if (!recipient && customerID) {
+async function sendRentalNoticeOnce(noticeID, send) {
+    const markerID = encodeURIComponent(noticeID).replace(/%/g, "_");
+    const ref = db.collection("rentalExpiryNotices").doc(markerID);
+    if (!await claimRentalExpiryNoticeOnce(noticeID)) return false;
+    try {
+        await send();
+        await ref.update({ status: "sent", sentAt: new Date().toISOString() });
+        return true;
+    } catch (error) {
+        await ref.delete().catch(() => {});
+        throw error;
+    }
+}
+async function rentalNoticeRecipient(rentalID, data) {
+    let email = String(data.email || data.customerEmail || "").trim();
+    const customerID = String(data.customerID || "").trim();
+    if (!email && customerID) {
         try {
-            const customerSnap = await db.collection("users").doc(customerID).get();
-            if (customerSnap.exists) recipient = String(customerSnap.data()?.email || "").trim();
-            if (!recipient) {
-                const customerQuery = await db.collection("users").where("userId", "==", customerID).limit(1).get();
-                if (!customerQuery.empty) recipient = String(customerQuery.docs[0].data()?.email || "").trim();
+            const user = await db.collection("users").doc(customerID).get();
+            if (user.exists) email = String(user.data()?.email || "").trim();
+            if (!email) {
+                const match = await db.collection("users").where("userId", "==", customerID).limit(1).get();
+                if (!match.empty) email = String(match.docs[0].data()?.email || "").trim();
             }
-        } catch (err) {
-            console.warn(`[Rental Expiry] Could not resolve email for ${rentalID}:`, err.message);
-        }
+        } catch (error) { console.warn("[Rental Expiry] Email lookup failed for " + rentalID + ":", error.message); }
     }
-    if (!recipient) {
-        console.warn(`[Rental Expiry] No customer email for ${rentalID}; status was marked overdue, notice not sent.`);
-        return;
+    return email;
+}
+async function sendRentalExpiryNotice(rentalID, data, sourceStatus, expiryDate, finalDate, bufferDays) {
+    const email = await rentalNoticeRecipient(rentalID, data);
+    if (!email) {
+        const error = new Error("No customer email for rental " + rentalID);
+        console.warn("[Rental Expiry] " + error.message);
+        throw error;
     }
-
-    const customerName = String(rentalData.name || rentalData.customerName || recipient.split("@")[0] || "Customer");
-    const isReturning = sourceStatus === "returning";
-    const action = isReturning ? "return your rental device" : "pay your rental fee";
-    const subjectAction = isReturning ? "Return your rental device" : "Rental payment due";
-    const message = `Your rented device is due on ${expiryDate}. Please ${action} by ${finalDate} (including the ${RENTAL_BUFFER_DAYS}-day buffer) to avoid device lock.`;
-    const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
-    })[character]);
+    const name = String(data.name || data.customerName || email.split("@")[0] || "Customer");
+    const overdue = sourceStatus === "overdue";
+    const subject = overdue ? "Rental overdue" : "Rental expiry reminder";
+    const message = overdue
+        ? "Your rental is overdue. The " + bufferDays + "-day buffer ended on " + finalDate + ". Please pay the overdue balance or return the device as soon as possible."
+        : "Your rental expires on " + expiryDate + ". Please pay or return the device by " + finalDate + " (including the " + bufferDays + "-day buffer) to avoid device lock.";
     await recurringFailureMailer.sendMail({
         from: process.env.REBYTE_SMTP_FROM || '"ReByte Notifications" <lolincoln021@gmail.com>',
-        to: recipient,
-        subject: `[ReByte] ${subjectAction} - ${rentalID}`,
-        text: `Dear ${customerName},\n\n${message}\n\nRental ID: ${rentalID}\n\nReByte Team`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1e293b"><h2 style="color:#0c5ad2">${escapeHtml(subjectAction)}</h2><p>Dear ${escapeHtml(customerName)},</p><p>${escapeHtml(message)}</p><p><strong>Rental ID:</strong> ${escapeHtml(rentalID)}</p><p>ReByte Team</p></div>`
+        to: email,
+        subject: "[ReByte] " + subject + " - " + rentalID,
+        text: "Dear " + name + ",\n\n" + message + "\n\nRental ID: " + rentalID + "\n\nReByte Team",
+        html: "<div><h2>" + subject + "</h2><p>Dear " + name + ",</p><p>" + message + "</p><p>Rental ID: " + rentalID + "</p><p>ReByte Team</p></div>"
     });
-    console.log(`[Rental Expiry] One-time ${isReturning ? "return" : "payment"} notice sent for ${rentalID}.`);
+}
+function daysBetweenRentalDateStrings(fromDate, toDate) {
+    const from = new Date(fromDate + "T00:00:00.000Z");
+    const to = new Date(toDate + "T00:00:00.000Z");
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+    return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+async function getExpiryPolicyValues() {
+    try {
+        const snap = await db.doc(RENTAL_POLICY_DOC).get();
+        const fields = (snap.exists ? snap.data()?.fields : null) || {};
+        return {
+            dueReminderDays: Math.max(0, Number.parseInt(fields.dueReminder ?? "7", 10) || 0),
+            returnBufferDays: Math.max(0, Number.parseInt(fields.returnBuffer ?? "3", 10) || 0)
+        };
+    } catch (error) {
+        console.warn("[Rental Expiry] Saved policy unavailable; using defaults:", error.message);
+        return { dueReminderDays: 7, returnBufferDays: 3 };
+    }
 }
 
 async function lockRentalProduct(rentalID, rentalData) {
@@ -253,61 +286,55 @@ async function runRentalExpirySweep() {
     rentalExpirySweepRunning = true;
     try {
         const today = todayInRentalTimeZone();
+        const policy = await getExpiryPolicyValues();
         const snapshot = await db.collection("rental")
-            .where("rentalStatus", "in", ["renting", "returning", "overdue"])
-            .get();
-
+            .where("rentalStatus", "in", ["renting", "returning", "overdue"]).get();
         for (const rentalDoc of snapshot.docs) {
-            const rentalData = rentalDoc.data() || {};
-            const rentalID = String(rentalData.rentalID || rentalDoc.id);
-            let status = String(rentalData.rentalStatus || "").toLowerCase().trim();
-            const expiryDate = dateStringInRentalTimeZone(rentalData.rentalExpiryDate);
-            if (!expiryDate) continue;
-            const finalDate = addDaysToDateString(expiryDate, RENTAL_BUFFER_DAYS);
-
+            const data = rentalDoc.data() || {};
+            const id = String(data.rentalID || rentalDoc.id);
+            let status = String(data.rentalStatus || "").toLowerCase().trim();
+            const expiry = dateStringInRentalTimeZone(data.rentalExpiryDate);
+            if (!expiry) continue;
+            const finalDate = addDaysToDateString(expiry, policy.returnBufferDays);
             if (status === "renting") {
-                const endDate = dateStringInRentalTimeZone(rentalData.endDate);
-                if (endDate && endDate <= today) {
-                    const movedToReturning = await transitionRentalStatusOnce(rentalDoc.ref, "renting", "returning");
-                    if (!movedToReturning) continue;
+                const end = dateStringInRentalTimeZone(data.endDate);
+                if (end && end <= today) {
+                    if (!await transitionRentalStatusOnce(rentalDoc.ref, "renting", "returning")) continue;
                     status = "returning";
-                    console.log(`[Rental Expiry] Rental ${rentalID} moved from renting to returning at endDate ${endDate}.`);
                 }
             }
-
-            if ((status === "renting" || status === "returning") && today >= expiryDate) {
-                const claimedNotice = await claimRentalExpiryNoticeOnce(rentalID);
-                if (claimedNotice) {
+            if (status === "renting" || status === "returning") {
+                const remainingDays = daysBetweenRentalDateStrings(today, expiry);
+                if (remainingDays !== null && remainingDays >= 0 && remainingDays <= policy.dueReminderDays) {
                     try {
-                        await sendRentalExpiryNotice(rentalID, rentalData, status, expiryDate, finalDate);
-                    } catch (mailError) {
-                        console.error(`[Rental Expiry] One-time notice failed for ${rentalID}:`, mailError.message);
-                    }
+                        await sendRentalNoticeOnce(id + "_reminder_" + expiry,
+                            () => sendRentalExpiryNotice(id, data, status, expiry, finalDate, policy.returnBufferDays));
+                    } catch (error) { console.error("[Rental Expiry] Reminder failed for " + id + ":", error.message); }
                 }
             }
-
             if ((status === "renting" || status === "returning") && today > finalDate) {
-                const movedToOverdue = await transitionRentalStatusOnce(rentalDoc.ref, status, "overdue");
-                if (!movedToOverdue) continue;
-                status = "overdue";
-                console.log(`[Rental Expiry] Rental ${rentalID} moved to overdue after buffer deadline ${finalDate}.`);
-            }
-
-            if (status === "overdue" && today > finalDate) {
-                try {
-                    await lockRentalProduct(rentalID, rentalData);
-                } catch (lockError) {
-                    console.error(`[Rental Expiry] Device lock failed for ${rentalID}; the next daily sweep will retry:`, lockError.message);
+                const transitioned = await transitionRentalStatusOnce(rentalDoc.ref, status, "overdue");
+                if (transitioned) {
+                    status = "overdue";
+                } else {
+                    // Another sweep or payment may have changed the status while this one ran.
+                    const currentRental = await rentalDoc.ref.get();
+                    status = String(currentRental.data()?.rentalStatus || "").toLowerCase().trim();
                 }
+            }
+            if (status === "overdue" && today > finalDate) {
+                // The expiry date is part of the notice key, so a new expiry can send a new notice.
+                try {
+                    await sendRentalNoticeOnce(id + "_overdue_" + expiry,
+                        () => sendRentalExpiryNotice(id, data, "overdue", expiry, finalDate, policy.returnBufferDays));
+                } catch (error) { console.error("[Rental Expiry] Overdue email failed for " + id + ":", error.message); }
+                try { await lockRentalProduct(id, data); }
+                catch (error) { console.error("[Rental Expiry] Device lock failed for " + id + ":", error.message); }
             }
         }
-    } catch (err) {
-        console.error("[Rental Expiry] Daily sweep failed:", err.message);
-    } finally {
-        rentalExpirySweepRunning = false;
-    }
+    } catch (error) { console.error("[Rental Expiry] Daily sweep failed:", error.message); }
+    finally { rentalExpirySweepRunning = false; }
 }
-
 function startRentalExpiryMonitor() {
     if (rentalExpiryMonitorStarted) return;
     rentalExpiryMonitorStarted = true;
@@ -325,7 +352,7 @@ function startRentalExpiryMonitor() {
         }, delay).unref?.();
     };
     scheduleNextSweep();
-    console.log(`[Rental Expiry] Daily rental expiry monitor started (buffer ${RENTAL_BUFFER_DAYS} days, ${RENTAL_DATE_TIME_ZONE}).`);
+    console.log("[Rental Expiry] Daily monitor uses saved reminder and return-buffer settings.");
 }
 
 function generateReferenceSuffix() {
@@ -845,10 +872,22 @@ router.post("/create-rental", async (req, res) => {
             }
         }
 
-        // depositAmount = ceil(collectedPrice * 0.1)
-        let depositAmount = Math.ceil(collectedPrice * 0.1);
+        // Use the saved admin percentage when no amount is sent by a customer app.
+        let depositPercentage = 10;
+        try {
+            const rentalPolicySnapshot = await db.collection("systemSettings").doc("rentalPolicies").get();
+            const configuredPercentage = Number(rentalPolicySnapshot.data()?.fields?.baseDepositRule);
+            if (Number.isInteger(configuredPercentage) && configuredPercentage >= 1 && configuredPercentage <= 100) {
+                depositPercentage = configuredPercentage;
+            }
+        } catch (policyError) {
+            console.warn("Could not load configured rental deposit percentage:", policyError.message);
+        }
+
+        // Preserve cent precision; Math.ceil here used to force every deposit to whole RM.
+        let depositAmount = Math.round((collectedPrice * depositPercentage / 100 + Number.EPSILON) * 100) / 100;
         if (reqDepositAmount !== undefined && !isNaN(Number(reqDepositAmount)) && Number(reqDepositAmount) > 0) {
-            depositAmount = Math.ceil(Number(reqDepositAmount));
+            depositAmount = Math.round((Number(reqDepositAmount) + Number.EPSILON) * 100) / 100;
         }
 
         // 4. Monthly rental fee calculation
@@ -1304,6 +1343,34 @@ router.post("/complete-buyout", async (req, res) => {
  * The amount is always recalculated from the rental's product record on the
  * server (collection price × 1.2, plus the fixed RM50 loss penalty).
  */
+router.get("/missing-quote/:rentalID", async (req, res) => {
+    try {
+        const rentalID = String(req.params.rentalID || "").trim();
+        const email = String(req.query.email || "").trim().toLowerCase();
+        if (!rentalID || !email) return res.status(400).json({ success: false, error: "rentalID and email are required." });
+        const records = await resolveRentalBuyoutRecords(rentalID);
+        if (!records) return res.status(404).json({ success: false, error: "Rental record was not found." });
+        if (await resolveRentalOwnerEmail(records.rentalData) !== email) return res.status(403).json({ success: false, error: "This rental does not belong to the signed-in customer." });
+        if (!["renting", "returning", "overdue"].includes(String(records.rentalData.rentalStatus || "").toLowerCase().trim())) {
+            return res.status(409).json({ success: false, error: "This rental is not available to report missing." });
+        }
+        const settings = await db.doc(RENTAL_POLICY_DOC).get();
+        const policy = normalizeRentalPolicy(settings.exists ? settings.data() : DEFAULT_RENTAL_POLICY);
+        const quote = calculateRentalBuyoutQuote({ rentalData: records.rentalData, productData: records.productData, transactions: records.transactions.docs });
+        const rule = policy.fields.missingCompensation;
+        const adminLockFee = Number(policy.fields.adminLockFee) || 0;
+        const remainingValue = Math.max(0, Math.round((quote.currentValue - quote.rentalFeePaid) * 100) / 100);
+        const devicePrice = rule === "remainingPlusLockFee" ? remainingValue : quote.currentValue;
+        const lossPenalty = rule === "marketValue" ? 0 : adminLockFee;
+        const total = Math.round((devicePrice + lossPenalty) * 100) / 100;
+        if (quote.currentValue <= 0 || total <= 0) return res.status(400).json({ success: false, error: "The product collection price is unavailable." });
+        return res.json({ success: true, quote: { compensationRule: rule, marketValue: quote.currentValue, rentalFeePaid: quote.rentalFeePaid, remainingValue, adminLockFee, devicePrice, lossPenalty, total } });
+    } catch (error) {
+        console.error("Could not calculate missing-device quote:", error.message);
+        return res.status(500).json({ success: false, error: "Could not calculate the missing-device amount." });
+    }
+});
+
 router.post("/report-missing-payment", async (req, res) => {
     try {
         const rentalID = String(req.body?.rentalID || "").trim();
@@ -1351,14 +1418,17 @@ router.post("/report-missing-payment", async (req, res) => {
             productSnap = productMatch.docs[0];
         }
         const productData = productSnap.data() || {};
-        const collectionPrice = Number(productData.collectedPrice ?? productData.collectionPrice ?? productData.collection_price ?? 0);
-        const productSellingPrice = Number(productData.sellingPrice ?? 0);
-        const devicePrice = Math.round((collectionPrice > 0 ? collectionPrice * 1.2 : productSellingPrice) * 100) / 100;
-        const lossPenalty = 50;
+        const rentalTransactions = await db.collection("transaction").where("rentalID", "==", rentalID).get();
+        const settings = await db.doc(RENTAL_POLICY_DOC).get();
+        const policy = normalizeRentalPolicy(settings.exists ? settings.data() : DEFAULT_RENTAL_POLICY);
+        const quote = calculateRentalBuyoutQuote({ rentalData, productData, transactions: rentalTransactions.docs });
+        const compensationRule = policy.fields.missingCompensation;
+        const adminLockFee = Number(policy.fields.adminLockFee) || 0;
+        const remainingValue = Math.max(0, Math.round((quote.currentValue - quote.rentalFeePaid) * 100) / 100);
+        const devicePrice = compensationRule === "remainingPlusLockFee" ? remainingValue : quote.currentValue;
+        const lossPenalty = compensationRule === "marketValue" ? 0 : adminLockFee;
         const expectedAmount = Math.round((devicePrice + lossPenalty) * 100) / 100;
-        if (!Number.isFinite(expectedAmount) || devicePrice <= 0) {
-            return res.status(400).json({ success: false, error: "The product collection price is unavailable." });
-        }
+        if (!Number.isFinite(expectedAmount) || quote.currentValue <= 0 || expectedAmount <= 0) return res.status(400).json({ success: false, error: "The product collection price is unavailable." });
 
         const invoiceResponse = await axios.get(`https://api.xendit.co/v2/invoices/${encodeURIComponent(invoiceID)}`, {
             headers: getXenditAuthHeader(),
@@ -1451,6 +1521,12 @@ router.post("/report-missing-payment", async (req, res) => {
                 customerID,
                 paymentAccountID,
                 gatewayTransactionID: invoiceID,
+                missingCompensationRule: compensationRule,
+                marketValue: quote.currentValue,
+                totalRentalSpend: quote.rentalFeePaid,
+                remainingValue,
+                adminLockFee,
+                lossPenalty,
                 createdAt: new Date().toISOString()
             });
         }
@@ -1464,7 +1540,7 @@ router.post("/report-missing-payment", async (req, res) => {
         });
         await batch.commit();
 
-        return res.json({ success: true, transactionID, amount: expectedAmount, devicePrice, lossPenalty });
+        return res.json({ success: true, transactionID, amount: expectedAmount, devicePrice, lossPenalty, adminLockFee, compensationRule, marketValue: quote.currentValue, totalRentalSpend: quote.rentalFeePaid, remainingValue });
     } catch (error) {
         console.error("Error verifying missing-device payment:", error.response?.data || error.message);
         return res.status(error.response?.status === 404 ? 404 : 500).json({
@@ -2336,6 +2412,27 @@ router.get("/overdue-balance/:rentalID", async (req, res) => {
             rentalSnap = match.docs[0];
         }
         const rental = rentalSnap.data() || {};
+        let productData = {};
+        let deviceData = {};
+        if (rental.productID) {
+            let productSnap = await db.collection("product").doc(String(rental.productID)).get();
+            if (!productSnap.exists) {
+                const productMatch = await db.collection("product").where("productID", "==", String(rental.productID)).limit(1).get();
+                if (!productMatch.empty) productSnap = productMatch.docs[0];
+            }
+            if (productSnap.exists) {
+                productData = productSnap.data() || {};
+                const deviceID = String(productData.deviceID || "");
+                if (deviceID) {
+                    let deviceSnap = await db.collection("devices").doc(deviceID).get();
+                    if (!deviceSnap.exists) {
+                        const deviceMatch = await db.collection("devices").where("deviceID", "==", deviceID).limit(1).get();
+                        if (!deviceMatch.empty) deviceSnap = deviceMatch.docs[0];
+                    }
+                    if (deviceSnap.exists) deviceData = deviceSnap.data() || {};
+                }
+            }
+        }
         const expiryValue = rental.rentalExpiryDate;
         const expiryDate = expiryValue && typeof expiryValue.toDate === "function"
             ? dateStringInRentalTimeZone(expiryValue)
@@ -2346,8 +2443,21 @@ router.get("/overdue-balance/:rentalID", async (req, res) => {
         }
         const billingAnchorDate = rentalBillingAnchorDate(rental);
         const window = calculateOverdueBillingWindow(billingAnchorDate, todayDate);
-        const monthlyFee = Number(rental.monthlyRentalFee || rental.monthlyFee || 149);
-        const amountDue = Math.round((monthlyFee * window.monthsDue + 50) * 100) / 100;
+        let monthlyFee = Number(rental.monthlyRentalFee || rental.monthlyFee || 0);
+        if (!(monthlyFee > 0)) {
+            monthlyFee = Number(productData.rentPricePerMonth || productData.rentalPrice || productData.monthlyRentalPrice || 0);
+        }
+        if (!(monthlyFee > 0)) {
+            const collectedPrice = Number(productData.collectedPrice || 0);
+            const sellingPrice = Number(productData.sellingPrice || 0);
+            const rateBase = collectedPrice > 0 ? collectedPrice : sellingPrice > 0 ? sellingPrice / 1.2 : 0;
+            monthlyFee = Math.round(rateBase * 0.05 * 100) / 100;
+        }
+        if (!(monthlyFee > 0)) return res.status(409).json({ success: false, error: "The monthly rental rate is unavailable for this rental." });
+        const settings = await db.doc(RENTAL_POLICY_DOC).get();
+        const policy = normalizeRentalPolicy(settings.exists ? settings.data() : DEFAULT_RENTAL_POLICY);
+        const lockFee = Math.max(0, Number(policy.fields.adminLockFee) || 0);
+        const amountDue = Math.round((monthlyFee * window.monthsDue + lockFee) * 100) / 100;
         console.log(`[Overdue Balance] Rental ${rentalID}: rentalExpiryDate ${billingAnchorDate}, ${window.monthsDue} months, ${amountDue.toFixed(2)} due.`);
         return res.json({
             success: true,
@@ -2356,7 +2466,14 @@ router.get("/overdue-balance/:rentalID", async (req, res) => {
             monthsDue: window.monthsDue,
             nextBillingDate: window.nextBillingDate,
             monthlyRentalFee: monthlyFee,
-            amountDue
+            lockFee,
+            amountDue,
+            productID: rental.productID || "",
+            productName: productData.listingTitle || productData.title || productData.productName || "Rental device",
+            imageUrl: productData.imageUrl || (Array.isArray(productData.images) ? productData.images[0] : "") || "",
+            storage: deviceData.storageCapacity || deviceData.storage || productData.storage || "",
+            color: deviceData.colour || deviceData.color || productData.colour || productData.color || "",
+            deviceIdentifier: deviceData.serialNumber || deviceData.imei || deviceData.imeiNum || productData.serialNumber || productData.imei || productData.imeiNum || ""
         });
     } catch (error) {
         console.error("Could not calculate overdue rental balance:", error.message);
@@ -2412,8 +2529,26 @@ router.post("/pay-overdue-balance", async (req, res) => {
             return res.status(400).json({ success: false, error: "Last rental payment date is invalid" });
         }
         const { monthsDue, nextBillingDate } = calculateOverdueBillingWindow(billingAnchorDate, todayString);
-        const monthlyFee = Number(rental.monthlyRentalFee || rental.monthlyFee || 149);
-        const lockFee = 50;
+        let monthlyFee = Number(rental.monthlyRentalFee || rental.monthlyFee || 0);
+        if (!(monthlyFee > 0)) {
+            let productSnap = await db.collection("product").doc(String(rental.productID || "")).get();
+            if (!productSnap.exists && rental.productID) {
+                const productMatch = await db.collection("product").where("productID", "==", String(rental.productID)).limit(1).get();
+                if (!productMatch.empty) productSnap = productMatch.docs[0];
+            }
+            const productData = productSnap.exists ? (productSnap.data() || {}) : {};
+            monthlyFee = Number(productData.rentPricePerMonth || productData.rentalPrice || productData.monthlyRentalPrice || 0);
+            if (!(monthlyFee > 0)) {
+                const collectedPrice = Number(productData.collectedPrice || 0);
+                const sellingPrice = Number(productData.sellingPrice || 0);
+                const rateBase = collectedPrice > 0 ? collectedPrice : sellingPrice > 0 ? sellingPrice / 1.2 : 0;
+                monthlyFee = Math.round(rateBase * 0.05 * 100) / 100;
+            }
+        }
+        if (!(monthlyFee > 0)) return res.status(409).json({ success: false, error: "The monthly rental rate is unavailable for this rental." });
+        const settings = await db.doc(RENTAL_POLICY_DOC).get();
+        const policy = normalizeRentalPolicy(settings.exists ? settings.data() : DEFAULT_RENTAL_POLICY);
+        const lockFee = Math.max(0, Number(policy.fields.adminLockFee) || 0);
         const expectedAmount = Math.round((monthlyFee * monthsDue + lockFee) * 100) / 100;
 
         // Confirm the invoice is paid and its amount matches the server-side balance.
@@ -3205,6 +3340,108 @@ router.post("/confirm-admin-return", async (req, res) => {
     } catch (err) {
         console.error("Error confirming admin return:", err);
         return res.status(500).json({ success: false, error: err.message || "Failed to confirm return." });
+    }
+});
+
+
+
+const RENTAL_POLICY_DOC = "systemSettings/rentalPolicies";
+const DEFAULT_RENTAL_POLICY = {
+    fields: {
+        baseDepositRule: "10",
+        dueReminder: "7",
+        returnBuffer: "3",
+        adminLockFee: "15",
+        missingCompensation: "marketPlusLockFee"
+    },
+    allowedDurations: [3, 12, 24].map(months => ({ months, enabled: true }))
+};
+const REQUIRED_RENTAL_MONTHS = [3, 12, 24];
+const RENTAL_COMPENSATION_RULES = new Set(["marketPlusLockFee", "remainingPlusLockFee", "marketValue"]);
+
+function normalizeRentalPolicy(input = {}) {
+    const sourceFields = input.fields || {};
+    const percentage = Number(sourceFields.baseDepositRule ?? input.baseDepositPercentage ?? 10);
+    if (!Number.isInteger(percentage) || percentage < 1 || percentage > 100) {
+        throw new Error("Base deposit percentage must be a whole number from 1 to 100.");
+    }
+    const allowed = Array.isArray(input.allowedDurations) ? input.allowedDurations : [];
+    const durations = REQUIRED_RENTAL_MONTHS.map(months => ({ months, enabled: true }));
+    const seen = new Set(REQUIRED_RENTAL_MONTHS);
+    for (const entry of allowed) {
+        const months = Number(entry?.months);
+        if (!Number.isInteger(months) || months < 1 || months > 60 || seen.has(months)) continue;
+        if (durations.length >= 6) break;
+        seen.add(months);
+        durations.push({ months, enabled: Boolean(entry.enabled) });
+    }
+    const fields = {
+        baseDepositRule: String(percentage),
+        dueReminder: String(Math.max(0, Math.floor(Number(sourceFields.dueReminder ?? 7) || 0))),
+        returnBuffer: String(Math.max(0, Math.floor(Number(sourceFields.returnBuffer ?? 3) || 0))),
+        adminLockFee: String(Math.max(0, Number(sourceFields.adminLockFee ?? 15) || 0)),
+        missingCompensation: RENTAL_COMPENSATION_RULES.has(sourceFields.missingCompensation)
+            ? sourceFields.missingCompensation
+            : "marketPlusLockFee"
+    };
+    return { fields, allowedDurations: durations };
+}
+
+async function requireRentalPolicyAdmin(req, res, next) {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ success: false, error: "Please sign in as an administrator." });
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken);
+        let userSnapshot = await db.collection("users").doc(decoded.uid).get();
+        let user = userSnapshot.exists ? userSnapshot.data() : null;
+        if (!user && decoded.email) {
+            const matches = await db.collection("users").where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+            if (!matches.empty) user = matches.docs[0].data();
+        }
+        if (String(user?.systemRole || user?.role || "").trim().toLowerCase() !== "admin") {
+            return res.status(403).json({ success: false, error: "Administrator access is required." });
+        }
+        req.adminUid = decoded.uid;
+        return next();
+    } catch (error) {
+        return res.status(401).json({ success: false, error: "Your admin session has expired. Please sign in again." });
+    }
+}
+
+router.get("/policies", async (_req, res) => {
+    try {
+        const snapshot = await db.doc(RENTAL_POLICY_DOC).get();
+        const policy = normalizeRentalPolicy(snapshot.exists ? snapshot.data() : DEFAULT_RENTAL_POLICY);
+        const availableDurations = policy.allowedDurations
+            .filter(item => REQUIRED_RENTAL_MONTHS.includes(item.months) || item.enabled)
+            .map(item => item.months);
+        return res.json({
+            success: true,
+            policy,
+            baseDepositPercentage: Number(policy.fields.baseDepositRule),
+            availableDurations
+        });
+    } catch (error) {
+        console.error("Could not load rental policy settings:", error);
+        return res.status(500).json({ success: false, error: "Could not load rental policy settings." });
+    }
+});
+
+router.put("/admin/policies", requireRentalPolicyAdmin, async (req, res) => {
+    try {
+        const policy = normalizeRentalPolicy(req.body || {});
+        await db.doc(RENTAL_POLICY_DOC).set({
+            ...policy,
+            updatedAt: new Date().toISOString(),
+            updatedBy: req.adminUid
+        }, { merge: true });
+        const availableDurations = policy.allowedDurations
+            .filter(item => REQUIRED_RENTAL_MONTHS.includes(item.months) || item.enabled)
+            .map(item => item.months);
+        return res.json({ success: true, policy, baseDepositPercentage: Number(policy.fields.baseDepositRule), availableDurations });
+    } catch (error) {
+        const statusCode = /percentage|duration/i.test(error.message) ? 400 : 500;
+        return res.status(statusCode).json({ success: false, error: error.message || "Could not save rental policy settings." });
     }
 });
 

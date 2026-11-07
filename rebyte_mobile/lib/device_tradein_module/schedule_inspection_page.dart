@@ -104,20 +104,26 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
 
   // Real-time slot availability (slashed/disabled if all eligible staff have tasks)
   Set<String> _disabledSlots = {};
+  List<String> _serverSlotOptions = [];
+  bool _hasServerSlotOptions = false;
   bool _isLoadingSlots = false;
 
   // Fully booked dates for the current calendar month
   Set<String> _fullyBookedDates = {};
   bool _isLoadingMonth = false;
+  late DateTime _minimumBookDate;
+  int _minimumNoticeDays = 1;
 
   bool get _isOnSiteInspection => widget.method == 'On-Site Inspection';
+  String get _minimumNoticeUnit => _minimumNoticeDays == 1 ? 'day' : 'days';
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    // Default to first available date (tomorrow / 24 hours advance)
-    _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    _minimumBookDate = DateTime(now.year, now.month, now.day + 1);
+    // Default to the first available date until the scheduler returns its configured notice date.
+    _selectedDate = _minimumBookDate;
 
     if (widget.initialDate != null && widget.initialDate!.isNotEmpty) {
       final parsed = DateTime.tryParse(widget.initialDate!);
@@ -165,13 +171,22 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
         setState(() {
           final disabled = List<String>.from(res['disabledDates'] ?? []);
           _fullyBookedDates = disabled.toSet();
+          final minimumDate = DateTime.tryParse(res['minimumBookDate']?.toString() ?? '');
+          if (minimumDate != null) {
+            _minimumBookDate = DateTime(minimumDate.year, minimumDate.month, minimumDate.day);
+          }
+          final configuredNoticeDays = int.tryParse(res['minimumAdvanceNoticeDays']?.toString() ?? '');
+          if (configuredNoticeDays != null && configuredNoticeDays > 0) {
+            _minimumNoticeDays = configuredNoticeDays;
+          }
           _isLoadingMonth = false;
 
-          // If current selected date is fully booked, auto-select first available date (unless editing existing date)
+          // Move a new booking to the first permitted date when its initial date is too early or unavailable.
           final curDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+          final selectedDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
           final firstAvail = res['firstAvailableDate'] as String?;
           final isEditingSameDate = widget.fromMyTradeInRequests && widget.initialDate == curDateStr;
-          if (!isEditingSameDate && _fullyBookedDates.contains(curDateStr) && firstAvail != null && firstAvail.isNotEmpty) {
+          if (!isEditingSameDate && (selectedDay.isBefore(_minimumBookDate) || _fullyBookedDates.contains(curDateStr)) && firstAvail != null && firstAvail.isNotEmpty) {
             final parsed = DateTime.tryParse(firstAvail);
             if (parsed != null) {
               _selectedDate = parsed;
@@ -200,6 +215,11 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
       if (mounted) {
         setState(() {
           final disabled = List<String>.from(res['disabledSlots'] ?? []);
+          final serverSlots = res['allSlots'];
+          if (serverSlots is List) {
+            _serverSlotOptions = serverSlots.map((slot) => slot.toString()).toList();
+            _hasServerSlotOptions = true;
+          }
           _disabledSlots = disabled.toSet();
           _isLoadingSlots = false;
 
@@ -338,6 +358,7 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
   }
 
   List<String> _getAvailableSlots() {
+    if (_hasServerSlotOptions) return _serverSlotOptions;
     if (_isOnSiteInspection) {
       return const [
         '09:30 AM',
@@ -347,22 +368,21 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
         '02:30 PM',
         '03:00 PM',
       ];
-    } else {
-      return const [
-        '09:30 AM',
-        '10:00 AM',
-        '10:30 AM',
-        '11:00 AM',
-        '11:30 AM',
-        '01:00 PM',
-        '01:30 PM',
-        '02:00 PM',
-        '02:30 PM',
-        '03:00 PM',
-        '03:30 PM',
-        '04:00 PM',
-      ];
     }
+    return const [
+      '09:30 AM',
+      '10:00 AM',
+      '10:30 AM',
+      '11:00 AM',
+      '11:30 AM',
+      '01:00 PM',
+      '01:30 PM',
+      '02:00 PM',
+      '02:30 PM',
+      '03:00 PM',
+      '03:30 PM',
+      '04:00 PM',
+    ];
   }
 
   bool _isSlotDisabled(String slot) {
@@ -973,8 +993,8 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                 Expanded(
                   child: Text(
                     _isOnSiteInspection
-                        ? 'Inspections require a minimum 24-hour advance booking to assign a technician.'
-                        : 'Collections require a minimum 24-hour advance booking to assign a courier.',
+                        ? 'Inspections require at least $_minimumNoticeDays $_minimumNoticeUnit advance notice to assign a technician.'
+                        : 'Collections require at least $_minimumNoticeDays $_minimumNoticeUnit advance notice to assign a courier.',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF1E3A8A),
@@ -1106,8 +1126,7 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
     // weekday 1 (Mon) to 7 (Sun). If Sunday, weekday % 7 = 0
     final startingOffset = firstDayOfMonth.weekday % 7;
 
-    final now = DateTime.now();
-    final minBookDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final minBookDate = _minimumBookDate;
 
     final totalSlots = startingOffset + daysInMonth;
     final rowCount = (totalSlots / 7).ceil();
@@ -1126,17 +1145,17 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
 
               final date = DateTime(_currentMonth.year, _currentMonth.month, dayIndex);
               final dateStr = DateFormat('yyyy-MM-dd').format(date);
-              final isPastOrWithin24h = date.isBefore(minBookDate);
+              final isBeforeMinimumNotice = date.isBefore(minBookDate);
               final isFullyBooked = _fullyBookedDates.contains(dateStr);
-              final isDisabled = isPastOrWithin24h || isFullyBooked;
+              final isDisabled = isBeforeMinimumNotice || isFullyBooked;
               final isSelected = date.year == _selectedDate.year &&
                   date.month == _selectedDate.month &&
                   date.day == _selectedDate.day;
 
               return GestureDetector(
                 onTap: () {
-                  if (isPastOrWithin24h) {
-                    _showToast('Please select a date at least 24 hours in advance.', true);
+                  if (isBeforeMinimumNotice) {
+                    _showToast('Please select a date at least $_minimumNoticeDays $_minimumNoticeUnit in advance.', true);
                   } else if (isFullyBooked) {
                     _showToast('No eligible staff available on this date. Please select another date.', true);
                   } else {
@@ -1160,7 +1179,7 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      decoration: isFullyBooked && !isPastOrWithin24h ? TextDecoration.lineThrough : null,
+                      decoration: isFullyBooked && !isBeforeMinimumNotice ? TextDecoration.lineThrough : null,
                       decorationColor: const Color(0xFF94A3B8),
                       color: isSelected
                           ? Colors.white

@@ -2099,4 +2099,208 @@ router.put("/api/report-cache", requireAdmin, async (req, res) => {
         return res.status(500).json({ success: false, error: "Could not save the report snapshot." });
     }
 });
+router.post("/api/system-config/inspection-standards/images", requireAdmin, (req, res, next) => {
+    customerBackgroundUpload.single("image")(req, res, err => {
+        if (!err) return next();
+        const message = err.code === "LIMIT_FILE_SIZE" ? "Each image must be 15 MB or smaller." : "The image upload could not be processed.";
+        return res.status(400).json({ success: false, error: message });
+    });
+}, async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+            return res.status(400).json({ success: false, error: "Choose a JPG, PNG, or WebP image." });
+        }
+        const uploaded = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream({
+                folder: "inspection-standards",
+                resource_type: "image",
+                allowed_formats: ["jpg", "jpeg", "png", "webp"]
+            }, (error, result) => error ? reject(error) : resolve(result));
+            stream.end(file.buffer);
+        });
+        return res.json({ success: true, imageUrl: uploaded.secure_url });
+    } catch (err) {
+        console.error("Inspection standard image upload failed:", err.message);
+        return res.status(502).json({ success: false, error: "Could not upload the inspection image to Cloudinary." });
+    }
+});
+
+router.get("/api/system-config/inspection-standards", requireAdmin, async (req, res) => {
+    try {
+        const snapshot = await db.collection("standard").select("title", "description", "updatedAt", "sectionCount").orderBy("createdAt", "desc").get();
+        const standards = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title || "",
+                description: data.description || "",
+                sectionCount: Number.isInteger(data.sectionCount) ? data.sectionCount : null,
+                updatedAt: data.updatedAt?.toDate?.().toISOString?.() || null
+            };
+        });
+        return res.json({ success: true, standards });
+    } catch (err) {
+        console.error("Inspection standards read failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not load inspection standards." });
+    }
+});
+
+router.post("/api/system-config/inspection-standards", requireAdmin, async (req, res) => {
+    try {
+        const title = String(req.body?.title || "").trim();
+        const description = String(req.body?.description || "").trim();
+        const rawSections = req.body?.sections;
+        if (!title || title.length > 120) return res.status(400).json({ success: false, error: "Enter a title with 1 to 120 characters." });
+        if (description.length > 300) return res.status(400).json({ success: false, error: "Short description must be 300 characters or fewer." });
+        if (!Array.isArray(rawSections) || rawSections.length < 1 || rawSections.length > 8) {
+            return res.status(400).json({ success: false, error: "A standard must contain between 1 and 8 sections." });
+        }
+        const sections = [];
+        for (const section of rawSections) {
+            const sectionTitle = String(section?.title || "").trim();
+            const instructions = String(section?.instructions || "").trim();
+            const images = Array.isArray(section?.images) ? section.images : [];
+            if (!sectionTitle || sectionTitle.length > 120 || !instructions || instructions.length > 2000 || images.length > 5) {
+                return res.status(400).json({ success: false, error: "Each section needs a title and instructions, and may contain up to 5 images." });
+            }
+            const validImages = images.every(value => {
+                try {
+                    const url = new URL(String(value));
+                    return url.protocol === "https:" && url.hostname === "res.cloudinary.com";
+                } catch (_) { return false; }
+            });
+            if (!validImages) return res.status(400).json({ success: false, error: "Inspection images must be stored on Cloudinary." });
+            sections.push({ title: sectionTitle, instructions, images: images.map(String) });
+        }
+        const now = Timestamp.now();
+        const ref = db.collection("standard").doc();
+        const record = { title, description, sections, sectionCount: sections.length, createdAt: now, updatedAt: now, createdBy: req.adminUid, updatedBy: req.adminUid };
+        await ref.create(record);
+        return res.status(201).json({ success: true, standard: { id: ref.id, title, description, sections, sectionCount: sections.length, createdAt: now.toDate().toISOString(), updatedAt: now.toDate().toISOString() } });
+    } catch (err) {
+        console.error("Inspection standard creation failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not save the inspection standard." });
+    }
+});
+function inspectionStandardImageUrls(sections) {
+    const urls = new Set();
+    for (const section of Array.isArray(sections) ? sections : []) {
+        for (const image of Array.isArray(section?.images) ? section.images : []) {
+            if (typeof image === "string") urls.add(image);
+        }
+    }
+    return urls;
+}
+
+function inspectionStandardCloudinaryPublicId(imageUrl) {
+    try {
+        const parsed = new URL(String(imageUrl));
+        if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return null;
+        const uploadMarker = "/upload/";
+        const markerIndex = parsed.pathname.indexOf(uploadMarker);
+        if (markerIndex < 0) return null;
+        const pathAfterUpload = parsed.pathname.slice(markerIndex + uploadMarker.length).split("/");
+        const versionIndex = pathAfterUpload.findIndex(part => /^v\d+$/.test(part));
+        const assetPath = (versionIndex >= 0 ? pathAfterUpload.slice(versionIndex + 1) : pathAfterUpload).join("/");
+        if (!assetPath.startsWith("inspection-standards/")) return null;
+        return assetPath.replace(/\.[^/.]+$/, "");
+    } catch (_) { return null; }
+}
+
+async function deleteUnusedInspectionStandardImages(candidateUrls) {
+    const candidates = [...new Set(candidateUrls || [])];
+    if (!candidates.length) return [];
+    const snapshot = await db.collection("standard").get();
+    const referenced = new Set();
+    for (const doc of snapshot.docs) {
+        for (const url of inspectionStandardImageUrls(doc.data()?.sections)) referenced.add(url);
+    }
+    const failures = [];
+    for (const imageUrl of candidates) {
+        if (referenced.has(imageUrl)) continue;
+        const publicId = inspectionStandardCloudinaryPublicId(imageUrl);
+        if (!publicId) continue;
+        try {
+            const result = await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+            if (result?.result !== "ok" && result?.result !== "not found") failures.push(imageUrl);
+        } catch (err) {
+            console.error("Could not delete unused inspection standard image:", err.message);
+            failures.push(imageUrl);
+        }
+    }
+    return failures;
+}
+router.get("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+    try {
+        const snapshot = await db.collection("standard").doc(String(req.params.standardId || "")).get();
+        if (!snapshot.exists) return res.status(404).json({ success: false, error: "Inspection standard was not found." });
+        const data = snapshot.data();
+        return res.json({ success: true, standard: {
+            id: snapshot.id,
+            title: data.title || "",
+            description: data.description || "",
+            sections: Array.isArray(data.sections) ? data.sections : [],
+            createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+            updatedAt: data.updatedAt?.toDate?.().toISOString?.() || null
+        } });
+    } catch (err) {
+        console.error("Inspection standard read failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not load the inspection standard." });
+    }
+});
+
+router.put("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+    try {
+        const title = String(req.body?.title || "").trim();
+        const description = String(req.body?.description || "").trim();
+        const rawSections = req.body?.sections;
+        if (!title || title.length > 120) return res.status(400).json({ success: false, error: "Enter a title with 1 to 120 characters." });
+        if (description.length > 300) return res.status(400).json({ success: false, error: "Short description must be 300 characters or fewer." });
+        if (!Array.isArray(rawSections) || rawSections.length < 1 || rawSections.length > 8) return res.status(400).json({ success: false, error: "A standard must contain between 1 and 8 sections." });
+        const sections = [];
+        for (const section of rawSections) {
+            const sectionTitle = String(section?.title || "").trim();
+            const instructions = String(section?.instructions || "").trim();
+            const images = Array.isArray(section?.images) ? section.images : [];
+            if (!sectionTitle || sectionTitle.length > 120 || !instructions || instructions.length > 2000 || images.length > 5) {
+                return res.status(400).json({ success: false, error: "Each section needs a title and instructions, and may contain up to 5 images." });
+            }
+            const validImages = images.every(value => {
+                try { const url = new URL(String(value)); return url.protocol === "https:" && url.hostname === "res.cloudinary.com"; }
+                catch (_) { return false; }
+            });
+            if (!validImages) return res.status(400).json({ success: false, error: "Inspection images must be stored on Cloudinary." });
+            sections.push({ title: sectionTitle, instructions, images: images.map(String) });
+        }
+        const ref = db.collection("standard").doc(String(req.params.standardId || ""));
+        const existing = await ref.get();
+        if (!existing.exists) return res.status(404).json({ success: false, error: "Inspection standard was not found." });
+        const now = Timestamp.now();
+        const previousImageUrls = inspectionStandardImageUrls(existing.data()?.sections);
+        const nextImageUrls = inspectionStandardImageUrls(sections);
+        await ref.update({ title, description, sections, sectionCount: sections.length, updatedAt: now, updatedBy: req.adminUid });
+        const removedImageUrls = [...previousImageUrls].filter(url => !nextImageUrls.has(url));
+        const imageCleanupFailures = await deleteUnusedInspectionStandardImages(removedImageUrls);
+        return res.json({ success: true, standard: { id: ref.id, title, description, sections, sectionCount: sections.length, updatedAt: now.toDate().toISOString() }, imageCleanupFailures });
+    } catch (err) {
+        console.error("Inspection standard update failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not update the inspection standard." });
+    }
+});
+
+router.delete("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+    try {
+        const ref = db.collection("standard").doc(String(req.params.standardId || ""));
+        const existing = await ref.get();
+        if (!existing.exists) return res.status(404).json({ success: false, error: "Inspection standard was not found." });
+        const removedImageUrls = inspectionStandardImageUrls(existing.data()?.sections);
+        await ref.delete();
+        const imageCleanupFailures = await deleteUnusedInspectionStandardImages(removedImageUrls);
+        return res.json({ success: true, message: "Inspection standard removed.", imageCleanupFailures });
+    } catch (err) {
+        console.error("Inspection standard delete failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not remove the inspection standard." });
+    }
+});
 module.exports = router;

@@ -64,6 +64,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   final GlobalKey<ShopPageState> _shopPageKey = GlobalKey<ShopPageState>();
   final GlobalKey<ShopPageState> _rentalShopPageKey = GlobalKey<ShopPageState>();
   final ScrollController _homeScrollController = ScrollController();
+  final ScrollController _activeRentalsScrollController = ScrollController();
 
   String? _toastMessage;
   bool _isToastError = false;
@@ -325,6 +326,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   void dispose() {
     appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
+    _homeScrollController.dispose();
+    _activeRentalsScrollController.dispose();
     super.dispose();
   }
 
@@ -1238,9 +1241,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     return SizedBox(
       height: 290,
       child: Scrollbar(
+        controller: _activeRentalsScrollController,
         thumbVisibility: true,
         radius: const Radius.circular(4),
         child: ListView.separated(
+          controller: _activeRentalsScrollController,
+          primary: false,
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.only(right: 6, bottom: 4),
           itemCount: _activeRentals.length,

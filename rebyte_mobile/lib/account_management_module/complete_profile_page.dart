@@ -116,6 +116,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
 
     if (result['success']) {
         await SessionService.saveSession(email: widget.email, name: _fullNameController.text);
+        if (!mounted) return;
         Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => HomePage(isLoggedIn: true, email: widget.email, name: _fullNameController.text, toastMessage: 'Account created successfully!')), (route) => false);
     } else {
       _showTopToast(result['error'] ?? 'Update failed', true);
