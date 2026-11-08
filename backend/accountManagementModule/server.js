@@ -1717,7 +1717,7 @@ router.get("/customers/:customerId/records", requireAdmin, async (req, res) => {
     try {
         const requestedId = String(req.params.customerId || "").trim();
         const type = String(req.query.type || "history").trim().toLowerCase();
-        if (!["history", "orders", "rentals", "tradeins"].includes(type)) {
+        if (!["history", "orders", "rentals", "tradeins", "support"].includes(type)) {
             return res.status(400).json({ error: "Choose a valid customer activity tab." });
         }
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -1839,6 +1839,17 @@ router.get("/customers/:customerId/records", requireAdmin, async (req, res) => {
         if (type === "orders") activityRecords.push(...toActivity(serialize(orderDocs, "orderID"), "orders"));
         if (type === "rentals") activityRecords.push(...toActivity(serialize(rentalDocs, "rentalID"), "rentals"));
         if (type === "tradeins") activityRecords.push(...toActivity(serialize(tradeInDocs, "tradeInRequestID"), "tradeins"));
+        if (type === "support") {
+            const tickets = await collectMatches("supportTicket", ["userID"], customerIds);
+            const statusLabels = { pending: "Pending", "in progress": "In Progress", resolved: "Resolved" };
+            activityRecords = serialize(tickets, "ticketID").map(ticket => ({
+                type: "Support Ticket",
+                id: ticket.ticketID,
+                status: statusLabels[String(ticket.ticketStatus || "").trim().toLowerCase()] || ticket.ticketStatus || "Pending",
+                date: dateOf(ticket, ["lastMessageAt", "createdDate", "createdAt"]),
+                details: ticket.ticketCategory || "Other"
+            }));
+        }
         if (type === "history") {
             const auditDocs = await combineMatches("customerAccountAudit", [["customerId", customerIds], ["userId", customerIds], ["email", customerEmails]]);
             activityRecords.push(...toActivity(serialize(auditDocs, "auditID"), "audit"));

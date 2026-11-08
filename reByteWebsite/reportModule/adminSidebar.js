@@ -9,12 +9,14 @@
     { label: 'Leave Management', href: '/leaveManagementModule/leaveManagement.html', icon: '<path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="m9 16 2 2 4-4"/>' },
     { label: 'Customer Management', href: '/adminModule/customerManagement.html', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 0 0 7.75"/>' },
     { label: 'Staff Management', href: '/adminModule/staffManagement.html', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M17 11h6"/>' },
-    { label: 'Communication', href: '#', icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' }
+    { label: 'Communication', href: '/communicationModule/requestManagement.html', icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' }
   ];
 
   function renderSidebar() {
     const currentPath = window.location.pathname.toLowerCase();
-    const activeLabel = currentPath.includes('/sysconfigmodule/') ? 'System Config' : 'Analytics';
+    let activeLabel = 'Analytics';
+    if (currentPath.includes('/sysconfigmodule/')) activeLabel = 'System Config';
+    if (currentPath.includes('/communicationmodule/')) activeLabel = 'Communication';
     document.querySelectorAll('[data-admin-sidebar]').forEach(sidebar => {
       sidebar.innerHTML = `
         <a class="sidebar-brand" href="/adminModule/analyticsHub.html">

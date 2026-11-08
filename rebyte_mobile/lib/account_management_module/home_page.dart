@@ -29,6 +29,8 @@ import '../device_tradein_module/my_trade_in_requests_page.dart';
 import '../rental_managment_module/my_rentals_page.dart';
 import '../rental_managment_module/services/rental_service.dart';
 import '../rental_managment_module/rental_device_detail_page.dart';
+import 'help_desk_page.dart';
+import 'compare_devices_coming_soon_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -362,11 +364,65 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     setState(() => _selectedIndex = targetIndex);
   }
 
+  void _handleHelpDeskAction(String action) {
+    switch (action) {
+      case 'trade_in':
+        _navigateOrRequireLogin(2);
+        return;
+      case 'buy':
+        _navigateOrRequireLogin(1);
+        return;
+      case 'rent':
+        _navigateOrRequireLogin(3);
+        return;
+      case 'view_orders':
+        if (!_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        Navigator.push(context, MaterialPageRoute(builder: (context) => MyOrdersPage(email: _email ?? 'customer@rebyte.com', name: _name)));
+        return;
+      case 'view_rentals':
+        if (!_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        Navigator.push(context, MaterialPageRoute(builder: (context) => MyRentalsPage(email: _email ?? 'customer@rebyte.com', name: _name)));
+        return;
+      case 'view_trade_in':
+        if (!_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        Navigator.push(context, MaterialPageRoute(builder: (context) => MyTradeInRequestsPage(
+              email: _email ?? 'customer@rebyte.com',
+              name: _name,
+              isLoggedIn: _isLoggedIn,
+            )));
+        return;
+      case 'compare_devices':
+        setState(() => _selectedIndex = 6);
+        return;
+      case 'test_device':
+        if (!_isLoggedIn) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
+          return;
+        }
+        Navigator.push(context, MaterialPageRoute(builder: (context) => DiagnosticSuitePage(
+              isLoggedIn: _isLoggedIn,
+              email: _email,
+              name: _name,
+            )));
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8F9FB), // light grayish-blue background
+      resizeToAvoidBottomInset: _selectedIndex != 5,
       drawer: _buildDrawer(),
       appBar: _buildAppBar(),
       body: Stack(
@@ -456,6 +512,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 email: _email,
                 onProfileUpdated: () => _refreshProfileSession(),
               ),
+              HelpDeskPage(
+                onBack: () => setState(() => _selectedIndex = 0),
+                onNavigate: _handleHelpDeskAction,
+              ),
+              CompareDevicesComingSoonPage(onBack: () => setState(() => _selectedIndex = 0)),
             ],
           ),
           if (_toastMessage != null)
@@ -489,7 +550,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
             ),
         ],
       ),
-      bottomNavigationBar: _buildBottomNavigationBarWithShadow(),
+      bottomNavigationBar: _selectedIndex == 5 || _selectedIndex == 6 ? null : _buildBottomNavigationBarWithShadow(),
     );
   }
 
@@ -528,9 +589,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                       Navigator.pop(context);
                       _navigateOrRequireLogin(3);
                     }),
-                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices', onTap: () {
+                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices', isSelected: _selectedIndex == 6, onTap: () {
                     Navigator.pop(context);
-                    _navigateOrRequireLogin(1);
+                    setState(() => _selectedIndex = 6);
                   }),
                   _buildDrawerItem(Icons.phonelink_setup_rounded, 'Test My Device', onTap: () {
                     Navigator.pop(context);
@@ -629,7 +690,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
             ),
           ),
           Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk'),
+            _buildDrawerItem(Icons.help_outline, 'Help Desk', isSelected: _selectedIndex == 5, onTap: () {
+              Navigator.pop(context);
+              setState(() => _selectedIndex = 5);
+            }),
             if (_isLoggedIn)
               _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: () {
                 showDialog(

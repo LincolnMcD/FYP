@@ -132,7 +132,7 @@
       <a href="../leaveManagementModule/leaveManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path><path d="m9 16 2 2 4-4"></path></svg>Leave Management</a>
       <a href="customerManagement.html" class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Customer Management</a>
       <a href="staffManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M17 11h6"></path></svg>Staff Management</a>
-      <a href="#" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
+      <a href="/communicationModule/requestManagement.html" class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Communication</a>
     </nav>
   </aside>
   <main class="main">
@@ -169,7 +169,7 @@
             <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="orders">Orders</button>
             <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="rentals">Rentals</button>
             <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="tradeins">Trade-ins</button>
-            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="complaints">Complaints</button>
+            <button class="detail-tab" type="button" role="tab" aria-selected="false" data-tab="support">Support</button>
           </div>
           <div class="tab-content" aria-live="polite"></div>
         </section>
@@ -269,10 +269,6 @@
     }
     function renderDetailTab() {
       const content = document.querySelector('.tab-content');
-      if (activeDetailTab === 'complaints') {
-        content.innerHTML = '<div class="activity-empty">Complaints are on hold.</div>';
-        return;
-      }
       const cacheKey = `${activeDetailTab}:${activeActivityPage}`;
       const cached = activityPageCache.get(cacheKey);
       if (cached) {
@@ -335,14 +331,14 @@
     }
     async function loadCustomerActivity(page = 1) {
       const content = document.querySelector('.tab-content');
-      if (activeDetailTab === 'complaints') return;
+      if (!customer) return;
+      const requestId = ++activityRequestId;
       activeActivityPage = page;
       const cacheKey = `${activeDetailTab}:${page}`;
       if (activityPageCache.has(cacheKey)) {
         renderDetailTab();
         return;
       }
-      const requestId = ++activityRequestId;
       content.innerHTML = '<div class="loading">Loading this customer’s records…</div>';
       try {
         const recordId = String(customer.id || customer.userId || customerId);
@@ -472,7 +468,7 @@
         item.setAttribute('aria-selected', String(selected));
       });
       renderDetailTab();
-      if (activeDetailTab !== 'complaints') loadCustomerActivity(1);
+      loadCustomerActivity(1);
     }));
     document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));
     loadCustomer();

@@ -1,4 +1,5 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
 const accountManagementRouter = require("./accountManagementModule/server");
@@ -9,7 +10,7 @@ const shopRouter = require("./accountManagementModule/shopServer");
 const taskAssignmentRouter = require("./taskAssignmentModule/server");
 const rentalManagementRouter = require("./rentalManagementModule/server");
 const transactionManagementRouter = require("./transactionManagementModule/server");
-const path = require("path");
+const helpDeskRouter = require("./helpDeskModule/server");
 const { runWithRequest, recordRequest } = require("./config/firestoreMetrics");
 
 const app = express();
@@ -41,6 +42,7 @@ app.use("/api/rental", rentalManagementRouter);
 app.use("/rental", rentalManagementRouter);
 app.use("/api/transaction-management", transactionManagementRouter);
 app.use("/transaction-management", transactionManagementRouter);
+app.use("/api/help-desk", helpDeskRouter);
 
 const http = require("http");
 const { Server } = require("socket.io");

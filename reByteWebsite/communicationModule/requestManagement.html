@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request Management - ReByte</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../adminModule/adminHeader.css">
+  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { display: flex; margin: 0; min-height: 100vh; background: #f4f6fa; color: #172033; font: 14px Inter, Arial, sans-serif; }
+    .sidebar { position: sticky; top: 0; height: 100vh; }
+    .main { flex: 1; min-width: 0; }
+    .content { padding: 18px 40px 56px; }
+    .back { display: inline-grid; place-items: center; width: 36px; height: 36px; margin-left: -8px; color: #596579; border-radius: 8px; }
+    .back:hover { background: #e9edf4; }
+    h1 { margin: 23px 0 0; color: #0f172a; font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
+    .intro { color: #596273; font-size: 14.5px; margin: 18px 0 0; }
+    .requests { width: min(100%, 1120px); margin: 18px auto 0; }
+    .toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+    button { font: inherit; }
+    .refresh-button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 18px; border: 1px solid #cdd5e4; border-radius: 999px; background: #fff; color: #414b5d; font-weight: 600; cursor: pointer; }
+    .refresh-button:hover { background: #f1f5fb; }
+    .filters { display: flex; gap: 24px; border-bottom: 1px solid #cdd5e4; margin-bottom: 22px; }
+    .filter { padding: 12px 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #525d70; cursor: pointer; }
+    .filter[aria-pressed="true"] { color: #0646a5; border-bottom-color: #0646a5; font-weight: 700; }
+    .request-card { border: 1px solid #cdd5e4; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px #1720330d; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 16px 20px; text-align: left; border-bottom: 1px solid #cdd5e4; }
+    th { color: #414b5d; background: #fff; white-space: nowrap; }
+    th:nth-child(1) { width: 19%; }
+    th:nth-child(2) { width: 34%; }
+    th:nth-child(3) { width: 17%; }
+    th:nth-child(4) { width: 17%; }
+    th:nth-child(5) { width: 13%; }
+    .request-row td { overflow-wrap: anywhere; }
+    .customer-name { display: block; font-weight: 600; }
+    .customer-id { display: block; margin-top: 4px; color: #596273; font-size: 12px; }
+    .new-badge { display: inline-block; margin-top: 5px; padding: 3px 7px; border-radius: 999px; background: #e9efff; color: #0646a5; font-size: 10px; font-weight: 800; }
+    .new-badge[hidden] { display: none; }
+    .empty { text-align: center; padding: 35px 20px; color: #596273; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 20px; color: #596273; }
+    .page-controls { display: flex; gap: 8px; }
+    .page-controls button { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid #cdd5e4; color: #596273; background: transparent; }
+    .page-controls button:disabled { opacity: .65; }
+    .request-row { cursor: pointer; }
+    .request-row:hover { background: #f6f8fc; }
+    .status-pill { display: inline-block; padding: 5px 9px; border-radius: 20px; background: #e9efff; color: #0646a5; text-transform: capitalize; }
+    .open-ticket { padding: 7px 12px; border: 0; border-radius: 9px; background: #0646a5; color: white; cursor: pointer; }
+    .chat-modal { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 20px; background: #10182880; }
+    .chat-modal.open { display: flex; }
+    .chat-panel { width: min(720px, 100%); max-height: min(760px, 92vh); display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: white; box-shadow: 0 20px 80px #10182840; }
+    .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 12px 18px 20px; border-bottom: 1px solid #e3e8f1; }
+    .chat-head h2 { margin: 0; font-size: 18px; }
+    .chat-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    #closeChat { display: grid; place-items: center; width: 28px; height: 32px; padding: 0; border: 0; background: transparent; color: #596273; cursor: pointer; }
+    .resolve-ticket { padding: 7px 12px; border: 1px solid #cdd5e4; border-radius: 9px; background: #fff; color: #0646a5; font-weight: 600; cursor: pointer; }
+    .resolve-ticket:disabled { opacity: .55; cursor: not-allowed; }
+    .chat-compose[hidden], .resolve-ticket[hidden] { display: none; }
+    .chat-log { min-height: 280px; overflow: auto; padding: 18px; background: #f7f8fb; }
+    .chat-message { width: fit-content; max-width: 82%; margin: 0 0 12px; padding: 11px 14px; border-radius: 14px; background: white; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .chat-message.staff { background: #0646a5; color: white; }
+    .chat-message.customer { margin-left: auto; background: #e9efff; }
+    .chat-message small { display: block; margin-top: 5px; opacity: .7; font-size: 11px; }
+    .chat-compose { display: flex; gap: 10px; padding: 14px; border-top: 1px solid #e3e8f1; }
+    .chat-compose textarea { flex: 1; min-width: 0; height: 58px; resize: none; overflow-y: auto; padding: 8px 11px; border: 1px solid #cdd5e4; border-radius: 10px; font: inherit; line-height: 20px; }
+    .chat-compose button { padding: 0 18px; border: 0; border-radius: 10px; background: #0646a5; color: white; font-weight: 700; }
+    .notice { padding: 12px 16px; color: #596273; }
+    @media (max-width: 760px) {
+      body { display: block; }
+      .sidebar { position: relative; height: auto; }
+      .content { padding: 16px 20px 40px; }
+      .filters { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
+  <main class="main">
+    <header class="admin-header" data-admin-header data-page-title="Communication"></header>
+    <section class="content" aria-labelledby="pageTitle">
+      <a class="back" href="../adminModule/adminDashboard.html" aria-label="Back to Dashboard">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12"/></svg>
+      </a>
+      <h1 id="pageTitle">Request Management</h1>
+      <p class="intro">Manage and resolve customer inquiries.</p>
+
+      <div class="requests">
+        <div class="toolbar">
+          <button class="refresh-button" id="refreshTickets" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+        <div class="filters" role="group" aria-label="Request status">
+          <button class="filter" type="button" aria-pressed="true" data-status="pending">Pending (0)</button>
+          <button class="filter" type="button" aria-pressed="false" data-status="in progress">In Progress (0)</button>
+          <button class="filter" type="button" aria-pressed="false" data-status="resolved">Resolved</button>
+        </div>
+        <div class="request-card">
+          <div class="notice" id="ticketNotice" role="status">Loading support tickets…</div>
+          <div class="table-scroll">
+            <table aria-label="Customer requests">
+              <thead>
+                <tr>
+                  <th scope="col">Request ID</th>
+                  <th scope="col">Customer</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="empty" colspan="5"><span id="requestEmpty" role="status">Loading…</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span>Showing 0 requests</span>
+            <div class="page-controls" aria-label="Request pagination">
+              <button type="button" disabled>Previous</button>
+              <button type="button" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div class="chat-modal" id="chatModal" role="dialog" aria-modal="true" aria-labelledby="chatTitle">
+    <section class="chat-panel">
+      <div class="chat-head">
+        <div><h2 id="chatTitle">Support conversation</h2><small id="chatMeta"></small></div>
+        <div class="chat-controls">
+          <span class="status-pill" id="ticketStatus" role="status"></span>
+          <button class="resolve-ticket" id="resolveTicket" type="button">Resolve</button>
+          <button type="button" id="closeChat" aria-label="Close conversation">✕</button>
+        </div>
+      </div>
+      <div class="chat-log" id="chatLog"></div>
+      <form class="chat-compose" id="replyForm"><textarea id="replyText" rows="2" maxlength="2000" placeholder="Reply to customer…" required></textarea><button type="submit">Send</button></form>
+    </section>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="../accountManagementModule/auth.js"></script>
+  <script>
+    const admin = ReByteAuth.getUser();
+    if (!admin || !['admin', 'staff'].includes(String(admin.role || admin.systemRole || '').toLowerCase())) {
+      window.location.replace('../accountManagementModule/login.html');
+    }
+    const ticketRows = document.querySelector('tbody');
+    const ticketNotice = document.getElementById('ticketNotice');
+    let selectedStatus = 'pending';
+    let activeTicket = null;
+    let messagePoll = null;
+    let ticketRequest = 0;
+    let messageRequest = 0;
+    const staffIdentity = admin?.uid || admin?.userId || admin?.email;
+    const seenMessages = new Map();
+
+    function seenKey(ticketID) {
+      return `rebyte:help-desk:seen:${encodeURIComponent(staffIdentity)}:${encodeURIComponent(ticketID)}`;
+    }
+
+    function lastSeenMessage(ticketID) {
+      if (seenMessages.has(ticketID)) return seenMessages.get(ticketID);
+      if (!staffIdentity) return '';
+      try { return localStorage.getItem(seenKey(ticketID)) || ''; }
+      catch (_) { return ''; }
+    }
+
+    function markCustomerMessagesSeen(ticketID, messages) {
+      const latest = messages.reduce((seen, message) =>
+        String(message.senderRole || '').toLowerCase() === 'customer' && message.sentAt > seen
+          ? message.sentAt : seen, lastSeenMessage(ticketID));
+      if (!latest) return;
+      seenMessages.set(ticketID, latest);
+      if (staffIdentity) {
+        try { localStorage.setItem(seenKey(ticketID), latest); } catch (_) {}
+      }
+      const row = Array.from(ticketRows.querySelectorAll('[data-ticket]')).find(item => item.dataset.ticket === ticketID);
+      const badge = row?.querySelector('.new-badge');
+      if (badge && badge.dataset.messageAt <= latest) badge.hidden = true;
+    }
+
+    async function loadTickets() {
+      const request = ++ticketRequest;
+      ticketNotice.textContent = 'Loading support tickets…';
+      try {
+        const response = await ReByteAuth.authFetch(`${API_BASE_URL}/api/help-desk/staff/tickets?status=${encodeURIComponent(selectedStatus)}`);
+        const data = await response.json();
+        if (request !== ticketRequest) return;
+        if (!response.ok) throw new Error(data.error || 'Could not load support tickets.');
+        const tickets = Array.isArray(data.tickets) ? data.tickets : [];
+        document.querySelector('[data-status="pending"]').textContent = `Pending (${selectedStatus === 'pending' ? tickets.length : '…'})`;
+        document.querySelector('[data-status="in progress"]').textContent = `In Progress (${selectedStatus === 'in progress' ? tickets.length : '…'})`;
+        ticketRows.innerHTML = tickets.length ? tickets.map(ticket => `
+          <tr class="request-row" data-ticket="${escapeHtml(ticket.ticketID)}">
+            <td>
+              <div>${escapeHtml(ticket.ticketID)}</div>
+              ${ticket.lastCustomerMessageAt > lastSeenMessage(ticket.ticketID)
+                ? `<span class="new-badge" data-message-at="${escapeHtml(ticket.lastCustomerMessageAt)}" aria-label="New customer message">NEW</span>`
+                : ''}
+            </td>
+            <td>
+              <span class="customer-name">${escapeHtml(ticket.customerName || 'Name unavailable')}</span>
+              ${ticket.userID ? `<span class="customer-id">ID: ${escapeHtml(ticket.userID)}</span>` : ''}
+            </td>
+            <td>${escapeHtml(ticket.ticketCategory || 'Other')}</td>
+            <td><span class="status-pill">${escapeHtml(ticket.ticketStatus || 'pending')}</span></td>
+            <td><button class="open-ticket" type="button">Open</button></td>
+          </tr>`).join('') : '<tr><td class="empty" colspan="5">No ' + escapeHtml(selectedStatus) + ' requests to display.</td></tr>';
+        document.querySelector('.pagination span').textContent = `Showing ${tickets.length} ${tickets.length === 1 ? 'request' : 'requests'}`;
+        ticketNotice.textContent = '';
+        ticketRows.querySelectorAll('[data-ticket]').forEach((row, index) => {
+          row.addEventListener('click', () => openTicket(tickets[index]));
+        });
+      } catch (error) {
+        if (request === ticketRequest) ticketNotice.textContent = error.message;
+      }
+    }
+    function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+    async function loadMessages(ticket = activeTicket) {
+      if (!ticket || ticket !== activeTicket) return;
+      const request = ++messageRequest;
+      const response = await ReByteAuth.authFetch(`${API_BASE_URL}/api/help-desk/tickets/${encodeURIComponent(ticket.ticketID)}/messages`);
+      const data = await response.json();
+      if (ticket !== activeTicket || request !== messageRequest) return;
+      if (!response.ok) throw new Error(data.error || 'Could not load messages.');
+      const log = document.getElementById('chatLog');
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      markCustomerMessagesSeen(ticket.ticketID, messages);
+      const html = messages.map(message => {
+        const role = String(message.senderRole || '').toLowerCase();
+        const side = ['staff', 'customer'].includes(role) ? role : '';
+        const sentAt = message.sentAt ? new Date(message.sentAt).toLocaleString() : '';
+        return `<article class="chat-message ${side}">${escapeHtml(message.messageContent)}<small>${escapeHtml(role || 'Unknown sender')}${sentAt ? ' · ' + escapeHtml(sentAt) : ''}</small></article>`;
+      }).join('') || '<p>No messages yet.</p>';
+      if (html !== log.innerHTML) {
+        const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+        log.innerHTML = html;
+        if (nearBottom) log.scrollTop = log.scrollHeight;
+      }
+    }
+    function openTicket(ticket) {
+      clearTimeout(messagePoll);
+      activeTicket = ticket;
+      document.getElementById('chatTitle').textContent = `Ticket ${ticket.ticketID}`;
+      document.getElementById('chatMeta').textContent = `${ticket.ticketCategory || 'Other'} · ${ticket.customerName || ticket.userID || 'Customer'}`;
+      renderChatStatus(ticket);
+      document.getElementById('chatLog').textContent = 'Loading conversation…';
+      document.getElementById('replyText').value = '';
+      document.getElementById('chatModal').classList.add('open');
+      document.getElementById('closeChat').focus();
+
+      async function refreshConversation() {
+        try {
+          await loadMessages(ticket);
+        } catch (error) {
+          if (activeTicket === ticket) document.getElementById('chatLog').textContent = error.message;
+        }
+        if (activeTicket === ticket) messagePoll = setTimeout(refreshConversation, 5000);
+      }
+      refreshConversation();
+    }
+    document.querySelectorAll('.filter').forEach(filter => filter.addEventListener('click', () => {
+      selectedStatus = filter.dataset.status;
+      document.querySelectorAll('.filter').forEach(item => item.setAttribute('aria-pressed', String(item === filter)));
+      loadTickets();
+    }));
+    document.getElementById('refreshTickets').addEventListener('click', loadTickets);
+    function renderChatStatus(ticket) {
+      if (ticket !== activeTicket) return;
+      const status = String(ticket.ticketStatus || 'pending').toLowerCase();
+      document.getElementById('ticketStatus').textContent = status;
+      const resolve = document.getElementById('resolveTicket');
+      resolve.hidden = status === 'resolved';
+      resolve.disabled = status !== 'in progress' || Boolean(ticket.sendingReply || ticket.resolving);
+      const replyForm = document.getElementById('replyForm');
+      replyForm.hidden = status === 'resolved';
+      replyForm.querySelector('button[type="submit"]').disabled = Boolean(ticket.sendingReply || ticket.resolving);
+    }
+    document.getElementById('replyForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const ticket = activeTicket;
+      if (!ticket) return;
+      const textarea = document.getElementById('replyText');
+      const messageContent = textarea.value.trim();
+      if (!messageContent || ticket.sendingReply || ticket.resolving || ticket.ticketStatus === 'resolved') return;
+      ticket.sendingReply = true;
+      renderChatStatus(ticket);
+      try {
+        const response = await ReByteAuth.authFetch(`${API_BASE_URL}/api/help-desk/tickets/${encodeURIComponent(ticket.ticketID)}/messages`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({messageContent})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not send reply.');
+        if (ticket === activeTicket) {
+          if (textarea.value.trim() === messageContent) textarea.value = '';
+          if (String(ticket.ticketStatus || 'pending').toLowerCase() === 'pending') ticket.ticketStatus = 'in progress';
+          renderChatStatus(ticket);
+          await loadMessages(ticket);
+        }
+        await loadTickets();
+      } catch (error) {
+        if (ticket === activeTicket) alert(error.message);
+      } finally {
+        ticket.sendingReply = false;
+        renderChatStatus(ticket);
+      }
+    });
+    document.getElementById('resolveTicket').addEventListener('click', async () => {
+      const ticket = activeTicket;
+      if (!ticket || ticket.sendingReply || ticket.resolving || String(ticket.ticketStatus).toLowerCase() !== 'in progress') return;
+      ticket.resolving = true;
+      renderChatStatus(ticket);
+      try {
+        const response = await ReByteAuth.authFetch(`${API_BASE_URL}/api/help-desk/staff/tickets/${encodeURIComponent(ticket.ticketID)}/status`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ticketStatus:'resolved'})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not update status.');
+        Object.assign(ticket, data.ticket);
+        loadTickets();
+      } catch (error) {
+        if (ticket === activeTicket) alert(error.message);
+      } finally {
+        ticket.resolving = false;
+        renderChatStatus(ticket);
+      }
+    });
+    function closeChat() {
+      activeTicket = null;
+      clearTimeout(messagePoll);
+      document.getElementById('chatModal').classList.remove('open');
+    }
+    document.getElementById('closeChat').addEventListener('click', closeChat);
+    document.getElementById('chatModal').addEventListener('click', event => { if (event.target.id === 'chatModal') closeChat(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !activeTicket) loadTickets();
+    });
+    loadTickets();
+  </script>
+  <script src="../adminModule/adminHeader.js"></script>
+  <script src="../reportModule/adminSidebar.js"></script>
+</body>
+</html>
