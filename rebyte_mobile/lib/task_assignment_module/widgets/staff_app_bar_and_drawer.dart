@@ -263,6 +263,18 @@ class _StaffDrawerState extends State<StaffDrawer> {
                     isSelected: widget.selectedIndex == 3,
                     onTap: () => _navigateToIndex(3),
                   ),
+                  _buildDrawerItem(
+                    Icons.help_outline,
+                    'Help Desk',
+                    isSelected: widget.selectedIndex == 4,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(builder: (_) => const StaffHomePage(initialShowStandards: true)),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

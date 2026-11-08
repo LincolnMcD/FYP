@@ -9,6 +9,7 @@ const ReByteAuth = {
   // Key for storing active user session
   SESSION_KEY: 'rebyte_current_user',
   PASSWORD_CHANGE_KEY: 'rebyte_password_change_in_progress',
+  _tokenRefreshPromise: null,
 
   beginPasswordChange() {
     localStorage.setItem(this.PASSWORD_CHANGE_KEY, String(Date.now()));
@@ -91,6 +92,27 @@ const ReByteAuth = {
       }
     }
     return user?.token || '';
+  },
+
+  getCachedRequestToken() {
+    const token = this.getUser()?.token;
+    if (typeof token !== 'string') return '';
+    try {
+      const [, payload] = token.split('.');
+      const { exp } = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      // The expiry only selects the fast path. The API still verifies the token.
+      if (Number.isFinite(exp) && exp * 1000 > Date.now() + 60000) return token;
+    } catch (_) {}
+    return '';
+  },
+
+  async refreshTokenOnce() {
+    if (!this._tokenRefreshPromise) {
+      this._tokenRefreshPromise = this.getToken(true).finally(() => {
+        this._tokenRefreshPromise = null;
+      });
+    }
+    return this._tokenRefreshPromise;
   },
 
   /**
@@ -189,16 +211,18 @@ const ReByteAuth = {
    * session (401) or an explicit archived/suspended/banned account response.
    * Usage: const data = await ReByteAuth.authFetch(url, options);
    */
-  async authFetch(url, options = {}, isRetry = false) {
-    const token = await this.getToken(isRetry);
+  async authFetch(url, { preferCachedToken = false, ...options } = {}, isRetry = false) {
+    let token = (preferCachedToken && this.getCachedRequestToken()) || await this.getToken(false);
+    if (!token) token = await this.refreshTokenOnce();
     const headers = Object.assign({}, options.headers || {});
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers });
     if (response.status === 401 && !isRetry) {
       // Try refreshing the ID token once before logging out
-      const freshToken = await this.getToken(true);
+      const freshToken = await this.refreshTokenOnce();
       if (freshToken && freshToken !== token) {
-        return this.authFetch(url, options, true);
+        headers['Authorization'] = `Bearer ${freshToken}`;
+        response = await fetch(url, { ...options, headers });
       }
     }
     if (response.status === 401 || response.status === 403) {
@@ -209,7 +233,6 @@ const ReByteAuth = {
       if (response.status === 401 || isArchived || accountStatus === 'suspended' || accountStatus === 'banned') {
         this.forceSessionLogout(isArchived, errData?.status);
       }
-      if (response.status === 401) return new Promise(() => {});
     }
     return response;
   },
@@ -831,12 +854,9 @@ const ReByteAuth = {
   /**
    * Helper to perform authenticated requests and handle session expiration automatically
    */
-  async authFetch(url, options = {}, isRetry = false) {
-    let token = await this.getToken(isRetry);
-    if (!token) {
-      // Try force refresh once before declaring session dead
-      token = await this.getToken(true);
-    }
+  async authFetch(url, { preferCachedToken = false, ...options } = {}, isRetry = false) {
+    let token = (preferCachedToken && this.getCachedRequestToken()) || await this.getToken(false);
+    if (!token) token = await this.refreshTokenOnce();
     if (!token) {
       this.forceSessionLogout(false);
       return { ok: false, status: 401, json: async () => ({ error: 'Your session has expired. Please sign in again.' }) };
@@ -848,11 +868,12 @@ const ReByteAuth = {
     };
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      let response = await fetch(url, { ...options, headers });
       if (response.status === 401 && !isRetry) {
-        const freshToken = await this.getToken(true);
+        const freshToken = await this.refreshTokenOnce();
         if (freshToken && freshToken !== token) {
-          return this.authFetch(url, options, true);
+          const retryHeaders = { ...(options.headers || {}), Authorization: `Bearer ${freshToken}` };
+          response = await fetch(url, { ...options, headers: retryHeaders });
         }
       }
       if (response.status === 401 || response.status === 403) {

@@ -167,8 +167,18 @@ async function reactivateExpiredCustomerSuspensions() {
 async function requireAdmin(req, res, next) {
     const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!idToken) return res.status(401).json({ error: "Please sign in as an administrator." });
+    let decoded;
     try {
-        const decoded = await getAuth().verifyIdToken(idToken);
+        decoded = await getAuth().verifyIdToken(idToken);
+    } catch (err) {
+        if (["auth/id-token-expired", "auth/id-token-revoked", "auth/invalid-id-token", "auth/argument-error"].includes(err.code)) {
+            return res.status(401).json({ error: "Your admin session has expired. Please sign in again." });
+        }
+        console.error("Admin token verification unavailable:", err.message);
+        return res.status(503).json({ error: "Could not verify administrator access. Please try again." });
+    }
+
+    try {
         const usersRef = db.collection("users");
         let userData = null;
 
@@ -197,7 +207,8 @@ async function requireAdmin(req, res, next) {
         req.adminUid = decoded.uid;
         return next();
     } catch (err) {
-        return res.status(401).json({ error: "Your admin session has expired. Please sign in again." });
+        console.error("Admin role lookup failed:", err.message);
+        return res.status(503).json({ error: "Could not verify administrator access. Please try again." });
     }
 }
 
@@ -2099,7 +2110,86 @@ router.put("/api/report-cache", requireAdmin, async (req, res) => {
         return res.status(500).json({ success: false, error: "Could not save the report snapshot." });
     }
 });
-router.post("/api/system-config/inspection-standards/images", requireAdmin, (req, res, next) => {
+const inspectionImageFs = require("fs").promises;
+const inspectionImagePath = require("path");
+const inspectionImageQueueDir = inspectionImagePath.resolve(
+    process.env.INSPECTION_IMAGE_QUEUE_DIR || inspectionImagePath.join(__dirname, "../.inspection-image-queue")
+);
+const inspectionImageJobs = new Map();
+let inspectionImageWorkerRunning = false;
+
+async function stageInspectionImage(file) {
+    const extensions = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+    const id = crypto.randomUUID();
+    const format = extensions[file.mimetype];
+    const name = id + "." + format;
+    const publicId = "inspection-standards/" + id;
+    const imageUrl = cloudinary.url(publicId, { secure: true, format });
+    await inspectionImageFs.mkdir(inspectionImageQueueDir, { recursive: true });
+    const target = inspectionImagePath.join(inspectionImageQueueDir, name);
+    try {
+        await inspectionImageFs.writeFile(target + ".tmp", file.buffer, { flag: "wx" });
+        await inspectionImageFs.rename(target + ".tmp", target);
+    } catch (error) {
+        await inspectionImageFs.unlink(target + ".tmp").catch(() => {});
+        throw error;
+    }
+    return imageUrl;
+}
+
+async function runInspectionImageQueue() {
+    if (inspectionImageWorkerRunning) return;
+    inspectionImageWorkerRunning = true;
+    try {
+        const files = await inspectionImageFs.readdir(inspectionImageQueueDir);
+        const pending = files.filter(name => /^[a-f0-9-]{36}\.(jpg|png|webp)$/.test(name));
+        for (let offset = 0; offset < pending.length; offset += 3) {
+            await Promise.all(pending.slice(offset, offset + 3).map(name => {
+                const [id, format] = name.split(".");
+                const publicId = "inspection-standards/" + id;
+                const target = inspectionImagePath.join(inspectionImageQueueDir, name);
+                const job = (async () => {
+                    try {
+                        const image = await inspectionImageFs.readFile(target);
+                        await new Promise((resolve, reject) => {
+                            const stream = cloudinary.uploader.upload_stream({
+                                public_id: publicId, resource_type: "image",
+                                format, allowed_formats: ["jpg", "jpeg", "png", "webp"],
+                                overwrite: true, timeout: 30000
+                            }, (error, result) => error ? reject(error) : resolve(result));
+                            stream.end(image);
+                        });
+                        await inspectionImageFs.unlink(target).catch(error => {
+                            if (error.code !== "ENOENT") throw error;
+                        });
+                    } catch (error) {
+                        if (error.code !== "ENOENT") console.error("Queued inspection image upload failed:", publicId, error.message);
+                    }
+                })().finally(() => inspectionImageJobs.delete(publicId));
+                inspectionImageJobs.set(publicId, job);
+                return job;
+            }));
+        }
+    } catch (error) {
+        if (error.code !== "ENOENT") console.error("Inspection image queue failed:", error.message);
+    } finally {
+        inspectionImageWorkerRunning = false;
+    }
+}
+setInterval(() => void runInspectionImageQueue(), 5000).unref();
+
+async function cancelStagedInspectionImage(publicId, imageUrl) {
+    if (!/^inspection-standards\/[a-f0-9-]{36}$/.test(publicId)) return;
+    const format = new URL(imageUrl).pathname.split(".").pop();
+    if (!["jpg", "png", "webp"].includes(format)) return;
+    const name = publicId.slice("inspection-standards/".length) + "." + format;
+    await inspectionImageFs.unlink(inspectionImagePath.join(inspectionImageQueueDir, name)).catch(error => {
+        if (error.code !== "ENOENT") throw error;
+    });
+    await inspectionImageJobs.get(publicId);
+}
+
+router.post("/api/system-config/inspection-standards/images", (req, res, next) => {
     customerBackgroundUpload.single("image")(req, res, err => {
         if (!err) return next();
         const message = err.code === "LIMIT_FILE_SIZE" ? "Each image must be 15 MB or smaller." : "The image upload could not be processed.";
@@ -2110,6 +2200,10 @@ router.post("/api/system-config/inspection-standards/images", requireAdmin, (req
         const file = req.file;
         if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
             return res.status(400).json({ success: false, error: "Choose a JPG, PNG, or WebP image." });
+        }
+        if (req.query.defer === "1") {
+            const imageUrl = await stageInspectionImage(file);
+            return res.status(202).json({ success: true, imageUrl, pending: true });
         }
         const uploaded = await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream({
@@ -2126,7 +2220,7 @@ router.post("/api/system-config/inspection-standards/images", requireAdmin, (req
     }
 });
 
-router.get("/api/system-config/inspection-standards", requireAdmin, async (req, res) => {
+router.get("/api/system-config/inspection-standards", async (req, res) => {
     try {
         const snapshot = await db.collection("standard").select("title", "description", "updatedAt", "sectionCount").orderBy("createdAt", "desc").get();
         const standards = snapshot.docs.map(doc => {
@@ -2146,7 +2240,7 @@ router.get("/api/system-config/inspection-standards", requireAdmin, async (req, 
     }
 });
 
-router.post("/api/system-config/inspection-standards", requireAdmin, async (req, res) => {
+router.post("/api/system-config/inspection-standards", async (req, res) => {
     try {
         const title = String(req.body?.title || "").trim();
         const description = String(req.body?.description || "").trim();
@@ -2175,7 +2269,7 @@ router.post("/api/system-config/inspection-standards", requireAdmin, async (req,
         }
         const now = Timestamp.now();
         const ref = db.collection("standard").doc();
-        const record = { title, description, sections, sectionCount: sections.length, createdAt: now, updatedAt: now, createdBy: req.adminUid, updatedBy: req.adminUid };
+        const record = { title, description, sections, sectionCount: sections.length, createdAt: now, updatedAt: now, createdBy: null, updatedBy: null };
         await ref.create(record);
         return res.status(201).json({ success: true, standard: { id: ref.id, title, description, sections, sectionCount: sections.length, createdAt: now.toDate().toISOString(), updatedAt: now.toDate().toISOString() } });
     } catch (err) {
@@ -2222,6 +2316,7 @@ async function deleteUnusedInspectionStandardImages(candidateUrls) {
         const publicId = inspectionStandardCloudinaryPublicId(imageUrl);
         if (!publicId) continue;
         try {
+            await cancelStagedInspectionImage(publicId, imageUrl);
             const result = await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
             if (result?.result !== "ok" && result?.result !== "not found") failures.push(imageUrl);
         } catch (err) {
@@ -2231,7 +2326,7 @@ async function deleteUnusedInspectionStandardImages(candidateUrls) {
     }
     return failures;
 }
-router.get("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+router.get("/api/system-config/inspection-standards/:standardId", async (req, res) => {
     try {
         const snapshot = await db.collection("standard").doc(String(req.params.standardId || "")).get();
         if (!snapshot.exists) return res.status(404).json({ success: false, error: "Inspection standard was not found." });
@@ -2250,7 +2345,7 @@ router.get("/api/system-config/inspection-standards/:standardId", requireAdmin, 
     }
 });
 
-router.put("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+router.put("/api/system-config/inspection-standards/:standardId", async (req, res) => {
     try {
         const title = String(req.body?.title || "").trim();
         const description = String(req.body?.description || "").trim();
@@ -2279,7 +2374,7 @@ router.put("/api/system-config/inspection-standards/:standardId", requireAdmin, 
         const now = Timestamp.now();
         const previousImageUrls = inspectionStandardImageUrls(existing.data()?.sections);
         const nextImageUrls = inspectionStandardImageUrls(sections);
-        await ref.update({ title, description, sections, sectionCount: sections.length, updatedAt: now, updatedBy: req.adminUid });
+        await ref.update({ title, description, sections, sectionCount: sections.length, updatedAt: now, updatedBy: null });
         const removedImageUrls = [...previousImageUrls].filter(url => !nextImageUrls.has(url));
         const imageCleanupFailures = await deleteUnusedInspectionStandardImages(removedImageUrls);
         return res.json({ success: true, standard: { id: ref.id, title, description, sections, sectionCount: sections.length, updatedAt: now.toDate().toISOString() }, imageCleanupFailures });
@@ -2289,7 +2384,97 @@ router.put("/api/system-config/inspection-standards/:standardId", requireAdmin, 
     }
 });
 
-router.delete("/api/system-config/inspection-standards/:standardId", requireAdmin, async (req, res) => {
+router.patch("/api/system-config/inspection-standards/:standardId", async (req, res) => {
+    const { expectedUpdatedAt, title, description, sectionUpdates = [] } = req.body || {};
+    const validText = (value, max) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= max;
+    const validImages = images => Array.isArray(images) && images.length <= 5 && images.every(value => {
+        if (typeof value !== "string") return false;
+        try {
+            const url = new URL(value);
+            return url.protocol === "https:" && url.hostname === "res.cloudinary.com";
+        } catch (_) { return false; }
+    });
+    if ((expectedUpdatedAt !== null && typeof expectedUpdatedAt !== "string") ||
+        (title !== undefined && !validText(title, 120)) ||
+        (description !== undefined && (typeof description !== "string" || description.trim().length > 300)) ||
+        !Array.isArray(sectionUpdates) || sectionUpdates.length > 8 ||
+        (title === undefined && description === undefined && !sectionUpdates.length)) {
+        return res.status(400).json({ error: "Invalid inspection standard changes." });
+    }
+
+    const changes = new Map();
+    for (const change of sectionUpdates) {
+        if (!change || !Number.isInteger(change.index) || change.index < 0 || changes.has(change.index) ||
+            (change.title !== undefined && !validText(change.title, 120)) ||
+            (change.instructions !== undefined && !validText(change.instructions, 2000)) ||
+            (change.images !== undefined && !validImages(change.images))) {
+            return res.status(400).json({ error: "Invalid inspection section change." });
+        }
+        const fields = {};
+        if (change.title !== undefined) fields.title = change.title.trim();
+        if (change.instructions !== undefined) fields.instructions = change.instructions.trim();
+        if (change.images !== undefined) fields.images = change.images;
+        changes.set(change.index, fields);
+    }
+
+    try {
+        const ref = db.collection("standard").doc(String(req.params.standardId || ""));
+        const result = await db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(ref);
+            if (!snapshot.exists) return { status: 404, error: "Inspection standard was not found." };
+            const current = snapshot.data();
+            const updatedAt = current.updatedAt?.toDate?.().toISOString?.() || null;
+            if (updatedAt !== expectedUpdatedAt) {
+                return { status: 409, error: "This standard changed since you opened it. Reopen it before saving." };
+            }
+
+            const previousSections = Array.isArray(current.sections) ? current.sections : [];
+            for (const index of changes.keys()) {
+                if (!previousSections[index]) return { status: 400, error: "Inspection section was not found." };
+            }
+            const now = Timestamp.now();
+            const updates = { updatedAt: now, updatedBy: null };
+            if (title !== undefined) updates.title = title.trim();
+            if (description !== undefined) updates.description = description.trim();
+            if (changes.size) {
+                updates.sections = previousSections.map((section, index) =>
+                    changes.has(index) ? { ...section, ...changes.get(index) } : section);
+            }
+            transaction.update(ref, updates);
+
+            const sections = updates.sections ?? previousSections;
+            const remainingImages = inspectionStandardImageUrls(sections);
+            return {
+                standard: {
+                    id: ref.id,
+                    title: updates.title ?? current.title ?? "",
+                    description: updates.description ?? current.description ?? "",
+                    sections,
+                    createdAt: current.createdAt?.toDate?.().toISOString?.() || null,
+                    updatedAt: now.toDate().toISOString()
+                },
+                removedImages: changes.size
+                    ? [...inspectionStandardImageUrls(previousSections)].filter(url => !remainingImages.has(url))
+                    : []
+            };
+        });
+        if (result.status) return res.status(result.status).json({ success: false, error: result.error });
+
+        let imageCleanupFailures = [];
+        try {
+            imageCleanupFailures = await deleteUnusedInspectionStandardImages(result.removedImages);
+        } catch (err) {
+            console.error("Inspection standard image cleanup failed:", err.message);
+            imageCleanupFailures = result.removedImages;
+        }
+        return res.json({ success: true, standard: result.standard, imageCleanupFailures });
+    } catch (err) {
+        console.error("Inspection standard patch failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not update the inspection standard." });
+    }
+});
+
+router.delete("/api/system-config/inspection-standards/:standardId", async (req, res) => {
     try {
         const ref = db.collection("standard").doc(String(req.params.standardId || ""));
         const existing = await ref.get();
@@ -2303,4 +2488,67 @@ router.delete("/api/system-config/inspection-standards/:standardId", requireAdmi
         return res.status(500).json({ success: false, error: "Could not remove the inspection standard." });
     }
 });
-module.exports = router;
+async function requireActiveStaff(req, res, next) {
+    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!idToken) return res.status(401).json({ success: false, error: "Please sign in with a staff account." });
+    try {
+        const decoded = await getAuth().verifyIdToken(idToken, true);
+        const usersRef = db.collection("users");
+        let userSnap = await usersRef.doc(decoded.uid).get();
+        if (!userSnap.exists) {
+            const uidMatch = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
+            if (!uidMatch.empty) userSnap = uidMatch.docs[0];
+        }
+        if (!userSnap.exists && decoded.email) {
+            const emailMatch = await usersRef.where("email", "==", decoded.email.toLowerCase()).limit(1).get();
+            if (!emailMatch.empty) userSnap = emailMatch.docs[0];
+        }
+        const staff = userSnap.exists ? userSnap.data() || {} : {};
+        const role = String(staff.role || staff.systemRole || "").trim().toLowerCase();
+        if (role !== "staff" || String(staff.status || "active").trim().toLowerCase() === "archived") {
+            return res.status(403).json({ success: false, error: "An active staff account is required." });
+        }
+        req.staffUid = decoded.uid;
+        return next();
+    } catch (err) {
+        return res.status(401).json({ success: false, error: "Your staff session has expired. Please sign in again." });
+    }
+}
+
+router.get("/api/staff/standards", requireActiveStaff, async (_req, res) => {
+    try {
+        const snapshot = await db.collection("standard").select("title", "description", "sectionCount", "createdAt").get();
+        const standards = snapshot.docs.map(doc => {
+            const data = doc.data() || {};
+            const createdAt = data.createdAt?.toDate?.()?.toISOString?.() || null;
+            return {
+                id: doc.id,
+                title: data.title || "",
+                description: data.description || "",
+                sectionCount: Number.isInteger(data.sectionCount) ? data.sectionCount : null,
+                createdAt
+            };
+        }).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        return res.json({ success: true, standards });
+    } catch (err) {
+        console.error("Staff inspection standards read failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not load standards." });
+    }
+});
+
+router.get("/api/staff/standards/:standardId", requireActiveStaff, async (req, res) => {
+    try {
+        const snapshot = await db.collection("standard").doc(String(req.params.standardId || "")).get();
+        if (!snapshot.exists) return res.status(404).json({ success: false, error: "Standard was not found." });
+        const data = snapshot.data() || {};
+        const sections = Array.isArray(data.sections) ? data.sections.map(section => ({
+            title: section?.title || "",
+            instructions: section?.instructions || section?.description || section?.sectionDescription || "",
+            images: Array.isArray(section?.images) ? section.images : (section?.imageUrl || section?.image ? [section.imageUrl || section.image] : [])
+        })) : [];
+        return res.json({ success: true, standard: { id: snapshot.id, title: data.title || "", description: data.description || "", sections } });
+    } catch (err) {
+        console.error("Staff inspection standard detail read failed:", err.message);
+        return res.status(500).json({ success: false, error: "Could not load this standard." });
+    }
+});module.exports = router;

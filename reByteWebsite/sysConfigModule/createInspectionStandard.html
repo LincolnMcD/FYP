@@ -43,9 +43,25 @@
       let sections=[],saving=false,loading=true,baselineSnapshot=null;
       const esc=value=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       async function readJson(response){const type=response.headers.get('content-type')||'';if(!type.toLowerCase().includes('application/json')){const body=await response.text();if(body.trimStart().startsWith('<!DOCTYPE')||body.trimStart().startsWith('<html'))throw new Error(`The backend returned an HTML page (HTTP ${response.status}). Restart the backend on port 3000 to load the Inspection Standards API.`);throw new Error(`Unexpected backend response (HTTP ${response.status}).`);}return response.json();}
-      function withTimeout(promise,milliseconds,message){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),milliseconds);})]).finally(()=>clearTimeout(timer));}
       const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
-      async function detailFetch(url){let lastError;for(let attempt=0;attempt<3;attempt++){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);try{const token=await withTimeout(ReByteAuth.getToken(false),8000,'Admin authentication timed out.');if(!token)throw new Error('Could not read the admin session. Please sign in again.');let response=await fetch(url,{cache:'no-store',headers:{Authorization:`Bearer ${token}`},signal:controller.signal});if(response.status===401){const refreshed=await withTimeout(ReByteAuth.getToken(true),8000,'Admin authentication refresh timed out.');if(refreshed)response=await fetch(url,{cache:'no-store',headers:{Authorization:`Bearer ${refreshed}`},signal:controller.signal});}if(response.ok||response.status===404)return response;if(response.status<500&&response.status!==401)return response;lastError=new Error(`The server temporarily could not load this standard (HTTP ${response.status}).`);}catch(error){lastError=error.name==='AbortError'?new Error('Loading the inspection standard timed out.'):error;}finally{clearTimeout(timeout);}if(attempt<2)await wait(700*(attempt+1));}throw lastError||new Error('Could not load this inspection standard.');}
+      async function detailFetch(url) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 20000);
+          try {
+            const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+            if (response.status < 500 || attempt === 2) return response;
+          } catch (error) {
+            if (attempt === 2) {
+              if (error.name === 'AbortError') throw new Error('Loading the inspection standard timed out.');
+              throw error;
+            }
+          } finally {
+            clearTimeout(timeout);
+          }
+          await wait(700 * (attempt + 1));
+        }
+      }
       function currentSnapshot(){return JSON.stringify({title:titleInput.value.trim(),description:descInput.value.trim(),sections:sections.map(s=>({title:s.title.trim(),instructions:s.text.trim(),images:s.savedImages.slice(),files:s.files.map(f=>`${f.file.name}:${f.file.size}:${f.file.lastModified}`)}))});}
       function sync(){let hasComplete=false,hasPartial=false;sections.forEach(s=>{const started=!!(s.title.trim()||s.text.trim()||s.files.length||s.savedImages.length),complete=!!(s.title.trim()&&s.text.trim()),partial=started&&!complete;hasComplete||=complete;hasPartial||=partial;const article=sectionList.querySelector(`[data-section-id="${s.id}"]`);if(article){const titleField=article.querySelector('[data-section-title]'),instructionField=article.querySelector('[data-copy]'),titleError=article.querySelector('[data-title-error]'),instructionError=article.querySelector('[data-instruction-error]'),missingTitle=partial&&!s.title.trim(),missingInstruction=partial&&!s.text.trim();titleField.classList.toggle('is-invalid',missingTitle);instructionField.classList.toggle('is-invalid',missingInstruction);titleError.hidden=!missingTitle;instructionError.hidden=!missingInstruction;titleError.textContent=missingTitle?'Please enter a section title.':'';instructionError.textContent=missingInstruction?'Please enter the section instructions.':'';}});const changed=!standardId||!baselineSnapshot||currentSnapshot()!==baselineSnapshot;submitButton.disabled=loading||saving||!titleInput.value.trim()||!hasComplete||hasPartial||(!!standardId&&!changed);addButton.disabled=loading||sections.length>=MAX_SECTIONS;document.getElementById('sectionCountLabel').textContent=`${sections.length}/${MAX_SECTIONS}`;}
       function makeSection(data={}){return{id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title:String(data.title||''),text:String(data.instructions||''),files:[],savedImages:Array.isArray(data.images)?data.images.slice(0,5):[]};}
@@ -53,16 +69,155 @@
       addButton.addEventListener('click',()=>{if(sections.length<MAX_SECTIONS){sections.push(makeSection());draw();}});
       titleInput.addEventListener('input',()=>{document.getElementById('titleError').hidden=true;sync();});descInput.addEventListener('input',sync);
       sectionList.addEventListener('input',e=>{if(e.target.dataset.sectionTitle){const s=sections.find(x=>x.id===e.target.dataset.sectionTitle);if(s)s.title=e.target.value;}if(e.target.dataset.copy){const s=sections.find(x=>x.id===e.target.dataset.copy);if(s)s.text=e.target.value;}sync();});
-      sectionList.addEventListener('change',e=>{const id=e.target.dataset.images;if(!id)return;const s=sections.find(x=>x.id===id);if(!s)return;let warning='';for(const file of Array.from(e.target.files||[])){if(s.files.length+s.savedImages.length>=5){warning='A section can contain up to 5 images.';break;}if(!['image/jpeg','image/png','image/webp'].includes(file.type)){warning='Choose JPG, PNG, or WebP images.';continue;}if(file.size>15*1024*1024){warning='Each image must be 15 MB or smaller.';continue;}s.files.push({file,preview:URL.createObjectURL(file)});}status.textContent=warning;draw();});
-      sectionList.addEventListener('click',e=>{const remove=e.target.dataset.removeSection;if(remove&&sections.length>1){const s=sections.find(x=>x.id===remove);s?.files.forEach(f=>URL.revokeObjectURL(f.preview));sections=sections.filter(x=>x.id!==remove);draw();return;}const id=e.target.dataset.removeImage;if(id){const s=sections.find(x=>x.id===id),index=Number(e.target.dataset.index);if(!s)return;if(e.target.dataset.saved==='true')s.savedImages.splice(index,1);else if(s.files[index]){URL.revokeObjectURL(s.files[index].preview);s.files.splice(index,1);}draw();}});
-      async function upload(file){const data=new FormData();data.append('image',file);const response=await ReByteAuth.authFetch(`${API}/images`,{method:'POST',body:data});const result=await readJson(response);if(!response.ok)throw new Error(result.error||'An image could not be uploaded.');return result.imageUrl;}
-      async function buildPayloadSections(validSections){const payload=validSections.map(s=>({title:s.title.trim(),instructions:s.text.trim(),images:s.savedImages.slice()}));const jobs=[];validSections.forEach((section,sectionIndex)=>section.files.forEach(entry=>jobs.push({sectionIndex,file:entry.file})));for(let offset=0;offset<jobs.length;offset+=3){const batch=jobs.slice(offset,offset+3);status.textContent=`Uploading images ${Math.min(offset+batch.length,jobs.length)} of ${jobs.length}…`;const urls=await Promise.all(batch.map(job=>upload(job.file)));batch.forEach((job,index)=>payload[job.sectionIndex].images.push(urls[index]));}return payload;}
-      async function loadForEdit(){if(!standardId){loading=false;sections=[makeSection()];draw();return;}loading=true;sync();document.getElementById('pageTitle').textContent='Edit Inspection Standard';document.getElementById('pageDescription').textContent='Update the standard title, instructions, and reference images. Image removals take effect when you save.';deleteButton.hidden=false;submitButton.textContent='Save Changes';status.textContent='Loading inspection standard…';try{const response=await detailFetch(`${API}/${encodeURIComponent(standardId)}?_=${Date.now()}`);const result=await readJson(response);if(!response.ok||!result.standard)throw new Error(result.error||`Could not load standard (HTTP ${response.status}).`);const standard=result.standard;titleInput.value=standard.title||'';descInput.value=standard.description||'';const savedSections=Array.isArray(standard.sections)?standard.sections:[];sections=(savedSections.length?savedSections:[{}]).slice(0,MAX_SECTIONS).map((section,index)=>makeSection({...section,title:section.title||section.sectionTitle||section.name||`Section ${index+1}`}));loading=false;status.textContent='';baselineSnapshot=currentSnapshot();draw();}catch(error){loading=false;status.textContent=error.message||'Could not load this inspection standard.';submitButton.disabled=true;}}
+      sectionList.addEventListener('change',e=>{const id=e.target.dataset.images;if(!id||saving)return;const s=sections.find(x=>x.id===id);if(!s)return;let warning='';for(const file of Array.from(e.target.files||[])){if(s.files.length+s.savedImages.length>=5){warning='A section can contain up to 5 images.';break;}if(!['image/jpeg','image/png','image/webp'].includes(file.type)){warning='Choose JPG, PNG, or WebP images.';continue;}if(file.size>15*1024*1024){warning='Each image must be 15 MB or smaller.';continue;}s.files.push({file,preview:URL.createObjectURL(file)});}status.textContent=warning;draw();});
+      sectionList.addEventListener('click',e=>{if(saving)return;const remove=e.target.dataset.removeSection;if(remove&&sections.length>1){const s=sections.find(x=>x.id===remove);s?.files.forEach(discardImage);sections=sections.filter(x=>x.id!==remove);draw();return;}const id=e.target.dataset.removeImage;if(id){const s=sections.find(x=>x.id===id),index=Number(e.target.dataset.index);if(!s)return;if(e.target.dataset.saved==='true')s.savedImages.splice(index,1);else if(s.files[index]){discardImage(s.files[index]);s.files.splice(index,1);}draw();}});
+      sectionList.addEventListener('error', event => {
+        const image = event.target;
+        if (image instanceof HTMLImageElement &&
+            /\/inspection-standards\/[a-f0-9-]{36}\.(jpg|png|webp)$/.test(image.src)) {
+          image.alt = 'Image not available yet. It may still be uploading.';
+        }
+      }, true);
+
+      function discardImage(entry) {
+        URL.revokeObjectURL(entry.preview);
+      }
+
+      async function stageImage(entry) {
+        if (entry.imageUrl) return entry.imageUrl;
+        const data = new FormData();
+        data.append('image', entry.file);
+        const response = await fetch(`${API}/images?defer=1`, { method: 'POST', body: data });
+        const result = await readJson(response);
+        if (!response.ok || !result.imageUrl) throw new Error(result.error || 'An image could not be queued.');
+        entry.imageUrl = result.imageUrl;
+        return entry.imageUrl;
+      }
+
+      async function buildPayloadSections(validSections) {
+        const payload = validSections.map(section => ({
+          title: section.title.trim(),
+          instructions: section.text.trim(),
+          images: section.savedImages.slice()
+        }));
+        const jobs = validSections.flatMap((section, index) => section.files.map(entry => ({ index, entry })));
+        for (let offset = 0; offset < jobs.length; offset += 3) {
+          const batch = jobs.slice(offset, offset + 3);
+          status.textContent = 'Sending images to ReByte…';
+          const results = await Promise.allSettled(batch.map(job => stageImage(job.entry)));
+          const failure = results.find(result => result.status === 'rejected');
+          if (failure) throw failure.reason;
+          batch.forEach((job, index) => payload[job.index].images.push(results[index].value));
+        }
+        return payload;
+      }
+      let baselineSectionIds = [];
+      let standardUpdatedAt = null;
+
+      function buildStandardPatch(title, description, payloadSections) {
+        const baseline = JSON.parse(baselineSnapshot);
+        const patch = { expectedUpdatedAt: standardUpdatedAt };
+        if (title !== baseline.title) patch.title = title;
+        if (description !== baseline.description) patch.description = description;
+        const sectionUpdates = payloadSections.flatMap((section, index) => {
+          const before = baseline.sections[index];
+          const changes = {};
+          if (section.title !== before.title) changes.title = section.title;
+          if (section.instructions !== before.instructions) changes.instructions = section.instructions;
+          if (JSON.stringify(section.images) !== JSON.stringify(before.images)) changes.images = section.images;
+          return Object.keys(changes).length ? [{ index, ...changes }] : [];
+        });
+        if (sectionUpdates.length) patch.sectionUpdates = sectionUpdates;
+        return patch;
+      }
+
+      const adminIdentity = user.uid || user.userId || user.email;
+      const detailCacheKey = standardId && adminIdentity
+        ? `rebyte:inspection-standard:${encodeURIComponent(adminIdentity)}:${encodeURIComponent(standardId)}`
+        : '';
+
+      function readCachedDetail() {
+        if (!detailCacheKey) return null;
+        try {
+          const standard = JSON.parse(sessionStorage.getItem(detailCacheKey));
+          return standard?.id === standardId ? standard : null;
+        } catch (_) { return null; }
+      }
+
+      function cacheDetail(standard) {
+        if (!detailCacheKey) return;
+        try {
+          if (standard) sessionStorage.setItem(detailCacheKey, JSON.stringify(standard));
+          else sessionStorage.removeItem(detailCacheKey);
+        } catch (_) {}
+      }
+
+      function showStandard(standard) {
+        titleInput.value = standard.title || '';
+        descInput.value = standard.description || '';
+        const savedSections = Array.isArray(standard.sections) ? standard.sections : [];
+        sections = (savedSections.length ? savedSections : [{}]).slice(0, MAX_SECTIONS)
+          .map((section, index) => makeSection({
+            ...section, title: section.title || section.sectionTitle || section.name || `Section ${index + 1}`
+          }));
+        baselineSnapshot = currentSnapshot();
+        baselineSectionIds = sections.map(section => section.id);
+        draw();
+      }
+
+      async function loadForEdit() {
+        if (!standardId) {
+          loading = false;
+          sections = [makeSection()];
+          draw();
+          return;
+        }
+
+        document.getElementById('pageTitle').textContent = 'Edit Inspection Standard';
+        document.getElementById('pageDescription').textContent = 'Update the standard title, instructions, and reference images. Image removals take effect when you save.';
+        deleteButton.hidden = false;
+        deleteButton.disabled = true;
+        submitButton.textContent = 'Save Changes';
+        const cached = readCachedDetail();
+        if (cached) showStandard(cached);
+        else {
+          sync();
+          status.textContent = 'Loading inspection standard…';
+        }
+
+        try {
+          const response = await detailFetch(`${API}/${encodeURIComponent(standardId)}`);
+          if ([401, 403, 404].includes(response.status)) {
+            cacheDetail(null);
+            titleInput.value = descInput.value = '';
+            sections = [];
+            draw();
+          }
+          const result = await readJson(response);
+          if (!response.ok || !result.standard) throw new Error(result.error || `Could not load standard (HTTP ${response.status}).`);
+
+          cacheDetail(result.standard);
+          const visibleDetail = standard => JSON.stringify([standard.title, standard.description, standard.sections]);
+          const detailChanged = !cached || visibleDetail(cached) !== visibleDetail(result.standard);
+          if (cached && detailChanged && currentSnapshot() !== baselineSnapshot) {
+            status.textContent = 'This standard changed while you were editing. Reopen it before saving.';
+            return;
+          }
+          standardUpdatedAt = result.standard.updatedAt ?? null;
+          loading = false;
+          deleteButton.disabled = false;
+          if (detailChanged) showStandard(result.standard);
+          else sync();
+          status.textContent = '';
+        } catch (error) {
+          status.textContent = error.message || 'Could not load this inspection standard.';
+        }
+      }
       function openDeleteConfirm(){document.getElementById('deleteConfirmText').textContent=`“${titleInput.value.trim()||'This standard'}” and its inspection guidance will be permanently removed.`;deleteConfirm.classList.add('show');deleteConfirm.setAttribute('aria-hidden','false');}
       function closeDeleteConfirm(){deleteConfirm.classList.remove('show');deleteConfirm.setAttribute('aria-hidden','true');}
       deleteButton.addEventListener('click',openDeleteConfirm);document.getElementById('cancelDelete').addEventListener('click',closeDeleteConfirm);deleteConfirm.addEventListener('click',e=>{if(e.target===deleteConfirm)closeDeleteConfirm();});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&deleteConfirm.classList.contains('show'))closeDeleteConfirm();});
-      document.getElementById('confirmDelete').addEventListener('click',async e=>{if(!standardId)return;const button=e.currentTarget;button.disabled=true;button.textContent='Removing…';try{const response=await ReByteAuth.authFetch(`${API}/${encodeURIComponent(standardId)}`,{method:'DELETE'});const result=await readJson(response);if(!response.ok)throw new Error(result.error||'Could not remove the inspection standard.');closeDeleteConfirm();window.location.href=`inspectionStandards.html?removed=1${result.imageCleanupFailures?.length?'&cleanupFailed=1':''}`;}catch(error){closeDeleteConfirm();if(typeof ReByteAuth.showToast==='function')ReByteAuth.showToast(error.message||'Could not remove the inspection standard.','error');}finally{button.disabled=false;button.textContent='Remove Standard';}});
-      form.addEventListener('submit',async e=>{e.preventDefault();const title=titleInput.value.trim(),validSections=sections.filter(s=>s.title.trim()&&s.text.trim());if(!title){const error=document.getElementById('titleError');error.textContent='Please enter a title.';error.hidden=false;titleInput.focus();return;}if(sections.some(s=>(s.title.trim()||s.text.trim()||s.files.length||s.savedImages.length)&&!(s.title.trim()&&s.text.trim()))){status.textContent='Complete the title and instructions for every section with content.';sync();return;}if(!validSections.length){status.textContent='Add a section title and instructions to at least one section.';return;}saving=true;status.textContent=standardId?'Saving changes and uploading images…':'Saving standard and uploading images…';submitButton.innerHTML='<span class="spinner" aria-hidden="true"></span> Saving';sync();try{const payloadSections=await buildPayloadSections(validSections);status.textContent='Saving standard…';const response=await ReByteAuth.authFetch(standardId?`${API}/${encodeURIComponent(standardId)}`:API,{method:standardId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description:descInput.value.trim(),sections:payloadSections})});const result=await readJson(response);if(!response.ok)throw new Error(result.error||`Could not save standard (HTTP ${response.status}).`);window.location.href=`inspectionStandards.html?saved=${standardId?'updated':'created'}${result.imageCleanupFailures?.length?'&cleanupFailed=1':''}`;}catch(error){status.textContent=error.message||'Could not save the inspection standard.';}finally{saving=false;submitButton.textContent=standardId?'Save Changes':'Create Standard';sync();}});
+      document.getElementById('confirmDelete').addEventListener('click',async e=>{if(!standardId||loading)return;const button=e.currentTarget;button.disabled=true;button.textContent='Removing…';try{const response=await fetch(`${API}/${encodeURIComponent(standardId)}`,{method:'DELETE'});const result=await readJson(response);if(!response.ok)throw new Error(result.error||'Could not remove the inspection standard.');cacheDetail(null);closeDeleteConfirm();window.location.href=`inspectionStandards.html?removed=1${result.imageCleanupFailures?.length?'&cleanupFailed=1':''}`;}catch(error){closeDeleteConfirm();if(typeof ReByteAuth.showToast==='function')ReByteAuth.showToast(error.message||'Could not remove the inspection standard.','error');}finally{button.disabled=false;button.textContent='Remove Standard';}});
+      form.addEventListener('submit',async e=>{e.preventDefault();if(loading||saving)return;const title=titleInput.value.trim(),validSections=sections.filter(s=>s.title.trim()&&s.text.trim());if(!title){const error=document.getElementById('titleError');error.textContent='Please enter a title.';error.hidden=false;titleInput.focus();return;}if(sections.some(s=>(s.title.trim()||s.text.trim()||s.files.length||s.savedImages.length)&&!(s.title.trim()&&s.text.trim()))){status.textContent='Complete the title and instructions for every section with content.';sync();return;}if(!validSections.length){status.textContent='Add a section title and instructions to at least one section.';return;}const description=descInput.value.trim();const usePatch=standardId&&validSections.length===baselineSectionIds.length&&validSections.every((section,index)=>section.id===baselineSectionIds[index]);const hasNewImages=validSections.some(section=>section.files.length);saving=true;status.textContent='Saving standard…';submitButton.innerHTML='<span class="spinner" aria-hidden="true"></span> Saving';sync();try{const payloadSections=await buildPayloadSections(validSections);status.textContent='Saving standard…';const response=await fetch(standardId?`${API}/${encodeURIComponent(standardId)}`:API,{method:usePatch?'PATCH':standardId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(usePatch?buildStandardPatch(title,description,payloadSections):{title,description,sections:payloadSections})});const result=await readJson(response);if(!response.ok)throw new Error(result.error||`Could not save standard (HTTP ${response.status}).`);if(standardId)cacheDetail(result.standard);window.location.href=`inspectionStandards.html?saved=${standardId?'updated':'created'}${result.imageCleanupFailures?.length?'&cleanupFailed=1':''}${hasNewImages?'&imagesPending=1':''}`;}catch(error){status.textContent=error.message||'Could not save the inspection standard.';}finally{saving=false;submitButton.textContent=standardId?'Save Changes':'Create Standard';sync();}});
       loadForEdit();
     })();
   </script>

@@ -11,6 +11,7 @@ class StaffProfilePage extends StatelessWidget {
   final VoidCallback? onProfileUpdated;
   final VoidCallback? onNavigateToTasks;
   final VoidCallback? onNavigateToSchedule;
+  final VoidCallback? onNavigateToStandards;
 
   const StaffProfilePage({
     super.key,
@@ -21,6 +22,7 @@ class StaffProfilePage extends StatelessWidget {
     this.onProfileUpdated,
     this.onNavigateToTasks,
     this.onNavigateToSchedule,
+    this.onNavigateToStandards,
   });
 
   Widget _buildListTile(IconData icon, String title, {Color? color, VoidCallback? onTap}) {
@@ -196,7 +198,11 @@ class StaffProfilePage extends StatelessWidget {
                     }
                   },
                 ),
-                _buildListTile(Icons.history, 'Guidance Library'),
+                _buildListTile(
+                  Icons.menu_book_outlined,
+                  'Guidance Library',
+                  onTap: onNavigateToStandards,
+                ),
                 const SizedBox(height: 8),
                 _buildListTile(
                   Icons.logout,

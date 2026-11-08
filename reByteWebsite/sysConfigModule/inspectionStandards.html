@@ -64,6 +64,7 @@
         return;
       }
       const API = 'http://localhost:3000/api/system-config/inspection-standards';
+      const STANDARDS_CACHE_KEY = 'rebyte_inspection_standards_summary_v1';
       const modal = document.getElementById('createModal');
       const form = document.getElementById('standardForm');
       const titleInput = document.getElementById('standardTitle');
@@ -175,6 +176,16 @@
         }
         list.innerHTML = standards.map(item => `<article class="standard-card"><a class="standard-card-open" href="createInspectionStandard.html?id=${encodeURIComponent(item.id)}" aria-label="Open ${esc(item.title)} for editing"></a><div class="standard-card-heading"><h3>${esc(item.title)}</h3><button class="delete-standard" type="button" data-delete-standard="${esc(item.id)}" aria-label="Remove ${esc(item.title)}" title="Remove standard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"></path></svg></button></div><p>${esc(item.description || 'No short description provided.')}</p><footer class="standard-card-footer"><span>${item.sectionCount == null ? 'Click to view details' : `${item.sectionCount} sections · Click to edit`}</span><span>${item.updatedAt ? `Updated ${esc(new Date(item.updatedAt).toLocaleDateString())}` : ''}</span></footer></article>`).join('');
       }
+      function saveStandardsCache() {
+        const summaries = standards.map(item => ({
+          id: item.id,
+          title: item.title || '',
+          description: item.description || '',
+          sectionCount: item.sectionCount ?? item.sections?.length ?? null,
+          updatedAt: item.updatedAt || null
+        }));
+        try { sessionStorage.setItem(STANDARDS_CACHE_KEY, JSON.stringify(summaries)); } catch (_) {}
+      }
       const deleteConfirm = document.getElementById('deleteConfirm');
       function openDeleteConfirm(id) {
         const item = standards.find(standard => standard.id === id);
@@ -202,10 +213,11 @@
         button.disabled = true;
         button.textContent = 'Removing…';
         try {
-          const response = await ReByteAuth.authFetch(`${API}/${encodeURIComponent(pendingDeleteId)}`, { method: 'DELETE' });
+          const response = await fetch(`${API}/${encodeURIComponent(pendingDeleteId)}`, { method: 'DELETE' });
           const payload = await readApiJson(response);
           if (!response.ok) throw new Error(payload.error || 'Could not remove the inspection standard.');
           standards = standards.filter(item => item.id !== pendingDeleteId);
+          saveStandardsCache();
           renderStandards();
           closeDeleteConfirm();
           if (typeof ReByteAuth.showToast === 'function') ReByteAuth.showToast(payload.imageCleanupFailures?.length ? 'Standard removed, but some Cloudinary images could not be deleted.' : 'Inspection standard removed successfully.', payload.imageCleanupFailures?.length ? 'error' : 'success');
@@ -218,24 +230,39 @@
         }
       });
       async function loadStandards() {
+        let hasCachedStandards = false;
         try {
-          const response = await ReByteAuth.authFetch(`${API}?_=${Date.now()}`, { cache: 'no-store' });
+          const cached = JSON.parse(sessionStorage.getItem(STANDARDS_CACHE_KEY) || 'null');
+          if (Array.isArray(cached)) {
+            standards = cached;
+            hasCachedStandards = true;
+            loadError.style.display = 'none';
+            renderStandards();
+          }
+        } catch (_) {}
+        try {
+          const response = await fetch(`${API}?_=${Date.now()}`, { cache: 'no-store' });
           const payload = await readApiJson(response);
           if (!response.ok) throw new Error(payload.error || `Could not load standards (HTTP ${response.status}).`);
           standards = Array.isArray(payload.standards) ? payload.standards : [];
+          saveStandardsCache();
           loadError.style.display = 'none';
           renderStandards();
         } catch (error) {
-          standards = [];
-          renderStandards();
-          loadError.textContent = `Inspection standards could not be loaded. ${error.message || 'Check the backend connection and try again.'}`;
-          loadError.style.display = 'block';
+          if (!hasCachedStandards) {
+            standards = [];
+            renderStandards();
+            loadError.textContent = `Inspection standards could not be loaded. ${error.message || 'Check the backend connection and try again.'}`;
+            loadError.style.display = 'block';
+          } else {
+            console.warn('Could not refresh inspection standards; showing the last loaded list.', error);
+          }
         }
       }
       async function uploadImage(file) {
         const data = new FormData();
         data.append('image', file);
-        const response = await ReByteAuth.authFetch(`${API}/images`, { method: 'POST', body: data });
+        const response = await fetch(`${API}/images`, { method: 'POST', body: data });
         const payload = await readApiJson(response);
         if (!response.ok) throw new Error(payload.error || 'An image could not be uploaded.');
         return payload.imageUrl;
@@ -263,7 +290,7 @@
             for (const entry of section.files) imageUrls.push(await uploadImage(entry.file));
             payloadSections.push({ instructions: section.text.trim(), images: imageUrls });
           }
-          const response = await ReByteAuth.authFetch(API, {
+          const response = await fetch(API, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, description: descriptionInput.value.trim(), sections: payloadSections })
           });
@@ -271,6 +298,7 @@
           if (!response.ok) throw new Error(result.error || `Could not save standard (HTTP ${response.status}).`);
           if (result.standard) standards.unshift(result.standard);
           else await loadStandards();
+          saveStandardsCache();
           renderStandards();
           modal.classList.remove('open');
           resetForm();
@@ -290,11 +318,13 @@
       const savedAction = pageQuery.get('saved');
       if (typeof ReByteAuth.showToast === 'function' && (pageQuery.get('removed') === '1' || savedAction)) {
         const cleanupFailed = pageQuery.get('cleanupFailed') === '1';
-        const message = cleanupFailed ? 'Standard saved, but some Cloudinary images could not be deleted.' : pageQuery.get('removed') === '1' ? 'Inspection standard removed successfully.' : savedAction === 'updated' ? 'Inspection standard updated successfully.' : 'Inspection standard created successfully.';
+        const imagesPending = pageQuery.get('imagesPending') === '1';
+        const message = cleanupFailed ? 'Standard saved, but some Cloudinary images could not be deleted.' : pageQuery.get('removed') === '1' ? 'Inspection standard removed successfully.' : imagesPending ? 'Standard saved. New images will finish uploading in the background.' : savedAction === 'updated' ? 'Inspection standard updated successfully.' : 'Inspection standard created successfully.';
         ReByteAuth.showToast(message, cleanupFailed ? 'error' : 'success');
         pageQuery.delete('removed');
         pageQuery.delete('saved');
         pageQuery.delete('cleanupFailed');
+        pageQuery.delete('imagesPending');
         window.history.replaceState({}, '', `${window.location.pathname}${pageQuery.toString() ? `?${pageQuery}` : ''}`);
       }
     })();

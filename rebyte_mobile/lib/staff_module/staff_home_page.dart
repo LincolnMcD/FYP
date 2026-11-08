@@ -9,6 +9,7 @@ import '../account_management_module/home_page.dart';
 import 'staff_commission_page.dart';
 import 'staff_schedule_page.dart';
 import 'staff_leave_application_page.dart';
+import 'rebyte_standards_page.dart';
 import '../task_assignment_module/staff_assigned_tasks_page.dart';
 
 class StaffHomePage extends StatefulWidget {
@@ -16,6 +17,7 @@ class StaffHomePage extends StatefulWidget {
   final int? initialIndex;
   final int? initialTaskTabIndex;
   final String? email;
+  final bool initialShowStandards;
 
   const StaffHomePage({
     super.key,
@@ -23,6 +25,7 @@ class StaffHomePage extends StatefulWidget {
     this.initialIndex,
     this.initialTaskTabIndex,
     this.email,
+    this.initialShowStandards = false,
   });
 
   @override
@@ -31,6 +34,7 @@ class StaffHomePage extends StatefulWidget {
 
 class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserver, RouteAware {
   late int _selectedIndex;
+  bool _showStandards = false;
   String? _name;
   String? _email;
   String? _position;
@@ -66,6 +70,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex ?? 0;
+    _showStandards = widget.initialShowStandards;
     if (widget.email != null && widget.email!.isNotEmpty) {
       _email = widget.email;
     }
@@ -237,6 +242,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
               onTap: () {
                 setState(() {
                   _selectedIndex = 3;
+                _showStandards = false;
                 });
                 _verifyStaffSession();
               },
@@ -255,7 +261,9 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
       ),
       body: Stack(
         children: [
-          _selectedIndex == 3
+          _showStandards
+              ? ReByteStandardsPage(onExit: () => setState(() => _showStandards = false))
+              : _selectedIndex == 3
               ? StaffProfilePage(
                   name: _name,
                   email: _email,
@@ -263,10 +271,19 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   onLogout: _showLogoutDialog,
                   onProfileUpdated: () async { await _loadFreshStaffProfile(); },
                   onNavigateToTasks: () {
-                    setState(() => _selectedIndex = 2);
+                    setState(() {
+                      _selectedIndex = 2;
+                      _showStandards = false;
+                    });
                   },
                   onNavigateToSchedule: () {
-                    setState(() => _selectedIndex = 1);
+                    setState(() {
+                      _selectedIndex = 1;
+                      _showStandards = false;
+                    });
+                  },
+                  onNavigateToStandards: () {
+                    setState(() => _showStandards = true);
                   },
                 )
               : _selectedIndex == 2
@@ -611,7 +628,10 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
           elevation: 0,
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
-          onTap: (index) => setState(() => _selectedIndex = index),
+          onTap: (index) => setState(() {
+            _selectedIndex = index;
+            _showStandards = false;
+          }),
           selectedItemColor: const Color(0xFF0C5AD2),
           unselectedItemColor: const Color(0xFF64748B),
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
@@ -756,19 +776,19 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   children: [
                     _buildDrawerItem(Icons.grid_view_rounded, 'Dashboard', isSelected: _selectedIndex == 0, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 0);
+                      setState(() { _selectedIndex = 0; _showStandards = false; });
                     }),
                     _buildDrawerItem(Icons.calendar_today_rounded, 'Schedule', isSelected: _selectedIndex == 1, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 1);
+                      setState(() { _selectedIndex = 1; _showStandards = false; });
                     }),
                     _buildDrawerItem(Icons.assignment_outlined, 'Tasks', isSelected: _selectedIndex == 2, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 2);
+                      setState(() { _selectedIndex = 2; _showStandards = false; });
                     }),
-                    _buildDrawerItem(Icons.person_outline, 'Profile', isSelected: _selectedIndex == 3, onTap: () {
+                    _buildDrawerItem(Icons.person_outline, 'Profile', isSelected: _selectedIndex == 3 && !_showStandards, onTap: () {
                       Navigator.pop(context);
-                      setState(() => _selectedIndex = 3);
+                      setState(() { _selectedIndex = 3; _showStandards = false; });
                       _verifyStaffSession();
                     }),
                     const Padding(
@@ -782,7 +802,10 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
               ),
             ),
             Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk'),
+            _buildDrawerItem(Icons.help_outline, 'Help Desk', isSelected: _showStandards, onTap: () {
+              Navigator.pop(context);
+              setState(() => _showStandards = true);
+            }),
             _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: _showLogoutDialog),
           ],
         ),
@@ -794,7 +817,10 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
     return InkWell(
       onTap: () {
         Navigator.pop(context);
-        setState(() => _selectedIndex = 3);
+        setState(() {
+          _selectedIndex = 3;
+          _showStandards = false;
+        });
       },
       child: Row(
         children: [
