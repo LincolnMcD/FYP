@@ -7,25 +7,34 @@
     { label: 'Analytics', href: '/adminModule/analyticsHub.html', icon: '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/>' },
     { label: 'Task Assignment', href: '/taskAssignmentModule/taskAssignment.html', icon: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 15l2 2 5-5"/>' },
     { label: 'Leave Management', href: '/leaveManagementModule/leaveManagement.html', icon: '<path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="m9 16 2 2 4-4"/>' },
-    { label: 'Customer Management', href: '/adminModule/customerManagement.html', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 0 0 7.75"/>' },
+    { label: 'Customer Management', href: '/adminModule/customerManagement.html', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { label: 'Staff Management', href: '/adminModule/staffManagement.html', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M17 11h6"/>' },
     { label: 'Communication', href: '/communicationModule/requestManagement.html', icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' }
   ];
 
+  const tabsByRole = {
+    admin: ['Dashboard', 'Listing', 'System Config', 'Analytics', 'Task Assignment', 'Leave Management', 'Customer Management', 'Staff Management'],
+    'customer support': ['Dashboard', 'Customer Management', 'Communication'],
+    operator: ['Dashboard', 'Listing', 'Finance', 'Task Assignment']
+  };
+
   function renderSidebar() {
-    const currentPath = window.location.pathname.toLowerCase();
-    let activeLabel = 'Analytics';
-    if (currentPath.includes('/sysconfigmodule/')) activeLabel = 'System Config';
-    if (currentPath.includes('/communicationmodule/')) activeLabel = 'Communication';
+    let user = null;
+    try {
+      user = typeof ReByteAuth !== 'undefined'
+        ? ReByteAuth.getUser() : JSON.parse(localStorage.getItem('rebyte_current_user'));
+    } catch {}
+    const role = String(user?.role || user?.systemRole || '').trim().toLowerCase();
+    const tabs = tabsByRole[role] || [];
     document.querySelectorAll('[data-admin-sidebar]').forEach(sidebar => {
       sidebar.innerHTML = `
-        <a class="sidebar-brand" href="/adminModule/analyticsHub.html">
+        <a class="sidebar-brand" href="/adminModule/adminDashboard.html">
           <img src="/accountManagementModule/assets/images/rebyte_logo.png" alt="ReByte">
           <span>ReByte</span>
         </a>
         <nav class="sidebar-nav-list" aria-label="Admin navigation">
-          ${navItems.map(item => {
-            const active = item.label === activeLabel;
+          ${navItems.filter(item => tabs.includes(item.label)).map(item => {
+            const active = item.label === sidebar.dataset.adminSidebar;
             return `<a href="${item.href}" class="sidebar-nav-item${active ? ' active' : ''}"${active ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg><span>${item.label}</span></a>`;
           }).join('')}
         </nav>`;

@@ -5390,5 +5390,10 @@ router.put("/batch-review-leave", async (req, res) => {
     }
 });
 
+router.getDashboardTaskCounts = async function getDashboardTaskCounts() {
+    const { counts } = await getOrBuildTasksDataset({ includeOrderDetails: false });
+    return counts;
+};
+
 module.exports = router;
 

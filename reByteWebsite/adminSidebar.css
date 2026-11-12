@@ -1,13 +1,21 @@
-.sidebar {
+.sidebar[data-admin-sidebar] {
+  box-sizing: border-box;
   width: 260px;
   background: #fff;
   border-right: 1px solid var(--border, #e2e6ee);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  flex: 0 0 260px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100dvh;
+  overflow: visible;
+  z-index: 21;
 }
 .sidebar-brand {
-  height: 105px;
+  height: clamp(44px, 14dvh, 105px);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -19,36 +27,36 @@
 .sidebar-brand span { color: #10264b; font-size: 25px; font-weight: 700; letter-spacing: -1px; }
 .sidebar-nav-list {
   list-style: none;
-  padding: 22px 16px;
+  padding: clamp(4px, 2.5dvh, 22px) 12px;
   margin: 0;
   display: grid;
-  gap: 8px;
+  gap: clamp(0px, calc((100dvh - 420px) / 35), 8px);
   flex: 1;
   align-content: start;
 }
 .sidebar-nav-item {
-  min-height: 48px;
-  padding: 0 14px;
+  min-height: clamp(22px, 6dvh, 48px);
+  padding: 0 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   border-radius: 9px;
   color: #586579;
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color 0.15s, color 0.15s;
 }
 .sidebar-nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .sidebar-nav-item:hover { background: #f1f4f9; }
-.sidebar-nav-item.active { color: #fff; background: #082f72; }
+.sidebar-nav-item.active { color: #fff; background: #082f72; font-weight: 600; }
 
 @media (max-width: 760px) {
-  body { display: block; }
-  .sidebar { width: 100%; height: auto; position: relative; border-right: 0; border-bottom: 1px solid #e2e6ee; }
+  body:has(> [data-admin-sidebar]) { display: block; height: auto; overflow: visible; }
+  .sidebar[data-admin-sidebar] { display: flex; width: 100%; height: auto; max-height: none; flex-basis: auto; border-right: 0; border-bottom: 1px solid #e2e6ee; }
   .main, .main-wrap { height: auto; overflow: visible; }
   .sidebar-brand { height: 68px; padding: 0 18px; }
-  .sidebar-nav-list { display: flex; overflow-x: auto; padding: 8px 10px; }
-  .sidebar-nav-item { flex: 0 0 auto; }
-  .sidebar-nav-item:not(.active) { display: none; }
+  .sidebar-nav-list { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 8px; }
+  .sidebar-nav-item { min-height: 30px; padding-inline: 8px; flex: 0 0 auto; }
 }

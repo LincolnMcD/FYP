@@ -134,20 +134,15 @@ const WELL_KNOWN_MOBILE_BRANDS = [
     "OPPO",
     "HONOR",
     "vivo",
-    "realme",
+    "Realme",
     "Huawei",
-    "Redmi",
-    "POCO",
+    "Google",
     "OnePlus",
-    "Nothing",
     "ASUS",
-    "Google Pixel",
-    "Motorola",
     "Infinix",
     "TECNO",
-    "ZTE",
+    "Nothing",
     "nubia",
-    "Sony"
 ];
 
 // Curated flagship & popular models per brand (ensuring newest releases are on top)

@@ -783,13 +783,7 @@
           const updateData = await updateRes.json();
           btn.disabled = false; btn.textContent = 'Complete Registration';
           if (updateRes.ok) {
-            // Set the local session so the user is physically logged in!
-            ReByteAuth.setUser({
-              email: regState.email,
-              name: name,
-              role: oauthData.role || 'Customer',
-              loginMethod: regState.method
-            });
+            await firebase.auth().signOut();
             ReByteAuth.showToast('Account registered successfully! Redirecting...', 'success');
             setTimeout(() => window.location.href = 'home.html', 800);
           } else {

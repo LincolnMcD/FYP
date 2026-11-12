@@ -176,6 +176,10 @@ const ReByteAuth = {
     return this.getUser() !== null;
   },
 
+  canOpenAdminDashboard(role) {
+    return ['admin', 'operator', 'customer support'].includes(String(role || '').trim().toLowerCase());
+  },
+
   /**
    * Force immediate logout without a confirm dialog.
    * Used when a token refresh fails (e.g. session expired, user disabled).
@@ -559,6 +563,9 @@ const ReByteAuth = {
           requireProfileComplete: data.requireProfileComplete
         };
       } else {
+        if (response.status === 403 && typeof firebase !== 'undefined' && firebase.auth) {
+          await firebase.auth().signOut();
+        }
         return {
           success: false,
           error: data.error || `${provider} OAuth login failed.`
@@ -825,22 +832,6 @@ const ReByteAuth = {
 
       const data = await response.json();
       if (response.ok) {
-        let token = null;
-        if (typeof firebase !== 'undefined' && firebase.auth) {
-          try {
-            const credential = await firebase.auth().signInWithEmailAndPassword(email, password);
-            token = await credential.user.getIdToken();
-          } catch (authError) {
-            console.warn('Could not initialize Firebase session after registration:', authError);
-          }
-        }
-        this.setUser({
-          email,
-          name: fullName || email.split('@')[0],
-          role: 'Customer',
-          token,
-          loginMethod: 'Email'
-        });
         return { success: true, message: data.message || 'Account created successfully!' };
       } else {
         return { success: false, error: data.error || 'Registration failed' };

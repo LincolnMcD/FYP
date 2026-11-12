@@ -6,7 +6,7 @@
   <title>Inspection Standards - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../adminModule/adminHeader.css">
-  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
+  <link rel="stylesheet" href="../adminSidebar.css">
   <style>
     :root{--navy:#082f72;--blue:#0646a5;--page:#f5f7fb;--border:#e2e6ee;--text:#172033;--muted:#626b7d}
     *{box-sizing:border-box}body{display:flex;height:100vh;min-height:0;margin:0;overflow:hidden;background:var(--page);color:var(--text);font-family:Inter,Arial,sans-serif}
@@ -25,7 +25,7 @@
   <style>.standard-card{display:flex;flex-direction:column}.standard-card-footer{margin-top:auto}.standard-card-heading{align-items:center}.delete-standard{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;padding:0;border:1px solid #f0b7b7;border-radius:8px;background:#fff7f7;color:#b42318;cursor:pointer;transform:translateY(-6px)}.delete-standard svg{width:17px;height:17px}.delete-standard:hover{background:#feecec}</style>
 </head>
 <body>
-  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
+  <aside class="sidebar" data-admin-sidebar="System Config" aria-label="Admin navigation"></aside>
   <main class="main">
     <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
     <div class="main-content">
@@ -54,7 +54,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="../accountManagementModule/auth.js"></script>
-  <script src="../reportModule/adminSidebar.js"></script>
+  <script src="../adminSidebar.js"></script>
   <script src="../adminModule/adminHeader.js"></script>
   <script>
     (() => {

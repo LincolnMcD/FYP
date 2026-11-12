@@ -3,37 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - ReByte</title>
-  <meta name="description" content="Sign in to your ReByte account to manage your certified devices, trade-ins, and rentals.">
+  <title>Staff Portal - ReByte</title>
+  <meta name="description" content="Sign in to the ReByte Staff Portal.">
   <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+  <style>
+    .staff-login-page {
+      min-height: 100dvh;
+    }
 
-  <!-- Top Sticky Navigation Bar -->
+    .staff-login-header {
+      justify-content: center;
+    }
+
+    .staff-login-page .auth-page-container {
+      flex: 1 0 auto;
+      min-height: 0;
+      padding: clamp(12px, 3vh, 32px) clamp(12px, 3vw, 24px);
+    }
+
+    .staff-login-page .auth-split-layout {
+      min-height: min(560px, 74dvh);
+    }
+
+    .staff-login-page .auth-banner-side {
+      padding: clamp(20px, 5vh, 44px) clamp(20px, 4vw, 48px);
+    }
+
+    .staff-login-page .auth-card-side {
+      padding: clamp(24px, 8dvh, 68px) clamp(24px, 6vw, 68px);
+    }
+
+    .staff-login-page .auth-form-header {
+      margin-bottom: clamp(24px, 6dvh, 44px);
+    }
+
+    .staff-login-page .form-group {
+      margin-bottom: clamp(18px, 4.5dvh, 34px);
+    }
+
+    @media (max-height: 480px) {
+      .staff-login-header {
+        height: 56px;
+      }
+
+      .staff-login-page .auth-split-layout {
+        max-width: 540px;
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+
+      .staff-login-page .auth-banner-side {
+        display: none;
+      }
+
+      .staff-login-page .auth-card-side {
+        padding-block: 20px;
+      }
+    }
+  </style>
+</head>
+<body class="staff-login-page">
+
+  <!-- ReByte Header -->
   <header class="site-header">
-    <div class="container header-container">
+    <div class="container header-container staff-login-header">
       <!-- Brand Logo -->
       <a href="home.html" class="brand-link">
         <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
         <span class="brand-name">ReByte</span>
       </a>
-
-      <!-- Navigation Links -->
-      <ul class="nav-links">
-        <li class="nav-item"><a href="home.html">Home</a></li>
-        <li class="nav-item"><a href="home.html#shop">Shop</a></li>
-        <li class="nav-item"><a href="home.html#rentals">Rentals</a></li>
-        <li class="nav-item"><a href="home.html#tradein">Trade-in</a></li>
-      </ul>
-
-      <!-- Right Header Actions -->
-      <div class="header-actions">
-        <a href="register.html" class="btn-nav-register">Register</a>
-        <a href="login.html" class="btn-nav-login">
-          Login
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-        </a>
-      </div>
     </div>
   </header>
 
@@ -71,14 +109,9 @@
 
       <!-- Right Column: Login Card -->
       <div class="auth-card-side">
-        <!-- Back Arrow Button to Home -->
-        <a href="home.html" class="auth-back-btn" title="Back to Home">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        </a>
-
         <div class="auth-form-header">
-          <h2 class="auth-title">Welcome Back</h2>
-          <p class="auth-subtitle">Sign in to manage your certified tech portfolio.</p>
+          <h2 class="auth-title">Staff Portal</h2>
+          <p class="auth-subtitle">Sign in with your ReByte website account.</p>
         </div>
 
         <form id="loginForm" novalidate>
@@ -96,7 +129,6 @@
           <div class="form-group">
             <div class="form-label-row">
               <label class="form-label" for="loginPassword">Password</label>
-              <a href="forgot-password.html" class="form-forgot-link">Forgot password?</a>
             </div>
             <div class="input-with-icon-wrapper">
               <svg class="input-icon-prefix" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -114,81 +146,10 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
           </button>
         </form>
-
-        <!-- Divider -->
-        <div class="auth-divider">
-          <span>OR</span>
-        </div>
-
-        <!-- Social Buttons -->
-        <div class="social-buttons-box">
-          <button type="button" class="btn-social" id="btnGoogleLogin">
-            <img src="assets/images/google_logo.png" alt="Google">
-            <span>Sign in with Google</span>
-          </button>
-          <button type="button" class="btn-social" id="btnFacebookLogin">
-            <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-            <span>Sign in with Facebook</span>
-          </button>
-        </div>
-
-        <!-- Bottom Link to Register -->
-        <p class="auth-bottom-switch-link">
-          Don't have an account? <a href="register.html">Create Account</a>
-        </p>
       </div>
 
     </div>
   </main>
-
-  <!-- Site Footer -->
-  <footer class="site-footer">
-    <div class="container">
-      <div class="footer-top-grid">
-        <!-- Brand Summary -->
-        <div class="footer-brand-col">
-          <a href="home.html" class="brand-link">
-            <img src="assets/images/rebyte_logo.png" alt="ReByte Logo" class="brand-logo-img">
-            <span class="brand-name">ReByte</span>
-          </a>
-          <p class="footer-tagline">
-            Sustainable hardware for a better future. Buy, trade, and rent premium tech with confidence.
-          </p>
-        </div>
-
-        <div>
-          <h4 class="footer-col-title">Company</h4>
-          <ul class="footer-links-list">
-            <li class="footer-link-item"><a href="#about">About Us</a></li>
-            <li class="footer-link-item"><a href="#sustainability">Sustainability</a></li>
-            <li class="footer-link-item"><a href="#careers">Careers</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 class="footer-col-title">Legal</h4>
-          <ul class="footer-links-list">
-            <li class="footer-link-item"><a href="#terms">Terms of Service</a></li>
-            <li class="footer-link-item"><a href="#privacy">Privacy Policy</a></li>
-            <li class="footer-link-item"><a href="#cookie">Cookie Policy</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4 class="footer-col-title">Support</h4>
-          <ul class="footer-links-list">
-            <li class="footer-link-item"><a href="#help">Help Center</a></li>
-            <li class="footer-link-item"><a href="#contact">Contact Us</a></li>
-            <li class="footer-link-item"><a href="#track">Track Order</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="footer-bottom-bar">
-        &copy; 2024 ReByte Recommerce. All rights reserved. Built for sustainability.
-      </div>
-    </div>
-  </footer>
 
   <!-- Firebase Compat Client SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -212,8 +173,6 @@
     const emailError = document.getElementById('loginEmailError');
     const pwdError = document.getElementById('loginPasswordError');
     const submitBtn = document.getElementById('loginSubmitBtn');
-    const btnGoogle = document.getElementById('btnGoogleLogin');
-    const btnFacebook = document.getElementById('btnFacebookLogin');
 
     let hasInteractedWithEmail = false;
 
@@ -221,10 +180,6 @@
     function validateEmailInput(showError = true) {
       const val = emailInput.value;
       const res = ReByteAuth.validateEmail(val);
-
-      // Remove suggested buttons highlighting on change
-      btnGoogle.classList.remove('highlight-suggested');
-      btnFacebook.classList.remove('highlight-suggested');
 
       if (!res.isValid) {
         if (showError) {
@@ -329,10 +284,8 @@
       if (result.success) {
         ReByteAuth.showToast(result.message || 'Signed in successfully!', 'success');
         setTimeout(() => {
-          if (result.role === 'Admin') {
+          if (ReByteAuth.canOpenAdminDashboard(result.role)) {
             window.location.href = '../adminModule/adminDashboard.html';
-          } else if (result.role === 'Staff') {
-            window.location.href = '../staffModule/staffDashboard.html';
           } else {
             window.location.href = 'home.html';
           }
@@ -340,21 +293,10 @@
       } else {
         const errorMsg = result.error || 'Login failed';
 
-        // Check if user is registered via Google or Facebook
-        if (errorMsg.includes('registered at Google')) {
-          emailError.textContent = errorMsg;
-          emailError.classList.add('show');
-          emailInput.classList.add('input-error');
-          btnGoogle.classList.add('highlight-suggested');
-          emailInput.focus();
-        } else if (errorMsg.includes('registered at Facebook')) {
-          emailError.textContent = errorMsg;
-          emailError.classList.add('show');
-          emailInput.classList.add('input-error');
-          btnFacebook.classList.add('highlight-suggested');
-          emailInput.focus();
-        } else if (errorMsg.toLowerCase().includes('register an account first') || (errorMsg.toLowerCase().includes('email') && !errorMsg.toLowerCase().includes('password'))) {
-          emailError.textContent = errorMsg;
+        const isSocialAccount = /registered at (Google|Facebook)/i.test(errorMsg);
+        const message = errorMsg.toLowerCase();
+        if (isSocialAccount || message.includes('register an account first') || (message.includes('email') && !message.includes('password'))) {
+          emailError.textContent = isSocialAccount ? 'Use your ReByte website account email and password.' : errorMsg;
           emailError.classList.add('show');
           emailInput.classList.add('input-error');
           emailInput.focus();
@@ -368,48 +310,6 @@
         }
       }
     });
-
-    // Real OAuth Buttons
-    async function handleSocialClick(provider) {
-      const btn = provider === 'Google' ? btnGoogle : btnFacebook;
-      const originalHTML = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = `<span class="btn-spinner-sm"></span> <span>Connecting to ${provider}...</span>`;
-
-      let res;
-      if (provider === 'Google') {
-        res = await ReByteAuth.signInWithGoogle();
-      } else {
-        res = await ReByteAuth.signInWithFacebook();
-      }
-
-      btn.disabled = false;
-      btn.innerHTML = originalHTML;
-
-      if (res.success && res.requireProfileComplete) {
-        // New user tried to login via OAuth, redirect them to register.html
-        ReByteAuth.showToast('Please complete your profile to finish registration.', 'info');
-        setTimeout(() => {
-          window.location.href = `register.html?oauth=true&provider=${provider}`;
-        }, 700);
-      } else if (res.success) {
-        ReByteAuth.showToast(res.message || `Signed in with ${provider}!`, 'success');
-        setTimeout(() => {
-          if (res.role === 'Admin') {
-            window.location.href = '../adminModule/adminDashboard.html';
-          } else if (res.role === 'Staff') {
-            window.location.href = '../staffModule/staffDashboard.html';
-          } else {
-            window.location.href = 'home.html';
-          }
-        }, 700);
-      } else {
-        ReByteAuth.showToast(res.error || `${provider} sign in failed.`, 'error');
-      }
-    }
-
-    btnGoogle.addEventListener('click', () => handleSocialClick('Google'));
-    btnFacebook.addEventListener('click', () => handleSocialClick('Facebook'));
 
     // Initial check on load
     updateFormValidity();

@@ -4,6 +4,7 @@ const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const dashboardSummary = require("./dashboardSummary");
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -164,7 +165,24 @@ async function reactivateExpiredCustomerSuspensions() {
     }
 }
 
-async function requireAdmin(req, res, next) {
+async function findAccountForToken(decoded) {
+    const users = db.collection("users");
+    const uidDoc = await users.doc(decoded.uid).get();
+    if (uidDoc.exists) return uidDoc.data();
+
+    const uidMatch = await users.where("userId", "==", decoded.uid).limit(1).get();
+    if (!uidMatch.empty) return uidMatch.docs[0].data();
+
+    if (decoded.email) {
+        for (const email of new Set([decoded.email, decoded.email.toLowerCase()])) {
+            const emailMatch = await users.where("email", "==", email).limit(1).get();
+            if (!emailMatch.empty) return emailMatch.docs[0].data();
+        }
+    }
+    return null;
+}
+
+async function requireAdmin(req, res, next, allowCustomerSupport = false) {
     const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!idToken) return res.status(401).json({ error: "Please sign in as an administrator." });
     let decoded;
@@ -179,30 +197,15 @@ async function requireAdmin(req, res, next) {
     }
 
     try {
-        const usersRef = db.collection("users");
-        let userData = null;
-
-        const uidDoc = await usersRef.doc(decoded.uid).get();
-        if (uidDoc.exists) userData = uidDoc.data();
-
-        if (!userData) {
-            const uidSnapshot = await usersRef.where("userId", "==", decoded.uid).limit(1).get();
-            if (!uidSnapshot.empty) userData = uidSnapshot.docs[0].data();
-        }
-
-        if (!userData && decoded.email) {
-            for (const email of new Set([decoded.email, decoded.email.toLowerCase()])) {
-                const emailSnapshot = await usersRef.where("email", "==", email).limit(1).get();
-                if (!emailSnapshot.empty) {
-                    userData = emailSnapshot.docs[0].data();
-                    break;
-                }
-            }
-        }
-
-        const role = userData?.systemRole || userData?.role;
-        if (typeof role !== "string" || role.trim().toLowerCase() !== "admin") {
-            return res.status(403).json({ error: "Administrator access is required." });
+        const userData = await findAccountForToken(decoded);
+        const role = userData?.role || userData?.systemRole;
+        const normalizedRole = String(role || "").trim().toLowerCase();
+        const supportCanRead = allowCustomerSupport && normalizedRole === "customer support"
+            && !["archived", "suspended", "banned", "inactive"].includes(String(userData.status || "").trim().toLowerCase());
+        if (normalizedRole !== "admin" && !supportCanRead) {
+            return res.status(403).json({ error: allowCustomerSupport
+                ? "This account cannot view customer records."
+                : "Administrator access is required." });
         }
         req.adminUid = decoded.uid;
         return next();
@@ -210,6 +213,10 @@ async function requireAdmin(req, res, next) {
         console.error("Admin role lookup failed:", err.message);
         return res.status(503).json({ error: "Could not verify administrator access. Please try again." });
     }
+}
+
+function requireCustomerRead(req, res, next) {
+    return requireAdmin(req, res, next, true);
 }
 
 const multer = require("multer");
@@ -952,6 +959,63 @@ router.post("/register", async (req, res) => {
     }
 });
 
+function webOnlyRoleName(role) {
+    switch (String(role || "").trim().toLowerCase()) {
+        case "admin": return "Admin";
+        case "operator": return "Operator";
+        case "customer support": return "Customer Support";
+        default: return null;
+    }
+}
+
+function loginPlatformError(user, email, clientType) {
+    const role = String(user.role || "Customer").trim().toLowerCase();
+    const webRole = webOnlyRoleName(role);
+    if (clientType === "Mobile" && webRole) {
+        return `${webRole} access is constrained to the Web portal.`;
+    }
+    if (clientType === "Web") {
+        let mobileRole;
+        if (role === "rental" || String(email || "").toLowerCase() === "rental@rebyte.com") mobileRole = "Rental";
+        else if (role === "customer") mobileRole = "Customer";
+        else if (role === "staff") mobileRole = "Staff";
+        if (mobileRole) return `${mobileRole} access is constrained to the Mobile application.`;
+    }
+    return null;
+}
+
+function webOnlyPasswordResetError(user) {
+    const role = webOnlyRoleName(user.role);
+    return role && role !== "Admin" ? loginPlatformError(user, user.email, "Mobile") : null;
+}
+
+router.get("/api/dashboard/summary", async (req, res) => {
+    const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token) return res.status(401).json({ error: "Please sign in to the dashboard." });
+
+    let decoded;
+    try {
+        decoded = await getAuth().verifyIdToken(token, true);
+    } catch (error) {
+        return res.status(401).json({ error: "Please sign in to the dashboard again." });
+    }
+
+    try {
+        const user = await findAccountForToken(decoded);
+        const role = String(user?.role || user?.systemRole || "").trim().toLowerCase();
+        const status = String(user?.status || "").trim().toLowerCase();
+        if (!webOnlyRoleName(role) || ["archived", "suspended", "banned"].includes(status)) {
+            return res.status(403).json({ error: "This account cannot access the dashboard." });
+        }
+        const summary = await dashboardSummary(db, role);
+        res.set("Cache-Control", "no-store");
+        return res.json(summary);
+    } catch (error) {
+        console.error("Dashboard summary failed:", error.message);
+        return res.status(503).json({ error: "Dashboard data could not be loaded. Please try again." });
+    }
+});
+
 router.post("/forgot-password/request-otp", async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -965,6 +1029,8 @@ router.post("/forgot-password/request-otp", async (req, res) => {
         }
 
         const userDoc = snapshot.docs[0].data();
+        const platformError = webOnlyPasswordResetError(userDoc);
+        if (platformError) return res.status(403).json({ error: platformError });
         if (userDoc.loginMethod && userDoc.loginMethod !== "Email") {
             return res.status(400).json({ error: `Email registered via ${userDoc.loginMethod}. Please use social sign-in.` });
         }
@@ -1057,7 +1123,10 @@ router.post("/forgot-password/reset", async (req, res) => {
         const snapshot = await usersRef.where("email", "==", email).get();
         if (snapshot.empty) return res.status(404).json({ error: "User not found" });
 
-        const uid = snapshot.docs[0].data().userId;
+        const user = snapshot.docs[0].data();
+        const platformError = webOnlyPasswordResetError(user);
+        if (platformError) return res.status(403).json({ error: platformError });
+        const uid = user.userId;
 
         // Check if new password is the same as the current password by attempting to sign in
         const FIREBASE_API_KEY = "AIzaSyA8MQf-isqvndby6N6k2bfbD-KagiawFNE";
@@ -1197,6 +1266,8 @@ router.post("/oauth-login", async (req, res) => {
         if (!snapshot.empty) {
             // Existing User!
             const userData = snapshot.docs[0].data();
+            const platformError = loginPlatformError(userData, userData.email || email, clientType);
+            if (platformError) return res.status(403).json({ error: platformError });
 
             // Check if login method matches
             if (userData.loginMethod !== loginMethod) {
@@ -1213,18 +1284,14 @@ router.post("/oauth-login", async (req, res) => {
 
             const requireProfileComplete = !userData.phoneNumber || userData.phoneNumber === "";
 
-            if (userData.role === "Admin" && clientType === "Mobile") {
-                return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
-            }
-            if ((userData.role === "Rental" || (userData.email && userData.email.toLowerCase() === "rental@rebyte.com")) && clientType === "Web") {
-                return res.status(403).json({ error: "Rental access is constrained to the Mobile application." });
-            }
-
             return res.status(200).json({ success: true, message: `Login successful through ${loginMethod}`, email: userData.email, name: userData.fullName, requireProfileComplete, role: userData.role });
         } else {
             if (!email && !phone) {
                 return res.status(400).json({ error: "Your social account does not have a bound Email or Phone Number. Please link one to your account to proceed." });
             }
+
+            const platformError = loginPlatformError({}, email, clientType);
+            if (platformError) return res.status(403).json({ error: platformError });
 
             // New OAuth User! Create profile.
             const newUser = new Customer({
@@ -1282,7 +1349,10 @@ router.post("/login", async (req, res) => {
         if (snapshot.empty) {
             return res.status(404).json({ error: "Please register an account first." });
         } else {
-            const registeredMethod = snapshot.docs[0].data().loginMethod;
+            const user = snapshot.docs[0].data();
+            const platformError = loginPlatformError(user, email, clientType);
+            if (platformError) return res.status(403).json({ error: platformError });
+            const registeredMethod = user.loginMethod;
             if (registeredMethod && registeredMethod !== "Email") {
                 return res.status(400).json({ error: `Your email address is registered at ${registeredMethod}. Please login using ${registeredMethod}.` });
             }
@@ -1327,12 +1397,6 @@ router.post("/login", async (req, res) => {
             const userData = snapshot.docs[0].data();
             fullName = userData.fullName || "ReByte User";
             role = userData.role || "Customer";
-            if (role === "Admin" && clientType === "Mobile") {
-                return res.status(403).json({ error: "Admin access is constrained to the Web portal." });
-            }
-            if ((role === "Rental" || email.toLowerCase() === "rental@rebyte.com") && clientType === "Web") {
-                return res.status(403).json({ error: "Rental access is constrained to the Mobile application." });
-            }
         }
 
         return res.status(200).json({ message: "Login successful", token: data.idToken, uid: data.localId, name: fullName, role: role });
@@ -1713,7 +1777,7 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
-router.get("/customers/:customerId/records", requireAdmin, async (req, res) => {
+router.get("/customers/:customerId/records", requireCustomerRead, async (req, res) => {
     try {
         const requestedId = String(req.params.customerId || "").trim();
         const type = String(req.query.type || "history").trim().toLowerCase();
@@ -1866,7 +1930,7 @@ router.get("/customers/:customerId/records", requireAdmin, async (req, res) => {
     }
 });
 
-router.get("/customer-list", requireAdmin, async (req, res) => {
+router.get("/customer-list", requireCustomerRead, async (req, res) => {
     try {
         const customerDocuments = await queryUsersByRole("Customer");
         const customers = [];

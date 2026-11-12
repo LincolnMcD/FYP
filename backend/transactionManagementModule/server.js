@@ -4,14 +4,11 @@ const db = require("../config/firebase");
 const cloudinary = require("../config/cloudinary");
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const axios = require("axios");
-
-function timestampMillis(value) {
-    if (!value) return 0;
-    if (typeof value.toDate === "function") return value.toDate().getTime() || 0;
-    if (typeof value._seconds === "number") return value._seconds * 1000;
-    const time = new Date(value).getTime();
-    return Number.isFinite(time) ? time : 0;
-}
+const normalizeDepositStatus = require("./depositStatus");
+const {
+    transactionCategory: getCategory, isFailedOrCancelled, salesContribution,
+    timestampMillis, malaysiaMonthBoundary, loadAnalyticsTransactions, loadLinkedDocuments
+} = require("./salesRevenue");
 
 function normalizedRefundStatus(value) {
     const status = String(value || "").trim().toUpperCase();
@@ -515,19 +512,7 @@ router.get("/rental-deposits", async (req, res) => {
             // Deposit value resolution: check rentalDeposit first, fallback to depositAmount
             const depositVal = Number(r.rentalDeposit !== undefined ? r.rentalDeposit : (r.depositAmount || 0));
 
-            // Status resolution:
-            // "if paid mean active, if pending mean pending, if returned mean returned"
-            const rawDepStatus = String(r.depositStatus || "").toLowerCase().trim();
-            let normStatus = "Active"; // default for paid or active
-            if (rawDepStatus === "forfeited") {
-                normStatus = "Forfeited";
-            } else if (rawDepStatus === "returned" || rawDepStatus === "refunded") {
-                normStatus = "Returned";
-            } else if (rawDepStatus === "pending" || rawDepStatus === "pending_return" || rawDepStatus === "pending return") {
-                normStatus = "Pending";
-            } else {
-                normStatus = "Active";
-            }
+            const normStatus = normalizeDepositStatus(r.depositStatus);
 
             // Metric aggregations
             if (normStatus === "Active") {
@@ -1322,101 +1307,37 @@ router.get("/analytics/summary", async (req, res) => {
         const year = Number(monthMatch[1]);
         const monthIndex = Number(monthMatch[2]) - 1;
         const malaysiaOffsetMs = 8 * 60 * 60 * 1000;
-        const monthBoundary = offset => new Date(Date.UTC(year, monthIndex + offset, 1) - malaysiaOffsetMs);
+        const monthBoundary = offset => malaysiaMonthBoundary(year, monthIndex + offset);
         const selectedEnd = monthBoundary(1);
         const windowStart = monthBoundary(-3);
         const previousMonthStart = monthBoundary(-1);
 
         const transactionCollection = db.collection("transaction");
-        const windowStartIso = windowStart.toISOString();
-        const selectedEndIso = selectedEnd.toISOString();
-        const [transactionDateSnap, createdAtSnap, transactionDateStringSnap, createdAtStringSnap] = await Promise.all([
-            transactionCollection
-                .where("transactionDate", ">=", Timestamp.fromDate(windowStart))
-                .where("transactionDate", "<", Timestamp.fromDate(selectedEnd))
-                .get(),
-            transactionCollection
-                .where("createdAt", ">=", Timestamp.fromDate(windowStart))
-                .where("createdAt", "<", Timestamp.fromDate(selectedEnd))
-                .get(),
-            transactionCollection
-                .where("transactionDate", ">=", windowStartIso)
-                .where("transactionDate", "<", selectedEndIso)
-                .get(),
-            transactionCollection
-                .where("createdAt", ">=", windowStartIso)
-                .where("createdAt", "<", selectedEndIso)
-                .get()
-        ]);
-        const transactionDocs = new Map();
-        transactionDateSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
-        createdAtSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
-        transactionDateStringSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
-        createdAtStringSnap.forEach(doc => transactionDocs.set(doc.id, doc.data() || {}));
-        // Older transactions may store dates as epoch milliseconds or another legacy
-        // representation that Firestore range queries cannot match. Scan only when
-        // the indexed queries found nothing, then keep records in the requested window.
-        if (transactionDocs.size === 0) {
-            const fallbackSnap = await transactionCollection.get();
-            fallbackSnap.forEach(doc => {
-                const data = doc.data() || {};
-                const millis = timestampMillis(data.transactionDate) || timestampMillis(data.createdAt);
-                if (millis >= windowStart.getTime() && millis < selectedEnd.getTime()) {
-                    transactionDocs.set(doc.id, data);
-                }
-            });
-        }
+        const transactionDocs = await loadAnalyticsTransactions(db, windowStart, selectedEnd);
 
         const referenceIds = (field, data) => [...new Set(data.map(record => String(record[field] || "").trim()).filter(Boolean))];
-        const loadLinkedDocuments = async (collectionName, ids, alternateField) => {
-            const collection = db.collection(collectionName);
-            const uniqueIds = [...new Set(ids.filter(Boolean))];
-            const docs = new Map();
-            const jobs = uniqueIds.map(id => collection.doc(id).get().catch(() => null));
-            if (alternateField) {
-                for (let i = 0; i < uniqueIds.length; i += 10) {
-                    jobs.push(collection.where(alternateField, "in", uniqueIds.slice(i, i + 10)).get());
-                }
-            }
-            const results = await Promise.all(jobs);
-            results.forEach(result => {
-                if (!result) return;
-                if (Array.isArray(result)) return;
-                if (typeof result.forEach !== "function") {
-                    if (result.exists) docs.set(result.id, result.data() || {});
-                    return;
-                }
-                result.forEach(doc => {
-                    const data = doc.data() || {};
-                    docs.set(doc.id, data);
-                    if (data[alternateField]) docs.set(String(data[alternateField]), data);
-                });
-            });
-            return docs;
-        };
-
         const txRecords = [...transactionDocs.entries()].map(([id, data]) => ({ id, data }));
         // Read the full transaction history for product-ID deduplication so a
         // later order outside the 4-month chart window still supersedes an older one.
         const historySnap = await transactionCollection.get();
         const historyRecords = historySnap.docs.map(doc => ({ id: doc.id, data: doc.data() || {} }));
         const orderIds = referenceIds("orderID", [...txRecords, ...historyRecords].map(row => row.data));
-        const orders = await loadLinkedDocuments("order", orderIds, "orderID");
+        const orders = await loadLinkedDocuments(db, "order", orderIds, "orderID");
 
         const productIds = [...new Set(txRecords.flatMap(({ data }) => {
             const order = orders.get(String(data.orderID || "")) || {};
             const ids = Array.isArray(order.productIDs) ? order.productIDs : [];
             return [...ids, data.productID].map(id => String(id || "").trim()).filter(Boolean);
         }))];
-        const products = await loadLinkedDocuments("product", productIds, "productID");
+        const products = await loadLinkedDocuments(db, "product", productIds, "productID");
         const deviceIds = [...new Set([...products.values()].map(product => String(product.deviceID || "").trim()).filter(Boolean))];
         const tradeInIds = [
             ...referenceIds("tradeInRequestID", txRecords.map(row => row.data)),
             ...[...products.values()].map(product => String(product.tradeInRequestID || "").trim())
         ].filter(Boolean);
         const [devices, tradeIns] = await Promise.all([
-            loadLinkedDocuments("devices", deviceIds, "deviceID"),
-            loadLinkedDocuments("tradeInRequests", tradeInIds, "tradeInRequestID")
+            loadLinkedDocuments(db, "devices", deviceIds, "deviceID"),
+            loadLinkedDocuments(db, "tradeInRequests", tradeInIds, "tradeInRequestID")
         ]);
 
         const monthKey = date => {
@@ -1445,17 +1366,6 @@ router.get("/analytics/summary", async (req, res) => {
         const getDate = data => {
             const millis = timestampMillis(data.transactionDate) || timestampMillis(data.createdAt);
             return millis ? new Date(millis) : null;
-        };
-        const getCategory = data => {
-            const type = String(data.transactionType || "").toLowerCase().trim();
-            if (["payout", "trade-in", "tradein"].includes(type)) return "trade-in";
-            if (type.includes("deposit")) return "deposit";
-            if (type.includes("refund")) return "refund";
-            if (type.includes("rental")) return "rental";
-            if (type === "purchase" || data.orderID) return "purchase";
-            if (data.rentalID) return "rental";
-            if (data.tradeInRequestID) return "trade-in";
-            return "other";
         };
         // Product IDs can appear in more than one order. Keep the latest
         // successful purchase order for each product so one device is not
@@ -1501,14 +1411,13 @@ router.get("/analytics/summary", async (req, res) => {
             const key = monthKey(date);
             const stats = monthly.get(key);
             if (!stats) return;
-            const status = String(data.transactionStatus || data.status || "success").toLowerCase();
-            if (status.includes("fail") || status.includes("cancel")) return;
+            if (isFailedOrCancelled(data.transactionStatus || data.status)) return;
             const amount = Number(data.transactionAmount ?? data.amount ?? data.totalAmount ?? 0) || 0;
             const category = getCategory(data);
             const orderId = String(data.orderID || "").trim();
             const order = orders.get(orderId) || {};
-            const orderStatus = String(order.orderStatus || order.status || "").trim().toLowerCase();
-            if ((category === "purchase" || category === "refund") && (orderStatus.includes("fail") || orderStatus.includes("cancel"))) return;
+            if ((category === "purchase" || category === "refund") && isFailedOrCancelled(order.orderStatus || order.status)) return;
+            stats.sales += salesContribution(data, order, category);
             if (category === "rental") {
                 stats.rental += amount;
                 return;
@@ -1516,7 +1425,6 @@ router.get("/analytics/summary", async (req, res) => {
             if (category === "refund") {
                 if (data.rentalID) stats.rental -= amount;
                 else if (String(data.orderID || "").trim()) {
-                    stats.sales -= amount;
                     stats.salesRefunds.push({ data, amount });
                 }
                 return;
@@ -1527,7 +1435,6 @@ router.get("/analytics/summary", async (req, res) => {
             }
             if (category !== "purchase") return;
 
-            stats.sales += amount;
             const ids = [...new Set((Array.isArray(order.productIDs) ? order.productIDs : [data.productID]).map(id => String(id || "").trim()).filter(Boolean))];
             const latestIds = ids.filter(id => latestOrderByProductId.get(id)?.orderId === orderId);
             if (orderId) {

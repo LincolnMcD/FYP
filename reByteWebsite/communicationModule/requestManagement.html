@@ -6,7 +6,7 @@
   <title>Request Management - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../adminModule/adminHeader.css">
-  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
+  <link rel="stylesheet" href="../adminSidebar.css">
   <style>
     * { box-sizing: border-box; }
     body { display: flex; margin: 0; min-height: 100vh; background: #f4f6fa; color: #172033; font: 14px Inter, Arial, sans-serif; }
@@ -77,7 +77,7 @@
   </style>
 </head>
 <body>
-  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
+  <aside class="sidebar" data-admin-sidebar="Communication" aria-label="Admin navigation"></aside>
   <main class="main">
     <header class="admin-header" data-admin-header data-page-title="Communication"></header>
     <section class="content" aria-labelledby="pageTitle">
@@ -150,7 +150,7 @@
   <script src="../accountManagementModule/auth.js"></script>
   <script>
     const admin = ReByteAuth.getUser();
-    if (!admin || !['admin', 'staff'].includes(String(admin.role || admin.systemRole || '').toLowerCase())) {
+    if (!admin) {
       window.location.replace('../accountManagementModule/login.html');
     }
     const ticketRows = document.querySelector('tbody');
@@ -197,8 +197,12 @@
         if (request !== ticketRequest) return;
         if (!response.ok) throw new Error(data.error || 'Could not load support tickets.');
         const tickets = Array.isArray(data.tickets) ? data.tickets : [];
-        document.querySelector('[data-status="pending"]').textContent = `Pending (${selectedStatus === 'pending' ? tickets.length : '…'})`;
-        document.querySelector('[data-status="in progress"]').textContent = `In Progress (${selectedStatus === 'in progress' ? tickets.length : '…'})`;
+        for (const [status, label] of [['pending', 'Pending'], ['in progress', 'In Progress']]) {
+          const count = data.counts?.[status];
+          if (Number.isInteger(count)) {
+            document.querySelector(`[data-status="${status}"]`).textContent = `${label} (${count})`;
+          }
+        }
         ticketRows.innerHTML = tickets.length ? tickets.map(ticket => `
           <tr class="request-row" data-ticket="${escapeHtml(ticket.ticketID)}">
             <td>
@@ -214,7 +218,7 @@
             <td>${escapeHtml(ticket.ticketCategory || 'Other')}</td>
             <td><span class="status-pill">${escapeHtml(ticket.ticketStatus || 'pending')}</span></td>
             <td><button class="open-ticket" type="button">Open</button></td>
-          </tr>`).join('') : '<tr><td class="empty" colspan="5">No ' + escapeHtml(selectedStatus) + ' requests to display.</td></tr>';
+          </tr>`).join('') : '<tr><td class="empty" colspan="5">No requests to display.</td></tr>';
         document.querySelector('.pagination span').textContent = `Showing ${tickets.length} ${tickets.length === 1 ? 'request' : 'requests'}`;
         ticketNotice.textContent = '';
         ticketRows.querySelectorAll('[data-ticket]').forEach((row, index) => {
@@ -343,6 +347,6 @@
     loadTickets();
   </script>
   <script src="../adminModule/adminHeader.js"></script>
-  <script src="../reportModule/adminSidebar.js"></script>
+  <script src="../adminSidebar.js"></script>
 </body>
 </html>

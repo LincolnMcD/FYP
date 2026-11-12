@@ -163,6 +163,9 @@ class AuthService {
           'token': idToken,
         };
       }
+      if (response.statusCode == 403) {
+        await FirebaseAuth.instance.signOut();
+      }
       return {'success': false, 'error': body['error'] ?? 'OAuth Login failed'};
     } catch (e) {
       return {'success': false, 'error': 'Connection failed.'};

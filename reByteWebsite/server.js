@@ -20,9 +20,9 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
   let reqPath = req.url.split('?')[0];
 
-  // Default root redirect to customer home page
+  // Default root redirect to the login page
   if (reqPath === '/' || reqPath === '') {
-    res.writeHead(302, { 'Location': '/accountManagementModule/home.html' });
+    res.writeHead(302, { 'Location': '/accountManagementModule/login.html' });
     return res.end();
   }
 
@@ -70,6 +70,6 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n======================================================`);
   console.log(`  ReByte Web Server running successfully!`);
-  console.log(`  Local URL: http://localhost:${PORT}/accountManagementModule/home.html`);
+  console.log(`  Local URL: http://localhost:${PORT}/accountManagementModule/login.html`);
   console.log(`======================================================\n`);
 });

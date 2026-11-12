@@ -110,7 +110,7 @@ async function authenticateRequest(req, res, next) {
         const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
         const role = String(profile.systemRole || profile.role || "customer").trim().toLowerCase();
         const status = String(profile.status || "active").trim().toLowerCase();
-        const isStaff = role === "staff" || role === "admin";
+        const isStaff = ["staff", "admin", "operator", "customer support"].includes(role);
         if (isStaff && ["archived", "suspended", "banned", "inactive"].includes(status)) {
             return res.status(403).json({ error: "This staff account is not active." });
         }
@@ -124,7 +124,7 @@ async function authenticateRequest(req, res, next) {
 
 function requireHelpDeskStaff(req, res, next) {
     if (!req.helpDeskIdentity?.isStaff) {
-        return res.status(403).json({ error: "Staff access is required." });
+        return res.status(403).json({ error: "This account cannot manage support requests." });
     }
     return next();
 }
@@ -339,12 +339,19 @@ router.get("/staff/tickets", authenticateRequest, requireHelpDeskStaff, async (r
     try {
         const snapshot = await db.collection("supportTicket").get();
         const status = String(req.query.status || "pending").toLowerCase();
-        const tickets = snapshot.docs.map(serializeTicket)
+        const allTickets = snapshot.docs.map(serializeTicket);
+        const counts = { pending: 0, "in progress": 0 };
+        for (const ticket of allTickets) {
+            const key = String(ticket.ticketStatus || "").toLowerCase();
+            if (Object.hasOwn(counts, key)) counts[key]++;
+        }
+        const tickets = allTickets
             .filter(ticket => String(ticket.ticketStatus || "").toLowerCase() === status)
             .sort((a, b) => (b.lastMessageAt || b.createdDate || "").localeCompare(a.lastMessageAt || a.createdDate || "")
                 || String(b.ticketID).localeCompare(String(a.ticketID)));
         const names = await loadTicketCustomerNames(tickets);
         return res.json({
+            counts,
             tickets: tickets.map(ticket => ({
                 ...ticket,
                 customerName: names.get(ticket.userID) || ticket.customerName || null
@@ -361,9 +368,18 @@ router.patch("/staff/tickets/:ticketID/status", authenticateRequest, requireHelp
     if (!["pending", "in progress", "resolved"].includes(ticketStatus)) return res.status(400).json({ error: "Invalid ticket status." });
     try {
         const ref = db.collection("supportTicket").doc(req.params.ticketID);
-        const snapshot = await ref.get();
-        if (!snapshot.exists) return res.status(404).json({ error: "Support ticket not found." });
-        await ref.update({ ticketStatus });
+        const exists = await db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(ref);
+            if (!snapshot.exists) return false;
+            if (String(snapshot.data().ticketStatus).toLowerCase() !== ticketStatus) {
+                transaction.update(ref, {
+                    ticketStatus,
+                    resolvedAt: ticketStatus === "resolved" ? FieldValue.serverTimestamp() : FieldValue.delete()
+                });
+            }
+            return true;
+        });
+        if (!exists) return res.status(404).json({ error: "Support ticket not found." });
         return res.json({ ticket: serializeTicket(await ref.get()) });
     } catch (error) {
         console.error("Help Desk ticket status update failed:", error?.message || "Unknown error");

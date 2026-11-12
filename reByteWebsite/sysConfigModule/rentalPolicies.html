@@ -6,7 +6,7 @@
   <title>Rental Policies - ReByte</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../adminModule/adminHeader.css">
-  <link rel="stylesheet" href="../reportModule/adminSidebar.css">
+  <link rel="stylesheet" href="../adminSidebar.css">
   <style>
     :root { --navy:#082f72; --blue:#0646a5; --page:#f5f7fb; --border:#e2e6ee; --text:#172033; --muted:#687184; }
     * { box-sizing:border-box; }
@@ -90,7 +90,7 @@
   </style>
 </head>
 <body>
-  <aside class="sidebar" data-admin-sidebar aria-label="Admin navigation"></aside>
+  <aside class="sidebar" data-admin-sidebar="System Config" aria-label="Admin navigation"></aside>
   <main class="main">
     <header class="admin-header" data-admin-header data-page-title="Configuration"></header>
     <div class="main-content">
@@ -153,7 +153,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="../accountManagementModule/auth.js"></script>
-  <script src="../reportModule/adminSidebar.js"></script>
+  <script src="../adminSidebar.js"></script>
   <script src="../adminModule/adminHeader.js"></script>
   <script>
     const currentAdmin = ReByteAuth.getUser();
