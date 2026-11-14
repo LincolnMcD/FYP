@@ -55,7 +55,7 @@ class TradeInService {
       final response = await http.get(
         uri,
         headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -46,10 +46,5 @@ class PhoneBrandsData {
     'Huawei',
     'Google',
     'OnePlus',
-    'ASUS',
-    'Infinix',
-    'TECNO',
-    'Nothing',
-    'nubia',
   ];
 }

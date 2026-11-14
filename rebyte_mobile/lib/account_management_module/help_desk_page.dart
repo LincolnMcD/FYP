@@ -485,7 +485,7 @@ class _HelpDeskPageState extends State<HelpDeskPage> {
       case 'view_orders': return 'View my orders';
       case 'view_rentals': return 'View my rentals';
       case 'view_trade_in': return 'View trade-in requests';
-      case 'compare_devices': return 'Compare devices (coming soon)';
+      case 'compare_devices': return 'Compare devices';
       case 'test_device': return 'Test my device';
       default: return 'Open page';
     }

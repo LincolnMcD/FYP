@@ -156,7 +156,7 @@ class StaffProfilePage extends StatelessWidget {
           const SizedBox(height: 32),
 
           // Action List
-          Container(
+          Material(
             color: Colors.white,
             child: Column(
               children: [

@@ -11,6 +11,7 @@ class TaskAssignmentService {
   static Future<List<Map<String, dynamic>>> fetchStaffTasks({
     String? staffID,
     String? email,
+    bool requireLiveData = false,
   }) async {
     try {
       final query = <String, String>{};
@@ -45,8 +46,10 @@ class TaskAssignmentService {
           return List<Map<String, dynamic>>.from(data['tasks'] as List);
         }
       }
+      if (requireLiveData) throw StateError('Could not load staff tasks.');
       return [];
     } catch (e) {
+      if (requireLiveData) rethrow;
       debugPrint('TaskAssignmentService.fetchStaffTasks error: $e');
       return [];
     }
@@ -228,6 +231,7 @@ class TaskAssignmentService {
   static Future<Map<String, dynamic>> fetchLeaveBalance({
     String? staffID,
     String? email,
+    bool requireLiveData = false,
   }) async {
     try {
       final query = <String, String>{};
@@ -242,12 +246,14 @@ class TaskAssignmentService {
           return data;
         }
       }
+      if (requireLiveData) throw StateError('Could not load leave balance.');
       return {
         'success': true,
         'annualRemaining': 12,
         'medicalRemaining': 14,
       };
     } catch (e) {
+      if (requireLiveData) rethrow;
       debugPrint('TaskAssignmentService.fetchLeaveBalance error: $e');
       return {
         'success': true,

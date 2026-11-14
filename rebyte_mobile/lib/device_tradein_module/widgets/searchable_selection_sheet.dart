@@ -34,7 +34,11 @@ class SearchableSelectionSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      clipBehavior: Clip.antiAlias,
       builder: (context) => SearchableSelectionSheet(
         title: title,
         searchHint: searchHint,
@@ -121,13 +125,6 @@ class _SearchableSelectionSheetState extends State<SearchableSelectionSheet> {
       top: false,
       child: Container(
         constraints: BoxConstraints(maxHeight: maxHeight),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
         padding: EdgeInsets.only(bottom: bottomInset),
         child: Column(
           mainAxisSize: MainAxisSize.min,

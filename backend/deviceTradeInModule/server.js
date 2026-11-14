@@ -127,23 +127,7 @@ const APPLE_IPHONE_MODELS = [
     "iPhone 5s", "iPhone 5c", "iPhone 5"
 ];
 
-const WELL_KNOWN_MOBILE_BRANDS = [
-    "Apple",
-    "Samsung",
-    "Xiaomi",
-    "OPPO",
-    "HONOR",
-    "vivo",
-    "Realme",
-    "Huawei",
-    "Google",
-    "OnePlus",
-    "ASUS",
-    "Infinix",
-    "TECNO",
-    "Nothing",
-    "nubia",
-];
+const WELL_KNOWN_MOBILE_BRANDS = require("../phoneCatalog/brands");
 
 // Curated flagship & popular models per brand (ensuring newest releases are on top)
 const POPULAR_BRAND_MODELS = {
@@ -643,14 +627,19 @@ router.get("/brands", (req, res) => {
 });
 
 // GET /models?brand=Samsung&search=...
-router.get("/models", (req, res) => {
+router.get("/models", async (req, res) => {
     try {
         const { brand, search } = req.query;
-        if (!brand) {
+        if (typeof brand !== "string" || !brand.trim()) {
             return res.status(400).json({ success: false, message: "Brand query parameter is required" });
         }
 
-        let models = getModelsForBrand(brand);
+        const { getCatalogModels } = require("../phoneCatalog/gsmarena");
+        const selectedBrand = WELL_KNOWN_MOBILE_BRANDS.find(name => name.toLowerCase() === brand.trim().toLowerCase());
+        if (!selectedBrand) {
+            return res.status(400).json({ success: false, message: "Select a supported phone brand." });
+        }
+        let models = await getCatalogModels(selectedBrand);
 
         if (search) {
             const q = search.toLowerCase();
@@ -671,6 +660,9 @@ router.get("/models", (req, res) => {
             modelCodes
         });
     } catch (err) {
+        if (err.code === "ENOENT") {
+            return res.status(503).json({ success: false, message: "The phone model catalog has not been imported yet." });
+        }
         return res.status(500).json({ success: false, message: err.message });
     }
 });
@@ -3061,11 +3053,16 @@ router.post("/detect-phone", upload.single("image"), async (req, res) => {
             cleanupTemp();
 
             if (error) {
-                console.error("Detector process error:", error, stderr);
+                let detail = stderr.trim() || error.message;
+                try {
+                    const output = JSON.parse(stdout.trim());
+                    if (typeof output?.error === "string" && output.error) detail = output.error;
+                } catch (_) {}
+                console.error("Detector process error:", detail);
                 return res.status(500).json({
                     success: false,
                     isPhone: false,
-                    error: "Detector execution error: " + (stderr || error.message)
+                    error: "Detector execution error: " + detail
                 });
             }
 

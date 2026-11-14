@@ -6,7 +6,6 @@ import '../account_management_module/services/session_service.dart';
 import '../device_tradein_module/services/trade_in_flow_session.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
 import '../product_purchase_module/cart_page.dart';
-import '../product_purchase_module/notification_page.dart';
 import '../product_purchase_module/my_orders_page.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
 import '../rental_managment_module/my_rentals_page.dart';
@@ -14,10 +13,10 @@ import '../rental_managment_module/my_rentals_page.dart';
 class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
   final VoidCallback? onMenuPressed;
-  final VoidCallback? onNotificationPressed;
+  final VoidCallback? onProfilePressed;
+  final bool isProfileSignedIn;
   final VoidCallback? onCartPressed;
   final int cartItemCount;
-  final bool showNotificationDot;
 
   final bool isShopPage;
 
@@ -25,10 +24,10 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     this.scaffoldKey,
     this.onMenuPressed,
-    this.onNotificationPressed,
+    this.onProfilePressed,
+    this.isProfileSignedIn = false,
     this.onCartPressed,
     this.cartItemCount = 0,
-    this.showNotificationDot = true,
     this.isShopPage = false,
   });
 
@@ -88,7 +87,11 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
         if (isShopPage)
           // Shopping cart icon ONLY on shop page
           IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+            icon: Badge(
+              isLabelVisible: cartItemCount > 0,
+              label: Text('$cartItemCount'),
+              child: const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
+            ),
             onPressed: () async {
               if (onCartPressed != null) {
                 onCartPressed!();
@@ -113,51 +116,48 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
               }
             },
           )
+        else if (onProfilePressed != null)
+          _buildAccountAction(isProfileSignedIn, onProfilePressed!)
         else
-          // Bell Notification icon on all other pages
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none, color: Colors.black87),
-                onPressed: () async {
-                  if (onNotificationPressed != null) {
-                    onNotificationPressed!();
-                  } else {
-                    final session = await SessionService.getSession();
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => NotificationPage(
-                            isLoggedIn: session.isNotEmpty,
-                            email: session['email'],
-                            name: session['name'],
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                },
-              ),
-              if (showNotificationDot)
-                Positioned(
-                  right: 12,
-                  top: 12,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF97316),
-                      shape: BoxShape.circle,
-                    ),
+          FutureBuilder<Map<String, String?>>(
+            future: SessionService.getSession(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox(width: 48);
+              final session = snapshot.data!;
+              return _buildAccountAction(session.isNotEmpty, () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => session.isEmpty ? const WelcomePage() : HomePage(
+                    initialIndex: 4,
+                    isLoggedIn: true,
+                    email: session['email'],
+                    name: session['name'],
                   ),
-                ),
-            ],
+                ));
+              });
+            },
           ),
       ],
     );
   }
+  Widget _buildAccountAction(bool signedIn, VoidCallback onPressed) {
+    if (!signedIn) {
+      return TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(foregroundColor: const Color(0xFF0C4AA3)),
+        child: const Text('Login'),
+      );
+    }
+    return IconButton(
+      icon: CircleAvatar(
+        radius: 16,
+        backgroundColor: Colors.grey.shade200,
+        child: Icon(Icons.person, size: 20, color: Colors.grey.shade400),
+      ),
+      tooltip: 'Profile',
+      onPressed: onPressed,
+    );
+  }
+
 }
 
 class ReByteDrawer extends StatefulWidget {
@@ -202,7 +202,7 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
     if (widget.onSelectTab != null) {
       widget.onSelectTab!(targetIndex);
     } else {
-      if (targetIndex != 0 && !widget.isLoggedIn) {
+      if (![0, 5, 6].contains(targetIndex) && !widget.isLoggedIn) {
         Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
         return;
       }
@@ -213,6 +213,7 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
             isLoggedIn: widget.isLoggedIn,
             email: widget.email,
             name: widget.name,
+            initialIndex: targetIndex,
           ),
         ),
         (route) => false,
@@ -270,10 +271,7 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
                         Icons.autorenew,
                         'Trade-In',
                         isSelected: effectiveSelectedIndex == 2,
-                        onTap: () {
-                          Navigator.pop(context);
-                          _navigateToTab(context, 2);
-                        },
+                        onTap: () => _navigateToTab(context, 2),
                       ),
                       _buildDrawerItem(
                         Icons.calendar_month_outlined,
@@ -284,7 +282,8 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
                       _buildDrawerItem(
                         Icons.compare_arrows,
                         'Compare Devices',
-                        onTap: () => _navigateToTab(context, 1),
+                        isSelected: effectiveSelectedIndex == 6,
+                        onTap: () => _navigateToTab(context, 6),
                       ),
                       _buildDrawerItem(
                         Icons.phonelink_setup_rounded,
@@ -396,24 +395,6 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
                             );
                           },
                         ),
-                        _buildDrawerItem(
-                          Icons.notifications_none,
-                          'Notifications',
-                          badge: '3',
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => NotificationPage(
-                                  isLoggedIn: widget.isLoggedIn,
-                                  email: widget.email,
-                                  name: widget.name,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
                       ],
                       ],
                     ),
@@ -429,7 +410,12 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Divider(color: Colors.grey.shade200, height: 1),
-                  _buildDrawerItem(Icons.help_outline, 'Help Desk'),
+                  _buildDrawerItem(
+                    Icons.help_outline,
+                    'Help Desk',
+                    isSelected: effectiveSelectedIndex == 5,
+                    onTap: () => _navigateToTab(context, 5),
+                  ),
                   if (widget.isLoggedIn)
                     _buildDrawerItem(
                       Icons.logout,

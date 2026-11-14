@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../account_management_module/device_comparison_page.dart';
+import '../account_management_module/home_page.dart';
+import '../widgets/rebyte_app_bar.dart';
 import 'models/product_model.dart';
 import 'models/cart_item_model.dart';
 import 'services/shop_service.dart';
@@ -2635,9 +2638,40 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           // Compare device row (only for regular purchase products)
           if (!_isRentalDevice) ...[
             InkWell(
-              onTap: () {
-                _showTopToast('Device comparison feature coming soon.');
-              },
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (routeContext) => Scaffold(
+                    appBar: ReByteAppBar(
+                      isProfileSignedIn: widget.isLoggedIn,
+                      onProfilePressed: () => Navigator.of(routeContext).push(
+                        MaterialPageRoute(
+                          builder: (_) => widget.isLoggedIn
+                              ? HomePage(
+                                  initialIndex: 4,
+                                  isLoggedIn: true,
+                                  email: widget.email,
+                                  name: widget.name,
+                                )
+                              : const WelcomePage(),
+                        ),
+                      ),
+                    ),
+                    drawer: ReByteDrawer(
+                      isLoggedIn: widget.isLoggedIn,
+                      email: widget.email,
+                      name: widget.name,
+                      selectedIndex: 6,
+                    ),
+                    body: DeviceComparisonPage(
+                      isLoggedIn: widget.isLoggedIn,
+                      email: widget.email,
+                      name: widget.name,
+                      initialProduct: _product,
+                      onBack: () => Navigator.of(routeContext).pop(),
+                    ),
+                  ),
+                ),
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
@@ -2734,9 +2768,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
 
     // 5. Battery
-    final battery = specs['battery']?.toString() ?? '';
-    if (battery.isNotEmpty) {
-      rows.add({'label': 'Battery', 'value': battery});
+    final battery = RegExp(r'\b(\d+)\s*mAh\b', caseSensitive: false)
+        .firstMatch(specs['battery']?.toString() ?? '')
+        ?.group(1);
+    if (battery != null) {
+      rows.add({'label': 'Battery', 'value': '$battery mAh'});
+    }
+    final charging = specs['charging']?.toString().trim() ?? '';
+    if (charging.isNotEmpty) {
+      rows.add({'label': 'Charging', 'value': charging});
     }
 
     // 6. Body, Dimensions & Durability

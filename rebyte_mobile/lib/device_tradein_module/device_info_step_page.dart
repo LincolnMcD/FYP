@@ -110,6 +110,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
   }
 
   void _onBrandTapped() async {
+    _deviceAgeFocusNode.unfocus();
     final chosenBrand = await SearchableSelectionSheet.show(
       context: context,
       title: 'Select Brand',
@@ -164,6 +165,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
         .where((m) => !m.toLowerCase().startsWith('other'))
         .toList();
 
+    _deviceAgeFocusNode.unfocus();
     final chosenModel = await SearchableSelectionSheet.show(
       context: context,
       title: 'Select $_selectedBrand Model',
@@ -201,6 +203,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
 
     final colorNames = PhoneBrandsData.popularColors.map((e) => e.name).toList();
 
+    _deviceAgeFocusNode.unfocus();
     final chosenColour = await SearchableSelectionSheet.show(
       context: context,
       title: 'Select Colour',
@@ -222,6 +225,7 @@ class _DeviceInfoStepPageState extends State<DeviceInfoStepPage> {
   bool _isSubmitting = false;
 
   void _onContinue() async {
+    _deviceAgeFocusNode.unfocus();
     if (_isSubmitting) return;
 
     final rawAgeText = _deviceAgeController.text.trim();

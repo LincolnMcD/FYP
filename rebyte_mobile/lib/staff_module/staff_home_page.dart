@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'staff_profile_page.dart';
 import '../account_management_module/services/session_service.dart';
@@ -6,7 +7,7 @@ import '../account_management_module/services/auth_service.dart';
 import '../account_management_module/services/account_session_watch_service.dart';
 import '../account_management_module/services/app_route_observer.dart';
 import '../account_management_module/home_page.dart';
-import 'staff_commission_page.dart';
+import '../task_assignment_module/services/task_assignment_service.dart';
 import 'staff_schedule_page.dart';
 import 'staff_leave_application_page.dart';
 import 'rebyte_standards_page.dart';
@@ -46,6 +47,22 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   DateTime? _nextSessionCheckAt;
   ModalRoute<dynamic>? _observedRoute;
 
+  late Future<List<Map<String, dynamic>>?> _dashboardTasks;
+  late Future<Map<String, dynamic>?> _dashboardLeave;
+
+  void _refreshDashboard() {
+    _dashboardTasks = TaskAssignmentService.fetchStaffTasks(email: _email, requireLiveData: true)
+        .then<List<Map<String, dynamic>>?>((tasks) => tasks, onError: (_) => null);
+    _dashboardLeave = _loadDashboardLeave()
+        .then<Map<String, dynamic>?>((leave) => leave, onError: (_) => null);
+  }
+
+  Future<Map<String, dynamic>> _loadDashboardLeave() async {
+    final email = _email ?? (await SessionService.getSession())['email'];
+    if (email == null || email.isEmpty) throw StateError('Staff session missing');
+    return TaskAssignmentService.fetchLeaveBalance(email: email, requireLiveData: true);
+  }
+
   bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
 
   @override
@@ -62,6 +79,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   @override
   void didPopNext() {
     if (!_staffSessionEnding) {
+      setState(_refreshDashboard);
       AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
     }
   }
@@ -81,6 +99,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
         if (mounted) setState(() => _toastMessage = null);
       });
     }
+    _refreshDashboard();
     _loadSession();
     _loadFreshStaffProfile();
     AccountSessionWatchService.start(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
@@ -89,6 +108,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _isCurrentRoute) {
+      setState(_refreshDashboard);
       AccountSessionWatchService.restart(baseUrl: AuthService.baseUrl, onState: _handleStaffSessionState);
     }
   }
@@ -296,297 +316,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                       ? StaffSchedulePage(
                           email: _email,
                         )
-                      : SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Welcome Header
-              Padding(
-                padding: const EdgeInsets.only(left: 20.0, top: 16.0, right: 20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome, ${_name != null ? _name!.split(" ")[0] : "Sarah"}!',
-                      style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w900, fontSize: 16),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Here is your overview for today, October 24th.',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // KPI Row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  children: [
-                    Expanded(child: _buildKpiCard('ACTIVE', '2', Icons.hourglass_top_rounded, const Color(0xFF3B82F6), const Color(0xFFEFF6FF))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildKpiCard('PENDING', '5', Icons.more_horiz_rounded, const Color(0xFFF59E0B), const Color(0xFFFFFBEB))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildKpiCard('DONE', '12', Icons.check_circle_outline_rounded, const Color(0xFF10B981), const Color(0xFFECFDF5))),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action Required
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.0),
-                child: Text('Action Required', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15)),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF003799), Color(0xFF0C5AD2)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: const Color(0xFF0C5AD2).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8))],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -30,
-                        top: -30,
-                        child: Container(
-                          width: 120, height: 120,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                                  child: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF0C5AD2), size: 28),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(color: const Color(0xFF2DD4BF), borderRadius: BorderRadius.circular(30)),
-                                            child: const Text('IN PROGRESS', style: TextStyle(color: Color(0xFF134E4A), fontSize: 9, fontWeight: FontWeight.w900)),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          const Text('ID: RB-8832', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      const Text('iPhone 14 Pro Max - 256GB', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.location_on_outlined, color: Colors.white70, size: 14),
-                                          const SizedBox(width: 4),
-                                          const Text('Station 3', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-                                        ],
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {},
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFF97316),
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text('Continue Inspection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                    const SizedBox(width: 6),
-                                    const Icon(Icons.arrow_forward_rounded, size: 18),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              // Today's Schedule
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Today's Schedule", style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15)),
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedIndex = 1),
-                      child: Text('View All', style: TextStyle(color: const Color(0xFF0C5AD2).withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 125,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    _buildScheduleCard('10:00 AM', 'In 45 mins', 'UPCOMING', const Color(0xFFFEF3C7), const Color(0xFFD97706), 'iPhone 13 Pro Inspection', 'Michael C.'),
-                    const SizedBox(width: 12),
-                    _buildScheduleCard('11:30 AM', 'Walk-in', null, null, null, 'Samsung S22 Ultra Review', 'Sarah T.'),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              // QUICK ACTIONS
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.grey.shade200, width: 1.5),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('QUICK ACTIONS', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildQuickActionBtn(Icons.add_circle_outline_rounded, 'New\nInspect', true),
-                          _buildQuickActionBtn(
-                            Icons.calendar_month_outlined,
-                            'View\nSchedule',
-                            false,
-                            onTap: () => setState(() => _selectedIndex = 1),
-                          ),
-                          _buildQuickActionBtn(
-                            Icons.event_busy_outlined,
-                            'Request\nLeave',
-                            false,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => StaffLeaveApplicationPage(email: _email),
-                                ),
-                              );
-                            },
-                          ),
-                          _buildQuickActionBtn(Icons.support_agent_rounded, 'Inspection\nHelp', false),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              // Financial & Leave Metrics
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => const StaffCommissionPage()));
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.grey.shade200, width: 1.5),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(Icons.payments_outlined, color: Color(0xFF10B981), size: 24),
-                              const SizedBox(height: 12),
-                              const Text('Est. Commission', style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              const Text('RM 1,250', style: TextStyle(color: Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 12),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: const LinearProgressIndicator(
-                                  value: 0.75,
-                                  backgroundColor: Color(0xFFF1F5F9),
-                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
-                                  minHeight: 6,
-                                ),
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade200, width: 1.5),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.beach_access_rounded, color: Color(0xFF0C5AD2), size: 24),
-                            const SizedBox(height: 12),
-                            const Text('Leave Balance', style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            const Text('3 Days', style: TextStyle(color: Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 12),
-                            const Text('Resets Jan 1st', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
+                      : _buildDashboard(),
       if (_toastMessage != null)
             Positioned(
               top: 12,
@@ -629,6 +359,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
           onTap: (index) => setState(() {
+            if (index == 0) _refreshDashboard();
             _selectedIndex = index;
             _showStandards = false;
           }),
@@ -666,7 +397,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                 child: Icon(icon, color: primary, size: 14),
               ),
               const SizedBox(width: 6),
-              Text(title, style: const TextStyle(color: Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.bold)),
+              Flexible(child: Text(title, style: const TextStyle(color: Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.bold))),
             ],
           ),
           const SizedBox(height: 12),
@@ -676,85 +407,263 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildScheduleCard(String time, String subtitle, String? badge, Color? badgeBg, Color? badgeText, String title, String client) {
-    return Container(
-      width: 250,
-      padding: const EdgeInsets.all(16),
+  Widget _buildDashboard() {
+    final today = DateTime.now().toUtc().add(const Duration(hours: 8));
+    String dateKey(DateTime date) => date.toIso8601String().split('T').first;
+    final todayKey = dateKey(today);
+
+    int? category(Map<String, dynamic> task) {
+      final status = (task['taskStatus'] ?? '').toString().trim().toLowerCase();
+      final schedule = (task['scheduleStatus'] ?? '').toString().trim().toLowerCase();
+      const excluded = ['absent', 'rejected', 'cancelled', 'reassigned', 'unassigned'];
+      if (excluded.contains(status) || excluded.contains(schedule)) return null;
+      if (schedule == 'completed' || ['completed', 'delivered'].contains(status)) return 2;
+      if (schedule == 'ongoing' || ['in progress', 'ongoing', 'shipping'].contains(status)) return 1;
+      if (schedule == 'assigned' || ['assigned', 'packaging'].contains(status)) return 0;
+      return null;
+    }
+
+    String fields(Map<String, dynamic> task, List<String> keys) =>
+        keys.map((key) => task[key]?.toString() ?? '').where((value) => value.isNotEmpty).join(' · ');
+
+    Widget taskCard(Map<String, dynamic> task) => Card(
+      child: ListTile(
+        leading: const Icon(Icons.assignment_outlined),
+        title: Text(fields(task, ['taskType', 'deviceModel'])),
+        subtitle: Text(fields(task, ['scheduleStartTime', 'customerName'])),
+      ),
+    );
+    const heading = TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15);
+    Widget actionCard(Map<String, dynamic> task) => Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+        gradient: const LinearGradient(colors: [Color(0xFF003799), Color(0xFF0C5AD2)]),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+          const Text('IN PROGRESS', style: TextStyle(color: Color(0xFF99F6E4), fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(fields(task, ['taskType', 'deviceModel']), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(fields(task, ['scheduleStartTime', 'customerName']), style: const TextStyle(color: Colors.white70)),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white),
+              onPressed: () => setState(() => _selectedIndex = 2),
+              child: const Text('View Tasks'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text('Welcome, ${_name?.split(" ").first ?? "Staff"}!', style: const TextStyle(color: Color(0xFF0C5AD2), fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(MaterialLocalizations.of(context).formatFullDate(today), style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+          const SizedBox(height: 16),
+          FutureBuilder<List<Map<String, dynamic>>?>(
+            future: _dashboardTasks,
+            builder: (context, snapshot) {
+              final tasks = snapshot.data;
+              final scheduled = (tasks ?? []).where((task) =>
+                  task['scheduleDate'] == todayKey && category(task) != null).toList()
+                ..sort((a, b) => fields(a, ['scheduleStartTime']).compareTo(fields(b, ['scheduleStartTime'])));
+              final active = (tasks ?? []).where((task) => category(task) == 1).toList();
+              final completed = (tasks ?? []).where((task) {
+                if (category(task) != 2) return false;
+                final date = DateTime.tryParse(task['completedAt']?.toString() ?? '');
+                return date == null ? task['scheduleDate'] == todayKey
+                    : dateKey(date.toUtc().add(const Duration(hours: 8))) == todayKey;
+              }).length;
+              String count(int value) => tasks == null ? '—' : value.toString();
+              final message = snapshot.connectionState == ConnectionState.waiting
+                  ? 'Loading tasks…' : 'Could not load tasks.';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle),
-                    child: const Icon(Icons.access_time_rounded, color: Color(0xFF64748B), size: 16),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(time, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.w900)),
-                      Text(subtitle, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w500)),
-                    ],
+                  Row(children: [
+                    Expanded(child: _buildKpiCard('Active', count(scheduled.where((task) => category(task) == 0).length), Icons.assignment_outlined, Colors.blue, const Color(0xFFEFF6FF))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildKpiCard('In Progress', count(scheduled.where((task) => category(task) == 1).length), Icons.timelapse, Colors.orange, const Color(0xFFFFFBEB))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildKpiCard('Completed', count(completed), Icons.check_circle_outline, Colors.green, const Color(0xFFECFDF5))),
+                  ]),
+                  const SizedBox(height: 20),
+                  Text('Action Required', style: heading),
+                  const SizedBox(height: 12),
+                  if (tasks == null) Text(message)
+                  else if (active.isEmpty) _buildEmptyTaskCard(
+                    Icons.task_alt_rounded,
+                    'No tasks in progress',
+                    'Tasks you start will appear here.',
+                  )
+                  else if (active.length == 1) actionCard(active.single)
+                  else LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: [
+                      for (final task in active)
+                        Container(width: constraints.maxWidth * .85, margin: const EdgeInsets.only(right: 12), child: actionCard(task)),
+                    ]),
+                  )),
+                  const SizedBox(height: 20),
+                  Row(children: [
+                    Expanded(child: Text("Today's Schedule", style: heading)),
+                    TextButton(onPressed: () => setState(() => _selectedIndex = 1), child: const Text('View All')),
+                  ]),
+                  if (tasks == null) Text(message)
+                  else if (scheduled.isEmpty) _buildEmptyTaskCard(
+                    Icons.event_available_outlined,
+                    'No tasks scheduled today',
+                    'New assignments will appear here.',
+                  )
+                  else SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: [
+                      for (final task in scheduled)
+                        SizedBox(width: 250, child: taskCard(task)),
+                    ]),
                   ),
                 ],
-              ),
-              if (badge != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
-                  child: Text(badge, style: TextStyle(color: badgeText, fontSize: 9, fontWeight: FontWeight.bold)),
-                ),
-            ],
+              );
+            },
           ),
-          const Spacer(),
-          Text(title, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.person_outline, size: 12, color: Color(0xFF64748B)),
-              const SizedBox(width: 4),
-              Text('Client: $client', style: const TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
+          const SizedBox(height: 20),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _dashboardLeave,
+                  builder: (context, snapshot) => _buildDashboardTile(
+                    icon: Icons.beach_access_outlined,
+                    title: 'Leave Balance',
+                    accent: const Color(0xFF0C5AD2),
+                    detail: snapshot.data == null
+                        ? Text(snapshot.connectionState == ConnectionState.waiting ? 'Loading…' : 'Unavailable')
+                        : Table(
+                            columnWidths: const {
+                              0: IntrinsicColumnWidth(),
+                              1: IntrinsicColumnWidth(),
+                              2: IntrinsicColumnWidth(),
+                              3: FlexColumnWidth(),
+                            },
+                            children: [
+                              for (final entry in {'Annual': 'annualRemaining', 'MC': 'medicalRemaining'}.entries)
+                                TableRow(children: [
+                                  Text(entry.key, textAlign: TextAlign.end),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: const Text(':'),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Text(
+                                      '${snapshot.data?[entry.value] ?? '—'}',
+                                      textAlign: TextAlign.end,
+                                      style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: Text('days'),
+                                  ),
+                                ]),
+                            ],
+                          ),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => StaffLeaveApplicationPage(email: _email),
+                    )),
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _buildDashboardTile(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Guidance Library',
+                  accent: const Color(0xFF6D28D9),
+                  detail: const Text('Inspection standards'),
+                  onTap: () => setState(() => _showStandards = true),
+                )),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionBtn(IconData icon, String label, bool isActive, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF0C5AD2) : const Color(0xFFEEF2FF),
-              shape: BoxShape.circle,
-              boxShadow: isActive ? [BoxShadow(color: const Color(0xFF0C5AD2).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))] : [],
-            ),
-            child: Icon(icon, color: isActive ? Colors.white : const Color(0xFF0C5AD2), size: 24),
+  Widget _buildEmptyTaskCard(IconData icon, String title, String detail) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: Column(
+            children: [
+              CircleAvatar(
+                backgroundColor: const Color(0xFFEFF6FF),
+                foregroundColor: const Color(0xFF0C5AD2),
+                child: Icon(icon),
+              ),
+              const SizedBox(height: 8),
+              Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(detail, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold, height: 1.2),
-          ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _buildDashboardTile({
+    required IconData icon,
+    required String title,
+    required Widget detail,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      color: Colors.white,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: accent),
+              const SizedBox(height: 8),
+              Text(title, style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              DefaultTextStyle.merge(
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.w800),
+                child: detail,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: const Color(0xFFF8F9FB),
@@ -776,7 +685,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                   children: [
                     _buildDrawerItem(Icons.grid_view_rounded, 'Dashboard', isSelected: _selectedIndex == 0, onTap: () {
                       Navigator.pop(context);
-                      setState(() { _selectedIndex = 0; _showStandards = false; });
+                      setState(() { _refreshDashboard(); _selectedIndex = 0; _showStandards = false; });
                     }),
                     _buildDrawerItem(Icons.calendar_today_rounded, 'Schedule', isSelected: _selectedIndex == 1, onTap: () {
                       Navigator.pop(context);
@@ -791,12 +700,6 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                       setState(() { _selectedIndex = 3; _showStandards = false; });
                       _verifyStaffSession();
                     }),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                      child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                    ),
-                    _buildDrawerItem(Icons.inventory_2_outlined, 'My Trade-Ins'),
-                    _buildDrawerItem(Icons.notifications_none, 'Notifications', badge: '3'),
                   ],
                 ),
               ),

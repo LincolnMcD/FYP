@@ -22,15 +22,17 @@ import '../device_tradein_module/models/device_model.dart';
 import '../decision_assistance_module/diagnostic_suite_page.dart';
 import '../product_purchase_module/shop_page.dart';
 import '../product_purchase_module/cart_page.dart';
-import '../product_purchase_module/notification_page.dart';
+import '../widgets/rebyte_app_bar.dart';
 import '../product_purchase_module/my_orders_page.dart';
 import '../product_purchase_module/services/shop_service.dart';
+import '../product_purchase_module/models/product_model.dart';
+import '../product_purchase_module/product_detail_page.dart';
 import '../device_tradein_module/my_trade_in_requests_page.dart';
 import '../rental_managment_module/my_rentals_page.dart';
 import '../rental_managment_module/services/rental_service.dart';
 import '../rental_managment_module/rental_device_detail_page.dart';
 import 'help_desk_page.dart';
-import 'compare_devices_coming_soon_page.dart';
+import 'device_comparison_page.dart';
 
 class HomePage extends StatefulWidget {
   final bool isLoggedIn;
@@ -72,6 +74,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
   bool _isToastError = false;
   bool _accountSessionEnding = false;
   ModalRoute<dynamic>? _observedRoute;
+  late final Future<Map<String, dynamic>> _listedProducts =
+      ShopService.fetchProductPage(status: 'listed');
   int _cartItemCount = 0;
   List<Map<String, dynamic>> _activeRentals = [];
   bool _isLoadingRentals = false;
@@ -423,8 +427,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8F9FB), // light grayish-blue background
       resizeToAvoidBottomInset: _selectedIndex != 5,
-      drawer: _buildDrawer(),
-      appBar: _buildAppBar(),
+      drawer: ReByteDrawer(
+        isLoggedIn: _isLoggedIn,
+        name: _name,
+        email: _email,
+        selectedIndex: _selectedIndex,
+        onSelectTab: (index) {
+          if (index == 0 || index == 5 || index == 6) {
+            setState(() => _selectedIndex = index);
+          } else {
+            _navigateOrRequireLogin(index);
+          }
+        },
+      ),
+      appBar: ReByteAppBar(
+        scaffoldKey: _scaffoldKey,
+        isShopPage: _selectedIndex == 1,
+        onCartPressed: _openCartPage,
+        cartItemCount: _cartItemCount,
+        onProfilePressed: () => _navigateOrRequireLogin(4),
+        isProfileSignedIn: _isLoggedIn,
+      ),
       body: Stack(
         children: [
           if (_selectedIndex == 0) const Positioned.fill(child: _CustomerHomeBackground()),
@@ -437,8 +460,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSearchBar(),
-                    const SizedBox(height: 16),
                     _buildBanner(),
                     const SizedBox(height: 24),
                     _buildSectionTitle('Quick Actions'),
@@ -457,13 +478,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _buildSectionHeaderWithViewAll('Recommended Certified Smartphones'),
+                    _buildSectionHeaderWithViewAll('Listed Smartphones'),
                     const SizedBox(height: 12),
-                    _buildRecommendedSmartphones(),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle('Recently Viewed Smartphones'),
-                    const SizedBox(height: 12),
-                    _buildRecentlyViewedSmartphones(),
+                    _buildListedSmartphones(),
                     const SizedBox(height: 24),
                     _buildSectionTitle('Why Choose ReByte?'),
                     const SizedBox(height: 12),
@@ -516,7 +533,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                 onBack: () => setState(() => _selectedIndex = 0),
                 onNavigate: _handleHelpDeskAction,
               ),
-              CompareDevicesComingSoonPage(onBack: () => setState(() => _selectedIndex = 0)),
+              DeviceComparisonPage(
+                onBack: () => setState(() => _selectedIndex = 0),
+                email: _email,
+                name: _name,
+                isLoggedIn: _isLoggedIn,
+              ),
             ],
           ),
           if (_toastMessage != null)
@@ -554,340 +576,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     );
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      backgroundColor: const Color(0xFFF8F9FB),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: const Color(0xFFF8F9FB),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
-                child: _isLoggedIn ? _buildLoggedInDrawerHeader() : _buildLoggedOutDrawerHeader(),
-              ),
-            ),
-            Divider(color: Colors.grey.shade200, height: 1),
-            Expanded(
-              child: ClipRect(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildDrawerItem(Icons.home, 'Home', isSelected: _selectedIndex == 0, onTap: () {
-                    Navigator.pop(context);
-                    setState(() => _selectedIndex = 0);
-                  }),
-                  _buildDrawerItem(Icons.store_outlined, 'Shop', isSelected: _selectedIndex == 1, onTap: () {
-                    Navigator.pop(context);
-                    _navigateOrRequireLogin(1);
-                  }),
-                    _buildDrawerItem(Icons.autorenew, 'Trade-In', isSelected: _selectedIndex == 2, onTap: () {
-                      Navigator.pop(context);
-                      _navigateOrRequireLogin(2);
-                    }),
-                    _buildDrawerItem(Icons.calendar_month_outlined, 'Rentals', isSelected: _selectedIndex == 3, onTap: () {
-                      Navigator.pop(context);
-                      _navigateOrRequireLogin(3);
-                    }),
-                  _buildDrawerItem(Icons.compare_arrows, 'Compare Devices', isSelected: _selectedIndex == 6, onTap: () {
-                    Navigator.pop(context);
-                    setState(() => _selectedIndex = 6);
-                  }),
-                  _buildDrawerItem(Icons.phonelink_setup_rounded, 'Test My Device', onTap: () {
-                    Navigator.pop(context);
-                    if (!_isLoggedIn) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const WelcomePage()),
-                      );
-                      return;
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DiagnosticSuitePage(
-                          isLoggedIn: _isLoggedIn,
-                          email: _email,
-                          name: _name,
-                        ),
-                      ),
-                    );
-                  }),
-                  if (_isLoggedIn) ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                      child: Text('ACTIVITY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5)),
-                    ),
-                    _buildDrawerItem(
-                      Icons.inventory_2_outlined,
-                      'My Orders',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MyOrdersPage(
-                              email: _email ?? 'customer@rebyte.com',
-                              name: _name,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildDrawerItem(
-                      Icons.calendar_month_outlined,
-                      'My Rentals',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MyRentalsPage(
-                              email: _email ?? 'customer@rebyte.com',
-                              name: _name,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildDrawerItem(
-                      Icons.autorenew_outlined,
-                      'My Trade-In Requests',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MyTradeInRequestsPage(
-                              email: _email ?? 'customer@rebyte.com',
-                              name: _name,
-                              isLoggedIn: _isLoggedIn,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildDrawerItem(
-                      Icons.shopping_bag_outlined,
-                      'My Cart',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _openCartPage();
-                      },
-                    ),
-                    _buildDrawerItem(
-                      Icons.notifications_none,
-                      'Notifications',
-                      badge: '3',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _openNotificationPage();
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk', isSelected: _selectedIndex == 5, onTap: () {
-              Navigator.pop(context);
-              setState(() => _selectedIndex = 5);
-            }),
-            if (_isLoggedIn)
-              _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => Dialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Confirm Logout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                              GestureDetector(
-                                onTap: () => Navigator.pop(context),
-                                child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('Are you sure you want to log out of your ReByte account?', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                          const SizedBox(height: 32),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  child: const Text('CANCEL', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    TradeInFlowSession.clear();
-                                    await SessionService.clearSession();
-                                    if (context.mounted) {
-                                      Navigator.pushAndRemoveUntil(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const HomePage(
-                                            isLoggedIn: false,
-                                            toastMessage: 'Logout successful',
-                                          ),
-                                        ),
-                                        (route) => false,
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFE11D48),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    elevation: 0,
-                                  ),
-                                  child: const Text('LOGOUT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoggedOutDrawerHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Welcome to ReByte!',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Please log in to manage your account and orders.',
-          style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-        ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context); // Close drawer
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0C5AD2),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            elevation: 0,
-            minimumSize: const Size(double.infinity, 40),
-          ),
-          child: const Text('Log In / Register', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoggedInDrawerHeader() {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        setState(() => _selectedIndex = 4);
-      },
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha:0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(Icons.person, size: 32, color: Colors.grey.shade400),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _name ?? 'ReByte User',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _email ?? 'user@rebyte.com',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(IconData icon, String title, {bool isSelected = false, String? badge, Color? iconColor, void Function()? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: ListTile(
-        leading: Icon(icon, color: isSelected ? Colors.white : (iconColor ?? const Color(0xFF475569)), size: 20),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1E293B),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-        trailing: badge != null
-            ? Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFC53030), // Red color for badge
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                ),
-              )
-            : null,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        tileColor: isSelected ? const Color(0xFF0C5AD2) : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        onTap: onTap ?? () {},
-      ),
-    );
-  }
-
   void _openCartPage() {
     if (!_isLoggedIn) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => const WelcomePage()));
@@ -910,139 +598,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
       _shopPageKey.currentState?.loadProducts();
       _loadCartCount();
     });
-  }
-
-  void _openNotificationPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NotificationPage(
-          isLoggedIn: _isLoggedIn,
-          email: _email,
-          name: _name,
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: const Icon(Icons.menu, color: Colors.black87),
-        onPressed: () {
-          _scaffoldKey.currentState?.openDrawer();
-        },
-      ),
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/images/rebyte_logo.png',
-            height: 36,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.medium,
-            errorBuilder: (context, error, stackTrace) => Container(
-              height: 36,
-              width: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFF0C5AD2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'ReByte',
-            style: TextStyle(
-              color: Colors.black87,
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        if (_selectedIndex == 1)
-          IconButton(
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.shopping_cart_outlined, color: Colors.black87),
-                if (_cartItemCount > 0)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE11D48),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        '$_cartItemCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            onPressed: _openCartPage,
-          )
-        else
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none, color: Colors.black87),
-                onPressed: _openNotificationPage,
-              ),
-              Positioned(
-                right: 12,
-                top: 12,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF97316),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search for devices, brands, or models...',
-          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-          prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        ),
-      ),
-    );
   }
 
   Widget _buildBanner() {
@@ -1122,14 +677,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
           child: Text(
             title,
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
             ),
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: () => setState(() => _selectedIndex = 1),
           style: TextButton.styleFrom(
             minimumSize: Size.zero,
             padding: EdgeInsets.zero,
@@ -1158,7 +713,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
             }
             Navigator.push(context, MaterialPageRoute(builder: (context) => MyRentalsPage(email: _email ?? 'customer@rebyte.com', name: _name)));
           }),
-          _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth, onTap: () => _navigateOrRequireLogin(1)),
+          _buildActionItem('Compare\nPhones', Icons.compare_arrows, const Color(0xFFF3E8FF), itemWidth, onTap: () => setState(() => _selectedIndex = 6)),
           _buildActionItem(
             'Test My\nDevice',
             Icons.phonelink_setup_rounded,
@@ -1744,135 +1299,80 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
     );
   }
 
-  Widget _buildRecommendedSmartphones() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildPhoneCard(
-            brand: 'Apple',
-            model: 'iPhone 14, 128GB',
-            price: 'RM599.00',
-            tag: 'PERFECT',
-            tagColor: const Color(0xFFE0E7FF),
-            tagTextColor: const Color(0xFF0C5AD2),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildPhoneCard(
-            brand: 'Samsung',
-            model: 'Galaxy S23, 256GB',
-            price: 'RM499.00',
-            tag: 'EXCELLENT',
-            tagColor: const Color(0xFFE0E7FF),
-            tagTextColor: const Color(0xFF0C5AD2),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentlyViewedSmartphones() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildPhoneCard(
-            brand: 'Samsung',
-            model: 'Galaxy S22, 128GB',
-            price: 'RM349.00',
-            tag: null,
-            tagColor: Colors.transparent,
-            tagTextColor: Colors.transparent,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildPhoneCard(
-            brand: 'Apple',
-            model: 'iPhone 12, 64GB',
-            price: 'RM299.00',
-            tag: null,
-            tagColor: Colors.transparent,
-            tagTextColor: Colors.transparent,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhoneCard({
-    required String brand,
-    required String model,
-    required String price,
-    required String? tag,
-    required Color tagColor,
-    required Color tagTextColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha:0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (tag != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: tagColor,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                tag,
-                style: TextStyle(
-                  color: tagTextColor,
-                  fontSize: 7,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            )
-          else
-            const SizedBox(height: 14), // Placeholder for tag
-          const SizedBox(height: 8),
-          Center(
-            child: Container(
-              height: 80,
-              width: double.infinity,
-              color: Colors.grey.shade100, // Placeholder for image
-              child: Icon(Icons.phone_iphone, size: 40, color: Colors.grey.shade400),
+  Widget _buildListedSmartphones() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _listedProducts,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || snapshot.data?['error'] != null) {
+          return const Text('Could not load listings. Open Shop to try again.');
+        }
+        final products = (snapshot.data?['products'] as List<ProductModel>? ?? [])
+            .where((product) => product.listingStatus.toLowerCase() == 'listed')
+            .take(8)
+            .toList();
+        if (products.isEmpty) return const Text('No smartphones listed yet.');
+        return LayoutBuilder(
+          builder: (context, constraints) => SizedBox(
+            height: 166,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              itemCount: products.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final product = products[index];
+                return SizedBox(
+                  width: (constraints.maxWidth - 12) / 2,
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailPage(
+                            product: product,
+                            isLoggedIn: _isLoggedIn,
+                            email: _email,
+                            name: _name,
+                            onCartUpdated: _loadCartCount,
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Center(
+                                child: product.images.isEmpty
+                                    ? const Icon(Icons.smartphone)
+                                    : Image.network(
+                                        product.images.first,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) => const Icon(Icons.smartphone),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(product.displayTitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600)),
+                            Text('RM ${product.sellingPrice.toStringAsFixed(2)}',
+                                style: const TextStyle(color: Color(0xFF0C4AA3), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
-          const SizedBox(height: 12),
-          Text(brand, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-          const SizedBox(height: 2),
-          Text(model, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(price, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0E7FF),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.add, size: 14, color: Color(0xFF0C5AD2)),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
