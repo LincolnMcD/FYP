@@ -1,3 +1,4 @@
+import 'trade_in_inspection_sections.dart';
 import 'package:flutter/material.dart';
 import 'models/device_model.dart';
 import 'services/trade_in_flow_session.dart';
@@ -41,6 +42,9 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
   bool _isLoadingEstimate = false;
   String? _estimatedValue;
   String? _pricingError;
+  Map<String, dynamic>? _evaluation;
+  String? _conditionGrade;
+  String? _devicePhotoUrl;
 
   @override
   void initState() {
@@ -51,6 +55,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     TradeInFlowSession.setTradeInRequestId(widget.tradeInRequestID);
     TradeInFlowSession.setCurrentDevice(widget.device);
 
+    _loadDeviceAssessment();
     _estimatedValue = widget.estimatedValue;
     final shouldPredict = widget.tradeInRequestID.isNotEmpty &&
         ((widget.fromMyTradeInRequests && !widget.estimateFromModel) ||
@@ -61,6 +66,34 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     } else {
       _saveQuotedEstimate(_parseEstimateRange(_estimatedValue));
     }
+  }
+
+  Future<void> _loadDeviceAssessment() async {
+    if (widget.tradeInRequestID.isEmpty) return;
+    final evaluation = await TradeInService.getEvaluation(widget.tradeInRequestID);
+    if (!mounted || evaluation == null) return;
+    final images = evaluation['images'];
+    String? photoUrl;
+    if (images is List) {
+      for (final photo in images.whereType<Map>()) {
+        final url = [photo['originalImageUrl'], photo['imageUrl']]
+            .whereType<String>()
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .firstOrNull;
+        if (url == null) continue;
+        photoUrl ??= url;
+        if (photo['imageView']?.toString().startsWith('front') == true) {
+          photoUrl = url;
+          break;
+        }
+      }
+    }
+    setState(() {
+      _evaluation = evaluation;
+      _conditionGrade = evaluation['grade']?.toString().trim();
+      _devicePhotoUrl = photoUrl;
+    });
   }
 
   Map<String, dynamic>? _parseEstimateRange(String? value) {
@@ -320,7 +353,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
                 ),
                 const SizedBox(height: 10),
 
-                // Estimated Value Badge + Valid for 14 days
+                // Estimated Value Badge
                 Row(
                   children: [
                     Container(
@@ -345,11 +378,6 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Valid for 14 days',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -362,8 +390,11 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
                 _buildDeviceOverviewCard(fullDeviceName, storage, colour),
                 const SizedBox(height: 16),
 
-                // 3. Price Influencing Factors Card
-                _buildFactorsCard(),
+                TradeInInspectionSections(evaluation: _evaluation),
+                const SizedBox(height: 16),
+
+                // What Happens Next Card
+                _buildNextStepsCard(),
                 const SizedBox(height: 24),
 
                 // Accept Offer Button (Solid Blue)
@@ -531,6 +562,10 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     );
   }
 
+  static const _devicePhotoPlaceholder = Center(
+    child: Icon(Icons.phone_iphone_rounded, size: 48, color: Color(0xFF64748B)),
+  );
+
   Widget _buildDeviceOverviewCard(String fullDeviceName, String storage, String colour) {
     return Container(
       width: double.infinity,
@@ -549,7 +584,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Graphic thumbnail of smartphone
+          // Inspection photo
           Center(
             child: Container(
               height: 90,
@@ -558,13 +593,14 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.phone_iphone_rounded,
-                  size: 48,
-                  color: Color(0xFF64748B),
-                ),
-              ),
+              clipBehavior: Clip.antiAlias,
+              child: _devicePhotoUrl == null
+                  ? _devicePhotoPlaceholder
+                  : Image.network(
+                      _devicePhotoUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _devicePhotoPlaceholder,
+                    ),
             ),
           ),
           const SizedBox(height: 14),
@@ -590,16 +626,18 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
           ),
           const SizedBox(height: 10),
 
-          // Condition: Good badge
+          // Saved assessment grade
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              'Condition: Good',
-              style: TextStyle(
+            child: Text(
+              _conditionGrade?.isNotEmpty == true
+                  ? 'Condition grade $_conditionGrade'
+                  : 'Condition unavailable',
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF0C5AD2),
@@ -611,7 +649,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
     );
   }
 
-  Widget _buildFactorsCard() {
+  Widget _buildNextStepsCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -630,7 +668,7 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Price Influencing Factors',
+            'What Happens Next',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -641,37 +679,37 @@ class _PreliminaryQuotationPageState extends State<PreliminaryQuotationPage> {
           const Divider(height: 16, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 6),
 
-          // Factor 1: Flawless Screen
-          _buildFactorItem(
-            icon: Icons.check_circle_outline_rounded,
-            iconColor: const Color(0xFF10B981),
-            title: 'Flawless Screen',
-            description: 'No scratches or cracks detected.',
+          // Schedule the inspection
+          _buildNextStep(
+            icon: Icons.event_available_outlined,
+            iconColor: const Color(0xFF003799),
+            title: 'Schedule an inspection',
+            description: 'Choose an appointment that works for you.',
           ),
           const SizedBox(height: 14),
 
-          // Factor 2: Battery Health (82%)
-          _buildFactorItem(
-            icon: Icons.battery_alert_rounded,
-            iconColor: const Color(0xFFF59E0B),
-            title: 'Battery Health (82%)',
-            description: 'Slight deduction for battery degradation.',
+          // Prepare for the inspection
+          _buildNextStep(
+            icon: Icons.smartphone_outlined,
+            iconColor: const Color(0xFF003799),
+            title: 'Bring your device',
+            description: 'Our staff will verify its condition.',
           ),
           const SizedBox(height: 14),
 
-          // Factor 3: Fully Functional
-          _buildFactorItem(
-            icon: Icons.check_circle_outline_rounded,
-            iconColor: const Color(0xFF10B981),
-            title: 'Fully Functional',
-            description: 'All buttons and cameras working perfectly.',
+          // Review the offer
+          _buildNextStep(
+            icon: Icons.receipt_long_outlined,
+            iconColor: const Color(0xFF003799),
+            title: 'Review your final offer',
+            description: 'After inspection, you can accept or decline the offer.',
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFactorItem({
+  Widget _buildNextStep({
     required IconData icon,
     required Color iconColor,
     required String title,

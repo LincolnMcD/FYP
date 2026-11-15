@@ -154,6 +154,16 @@ class DefectPredictor:
     def __init__(self,settings,resolve,threshold):
         self.settings=settings;self.resolve=resolve;self.threshold=threshold;self.predictor=None
     def predict(self,image,output):
+        if self.settings.get('architecture') == 'v26':
+            from model2_defect_segmentation_v26.inference.predict import load_predictor, predict
+            if self.predictor is None:
+                self.predictor = load_predictor(
+                    self.resolve(self.settings['checkpoint']),
+                    self.resolve(self.settings['config']),
+                    self.settings.get('device', 'cpu'),
+                )
+            return predict(image, confidence=self.threshold, output_dir=output,
+                           predictor=self.predictor)[0]
         if self.predictor is None:
             from model2_defect_segmentation.inference.predict import Predictor
             config=self.resolve(self.settings['config']);checkpoint=self.resolve(self.settings['checkpoint'])

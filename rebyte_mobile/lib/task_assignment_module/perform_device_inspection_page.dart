@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 import 'staff_device_inspection_specs_page.dart';
+import 'staff_device_self_test_page.dart';
 import '../device_tradein_module/services/trade_in_service.dart';
 
 class PerformDeviceInspectionPage extends StatefulWidget {
@@ -22,10 +23,57 @@ class PerformDeviceInspectionPage extends StatefulWidget {
 class _PerformDeviceInspectionPageState
     extends State<PerformDeviceInspectionPage> {
   String? _imageUrl;
+  String _deviceID = '';
+  bool _checkingSelfTest = true;
+  bool _selfTestSaved = false;
+
+  Future<void> _loadSelfTestStatus() async {
+    final task = widget.task;
+    var deviceID = task['deviceID']?.toString().trim() ?? '';
+    if (deviceID.isEmpty && task['device'] is Map) {
+      deviceID = task['device']['deviceID']?.toString().trim() ?? '';
+    }
+    if (deviceID.isEmpty) {
+      final requestID = (task['tradeInRequestID'] ?? task['tradeInID'] ??
+          task['orderID'] ?? '').toString().trim();
+      if (requestID.isNotEmpty) {
+        final details = await TradeInService.getTradeInRequestDetails(requestID);
+        deviceID = details?['deviceID']?.toString().trim() ?? '';
+        if (deviceID.isEmpty && details?['device'] is Map) {
+          deviceID = details!['device']['deviceID']?.toString().trim() ?? '';
+        }
+      }
+    }
+    final diagnostic = deviceID.isEmpty
+        ? null
+        : await TradeInService.getDeviceDiagnostic(deviceID);
+    if (!mounted) return;
+    setState(() {
+      _deviceID = deviceID;
+      _selfTestSaved = diagnostic?['diagnosticScore'] is num;
+      _checkingSelfTest = false;
+    });
+  }
+
+  Future<void> _performSelfTest() async {
+    if (_deviceID.isEmpty) {
+      StaffToast.show(context, 'Could not find the device for this inspection. Please try again.', isError: true);
+      setState(() => _checkingSelfTest = true);
+      await _loadSelfTestStatus();
+      return;
+    }
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => StaffDeviceSelfTestPage(deviceID: _deviceID)),
+    );
+    if (!mounted || saved != true) return;
+    setState(() => _selfTestSaved = true);
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadSelfTestStatus();
     final items = widget.task['items'] as List? ?? [];
     _imageUrl = widget.task['imageUrl']?.toString() ??
         widget.task['deviceImageUrl']?.toString() ??
@@ -449,6 +497,27 @@ class _PerformDeviceInspectionPageState
 
               const SizedBox(height: 12),
 
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _checkingSelfTest || _selfTestSaved ? null : _performSelfTest,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0043CE),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFE2E8F0),
+                      disabledForegroundColor: const Color(0xFF64748B),
+                    ),
+                    icon: Icon(_selfTestSaved ? Icons.check_circle_outline : Icons.fact_check_outlined),
+                    label: Text(_checkingSelfTest
+                        ? 'Checking self-test status…'
+                        : _selfTestSaved ? 'Self-test completed' : 'Perform Self Test'),
+                  ),
+                ),
+              ),
+
               // Start Inspection Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -456,7 +525,7 @@ class _PerformDeviceInspectionPageState
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () async {
+                    onPressed: !_selfTestSaved ? null : () async {
                       final res = await Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -475,6 +544,8 @@ class _PerformDeviceInspectionPageState
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0043CE),
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFE2E8F0),
+                      disabledForegroundColor: const Color(0xFF64748B),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(26),
@@ -488,11 +559,10 @@ class _PerformDeviceInspectionPageState
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
                           ),
                         ),
                         SizedBox(width: 8),
-                        Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                        Icon(Icons.arrow_forward, size: 18),
                       ],
                     ),
                   ),

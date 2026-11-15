@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'package:flutter/material.dart';
 import '../device_tradein_module/models/device_model.dart';
 import 'camera_test_page.dart';
@@ -179,6 +180,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
 
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -315,6 +317,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
   void _onSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -420,8 +423,10 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
   }
 
   Future<void> _handleBack() async {
+    if (StaffDiagnosticScope.requestExit(context)) return;
     final bool? confirmExit = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -509,7 +514,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         _handleBack();
       },
       child: Scaffold(
@@ -1165,6 +1170,7 @@ class _DisplayTestPageState extends State<DisplayTestPage> {
   void _showDefectPreviewDialog(String title, String imagePath, String desc) {
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(

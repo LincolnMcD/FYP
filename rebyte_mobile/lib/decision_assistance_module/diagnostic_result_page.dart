@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../device_tradein_module/models/device_model.dart';
@@ -76,6 +77,38 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
   void initState() {
     super.initState();
     _checkAndSaveDiagnostic();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final staff = StaffDiagnosticScope.of(context);
+    if (staff == null || _hasSavedDiagnostic) return;
+    _hasSavedDiagnostic = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _saveStaffDiagnostic(staff);
+    });
+  }
+
+  Future<void> _saveStaffDiagnostic(StaffDiagnosticScope staff) async {
+    final result = await staff.save(() => TradeInService.saveDeviceDiagnostic(
+      deviceID: staff.deviceID,
+      touchScreenMark: widget.touchScore,
+      displayMark: widget.displayScore,
+      cameraMark: widget.cameraScore,
+      microphoneMark: widget.micScore,
+      speakerMark: widget.speakerScore,
+      sensorMark: widget.sensorScore,
+      connectivityMark: widget.networkScore,
+      gpsMark: widget.gpsScore,
+      diagnosticScore: overallScore,
+    ));
+    if (mounted && result['success'] != true) {
+      final message = result['message']?.toString() ??
+          'Could not save the self-test. Please retry.';
+      debugPrint('Staff self-test save failed: $message');
+      _showTopToast(message, isError: true);
+    }
   }
 
   Future<void> _checkAndSaveDiagnostic() async {
@@ -198,16 +231,17 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
 
   @override
   Widget build(BuildContext context) {
+    final staff = StaffDiagnosticScope.of(context);
     final String formattedDate = DateFormat('MMM d, yyyy \'at\' h:mm a').format(DateTime.now());
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const ReByteAppBar(),
-      drawer: ReByteDrawer(
+      appBar: staff == null ? const ReByteAppBar() : null,
+      drawer: staff != null ? null : ReByteDrawer(
         isLoggedIn: widget.isLoggedIn,
         email: widget.email,
         name: widget.name,
-        selectedIndex: 5,
+        selectedIndex: ReByteDrawer.testDeviceIndex,
       ),
       body: SafeArea(
         child: Stack(
@@ -223,7 +257,7 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                         // Back button
                         IconButton(
                           icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: staff?.exit ?? () => Navigator.pop(context),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -319,7 +353,7 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                         ),
 
                         // Blue caution label at the top of Overall Health block (when NOT accessed from Improve Assessment)
-                        if (!widget.fromImproveAssessment) ...[
+                        if (staff == null && !widget.fromImproveAssessment) ...[
                           const SizedBox(height: 16),
                           Container(
                             width: double.infinity,
@@ -580,7 +614,15 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: staff?.saving == true ? null : () {
+                    if (staff != null) {
+                      if (staff.saved) {
+                        staff.exit();
+                      } else {
+                        _saveStaffDiagnostic(staff);
+                      }
+                      return;
+                    }
                     if (widget.fromImproveAssessment && widget.device != null && widget.tradeInRequestID != null) {
                       // Navigate back to ImproveAssessmentPage (not evaluating yet)
                       Navigator.pushAndRemoveUntil(
@@ -611,7 +653,9 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        widget.fromImproveAssessment ? 'Use Result in Trade-In' : 'Complete',
+                        staff != null
+                            ? (staff.saving ? 'Saving self-test…' : staff.saved ? 'Complete' : 'Retry Save')
+                            : widget.fromImproveAssessment ? 'Use Result in Trade-In' : 'Complete',
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(width: 8),
@@ -682,7 +726,7 @@ class _DiagnosticResultPageState extends State<DiagnosticResultPage> {
       ],
     ),
   ),
-  bottomNavigationBar: const ReByteBottomNavBar(
+  bottomNavigationBar: staff != null ? null : const ReByteBottomNavBar(
     selectedIndex: 2,
   ),
 );

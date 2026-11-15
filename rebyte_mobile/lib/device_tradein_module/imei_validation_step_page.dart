@@ -7,7 +7,6 @@ import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import 'device_info_step_page.dart';
 import 'improve_assessment_page.dart';
-import '../widgets/device_title_formatter.dart';
 
 class ImeiValidationStepPage extends StatefulWidget {
   final DeviceModel device;
@@ -97,6 +96,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
   }
 
   void _onValidateImei() async {
+    FocusScope.of(context).unfocus();
     final imei = _imeiController.text.trim();
 
     // Validate 15-digit IMEI format
@@ -145,7 +145,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
           _mismatchReason = result['mismatchReason'];
           _mismatchExpected = result['mismatchExpected']?.toString();
           _mismatchDetected = result['mismatchDetected']?.toString();
-          _detectedModel = result['detectedModel'] ?? widget.device.model;
+          _detectedModel = result['detectedModel']?.toString();
           _detectedBrand = result['detectedBrand'] ?? widget.device.brand;
           _isValidated = !isMismatch;
           _imeiError = null;
@@ -628,9 +628,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
   /// Device Mismatch Card matching the user's requested UI layout and design
   Widget _buildMismatchResultCard() {
     final expectedName = widget.device.displayTitle;
-    final detectedName = _detectedModel != null
-        ? formatDeviceTitle(_detectedBrand, _detectedModel)
-        : 'Unknown Model';
+    final detectedName = _detectedModel ?? 'Unknown Model';
 
     return Container(
       width: double.infinity,
@@ -710,7 +708,7 @@ class _ImeiValidationStepPageState extends State<ImeiValidationStepPage> {
                     detectedLabel = 'Detected Model';
                     // User requirement: For quoted model just show model name, no need modelCode
                     expectedVal = widget.device.model;
-                    detectedVal = _detectedModel ?? 'Unknown Device';
+                    detectedVal = detectedName;
                   } else if (_mismatchType == 'storage') {
                     expectedLabel = 'Quoted Storage';
                     detectedLabel = 'Published Storage';

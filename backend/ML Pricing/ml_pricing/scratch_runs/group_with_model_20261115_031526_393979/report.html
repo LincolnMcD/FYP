@@ -1,0 +1,71 @@
+<!doctype html><html><meta charset="utf-8">
+<title>From-scratch training report</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f6f8fb;color:#182238}table{border-collapse:collapse;background:white}td,th{padding:12px;border:1px solid #ddd}img{width:100%}</style>
+<h1>From-scratch CatBoost-style regression</h1><p>Independent NumPy/Pandas implementation. Ordered-prefix mode uses dyadic supporting models and shared tree structures; it is an approximation, not full CatBoost parity. Leaf fitting uses ordered encodings.</p><p>Training curves are resubstitution metrics, not unbiased generalization estimates. All preprocessing is fitted on training data only.</p><h2>Held-out test results</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mae</th>
+      <th>rmse</th>
+      <th>r2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>retention_ratio</th>
+      <td>0.0125</td>
+      <td>0.0160</td>
+      <td>0.9952</td>
+    </tr>
+    <tr>
+      <th>price_myr</th>
+      <td>31.1663</td>
+      <td>47.0823</td>
+      <td>0.9977</td>
+    </tr>
+  </tbody>
+</table><p>Boosting: ordered; permutations: 3 · Best validation price MAE: RM 36.30; best iteration: 232</p><h2>Training and validation progress</h2><img src="learning_curves.png" alt="Learning curves"><p>Lower MAE/RMSE is better; higher R² is better. Ratio metrics and MYR price metrics use different units. Synthetic results do not establish real-market accuracy.</p><h2>Same-phone depreciation checks</h2><p>These checks measure whether predictions follow the expected direction and damage order.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Passed</th>
+      <th>Checked</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>backDmgScore</th>
+      <td>276</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>backDmgScore &gt; frameDmgScore</th>
+      <td>277</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>deviceAge</th>
+      <td>280</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>frameDmgScore</th>
+      <td>277</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>internalPerfromanceOverallMark</th>
+      <td>278</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>screenDmgScore</th>
+      <td>280</td>
+      <td>280</td>
+    </tr>
+    <tr>
+      <th>screenDmgScore &gt; backDmgScore</th>
+      <td>280</td>
+      <td>280</td>
+    </tr>
+  </tbody>
+</table><p><a href="depreciation_checks.csv">Scenario details</a></p><p><a href="learning_history.csv">Every-iteration CSV</a> · <a href="metrics.json">Full metrics</a> · <a href="feature_importance.csv">Feature split gains</a></p></html>

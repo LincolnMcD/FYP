@@ -89,10 +89,12 @@ class StaffAppBar extends StatelessWidget implements PreferredSizeWidget {
 
 class StaffDrawer extends StatefulWidget {
   final int selectedIndex;
+  final Future<bool> Function()? onBeforeNavigate;
 
   const StaffDrawer({
     super.key,
     this.selectedIndex = 2,
+    this.onBeforeNavigate,
   });
 
   @override
@@ -121,7 +123,9 @@ class _StaffDrawerState extends State<StaffDrawer> {
     }
   }
 
-  void _navigateToIndex(int index) {
+  Future<void> _navigateToIndex(int index) async {
+    if (widget.onBeforeNavigate != null && !await widget.onBeforeNavigate!()) return;
+    if (!mounted) return;
     Navigator.pop(context); // Close drawer
     Navigator.pushAndRemoveUntil(
       context,
@@ -147,6 +151,8 @@ class _StaffDrawerState extends State<StaffDrawer> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
             onPressed: () async {
               Navigator.pop(ctx);
+              if (widget.onBeforeNavigate != null && !await widget.onBeforeNavigate!()) return;
+              if (!mounted) return;
               await SessionService.clearSession();
               if (mounted && context.mounted) {
                 Navigator.pushAndRemoveUntil(
@@ -267,12 +273,18 @@ class _StaffDrawerState extends State<StaffDrawer> {
                     Icons.help_outline,
                     'Help Desk',
                     isSelected: widget.selectedIndex == 4,
-                    onTap: () {
+                    onTap: () async {
+                      if (widget.onBeforeNavigate != null && !await widget.onBeforeNavigate!()) return;
+                      if (!context.mounted) return;
                       Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(builder: (_) => const StaffHomePage(initialShowStandards: true)),
+                      final route = MaterialPageRoute<void>(
+                        builder: (_) => const StaffHomePage(initialShowStandards: true),
                       );
+                      if (widget.onBeforeNavigate == null) {
+                        Navigator.push(context, route);
+                      } else {
+                        Navigator.pushReplacement(context, route);
+                      }
                     },
                   ),
                 ],
@@ -320,18 +332,22 @@ class _StaffDrawerState extends State<StaffDrawer> {
 
 class StaffBottomNavBar extends StatelessWidget {
   final int currentIndex;
+  final Future<bool> Function()? onBeforeNavigate;
 
   const StaffBottomNavBar({
     super.key,
     this.currentIndex = 2,
+    this.onBeforeNavigate,
   });
 
   @override
   Widget build(BuildContext context) {
     return BottomNavigationBar(
       currentIndex: currentIndex,
-      onTap: (index) {
+      onTap: (index) async {
         if (index == currentIndex) return;
+        if (onBeforeNavigate != null && !await onBeforeNavigate!()) return;
+        if (!context.mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
@@ -427,6 +443,7 @@ class StaffToast {
 /// In-memory cache for retaining inspection uploads across page navigation
 class StaffInspectionSession {
   static String? currentTaskId;
+  static bool staffPhotosEdited = false;
   static final Map<String, String> savedImagePaths = {};
   static final Map<String, String> savedImageNames = {};
   static String? savedOwnershipPhotoPath;
@@ -465,6 +482,7 @@ class StaffInspectionSession {
 
   static void clear() {
     currentTaskId = null;
+    staffPhotosEdited = false;
     savedImagePaths.clear();
     savedImageNames.clear();
     savedOwnershipPhotoPath = null;

@@ -20,15 +20,19 @@ CLASS_FIELDS = {
 def build_result(report, manifest, output_dir):
     unique = report.get("unique_defects", [])
     class_results = report.get("summary", {}).get("classes", {})
-    has_scored_severity = any(
-        row.get("severity", {}).get("ordinal") is not None for row in unique
+    submitted_views = {image.get("capture_view") for image in manifest["images"]}
+    full_views = {
+        "front_screen_open", "front_screen_closed", "back", "frame_right",
+        "frame_top", "frame_bottom", "camera_area",
+    }
+    quick_trade_in = (
+        manifest.get("customer_assessment") is True
+        and "back" in submitted_views
+        and bool(submitted_views & {"front_screen_open", "front_screen_closed"})
+        and not full_views.issubset(submitted_views)
     )
-    all_images_reliable = bool(report.get("images")) and all(
-        image.get("quality", {}).get("acceptable", False) for image in report["images"]
-    )
-    grade = report.get("grade")
-    if grade is None and ((not unique and all_images_reliable) or has_scored_severity):
-        grade = report.get("provisional_grade")
+    # Keep review notes even when the assessment publishes a provisional grade.
+    grade = report.get("grade") or report.get("provisional_grade")
     phone_profile = report.get("phone_profile", {})
     result = {
         "evaluationID": manifest["evaluationID"],
@@ -39,6 +43,7 @@ def build_result(report, manifest, output_dir):
         "parts": {},
         "images": [],
         "other": {
+            "quickTradeIn": quick_trade_in,
             "provisionalGrade": report.get("provisional_grade"),
             "reviewItems": report.get("review_items", []),
             "gradeRequiresReview": bool(report.get("grade_requires_review", True)),
@@ -52,7 +57,7 @@ def build_result(report, manifest, output_dir):
                 "screenWidth": (phone_profile.get("surfaces", {}).get("Screen") or {}).get("width_mm"),
                 "screenHeight": (phone_profile.get("surfaces", {}).get("Screen") or {}).get("height_mm"),
             },
-            "modelVersion": "model2_defect_segmentation",
+            "modelVersion": "model2_defect_segmentation_v26",
         },
     }
 

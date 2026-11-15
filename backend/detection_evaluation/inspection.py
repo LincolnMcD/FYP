@@ -20,59 +20,37 @@ CLASSES=['Back_Crack','Back_Scratch','Frame_Dent','Frame_Scratch','Screen_Crack'
 # Malaysia smartphone ASP reported for H1 2025. Keep configurable so the fallback
 # can be refreshed without changing the evaluation pipeline.
 DEFAULT_MARKET_AVERAGE_MYR = 1893.0
-DEFAULT_USD_TO_MYR_RATE = 4.0476
+# Bank Negara Malaysia middle rates, 13 November 2026.
+DEFAULT_FX_RATES_TO_MYR = {"USD": 4.0850, "EUR": 4.5190}
 
 
-def attach_market_price(profile, brand, model, config, resolve):
-    """Attach the device MSRP in MYR, falling back to the Malaysia market average."""
+def attach_market_price(profile):
+    """Convert catalog MSRP or apply the existing MYR fallback."""
     profile = copy.deepcopy(profile)
-    raw = profile.get('provider_raw') or {}
-    value = raw.get('msrp_usd')
+    if (profile.get('msrp') or 0) > 0:
+        return profile
+    for currency, default_rate in DEFAULT_FX_RATES_TO_MYR.items():
+        amount = profile.get(f'msrp_{currency.lower()}')
+        if amount is None:
+            continue
+        try:
+            rate = float(os.environ.get(f'{currency}_TO_MYR_RATE', default_rate))
+        except (TypeError, ValueError):
+            rate = default_rate
+        if not np.isfinite(rate) or rate <= 0:
+            rate = default_rate
+        profile['msrp'] = round(amount * rate, 2)
+        return profile
+
     try:
-        amount = float(value)
-        if not np.isfinite(amount) or amount <= 0:
-            amount = None
+        market_average = float(os.environ.get(
+            'PHONE_MARKET_AVERAGE_MYR', DEFAULT_MARKET_AVERAGE_MYR
+        ))
     except (TypeError, ValueError):
-        amount = None
-
-    # Bundled geometry profiles have no price. Reuse the existing TechAPI
-    # lookup/cache path for price metadata while preserving the selected geometry.
-    if amount is None and brand and model:
-        try:
-            from .phone_specs import PHONE_SPECS_API_BASE, lookup
-            options = config.get('phone_specs', {})
-            api_profile = lookup(
-                brand, model,
-                catalog_path=resolve(options['catalog']) if options.get('catalog') else None,
-                api_base=options.get('api_base') or PHONE_SPECS_API_BASE,
-                slug=options.get('slug'),
-            )
-            api_raw = api_profile.get('provider_raw') or {}
-            value = api_raw.get('msrp_usd')
-            amount = float(value)
-            if not np.isfinite(amount) or amount <= 0:
-                amount = None
-        except (OSError, ValueError, TypeError, KeyError, TimeoutError):
-            amount = None
-
-    if amount is not None:
-        try:
-            usd_to_myr = float(os.environ.get('USD_TO_MYR_RATE', DEFAULT_USD_TO_MYR_RATE))
-        except (TypeError, ValueError):
-            usd_to_myr = DEFAULT_USD_TO_MYR_RATE
-        if not np.isfinite(usd_to_myr) or usd_to_myr <= 0:
-            usd_to_myr = DEFAULT_USD_TO_MYR_RATE
-        profile['msrp'] = round(amount * usd_to_myr, 2)
-    else:
-        try:
-            market_average = float(os.environ.get(
-                'PHONE_MARKET_AVERAGE_MYR', DEFAULT_MARKET_AVERAGE_MYR
-            ))
-        except (TypeError, ValueError):
-            market_average = DEFAULT_MARKET_AVERAGE_MYR
-        if not np.isfinite(market_average) or market_average <= 0:
-            market_average = DEFAULT_MARKET_AVERAGE_MYR
-        profile['msrp'] = round(market_average, 2)
+        market_average = DEFAULT_MARKET_AVERAGE_MYR
+    if not np.isfinite(market_average) or market_average <= 0:
+        market_average = DEFAULT_MARKET_AVERAGE_MYR
+    profile['msrp'] = round(market_average, 2)
     return profile
 
 
@@ -151,28 +129,10 @@ def phone_profile(config,resolve):
         if config.get('phone_brand') and profile.get('brand') and normalized(config['phone_brand'])!=normalized(profile['brand']):
             raise ValueError('Phone profile/brand mismatch.')
         if normalized(profile.get('phone_model','')) not in (normalized(model),expected):raise ValueError('Phone profile/model mismatch.')
-        return attach_market_price(
-            profile, config.get('phone_brand', profile.get('brand', '')),
-            model, config, resolve
-        )
-    catalog=json.loads(Path(__file__).with_name('phone_profiles.json').read_text())
-    for row in catalog['profiles']:
-        if row['phone_model'].casefold()==model.casefold() and (not config.get('phone_brand') or
-                row.get('brand','').casefold()==config['phone_brand'].casefold()):
-            return attach_market_price(
-                row, config.get('phone_brand', row.get('brand', '')),
-                model, config, resolve
-            )
-    if config.get('phone_brand'):
-        from .phone_specs import PHONE_SPECS_API_BASE,lookup
-        options=config.get('phone_specs',{})
-        profile = lookup(config['phone_brand'],model,
-            catalog_path=resolve(options['catalog']) if options.get('catalog') else None,
-            api_base=options.get('api_base') or PHONE_SPECS_API_BASE,slug=options.get('slug'))
-        return attach_market_price(profile, config['phone_brand'], model, config, resolve)
-    from .phone_specs import _average_catalog_profile
-    profile = _average_catalog_profile('', model, reason='No phone brand was provided for TechAPI lookup.')
-    return attach_market_price(profile, '', model, config, resolve)
+        return attach_market_price(profile)
+    from .catalog_specs import lookup
+    profile = lookup(config.get('phone_brand', ''), model, config.get('phone_model_code'))
+    return attach_market_price(profile)
 
 
 def run(inspection_path,output_dir,matcher=None,predictor=None,overrides=None):

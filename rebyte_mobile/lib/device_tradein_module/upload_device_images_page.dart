@@ -7,92 +7,10 @@ import 'services/trade_in_flow_session.dart';
 import 'imei_validation_step_page.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../widgets/rebyte_app_bar.dart';
+import 'models/image_slot_item.dart';
+import 'trade_in_batch_photos.dart';
 
-enum ImageSlotStatus {
-  empty,
-  uploading,
-  success,
-  error,
-  notPhoneDetected,
-}
-
-class ImageSlotItem {
-  final String keyName;
-  final String label;
-  final String? localFilePath;
-  final String? previewBase64;
-  final String? fileName;
-  final bool isOptional;
-  final bool hasInfo;
-  final String? infoTitle;
-  final String? infoMessage;
-  final ImageSlotStatus status;
-  final double uploadProgress;
-  final String? errorMessage;
-
-  const ImageSlotItem({
-    required this.keyName,
-    required this.label,
-    this.localFilePath,
-    this.previewBase64,
-    this.fileName,
-    this.isOptional = false,
-    this.hasInfo = false,
-    this.infoTitle,
-    this.infoMessage,
-    this.status = ImageSlotStatus.empty,
-    this.uploadProgress = 0.0,
-    this.errorMessage,
-  });
-
-  ImageSlotItem copyWith({
-    String? keyName,
-    String? label,
-    String? localFilePath,
-    String? previewBase64,
-    String? fileName,
-    bool? isOptional,
-    bool? hasInfo,
-    String? infoTitle,
-    String? infoMessage,
-    ImageSlotStatus? status,
-    double? uploadProgress,
-    String? errorMessage,
-  }) {
-    return ImageSlotItem(
-      keyName: keyName ?? this.keyName,
-      label: label ?? this.label,
-      localFilePath: localFilePath ?? this.localFilePath,
-      previewBase64: previewBase64 ?? this.previewBase64,
-      fileName: fileName ?? this.fileName,
-      isOptional: isOptional ?? this.isOptional,
-      hasInfo: hasInfo ?? this.hasInfo,
-      infoTitle: infoTitle ?? this.infoTitle,
-      infoMessage: infoMessage ?? this.infoMessage,
-      status: status ?? this.status,
-      uploadProgress: uploadProgress ?? this.uploadProgress,
-      errorMessage: errorMessage ?? this.errorMessage,
-    );
-  }
-
-  /// Returns a clean empty slot item with all image paths, files, and errors cleared
-  ImageSlotItem reset() {
-    return ImageSlotItem(
-      keyName: keyName,
-      label: label,
-      isOptional: isOptional,
-      hasInfo: hasInfo,
-      infoTitle: infoTitle,
-      infoMessage: infoMessage,
-      status: ImageSlotStatus.empty,
-      localFilePath: null,
-      previewBase64: null,
-      fileName: null,
-      uploadProgress: 0.0,
-      errorMessage: null,
-    );
-  }
-}
+export 'models/image_slot_item.dart';
 
 class UploadDeviceImagesPage extends StatefulWidget {
   final DeviceModel device;
@@ -112,25 +30,29 @@ class UploadDeviceImagesPage extends StatefulWidget {
   State<UploadDeviceImagesPage> createState() => _UploadDeviceImagesPageState();
 }
 
-class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
-  late List<ImageSlotItem> _slots;
+class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> with TradeInBatchPhotos<UploadDeviceImagesPage> {
+  @override
+  late List<ImageSlotItem> photoSlots;
+  bool get _quickTradeIn => TradeInFlowSession.quickTradeInEnabled;
+  @override
+  void onSharedPhotosChanged() => TradeInFlowSession.saveSlots(photoSlots);
 
   // Track upload generation tokens per slot to cancel processing if navigated away
   final Map<int, int> _slotTokens = {};
 
   void _cancelAndEmptyUploadingSlots() {
-    for (int i = 0; i < _slots.length; i++) {
-      if (_slots[i].status == ImageSlotStatus.uploading) {
+    for (int i = 0; i < photoSlots.length; i++) {
+      if (photoSlots[i].status == ImageSlotStatus.uploading) {
         // Invalidate generation token
         _slotTokens[i] = (_slotTokens[i] ?? 0) + 1;
-        _slots[i] = _slots[i].reset();
-      } else if (_slots[i].status != ImageSlotStatus.success) {
+        photoSlots[i] = photoSlots[i].reset();
+      } else if (photoSlots[i].status != ImageSlotStatus.success) {
         // Reset any non-successful slots (error, notPhoneDetected, etc.)
-        _slots[i] = _slots[i].reset();
+        photoSlots[i] = photoSlots[i].reset();
       }
     }
     // Always persist the sanitized slots to TradeInFlowSession so success images are retained
-    TradeInFlowSession.saveSlots(_slots);
+    TradeInFlowSession.saveSlots(photoSlots);
   }
 
   @override
@@ -147,7 +69,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     // If returning from Page 4 to Page 3, or re-entering from Page 2, restore existing uploaded image slots
     if (TradeInFlowSession.savedSlots != null &&
         TradeInFlowSession.savedSlots!.isNotEmpty) {
-      _slots = TradeInFlowSession.savedSlots!.map((slot) {
+      photoSlots = TradeInFlowSession.savedSlots!.map((slot) {
         // Only keep slots that succeeded and whose local file still exists
         if (slot.status == ImageSlotStatus.success &&
             slot.localFilePath != null &&
@@ -159,7 +81,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
         return slot.reset();
       }).toList();
     } else {
-      _slots = [
+      photoSlots = [
         const ImageSlotItem(
           keyName: 'front_screen_closed',
           label: 'Front (Screen Closed)',
@@ -206,7 +128,8 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   }
 
   void _onSlotTap(int index) {
-    final slot = _slots[index];
+    if (bulkPhotoBusy) return;
+    final slot = photoSlots[index];
 
     // If this specific slot is already uploading, ignore tap
     if (slot.status == ImageSlotStatus.uploading) return;
@@ -302,11 +225,11 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    TradeInFlowSession.removeUploadedImage(_slots[index].keyName);
+                    TradeInFlowSession.removeUploadedImage(photoSlots[index].keyName);
                     setState(() {
-                      _slots[index] = _slots[index].reset();
+                      photoSlots[index] = photoSlots[index].reset();
                     });
-                    TradeInFlowSession.saveSlots(_slots);
+                    TradeInFlowSession.saveSlots(photoSlots);
                   },
                 ),
               ],
@@ -346,7 +269,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       if (!isJpg && !isPng) {
         if (!mounted) return;
         setState(() {
-          _slots[index] = _slots[index].copyWith(
+          photoSlots[index] = photoSlots[index].copyWith(
             status: ImageSlotStatus.error,
             localFilePath: null,
             fileName: pickedFile.name,
@@ -364,7 +287,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
         if (!mounted) return;
         final double mbSize = fileLength / (1024 * 1024);
         setState(() {
-          _slots[index] = _slots[index].copyWith(
+          photoSlots[index] = photoSlots[index].copyWith(
             status: ImageSlotStatus.error,
             localFilePath: null,
             fileName: pickedFile.name,
@@ -380,7 +303,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       _slotTokens[index] = currentToken;
 
       setState(() {
-        _slots[index] = _slots[index].copyWith(
+        photoSlots[index] = photoSlots[index].copyWith(
           status: ImageSlotStatus.uploading,
           uploadProgress: 0.35,
           errorMessage: null,
@@ -425,7 +348,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
 
         if (_slotTokens[index] != currentToken) return;
         setState(() {
-          _slots[index] = _slots[index].copyWith(
+          photoSlots[index] = photoSlots[index].copyWith(
             status: ImageSlotStatus.notPhoneDetected,
             localFilePath: pickedFile.path,
             fileName: pickedFile.name,
@@ -439,14 +362,14 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       if (_slotTokens[index] != currentToken) return;
       // Progress animation
       setState(() {
-        _slots[index] = _slots[index].copyWith(uploadProgress: 0.85);
+        photoSlots[index] = photoSlots[index].copyWith(uploadProgress: 0.85);
       });
 
       await Future.delayed(const Duration(milliseconds: 200));
       if (!mounted || _slotTokens[index] != currentToken) return;
 
       setState(() {
-        _slots[index] = _slots[index].copyWith(
+        photoSlots[index] = photoSlots[index].copyWith(
           status: ImageSlotStatus.success,
           localFilePath: pickedFile.path,
           fileName: pickedFile.name,
@@ -454,11 +377,11 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
           errorMessage: null,
         );
       });
-      TradeInFlowSession.saveSlots(_slots);
+      TradeInFlowSession.saveSlots(photoSlots);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _slots[index] = _slots[index].copyWith(
+        photoSlots[index] = photoSlots[index].copyWith(
           status: ImageSlotStatus.error,
           errorMessage: 'Failed to access camera or gallery: ${e.toString()}',
         );
@@ -522,24 +445,35 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   }
 
   bool get _canContinue {
+    if (bulkPhotoBusy) return false;
     // 1. Must NOT have any slot currently uploading or verifying (especially when 8th slot is in progress)
-    final bool anyUploading = _slots.any((slot) => slot.status == ImageSlotStatus.uploading);
+    final bool anyUploading = photoSlots.any((slot) => slot.status == ImageSlotStatus.uploading);
     if (anyUploading) return false;
 
     // 2. Must NOT have any slot in error or notPhoneDetected state
-    final bool hasErrors = _slots.any(
+    final bool hasErrors = photoSlots.any(
       (slot) => slot.status == ImageSlotStatus.error || slot.status == ImageSlotStatus.notPhoneDetected,
     );
     if (hasErrors) return false;
 
+    if (_quickTradeIn) {
+      final uploadedViews = photoSlots
+          .where((slot) => slot.status == ImageSlotStatus.success)
+          .map((slot) => slot.keyName)
+          .toSet();
+      return uploadedViews.contains('back') &&
+          (uploadedViews.contains('front_screen_open') ||
+              uploadedViews.contains('front_screen_closed'));
+    }
+
     // 3. For optional slots (e.g. 8th "Any angles"), it must be either empty OR successfully verified
-    final bool optionalValid = _slots
+    final bool optionalValid = photoSlots
         .where((slot) => slot.isOptional)
         .every((slot) => slot.status == ImageSlotStatus.empty || slot.status == ImageSlotStatus.success);
     if (!optionalValid) return false;
 
     // 4. All 7 required (non-optional) slots must have status == success
-    return _slots
+    return photoSlots
         .where((slot) => !slot.isOptional)
         .every((slot) => slot.status == ImageSlotStatus.success);
   }
@@ -557,7 +491,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
 
     // Collect local file paths for each imageView slot that are new or changed
     final Map<String, String> imagePathsToUpload = {};
-    for (final slot in _slots) {
+    for (final slot in photoSlots) {
       if (slot.status == ImageSlotStatus.success &&
           slot.localFilePath != null &&
           slot.localFilePath!.isNotEmpty) {
@@ -568,7 +502,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     }
 
     // Save slots to in-memory session so if user comes back to Page 3, their selections are kept
-    TradeInFlowSession.saveSlots(_slots);
+    TradeInFlowSession.saveSlots(photoSlots);
 
     final List<String> removedViews = List.from(TradeInFlowSession.pendingRemovedImageViews);
 
@@ -630,6 +564,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) return;
         _cancelAndEmptyUploadingSlots();
       },
       child: Scaffold(
@@ -721,7 +656,69 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
               ),
               const SizedBox(height: 18),
 
-              // 2-Column Grid of Slots
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Color(_quickTradeIn ? 0xFFEFF6FF : 0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Color(_quickTradeIn ? 0xFF3B82F6 : 0xFFCBD5E1),
+                    width: _quickTradeIn ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Color(_quickTradeIn ? 0xFFDBEAFE : 0xFFE2E8F0),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.bolt_rounded,
+                        size: 18,
+                        color: Color(_quickTradeIn ? 0xFF003799 : 0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Quick Trade-In',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F254B),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Minimum 2 photos: one front (screen on or off) and one back.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Semantics(
+                      label: 'Quick Trade-In',
+                      child: Switch.adaptive(
+                        value: _quickTradeIn,
+                        activeThumbColor: TradeInBatchPhotos.photoDialogBlue,
+                        onChanged: canCancelAllPhotos
+                            ? (enabled) => setState(() {
+                                TradeInFlowSession.quickTradeInEnabled = enabled;
+                              })
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              buildBatchPhotoControls(),
               _buildSlotsGrid(),
               const SizedBox(height: 24),
 
@@ -772,8 +769,8 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
           spacing: 12,
           runSpacing: 14,
           crossAxisAlignment: WrapCrossAlignment.start,
-          children: List.generate(_slots.length, (index) {
-            final slot = _slots[index];
+          children: List.generate(photoSlots.length, (index) {
+            final slot = photoSlots[index];
             final bool hasError = slot.status == ImageSlotStatus.error ||
                 slot.status == ImageSlotStatus.notPhoneDetected;
             return SizedBox(
@@ -784,7 +781,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
                 children: [
                   SizedBox(
                     height: 175,
-                    child: _buildSlotCard(index),
+                    child: buildMovablePhotoSlot(index, cardWidth, 175, _buildSlotCard(index)),
                   ),
                   if (hasError && slot.errorMessage != null) ...[
                     const SizedBox(height: 6),
@@ -830,7 +827,7 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
   }
 
   Widget _buildSlotCard(int index) {
-    final slot = _slots[index];
+    final slot = photoSlots[index];
 
     switch (slot.status) {
       case ImageSlotStatus.success:
@@ -857,6 +854,9 @@ class _UploadDeviceImagesPageState extends State<UploadDeviceImagesPage> {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        foregroundDecoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
         ),

@@ -1,3 +1,5 @@
+import 'staff_diagnostic_scope.dart';
+import 'diagnostic_exit_dialog.dart';
 import 'package:flutter/material.dart';
 import '../device_tradein_module/models/device_model.dart';
 import 'display_test_page.dart';
@@ -68,6 +70,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
 
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -202,6 +205,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
   void _onSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -306,84 +310,8 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
   }
 
   Future<void> _handleBack() async {
-    final bool? confirmExit = await showDialog<bool>(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Exit Touchscreen Test?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context, false),
-                    child: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Are you sure you want to exit the Touchscreen test? Your current progress will be lost.',
-                textAlign: TextAlign.justify,
-                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        side: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      child: const Text(
-                        'CANCEL',
-                        style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE11D48),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'EXIT',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    if (StaffDiagnosticScope.requestExit(context)) return;
+    final confirmExit = await showDiagnosticExitDialog(context, 'Touchscreen Test');
 
     if (confirmExit == true && mounted) {
       Navigator.pop(context);
@@ -401,7 +329,7 @@ class _TouchscreenTestPageState extends State<TouchscreenTestPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         _handleBack();
       },
       child: Scaffold(

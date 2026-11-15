@@ -1,0 +1,18 @@
+feature,split_gain_percent
+deviceAge,77.32784018435679
+screenDmgScore,22.67215981564321
+ramCapacity,0.0
+storage,0.0
+internalPerfromanceOverallMark,0.0
+backDmgScore,0.0
+frameDmgScore,0.0
+msrp,0.0
+"[""brand""]:target_mean:10.0",0.0
+"[""brand""]:target_mean:50.0",0.0
+"[""brand""]:frequency",0.0
+"[""model""]:target_mean:10.0",0.0
+"[""model""]:target_mean:50.0",0.0
+"[""model""]:frequency",0.0
+"[""brand"", ""model""]:target_mean:10.0",0.0
+"[""brand"", ""model""]:target_mean:50.0",0.0
+"[""brand"", ""model""]:frequency",0.0

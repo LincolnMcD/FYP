@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0C5AD2)),
         useMaterial3: true,
       ),
-      navigatorObservers: [appRouteObserver],
+      navigatorObservers: [appRouteObserver, appPageRouteObserver],
       home: (isLoggedIn && role?.toLowerCase() == 'staff')
           ? const StaffHomePage()
           : (isLoggedIn && role?.toLowerCase() == 'rental')

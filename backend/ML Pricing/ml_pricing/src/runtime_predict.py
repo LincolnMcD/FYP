@@ -36,6 +36,8 @@ def predict(model_path, metrics_path, request_path):
             else:
                 step = float(edges[-1] - edges[-2]) if len(edges) > 1 else max(abs(float(edges[-1])) * 0.01, 1.0)
                 values.append(float(edges[-1]) + step / 2)
+        if name == "internalPerfromanceOverallMark":
+            values = [min(value, 100.0) for value in values]
         candidates.append((name, values))
 
     predictions = []

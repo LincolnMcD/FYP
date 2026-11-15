@@ -1,0 +1,10 @@
+{"kind":"workbook","id":"wb/otkpu5","sheets":3,"tables":3}
+{"kind":"sheet","id":"ws/k75p9i","name":"Training Data","index":0,"range":"A1:A1","address":"A1:A1","tables":1}
+{"kind":"table","sheet":"Training Data","address":"A1:A1","rows":1,"cols":1,"values":[["Header"]]}
+{"kind":"computedStyle","sheet":"Training Data","for":"A1","style":{"fill":{"type":1,"color":{"type":1,"value":"183B56"},"gradientStops":[],"pictureEffects":[]},"font":{"size":11,"name":"Carlito","color":"#FFFFFF"},"border":{},"wrapText":false,"horizontalAlignment":"general","styleId":2}}
+{"kind":"sheet","id":"ws/dz2csu","name":"Device Catalog","index":1,"range":"A1:A1","address":"A1:A1","tables":1}
+{"kind":"table","sheet":"Device Catalog","address":"A1:A1","rows":1,"cols":1,"values":[["Header"]]}
+{"kind":"computedStyle","sheet":"Device Catalog","for":"A1","style":{"fill":{"type":1,"color":{"type":1,"value":"183B56"},"gradientStops":[],"pictureEffects":[]},"font":{"size":11,"name":"Carlito","color":"#FFFFFF"},"border":{},"wrapText":false,"horizontalAlignment":"general","styleId":2}}
+{"kind":"sheet","id":"ws/tnqw7g","name":"Method","index":2,"range":"A1:A1","address":"A1:A1","tables":1}
+{"kind":"table","sheet":"Method","address":"A1:A1","rows":1,"cols":1,"values":[["Header"]]}
+{"kind":"computedStyle","sheet":"Method","for":"A1","style":{"fill":{"type":1,"color":{"type":1,"value":"183B56"},"gradientStops":[],"pictureEffects":[]},"font":{"size":11,"name":"Carlito","color":"#FFFFFF"},"border":{},"wrapText":false,"horizontalAlignment":"general","styleId":2}}

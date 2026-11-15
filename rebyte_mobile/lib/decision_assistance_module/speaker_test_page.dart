@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -242,6 +243,7 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
 
     await showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -353,6 +355,7 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
   Future<void> _handleSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -467,6 +470,7 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
   Future<bool> _showExitConfirmationDialog() async {
     final bool? result = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -556,9 +560,9 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         final shouldExit = await _showExitConfirmationDialog();
-        if (shouldExit && mounted) {
+        if (shouldExit && context.mounted) {
           Navigator.pop(context);
         }
       },
@@ -576,8 +580,9 @@ class _SpeakerTestPageState extends State<SpeakerTestPage> {
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
                       onPressed: () async {
+                        if (StaffDiagnosticScope.requestExit(context)) return;
                         final shouldExit = await _showExitConfirmationDialog();
-                        if (shouldExit && mounted) {
+                        if (shouldExit && context.mounted) {
                           Navigator.pop(context);
                         }
                       },

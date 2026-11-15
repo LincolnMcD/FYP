@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -397,6 +398,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
 
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -536,6 +538,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
   Future<void> _handleSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -646,8 +649,10 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
   }
 
   Future<void> _handleBack() async {
+    if (StaffDiagnosticScope.requestExit(context)) return;
     final bool? confirmExit = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -735,7 +740,7 @@ class _MicrophoneTestPageState extends State<MicrophoneTestPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         _handleBack();
       },
       child: Scaffold(

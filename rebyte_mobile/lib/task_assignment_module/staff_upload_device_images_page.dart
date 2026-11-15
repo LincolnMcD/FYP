@@ -2,84 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../device_tradein_module/models/device_model.dart';
+import '../device_tradein_module/models/image_slot_item.dart';
+import '../device_tradein_module/trade_in_batch_photos.dart';
 import '../device_tradein_module/services/trade_in_service.dart';
 import 'widgets/staff_app_bar_and_drawer.dart';
 import 'staff_verify_device_information_page.dart';
-
-enum StaffImageSlotStatus {
-  empty,
-  uploading,
-  success,
-  error,
-  notPhoneDetected,
-}
-
-class StaffImageSlot {
-  final String keyName;
-  final String label;
-  final bool isOptional;
-  final bool hasInfo;
-  final String? infoMessage;
-  final String? localFilePath;
-  final String? fileName;
-  final StaffImageSlotStatus status;
-  final double uploadProgress;
-  final String? errorMessage;
-
-  const StaffImageSlot({
-    required this.keyName,
-    required this.label,
-    this.isOptional = false,
-    this.hasInfo = false,
-    this.infoMessage,
-    this.localFilePath,
-    this.fileName,
-    this.status = StaffImageSlotStatus.empty,
-    this.uploadProgress = 0.0,
-    this.errorMessage,
-  });
-
-  StaffImageSlot copyWith({
-    String? keyName,
-    String? label,
-    bool? isOptional,
-    bool? hasInfo,
-    String? infoMessage,
-    String? localFilePath,
-    String? fileName,
-    StaffImageSlotStatus? status,
-    double? uploadProgress,
-    String? errorMessage,
-  }) {
-    return StaffImageSlot(
-      keyName: keyName ?? this.keyName,
-      label: label ?? this.label,
-      isOptional: isOptional ?? this.isOptional,
-      hasInfo: hasInfo ?? this.hasInfo,
-      infoMessage: infoMessage ?? this.infoMessage,
-      localFilePath: localFilePath ?? this.localFilePath,
-      fileName: fileName ?? this.fileName,
-      status: status ?? this.status,
-      uploadProgress: uploadProgress ?? this.uploadProgress,
-      errorMessage: errorMessage ?? this.errorMessage,
-    );
-  }
-
-  StaffImageSlot reset() {
-    return StaffImageSlot(
-      keyName: keyName,
-      label: label,
-      isOptional: isOptional,
-      hasInfo: hasInfo,
-      infoMessage: infoMessage,
-      status: StaffImageSlotStatus.empty,
-      localFilePath: null,
-      fileName: null,
-      uploadProgress: 0.0,
-      errorMessage: null,
-    );
-  }
-}
 
 class StaffUploadDeviceImagesPage extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -99,18 +26,35 @@ class StaffUploadDeviceImagesPage extends StatefulWidget {
 }
 
 class _StaffUploadDeviceImagesPageState
-    extends State<StaffUploadDeviceImagesPage> {
+    extends State<StaffUploadDeviceImagesPage> with TradeInBatchPhotos<StaffUploadDeviceImagesPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ImagePicker _picker = ImagePicker();
 
-  late List<StaffImageSlot> _slots;
+  @override
+  late List<ImageSlotItem> photoSlots;
+  bool _loadingExistingPhotos = true;
+
+  @override
+  bool get photoEditsBlocked => _loadingExistingPhotos || _isUploadingToServer;
+
+  @override
+  void onSharedPhotosChanged() {
+    StaffInspectionSession.staffPhotosEdited = true;
+    StaffInspectionSession.savedImagePaths.clear();
+    StaffInspectionSession.savedImageNames.clear();
+    for (final slot in photoSlots) {
+      if (slot.status != ImageSlotStatus.success || slot.localFilePath == null) continue;
+      StaffInspectionSession.savedImagePaths[slot.keyName] = slot.localFilePath!;
+      StaffInspectionSession.savedImageNames[slot.keyName] = slot.fileName ?? '${slot.label}.jpg';
+    }
+  }
   final Map<int, int> _slotTokens = {};
   bool _isUploadingToServer = false;
 
   bool get _areRequiredImagesUploaded =>
-      _slots.length >= 7 &&
-      _slots.sublist(0, 7).every(
-            (s) => s.status == StaffImageSlotStatus.success && s.localFilePath != null,
+      !bulkPhotoBusy && !photoEditsBlocked && photoSlots.length >= 7 &&
+      photoSlots.sublist(0, 7).every(
+            (s) => s.status == ImageSlotStatus.success && s.localFilePath != null,
           );
 
   @override
@@ -122,42 +66,42 @@ class _StaffUploadDeviceImagesPageState
         '';
     StaffInspectionSession.ensureTask(taskId);
 
-    _slots = [
-      const StaffImageSlot(
+    photoSlots = [
+      const ImageSlotItem(
         keyName: 'front_screen_closed',
         label: 'Front(Screen Closed)',
         hasInfo: true,
         infoMessage:
             'Please turn the display OFF (black screen) under good lighting to inspect for any surface hairline scratches, cracks, or chips on the glass.',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'front_screen_open',
         label: 'Front(Screen Open)',
         hasInfo: true,
         infoMessage:
             'Please turn the display ON to verify that the screen functions properly without dead pixels, tinting, or screen burn-in.',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'back',
         label: 'Back',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'frame_right',
         label: 'Frame(right)',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'frame_top',
         label: 'Frame(top)',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'frame_bottom',
         label: 'Frame(bottom)',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'camera_area',
         label: 'Camera area',
       ),
-      const StaffImageSlot(
+      const ImageSlotItem(
         keyName: 'any_angles',
         label: 'Any angles (Optional)',
         isOptional: true,
@@ -165,14 +109,14 @@ class _StaffUploadDeviceImagesPageState
     ];
 
     // Restore previously uploaded images
-    for (int i = 0; i < _slots.length; i++) {
-      final key = _slots[i].keyName;
+    for (int i = 0; i < photoSlots.length; i++) {
+      final key = photoSlots[i].keyName;
       final savedPath = StaffInspectionSession.savedImagePaths[key];
       if (savedPath != null && (savedPath.startsWith('http') || File(savedPath).existsSync())) {
-        _slots[i] = _slots[i].copyWith(
-          status: StaffImageSlotStatus.success,
+        photoSlots[i] = photoSlots[i].copyWith(
+          status: ImageSlotStatus.success,
           localFilePath: savedPath,
-          fileName: StaffInspectionSession.savedImageNames[key] ?? '${_slots[i].label}.jpg',
+          fileName: StaffInspectionSession.savedImageNames[key] ?? '${photoSlots[i].label}.jpg',
           uploadProgress: 1.0,
         );
       }
@@ -186,25 +130,30 @@ class _StaffUploadDeviceImagesPageState
         widget.task['tradeInID']?.toString() ??
         widget.task['orderID']?.toString() ??
         '';
-    if (tradeInId.isEmpty) return;
+    if (tradeInId.isEmpty || StaffInspectionSession.staffPhotosEdited) {
+      _loadingExistingPhotos = false;
+      return;
+    }
 
     final details = await TradeInService.getTradeInRequestDetails(tradeInId);
+    if (!mounted) return;
+    setState(() => _loadingExistingPhotos = false);
     if (details != null && details['staffImages'] is Map && mounted) {
       final Map<String, dynamic> staffImages = Map<String, dynamic>.from(details['staffImages']);
       setState(() {
-        for (int i = 0; i < _slots.length; i++) {
-          final key = _slots[i].keyName;
-          if (_slots[i].status != StaffImageSlotStatus.success && staffImages.containsKey(key)) {
+        for (int i = 0; i < photoSlots.length; i++) {
+          final key = photoSlots[i].keyName;
+          if (photoSlots[i].status != ImageSlotStatus.success && staffImages.containsKey(key)) {
             final imgUrl = staffImages[key]?.toString();
             if (imgUrl != null && imgUrl.isNotEmpty) {
-              _slots[i] = _slots[i].copyWith(
-                status: StaffImageSlotStatus.success,
+              photoSlots[i] = photoSlots[i].copyWith(
+                status: ImageSlotStatus.success,
                 localFilePath: imgUrl,
-                fileName: '${_slots[i].label}.jpg',
+                fileName: '${photoSlots[i].label}.jpg',
                 uploadProgress: 1.0,
               );
               StaffInspectionSession.savedImagePaths[key] = imgUrl;
-              StaffInspectionSession.savedImageNames[key] = '${_slots[i].label}.jpg';
+              StaffInspectionSession.savedImageNames[key] = '${photoSlots[i].label}.jpg';
             }
           }
         }
@@ -213,8 +162,9 @@ class _StaffUploadDeviceImagesPageState
   }
 
   void _onSlotTap(int index) {
-    final slot = _slots[index];
-    if (slot.status == StaffImageSlotStatus.uploading) return;
+    if (bulkPhotoBusy || photoEditsBlocked) return;
+    final slot = photoSlots[index];
+    if (slot.status == ImageSlotStatus.uploading) return;
 
     showModalBottomSheet(
       context: context,
@@ -288,9 +238,9 @@ class _StaffUploadDeviceImagesPageState
                   _pickAndProcessImage(index, ImageSource.gallery);
                 },
               ),
-              if (slot.status == StaffImageSlotStatus.success ||
-                  slot.status == StaffImageSlotStatus.error ||
-                  slot.status == StaffImageSlotStatus.notPhoneDetected) ...[
+              if (slot.status == ImageSlotStatus.success ||
+                  slot.status == ImageSlotStatus.error ||
+                  slot.status == ImageSlotStatus.notPhoneDetected) ...[
                 const Divider(),
                 ListTile(
                   leading: Container(
@@ -302,7 +252,7 @@ class _StaffUploadDeviceImagesPageState
                     child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
                   ),
                   title: Text(
-                    slot.status == StaffImageSlotStatus.success
+                    slot.status == ImageSlotStatus.success
                         ? 'Remove Photo'
                         : 'Clear & Retake Photo',
                     style: const TextStyle(
@@ -315,10 +265,11 @@ class _StaffUploadDeviceImagesPageState
                   onTap: () {
                     Navigator.pop(sheetContext);
                     setState(() {
-                      StaffInspectionSession.savedImagePaths.remove(_slots[index].keyName);
-                      StaffInspectionSession.savedImageNames.remove(_slots[index].keyName);
-                      _slots[index] = _slots[index].reset();
+                      StaffInspectionSession.savedImagePaths.remove(photoSlots[index].keyName);
+                      StaffInspectionSession.savedImageNames.remove(photoSlots[index].keyName);
+                      photoSlots[index] = photoSlots[index].reset();
                     });
+                    onSharedPhotosChanged();
                   },
                 ),
               ],
@@ -332,7 +283,8 @@ class _StaffUploadDeviceImagesPageState
   Future<void> _pickAndProcessImage(int index, ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(source: source);
-      if (pickedFile == null) return;
+      if (pickedFile == null || !mounted) return;
+      StaffInspectionSession.staffPhotosEdited = true;
 
       final String pathLower = pickedFile.path.toLowerCase();
       final String nameLower = pickedFile.name.toLowerCase();
@@ -347,10 +299,10 @@ class _StaffUploadDeviceImagesPageState
       if (!isJpg && !isPng) {
         if (!mounted) return;
         setState(() {
-          StaffInspectionSession.savedImagePaths.remove(_slots[index].keyName);
-          StaffInspectionSession.savedImageNames.remove(_slots[index].keyName);
-          _slots[index] = _slots[index].copyWith(
-            status: StaffImageSlotStatus.error,
+          StaffInspectionSession.savedImagePaths.remove(photoSlots[index].keyName);
+          StaffInspectionSession.savedImageNames.remove(photoSlots[index].keyName);
+          photoSlots[index] = photoSlots[index].copyWith(
+            status: ImageSlotStatus.error,
             localFilePath: null,
             fileName: pickedFile.name,
             errorMessage: 'Must be JPG or PNG under 5MB. Tap to retry.',
@@ -365,10 +317,10 @@ class _StaffUploadDeviceImagesPageState
       if (fileLength > maxSizeBytes) {
         if (!mounted) return;
         setState(() {
-          StaffInspectionSession.savedImagePaths.remove(_slots[index].keyName);
-          StaffInspectionSession.savedImageNames.remove(_slots[index].keyName);
-          _slots[index] = _slots[index].copyWith(
-            status: StaffImageSlotStatus.error,
+          StaffInspectionSession.savedImagePaths.remove(photoSlots[index].keyName);
+          StaffInspectionSession.savedImageNames.remove(photoSlots[index].keyName);
+          photoSlots[index] = photoSlots[index].copyWith(
+            status: ImageSlotStatus.error,
             localFilePath: null,
             fileName: pickedFile.name,
             errorMessage: 'Must be JPG or PNG under 5MB. Tap to retry.',
@@ -382,8 +334,8 @@ class _StaffUploadDeviceImagesPageState
       _slotTokens[index] = currentToken;
 
       setState(() {
-        _slots[index] = _slots[index].copyWith(
-          status: StaffImageSlotStatus.uploading,
+        photoSlots[index] = photoSlots[index].copyWith(
+          status: ImageSlotStatus.uploading,
           uploadProgress: 0.35,
           errorMessage: null,
           localFilePath: pickedFile.path,
@@ -414,10 +366,10 @@ class _StaffUploadDeviceImagesPageState
         }
 
         setState(() {
-          StaffInspectionSession.savedImagePaths.remove(_slots[index].keyName);
-          StaffInspectionSession.savedImageNames.remove(_slots[index].keyName);
-          _slots[index] = _slots[index].copyWith(
-            status: StaffImageSlotStatus.notPhoneDetected,
+          StaffInspectionSession.savedImagePaths.remove(photoSlots[index].keyName);
+          StaffInspectionSession.savedImageNames.remove(photoSlots[index].keyName);
+          photoSlots[index] = photoSlots[index].copyWith(
+            status: ImageSlotStatus.notPhoneDetected,
             localFilePath: pickedFile.path,
             fileName: pickedFile.name,
             uploadProgress: 0.0,
@@ -429,30 +381,30 @@ class _StaffUploadDeviceImagesPageState
 
       // Progress animation
       setState(() {
-        _slots[index] = _slots[index].copyWith(uploadProgress: 0.75);
+        photoSlots[index] = photoSlots[index].copyWith(uploadProgress: 0.75);
       });
       await Future.delayed(const Duration(milliseconds: 250));
 
       if (!mounted || _slotTokens[index] != currentToken) return;
 
       setState(() {
-        _slots[index] = _slots[index].copyWith(
-          status: StaffImageSlotStatus.success,
+        photoSlots[index] = photoSlots[index].copyWith(
+          status: ImageSlotStatus.success,
           localFilePath: pickedFile.path,
           fileName: pickedFile.name,
           uploadProgress: 1.0,
           errorMessage: null,
         );
       });
-      StaffInspectionSession.savedImagePaths[_slots[index].keyName] = pickedFile.path;
-      StaffInspectionSession.savedImageNames[_slots[index].keyName] = pickedFile.name;
+      StaffInspectionSession.savedImagePaths[photoSlots[index].keyName] = pickedFile.path;
+      StaffInspectionSession.savedImageNames[photoSlots[index].keyName] = pickedFile.name;
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        StaffInspectionSession.savedImagePaths.remove(_slots[index].keyName);
-        StaffInspectionSession.savedImageNames.remove(_slots[index].keyName);
-        _slots[index] = _slots[index].copyWith(
-          status: StaffImageSlotStatus.error,
+        StaffInspectionSession.savedImagePaths.remove(photoSlots[index].keyName);
+        StaffInspectionSession.savedImageNames.remove(photoSlots[index].keyName);
+        photoSlots[index] = photoSlots[index].copyWith(
+          status: ImageSlotStatus.error,
           errorMessage: 'Failed to process image: $e',
         );
       });
@@ -460,10 +412,11 @@ class _StaffUploadDeviceImagesPageState
   }
 
   Future<void> _onVerifyDeviceDetails() async {
+    if (bulkPhotoBusy || photoEditsBlocked) return;
     // Check if the 7 required slots (indices 0 to 6) are fulfilled
-    final requiredSlots = _slots.sublist(0, 7);
+    final requiredSlots = photoSlots.sublist(0, 7);
     final unverifiedSlots = requiredSlots
-        .where((s) => s.status != StaffImageSlotStatus.success || s.localFilePath == null)
+        .where((s) => s.status != ImageSlotStatus.success || s.localFilePath == null)
         .toList();
 
     if (unverifiedSlots.isNotEmpty) {
@@ -478,14 +431,17 @@ class _StaffUploadDeviceImagesPageState
     // Build uploaded files map - only collect local files that need to be uploaded
     final Map<String, String> uploadedImages = {};
     final Map<String, String> localFilesToUpload = {};
-    for (final s in _slots) {
-      if (s.localFilePath != null &&
-          s.status == StaffImageSlotStatus.success) {
-        uploadedImages[s.keyName] = s.localFilePath!;
-        if (!s.localFilePath!.startsWith('http') && File(s.localFilePath!).existsSync()) {
-          localFilesToUpload[s.keyName] = s.localFilePath!;
+    for (final s in photoSlots) {
+      final path = s.localFilePath;
+      if (path == null || s.status != ImageSlotStatus.success) continue;
+      if (!path.startsWith('https://') && !path.startsWith('http://')) {
+        if (!File(path).existsSync()) {
+          StaffToast.show(context, 'Please select the ${s.label} photo again.', isError: true);
+          return;
         }
+        localFilesToUpload[s.keyName] = path;
       }
+      uploadedImages[s.keyName] = path;
     }
 
     final tradeInId = widget.task['tradeInRequestID']?.toString() ??
@@ -493,20 +449,39 @@ class _StaffUploadDeviceImagesPageState
         widget.task['orderID']?.toString() ??
         '';
 
-    if (tradeInId.isNotEmpty && localFilesToUpload.isNotEmpty) {
+    if (tradeInId.isNotEmpty && (StaffInspectionSession.staffPhotosEdited || localFilesToUpload.isNotEmpty)) {
       setState(() => _isUploadingToServer = true);
       try {
         final res = await TradeInService.uploadStaffDeviceImages(
           tradeInRequestID: tradeInId,
           imagePaths: localFilesToUpload,
+          retainedImages: Map.of(uploadedImages)..removeWhere(
+            (key, _) => localFilesToUpload.containsKey(key),
+          ),
         );
         if (!mounted) return;
         if (res['success'] != true) {
           StaffToast.show(
             context,
-            'Warning: Failed to sync images to server: ${res['message'] ?? 'Unknown error'}',
+            'Failed to sync images: ${res['message'] ?? 'Unknown error'}',
             isError: true,
           );
+          return;
+        }
+        final saved = res['images'];
+        if (saved is List) {
+          setState(() {
+            for (final image in saved.whereType<Map>()) {
+              final view = image['imageView'];
+              final url = image['imageUrl'];
+              final index = photoSlots.indexWhere((slot) => slot.keyName == view);
+              if (index < 0 || url is! String) continue;
+              photoSlots[index] = photoSlots[index].copyWith(localFilePath: url);
+              uploadedImages[photoSlots[index].keyName] = url;
+            }
+          });
+          onSharedPhotosChanged();
+          StaffInspectionSession.staffPhotosEdited = false;
         }
       } catch (e) {
         if (!mounted) return;
@@ -515,6 +490,7 @@ class _StaffUploadDeviceImagesPageState
           'Error uploading images: $e',
           isError: true,
         );
+        return;
       } finally {
         if (mounted) {
           setState(() => _isUploadingToServer = false);
@@ -586,6 +562,7 @@ class _StaffUploadDeviceImagesPageState
                     ),
                     const SizedBox(height: 20),
 
+                    buildBatchPhotoControls(),
                     // 2-Column Grid
                     GridView.builder(
                       shrinkWrap: true,
@@ -596,9 +573,16 @@ class _StaffUploadDeviceImagesPageState
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 14,
                       ),
-                      itemCount: _slots.length,
+                      itemCount: photoSlots.length,
                       itemBuilder: (context, index) {
-                        return _buildSlotCard(index);
+                        return LayoutBuilder(
+                          builder: (context, constraints) => buildMovablePhotoSlot(
+                            index,
+                            constraints.maxWidth,
+                            constraints.maxHeight,
+                            _buildSlotCard(index),
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(height: 16),
@@ -679,10 +663,10 @@ class _StaffUploadDeviceImagesPageState
   }
 
   Widget _buildSlotCard(int index) {
-    final slot = _slots[index];
+    final slot = photoSlots[index];
 
     // Optional slot styling
-    if (slot.isOptional && slot.status == StaffImageSlotStatus.empty) {
+    if (slot.isOptional && slot.status == ImageSlotStatus.empty) {
       return GestureDetector(
         onTap: () => _onSlotTap(index),
         child: Container(
@@ -719,14 +703,14 @@ class _StaffUploadDeviceImagesPageState
     Color borderColor = const Color(0xFFCBD5E1);
     Color backgroundColor = Colors.white;
 
-    if (slot.status == StaffImageSlotStatus.success) {
+    if (slot.status == ImageSlotStatus.success) {
       borderColor = const Color(0xFF93C5FD);
       backgroundColor = const Color(0xFFF8FAFC);
-    } else if (slot.status == StaffImageSlotStatus.uploading) {
+    } else if (slot.status == ImageSlotStatus.uploading) {
       borderColor = const Color(0xFF3B82F6);
       backgroundColor = const Color(0xFFEFF6FF);
-    } else if (slot.status == StaffImageSlotStatus.error ||
-        slot.status == StaffImageSlotStatus.notPhoneDetected) {
+    } else if (slot.status == ImageSlotStatus.error ||
+        slot.status == ImageSlotStatus.notPhoneDetected) {
       borderColor = const Color(0xFFDC2626);
       backgroundColor = const Color(0xFFFEF2F2);
     }
@@ -751,7 +735,7 @@ class _StaffUploadDeviceImagesPageState
                   Center(
                     child: _buildSlotContent(slot),
                   ),
-                  if (slot.status == StaffImageSlotStatus.success)
+                  if (slot.status == ImageSlotStatus.success)
                     Positioned(
                       top: 10,
                       right: 10,
@@ -764,7 +748,7 @@ class _StaffUploadDeviceImagesPageState
                         child: const Icon(Icons.check, size: 14, color: Colors.white),
                       ),
                     ),
-                  if (slot.status == StaffImageSlotStatus.uploading)
+                  if (slot.status == ImageSlotStatus.uploading)
                     Positioned(
                       bottom: 0,
                       left: 0,
@@ -806,8 +790,8 @@ class _StaffUploadDeviceImagesPageState
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: (slot.status == StaffImageSlotStatus.error ||
-                                      slot.status == StaffImageSlotStatus.notPhoneDetected)
+                              color: (slot.status == ImageSlotStatus.error ||
+                                      slot.status == ImageSlotStatus.notPhoneDetected)
                                   ? const Color(0xFFDC2626)
                                   : const Color(0xFF0F172A),
                             ),
@@ -851,8 +835,8 @@ class _StaffUploadDeviceImagesPageState
     );
   }
 
-  Widget _buildSlotContent(StaffImageSlot slot) {
-    if (slot.status == StaffImageSlotStatus.success &&
+  Widget _buildSlotContent(ImageSlotItem slot) {
+    if (slot.status == ImageSlotStatus.success &&
         slot.localFilePath != null) {
       final isNetwork = slot.localFilePath!.startsWith('http://') ||
           slot.localFilePath!.startsWith('https://');
@@ -876,7 +860,7 @@ class _StaffUploadDeviceImagesPageState
       );
     }
 
-    if (slot.status == StaffImageSlotStatus.uploading) {
+    if (slot.status == ImageSlotStatus.uploading) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -908,8 +892,8 @@ class _StaffUploadDeviceImagesPageState
       );
     }
 
-    if (slot.status == StaffImageSlotStatus.error ||
-        slot.status == StaffImageSlotStatus.notPhoneDetected) {
+    if (slot.status == ImageSlotStatus.error ||
+        slot.status == ImageSlotStatus.notPhoneDetected) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Column(
@@ -918,7 +902,7 @@ class _StaffUploadDeviceImagesPageState
             const Icon(Icons.error_outline_rounded, size: 28, color: Color(0xFFDC2626)),
             const SizedBox(height: 6),
             Text(
-              slot.status == StaffImageSlotStatus.notPhoneDetected
+              slot.status == ImageSlotStatus.notPhoneDetected
                   ? 'No Phone Detected'
                   : 'Invalid File',
               textAlign: TextAlign.center,

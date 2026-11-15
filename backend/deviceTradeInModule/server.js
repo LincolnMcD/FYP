@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const axios = require("axios");
+const { getCatalogModels, getCatalogModelCodes, findCatalogCodes, getCatalogModelName } = require("../phoneCatalog/gsmarena");
 const androidDeviceList = require("android-device-list");
 const TradeInRequest = require("../models/tradeInModel");
 const Device = require("../models/deviceModel");
@@ -21,214 +22,7 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit per image
 });
 
-// Official Google Play supported devices in-memory cache
-// Covers over 54,000+ certified devices including latest models (e.g. Galaxy A15, A25, S24, Honor 90/200, etc.)
-const googlePlayBrandToModels = {};
-const googlePlayModelToCode = {};
-const googlePlayModelToCodes = {};
-const googlePlayBrandNormToCodes = {}; // brand -> normKey -> Set of model codes
-const googlePlayBrandCodeToNames = {}; // brand:::CODE -> Array of model names
-
-function initGooglePlayDevices() {
-    const csvPath = path.join(__dirname, "google_play_devices.csv");
-    if (!fs.existsSync(csvPath)) return;
-    try {
-        console.time("loadGooglePlayDevices");
-        const buffer = fs.readFileSync(csvPath);
-        const text = buffer.toString("utf16le");
-        const lines = text.split(/\r?\n/);
-
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const parts = line.split('","');
-            if (parts.length >= 4) {
-                const brand = parts[0].replace(/^"/, '').trim();
-                let name = parts[1].trim();
-                const model = parts[3].replace(/"$/, '').trim();
-
-                if (!brand) continue;
-                const bLower = brand.toLowerCase();
-                if (!googlePlayBrandToModels[bLower]) {
-                    googlePlayBrandToModels[bLower] = new Set();
-                    googlePlayBrandNormToCodes[bLower] = {};
-                }
-
-                // Ignore names containing Chinese, Japanese, or Korean characters
-                const nonLatinRegex = /[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/;
-                if (nonLatinRegex.test(name) && !nonLatinRegex.test(model)) {
-                    // Use clean Latin model name if available, else skip
-                    name = model;
-                }
-                if (nonLatinRegex.test(name)) continue;
-
-                const mName = name || model;
-                if (mName && !nonLatinRegex.test(mName)) {
-                    googlePlayBrandToModels[bLower].add(mName);
-                    const key = bLower + ":::" + mName.toLowerCase();
-                    if (!googlePlayModelToCodes[key]) {
-                        googlePlayModelToCodes[key] = new Set();
-                    }
-                    if (model) {
-                        googlePlayModelToCodes[key].add(model);
-                        if (!googlePlayModelToCode[key]) {
-                            googlePlayModelToCode[key] = model;
-                        }
-
-                        // Index reverse lookup: brand + modelCode -> model names
-                        const codeKey = bLower + ":::" + model.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                        if (!googlePlayBrandCodeToNames[codeKey]) {
-                            googlePlayBrandCodeToNames[codeKey] = [];
-                        }
-                        if (!googlePlayBrandCodeToNames[codeKey].includes(mName)) {
-                            googlePlayBrandCodeToNames[codeKey].push(mName);
-                        }
-
-                        // Pre-index under normalized key for instantaneous multi-code lookup
-                        const normKey = normalizeModelSearchTerm(mName) + (mName.toLowerCase().includes('5g') ? '_5g' : '');
-                        if (!googlePlayBrandNormToCodes[bLower][normKey]) {
-                            googlePlayBrandNormToCodes[bLower][normKey] = new Set();
-                        }
-                        googlePlayBrandNormToCodes[bLower][normKey].add(model);
-
-                        // Also pre-index without brand prefix (e.g. "huawei y9 prime 2019" -> "y9 prime 2019")
-                        const bPartNorm = normalizeModelSearchTerm(bLower);
-                        const normWithoutB = normKey.startsWith(bPartNorm) ? normKey.slice(bPartNorm.length) : normKey;
-                        if (normWithoutB.length > 3) {
-                            if (!googlePlayBrandNormToCodes[bLower][normWithoutB]) {
-                                googlePlayBrandNormToCodes[bLower][normWithoutB] = new Set();
-                            }
-                            googlePlayBrandNormToCodes[bLower][normWithoutB].add(model);
-                        }
-                    }
-                }
-            }
-        }
-        console.timeEnd("loadGooglePlayDevices");
-        console.log(`Loaded Google Play database: ${Object.keys(googlePlayBrandToModels).length} brands, 54,000+ devices indexed.`);
-    } catch (e) {
-        console.error("Failed to load Google Play devices database:", e.message);
-    }
-}
-initGooglePlayDevices();
-
-// Apple iPhone complete device catalogue
-const APPLE_IPHONE_MODELS = [
-    "iPhone 16 Pro Max", "iPhone 16 Pro", "iPhone 16 Plus", "iPhone 16",
-    "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 Plus", "iPhone 15",
-    "iPhone 14 Pro Max", "iPhone 14 Pro", "iPhone 14 Plus", "iPhone 14",
-    "iPhone 13 Pro Max", "iPhone 13 Pro", "iPhone 13", "iPhone 13 mini",
-    "iPhone 12 Pro Max", "iPhone 12 Pro", "iPhone 12", "iPhone 12 mini",
-    "iPhone 11 Pro Max", "iPhone 11 Pro", "iPhone 11",
-    "iPhone SE (3rd Gen)", "iPhone SE (2nd Gen)", "iPhone SE (1st Gen)",
-    "iPhone XS Max", "iPhone XS", "iPhone XR", "iPhone X",
-    "iPhone 8 Plus", "iPhone 8", "iPhone 7 Plus", "iPhone 7",
-    "iPhone 6s Plus", "iPhone 6s", "iPhone 6 Plus", "iPhone 6",
-    "iPhone 5s", "iPhone 5c", "iPhone 5"
-];
-
 const WELL_KNOWN_MOBILE_BRANDS = require("../phoneCatalog/brands");
-
-// Curated flagship & popular models per brand (ensuring newest releases are on top)
-const POPULAR_BRAND_MODELS = {
-    "Samsung": [
-        "Galaxy S24 Ultra", "Galaxy S24+", "Galaxy S24",
-        "Galaxy S23 Ultra", "Galaxy S23+", "Galaxy S23", "Galaxy S23 FE",
-        "Galaxy S22 Ultra", "Galaxy S22+", "Galaxy S22",
-        "Galaxy S21 Ultra", "Galaxy S21+", "Galaxy S21", "Galaxy S21 FE",
-        "Galaxy Z Fold 6", "Galaxy Z Fold 5", "Galaxy Z Fold 4", "Galaxy Z Fold 3",
-        "Galaxy Z Flip 6", "Galaxy Z Flip 5", "Galaxy Z Flip 4", "Galaxy Z Flip 3",
-        "Galaxy Note 20 Ultra", "Galaxy Note 20",
-        "Galaxy A55 5G", "Galaxy A54 5G", "Galaxy A35 5G", "Galaxy A34 5G",
-        "Galaxy A25 5G", "Galaxy A15 5G", "Galaxy A15", "Galaxy A14 5G", "Galaxy A05s"
-    ],
-    "POCO": [
-        "POCO F6 Pro", "POCO F6", "POCO X6 Pro 5G", "POCO X6 5G", "POCO X6 Neo",
-        "POCO M6 Pro 5G", "POCO M6 5G", "POCO M6 Plus 5G", "POCO C65", "POCO C61",
-        "POCO F5 Pro", "POCO F5", "POCO X5 Pro 5G", "POCO X5 5G",
-        "POCO F4 GT", "POCO F4", "POCO X4 Pro 5G", "POCO X4 GT",
-        "POCO F3", "POCO F2 Pro", "POCO F1"
-    ],
-    "ZTE": [
-        "Nubia Z60 Ultra Leading Version", "Nubia Z60 Ultra", "Nubia Z60S Pro",
-        "Nubia RedMagic 9S Pro+", "Nubia RedMagic 9S Pro", "Nubia RedMagic 9 Pro",
-        "Nubia RedMagic 8S Pro", "Nubia RedMagic 8 Pro", "Nubia RedMagic 7 Pro",
-        "Nubia Flip 5G", "Nubia Focus Pro 5G", "Nubia Neo 2 5G",
-        "Axon 50 Ultra", "Axon 40 Ultra", "Axon 30 Ultra",
-        "Blade V50 Design", "Blade A73 5G", "Blade A53 Pro"
-    ],
-    "Google": [
-        "Pixel 9 Pro Fold", "Pixel 9 Pro XL", "Pixel 9 Pro", "Pixel 9",
-        "Pixel 8 Pro", "Pixel 8", "Pixel 8a",
-        "Pixel 7 Pro", "Pixel 7", "Pixel 7a",
-        "Pixel 6 Pro", "Pixel 6", "Pixel 6a", "Pixel Fold"
-    ],
-    "Xiaomi": [
-        "Xiaomi 14 Ultra", "Xiaomi 14 Pro", "Xiaomi 14",
-        "Xiaomi 13 Ultra", "Xiaomi 13 Pro", "Xiaomi 13", "Xiaomi 13T Pro",
-        "Xiaomi 12 Pro", "Xiaomi 12", "Xiaomi 12T Pro",
-        "Redmi Note 13 Pro+ 5G", "Redmi Note 13 Pro", "Redmi Note 13 5G",
-        "Redmi Note 12 Pro+", "Redmi 13C", "Redmi 12", "Redmi 10"
-    ],
-    "OnePlus": [
-        "OnePlus 12", "OnePlus 12R", "OnePlus Open",
-        "OnePlus 11", "OnePlus 11R", "OnePlus 10 Pro", "OnePlus 10T",
-        "OnePlus 9 Pro", "OnePlus 9", "OnePlus Nord 4", "OnePlus Nord 3 5G"
-    ],
-    "Oppo": [
-        "Find X7 Ultra", "Find X7", "Find N3", "Find N3 Flip",
-        "Find X6 Pro", "Find X6", "Find N2 Flip",
-        "Reno12 Pro 5G", "Reno12 5G", "Reno11 Pro 5G", "Reno11 5G",
-        "A98 5G", "A79 5G", "A58"
-    ],
-    "Vivo": [
-        "X100 Ultra", "X100 Pro", "X100", "X Fold 3 Pro", "X Fold 3",
-        "X90 Pro", "X90", "V30 Pro", "V30", "V30e",
-        "V29 5G", "V27 5G", "Y200 5G", "Y100 5G"
-    ],
-    "Honor": [
-        "Magic V3", "Magic V2", "Magic6 Pro", "Magic6",
-        "Magic5 Pro", "Honor 200 Pro", "Honor 200", "Honor 90", "Honor X9b 5G"
-    ],
-    "Huawei": [
-        "Pura 70 Ultra", "Pura 70 Pro", "Pura 70",
-        "Mate 60 Pro+", "Mate 60 Pro", "Mate X5", "P60 Pro", "Mate 50 Pro",
-        "nova 12 Pro", "nova 11", "nova 10 Pro"
-    ],
-    "Sony": [
-        "Xperia 1 VI", "Xperia 1 V", "Xperia 1 IV", "Xperia 1 III",
-        "Xperia 5 V", "Xperia 5 IV", "Xperia 5 III",
-        "Xperia 10 VI", "Xperia 10 V", "Xperia 10 IV", "Xperia Pro-I"
-    ],
-    "ASUS": [
-        "ROG Phone 8 Pro", "ROG Phone 8", "ROG Phone 7 Ultimate", "ROG Phone 7",
-        "ROG Phone 6", "Zenfone 11 Ultra", "Zenfone 10", "Zenfone 9"
-    ],
-    "Realme": [
-        "GT 6", "GT 6T", "GT 5 Pro", "GT Neo 5",
-        "Realme 12 Pro+ 5G", "Realme 12+ 5G", "Realme 12 5G",
-        "Realme 11 Pro+", "Realme C67", "Realme C55"
-    ],
-    "Nothing": [
-        "Phone (2a) Plus", "Phone (2a)", "Phone (2)", "Phone (1)", "CMF Phone 1"
-    ],
-    "Motorola": [
-        "Razr 50 Ultra", "Razr 50", "Razr 40 Ultra", "Razr 40",
-        "Edge 50 Ultra", "Edge 50 Pro", "Edge 50 Fusion",
-        "Edge 40 Pro", "Edge 40", "Moto G84", "Moto G54"
-    ],
-    "Infinix": [
-        "Zero 40 5G", "Zero 30 5G", "GT 20 Pro", "GT 10 Pro",
-        "Note 40 Pro+ 5G", "Note 40 5G", "Hot 40 Pro"
-    ],
-    "Tecno": [
-        "Phantom V Fold 2", "Phantom V Flip 2", "Phantom X2 Pro",
-        "Camon 30 Premier 5G", "Camon 30 Pro", "Pova 6 Pro", "Spark 20 Pro+"
-    ],
-    "Nokia": [
-        "Nokia XR21", "Nokia G42 5G", "Nokia X30 5G", "Nokia G60 5G", "Nokia C32"
-    ]
-};
 
 const POPULAR_COLORS = [
     { name: "Black / Midnight / Space Gray", hex: "#1F2421" },
@@ -243,109 +37,6 @@ const POPULAR_COLORS = [
     { name: "Orange / Coral / Peach", hex: "#EA580C" },
     { name: "Other", hex: "#6B7280" }
 ];
-
-// Helper: Normalize brand query name (e.g. "Google Pixel" -> "Google", "nubia" -> "Nubia")
-function normalizeBrandName(brand) {
-    if (!brand) return "";
-    const b = brand.toLowerCase().trim();
-    if (b.includes("apple") || b.includes("iphone")) return "Apple";
-    if (b.includes("google") || b.includes("pixel")) return "Google";
-    if (b === "poco") return "POCO";
-    if (b === "zte") return "ZTE";
-    if (b === "nubia") return "nubia";
-    if (b === "oppo") return "OPPO";
-    if (b === "honor") return "HONOR";
-    if (b === "redmi") return "Redmi";
-    return brand.trim();
-}
-
-// Helper: Get models for a specific brand from Google Play Database + Apple DB + curated flagship series
-function getModelsForBrand(brand) {
-    if (!brand) return [];
-    
-    const normalizedBrand = normalizeBrandName(brand);
-    const brandLower = normalizedBrand.toLowerCase();
-
-    // 1. Apple (iPhone)
-    if (brandLower === "apple") {
-        return APPLE_IPHONE_MODELS;
-    }
-
-    const modelSet = new Set();
-
-    // 2. Add flagship / curated series for this brand
-    for (const [key, list] of Object.entries(POPULAR_BRAND_MODELS)) {
-        if (key.toLowerCase() === brandLower || key.toLowerCase() === brand.toLowerCase().trim()) {
-            list.forEach(m => modelSet.add(m));
-            break;
-        }
-    }
-
-    // 3. Query Google Play Certified Supported Devices Database (54,000+ devices)
-    // Handle brand aliases in Google Play (e.g. Google Pixel -> google, Redmi -> redmi & xiaomi redmi)
-    const gpKeys = [brandLower];
-    if (brandLower === "google pixel" || brandLower === "google") {
-        gpKeys.push("google");
-    }
-    if (brandLower === "redmi") {
-        gpKeys.push("redmi");
-        // Also include Redmi models listed under Xiaomi in Google Play
-        const xiaomiSet = googlePlayBrandToModels["xiaomi"];
-        if (xiaomiSet) {
-            xiaomiSet.forEach(m => {
-                if (m.toLowerCase().includes("redmi")) modelSet.add(m);
-            });
-        }
-    }
-
-    gpKeys.forEach(k => {
-        const gpModels = googlePlayBrandToModels[k];
-        if (gpModels && gpModels.size > 0) {
-            gpModels.forEach(m => {
-                if (m.length > 1) modelSet.add(m);
-            });
-        }
-    });
-
-    // 4. Query android-device-list library as additional source
-    try {
-        const rawBrands = androidDeviceList.brandList ? androidDeviceList.brandList() : [];
-        // Match brand in library
-        const matchedBrand = rawBrands.find(b => b.toLowerCase() === brandLower) || normalizedBrand;
-        const devices = androidDeviceList.getDevicesByBrand(matchedBrand) || [];
-
-        const namedDevices = [];
-        const unnamedDevices = [];
-
-        devices.forEach(d => {
-            const name = d.name ? d.name.trim() : '';
-            const model = d.model ? d.model.trim() : '';
-
-            if (name) {
-                namedDevices.push(name);
-            } else if (model) {
-                unnamedDevices.push(model);
-            }
-        });
-
-        const nonLatinRegex = /[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]/;
-        // Add unique marketing names (ignoring non-Latin / Chinese names)
-        namedDevices.forEach(name => {
-            if (name.length > 1 && !nonLatinRegex.test(name)) modelSet.add(name);
-        });
-
-        // Add remaining distinct hardware models if list is relatively small
-        if (modelSet.size < 50) {
-            unnamedDevices.slice(0, 50).forEach(m => {
-                if (m.length > 1 && !nonLatinRegex.test(m)) modelSet.add(m);
-            });
-        }
-    } catch (e) {
-        console.error("Error retrieving models from android-device-list:", e);
-    }
-
-    return Array.from(modelSet);
-}
 
 // Helper: Extract model code (e.g. A2638, SM-S928B, 2407FPN8EG, GKV4X) from TAC record specs or specs text
 function extractModelCodeFromSpecs(specs) {
@@ -487,45 +178,17 @@ function normalizeModelSearchTerm(m) {
 }
 
 // Helper: Resolve ALL modelCodes given brand and model name (does not stop at first match)
-function getModelCodeForModel(brand, modelName) {
+async function getModelCodeForModel(brand, modelName, catalogRows) {
     if (!modelName) return null;
     const cleanModel = modelName.trim();
     const bLower = (brand || '').toLowerCase().trim();
 
-    // 1. Apple: Dedicated exact or normalized lookup
-    if (bLower === "apple" || bLower.includes("iphone")) {
-        if (KNOWN_MODEL_CODES[cleanModel]) return KNOWN_MODEL_CODES[cleanModel];
-        const norm = cleanModel.toLowerCase().replace(/[^a-z0-9]/g, '');
-        for (const [k, v] of Object.entries(KNOWN_MODEL_CODES)) {
-            const kNorm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (norm === kNorm || norm.includes(kNorm) || kNorm.includes(norm)) {
-                return v;
-            }
-        }
-    }
+    const catalogCodes = findCatalogCodes(
+        brand, cleanModel, catalogRows ?? await getCatalogModelCodes(brand)
+    );
+    if (catalogCodes.length) return catalogCodes.join(", ");
 
-    // 2. Look up hardware models in Google Play Certified Devices Database (54,000+ devices)
-    // Instantaneous multi-code lookup across the complete Google Play dataset
     const collectedCodes = new Set();
-    try {
-        const directKey = bLower + ":::" + cleanModel.toLowerCase();
-        if (googlePlayModelToCodes[directKey] && googlePlayModelToCodes[directKey].size > 0) {
-            googlePlayModelToCodes[directKey].forEach(c => collectedCodes.add(c));
-        }
-
-        const brandNormMap = googlePlayBrandNormToCodes[bLower] || {};
-        const targetNorm = normalizeModelSearchTerm(cleanModel) + (cleanModel.toLowerCase().includes('5g') ? '_5g' : '');
-        const bPartNorm = normalizeModelSearchTerm(bLower);
-        const normWithoutB = targetNorm.startsWith(bPartNorm) ? targetNorm.slice(bPartNorm.length) : targetNorm;
-
-        if (brandNormMap[targetNorm]) {
-            brandNormMap[targetNorm].forEach(c => collectedCodes.add(c));
-        }
-        if (normWithoutB.length > 3 && brandNormMap[normWithoutB]) {
-            brandNormMap[normWithoutB].forEach(c => collectedCodes.add(c));
-        }
-    } catch (_) {}
-
     // 3. Look up in android-device-list library as well (scan until finish)
     try {
         const rawBrands = androidDeviceList.brandList ? androidDeviceList.brandList() : [];
@@ -634,7 +297,6 @@ router.get("/models", async (req, res) => {
             return res.status(400).json({ success: false, message: "Brand query parameter is required" });
         }
 
-        const { getCatalogModels } = require("../phoneCatalog/gsmarena");
         const selectedBrand = WELL_KNOWN_MOBILE_BRANDS.find(name => name.toLowerCase() === brand.trim().toLowerCase());
         if (!selectedBrand) {
             return res.status(400).json({ success: false, message: "Select a supported phone brand." });
@@ -648,9 +310,10 @@ router.get("/models", async (req, res) => {
 
         // Return array of models, plus modelCodes map for convenience
         const modelCodes = {};
-        models.forEach(m => {
-            modelCodes[m] = getModelCodeForModel(brand, m);
-        });
+        const catalogRows = await getCatalogModelCodes(selectedBrand);
+        for (const model of models) {
+            modelCodes[model] = await getModelCodeForModel(selectedBrand, model, catalogRows);
+        }
 
         return res.status(200).json({
             success: true,
@@ -766,7 +429,7 @@ router.post("/device", async (req, res) => {
             }
         }
 
-        const resolvedModelCode = modelCode || getModelCodeForModel(brand, model);
+        const resolvedModelCode = modelCode || await getModelCodeForModel(brand, model);
 
         const device = new Device({
             deviceID,
@@ -889,6 +552,46 @@ router.post("/device/update", async (req, res) => {
     }
 });
 
+const staffPhotoViews = new Set([
+    "front_screen_closed", "front_screen_open", "back", "frame_right",
+    "frame_top", "frame_bottom", "camera_area", "any_angles"
+]);
+
+async function syncStaffImageSlots(tradeInRequestRef, files, retainedImages) {
+    const collection = tradeInRequestRef.collection("staffImages");
+    const snapshot = await collection.get();
+    const savedByUrl = new Map(snapshot.docs.map(doc => [doc.data().imageUrl, doc]));
+    const saved = [];
+    const retainedDocIds = new Set();
+
+    for (const [imageView, url] of Object.entries(retainedImages)) {
+        const doc = savedByUrl.get(url);
+        if (!doc || retainedDocIds.has(doc.id)) return null;
+        retainedDocIds.add(doc.id);
+        saved.push({ ref: doc.ref, data: { ...doc.data(), imageView } });
+    }
+
+    const tradeInRequestID = tradeInRequestRef.id;
+    const folder = `rebyte/trade_in/${tradeInRequestID}/staff`;
+    for (const file of files) {
+        const imageView = file.fieldname;
+        const publicName = `${imageView}_${crypto.randomBytes(8).toString("hex")}`;
+        const cloudResult = await uploadBufferToCloudinary(file.buffer, folder, publicName);
+        const image = new TradeInRequestImage({
+            imageUrl: cloudResult.secure_url, imageView, tradeInRequestID
+        });
+        saved.push({ ref: collection.doc(image.imageID), data: image.toJSON() });
+    }
+
+    const batch = db.batch();
+    for (const doc of snapshot.docs) {
+        if (!retainedDocIds.has(doc.id)) batch.delete(doc.ref);
+    }
+    for (const image of saved) batch.set(image.ref, image.data);
+    await batch.commit();
+    return saved.map(image => image.data);
+}
+
 // POST /staff/upload-images - Page 3: Upload staff images to Cloudinary in folder rebyte/trade_in/<tradeInRequestID>/staff and Firestore subcollection staffImages
 router.post("/staff/upload-images", upload.any(), async (req, res) => {
     try {
@@ -899,6 +602,32 @@ router.post("/staff/upload-images", upload.any(), async (req, res) => {
 
         const tradeInRequestRef = db ? db.collection("tradeInRequests").doc(tradeInRequestID) : null;
         const files = req.files || [];
+        if (req.body.retainedImages !== undefined) {
+            if (!tradeInRequestRef) {
+                return res.status(503).json({ success: false, message: "Database is unavailable." });
+            }
+            let retainedImages;
+            try {
+                retainedImages = JSON.parse(req.body.retainedImages);
+            } catch {
+                return res.status(400).json({ success: false, message: "Invalid retained images." });
+            }
+            if (!retainedImages || typeof retainedImages !== "object" || Array.isArray(retainedImages)) {
+                return res.status(400).json({ success: false, message: "Invalid retained images." });
+            }
+            const views = [...Object.keys(retainedImages), ...files.map(file => file.fieldname)];
+            if (!views.length || !views.every(view => staffPhotoViews.has(view)) ||
+                new Set(views).size !== views.length ||
+                files.some(file => file.size > 5 * 1024 * 1024)) {
+                return res.status(400).json({ success: false, message: "Invalid staff photo slots or file size." });
+            }
+            const images = await syncStaffImageSlots(tradeInRequestRef, files, retainedImages);
+            if (!images) {
+                return res.status(400).json({ success: false, message: "A retained photo is no longer available." });
+            }
+            return res.json({ success: true, images });
+        }
+
         if (files.length === 0) {
             return res.status(400).json({ success: false, message: "No image files provided." });
         }
@@ -1118,7 +847,9 @@ async function predictTradeInValue(tradeInRequestID, evaluationCollection = "eva
         ramCapacity,
         storage,
         internalPerfromanceOverallMark: performanceMark,
-        screenDmgScore,
+        screenDmgScore: Math.min(100, screenDmgScore),
+        backDmgScore: Math.min(100, score(back) * 100),
+        frameDmgScore: Math.min(100, score(frame) * 100),
         totalDmgScore,
         hasScreenDamage: screenDmgScore > 0 ? 1 : 0,
         msrp
@@ -1127,7 +858,7 @@ async function predictTradeInValue(tradeInRequestID, evaluationCollection = "eva
     const backendRoot = path.resolve(__dirname, "..");
     const pricingRoot = path.join(backendRoot, "ML Pricing");
     const runRoot = path.join(pricingRoot, "ml_pricing", "scratch_runs",
-        "group_with_model_20261031_230012_911368");
+        "group_with_model_20261115_031526_393979");
     const modelPath = process.env.ML_PRICING_MODEL_PATH || path.join(runRoot, "model.json");
     const metricsPath = process.env.ML_PRICING_METRICS_PATH || path.join(runRoot, "metrics.json");
     if (!fs.existsSync(modelPath) || !fs.existsSync(metricsPath)) {
@@ -1328,7 +1059,7 @@ router.post("/submit-request", upload.any(), async (req, res) => {
         }
 
         // 1. Create or persist Device record with pending status
-        const resolvedModelCode = body.modelCode || getModelCodeForModel(brand, model);
+        const resolvedModelCode = body.modelCode || await getModelCodeForModel(brand, model);
         const device = new Device({
             deviceID: clientDeviceID,
             deviceCategory,
@@ -2132,7 +1863,11 @@ router.get("/user-requests", async (req, res) => {
         let quoteCount = 0;
         let agreedCount = 0;
 
-        snapshot.docs.forEach((doc) => {
+        const visibleDocs = snapshot.docs.filter((doc) => {
+            const data = doc.data();
+            return String(data.requestStatus || data.status || "").trim().toLowerCase() !== "pending";
+        });
+        visibleDocs.forEach((doc) => {
             const d = doc.data();
             if (isCompletedDoc(d)) {
                 completedCount++;
@@ -2155,7 +1890,7 @@ router.get("/user-requests", async (req, res) => {
         const requestedTab = (tab || 'all').toLowerCase().trim();
         const requestedStatus = (status || 'all').toLowerCase().trim();
 
-        let filteredDocs = snapshot.docs.filter((doc) => {
+        let filteredDocs = visibleDocs.filter((doc) => {
             const d = doc.data();
             if (requestedTab === 'active') {
                 if (!isActiveDoc(d)) return false;
@@ -2842,25 +2577,23 @@ router.post("/validate-imei", async (req, res) => {
             detectedBrand = formatBrandName(tacRecord.brand);
             // Parse specs (e.g., "APPLE IPHONE 13 PRO, Apple iPhone 13 Pro, A2638, 2021, QC SD X60 Modem")
             const parts = tacRecord.specs.split(",").map(p => p.trim());
-            detectedModel = parts[1] || parts[0] || tacRecord.specs;
+            detectedModel = parts[0] || null;
 
             // Extract model code from TAC specs (e.g. A2638, SM-S928B, 2407FPN8EG, GKV4X)
             detectedModelCode = extractModelCodeFromSpecs(tacRecord.specs);
 
-            // Retrieve consistent, official model name from Google Play devices list using detected modelCode
             if (detectedModelCode && detectedBrand) {
-                const bLower = detectedBrand.toLowerCase().trim();
-                const codeKey = bLower + ":::" + detectedModelCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                const gpNames = googlePlayBrandCodeToNames[codeKey];
-                if (gpNames && gpNames.length > 0) {
-                    // If multiple aliases exist, pick the best matching or primary one
-                    let bestName = gpNames[0];
-                    if (expectedModel) {
-                        const expLower = expectedModel.toLowerCase();
-                        const match = gpNames.find(n => n.toLowerCase() === expLower || expLower.includes(n.toLowerCase()));
-                        if (match) bestName = match;
-                    }
-                    detectedModel = bestName;
+                detectedModel = await getCatalogModelName(
+                    detectedBrand, detectedModelCode, expectedModel
+                ) || detectedModel;
+
+                // Some TAC rows have only the hardware code in the name field.
+                const nameWithoutBrand = detectedModel?.replace(
+                    new RegExp(`^${detectedBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`, "i"), ""
+                );
+                if (nameWithoutBrand && extractModelCodeFromSpecs(nameWithoutBrand) === detectedModelCode &&
+                    !/\s/.test(nameWithoutBrand)) {
+                    detectedModel = "Unknown Model";
                 }
             }
 
@@ -2916,16 +2649,17 @@ router.post("/validate-imei", async (req, res) => {
         // Resolve target model code from expectedModelCode or fallback lookup of expectedModel
         const targetModelCode = (expectedModelCode && String(expectedModelCode).trim().length > 0)
             ? String(expectedModelCode).trim()
-            : getModelCodeForModel(expectedBrand, expectedModel);
+            : await getModelCodeForModel(expectedBrand, expectedModel);
 
         if (!isMismatch && targetModelCode && detectedModelCode) {
             const matchesCode = isModelCodeMatch(detectedModelCode, targetModelCode);
             if (!matchesCode) {
                 isMismatch = true;
                 mismatchType = "modelCode";
-                mismatchExpected = targetModelCode;
                 const expName = expectedModel || "Quoted Model";
                 const detName = detectedModel || "Scanned Device";
+                mismatchExpected = expName;
+                mismatchDetected = detName;
                 mismatchReason = `Model mismatch: Quoted model is "${expName}", but scanned IMEI belongs to "${detName}".`;
             }
         }
@@ -3016,7 +2750,7 @@ router.post("/validate-imei", async (req, res) => {
     }
 });
 
-// POST /detect-phone - Page 3 instant verification: Runs model1_phone_detection on the image
+// POST /detect-phone - Page 3 instant verification: Runs model1_phone_part_detection on the image
 const { execFile } = require("child_process");
 
 router.post("/detect-phone", upload.single("image"), async (req, res) => {
@@ -3033,7 +2767,7 @@ router.post("/detect-phone", upload.single("image"), async (req, res) => {
         tempFilePath = path.join(os.tmpdir(), `${tempName}${ext}`);
         fs.writeFileSync(tempFilePath, req.file.buffer);
 
-        const detectorScript = path.resolve(__dirname, "..", "model1_phone_detection", "run_detector.py");
+        const detectorScript = path.resolve(__dirname, "..", "model1_phone_part_detection", "run_detector.py");
         // Prefer anaconda python where torch is installed
         const pythonBin = fs.existsSync("C:\\Users\\User\\anaconda3\\python.exe") 
             ? "C:\\Users\\User\\anaconda3\\python.exe" 
@@ -3049,8 +2783,9 @@ router.post("/detect-phone", upload.single("image"), async (req, res) => {
             }
         };
 
-        execFile(pythonBin, [detectorScript, tempFilePath], { timeout: 30000 }, (error, stdout, stderr) => {
+        const detector = execFile(pythonBin, [detectorScript, tempFilePath], { timeout: 30000 }, (error, stdout, stderr) => {
             cleanupTemp();
+            if (res.destroyed) return;
 
             if (error) {
                 let detail = stderr.trim() || error.message;
@@ -3077,6 +2812,9 @@ router.post("/detect-phone", upload.single("image"), async (req, res) => {
                     error: "Invalid detector output format."
                 });
             }
+        });
+        res.once("close", () => {
+            if (!res.writableEnded) detector.kill();
         });
     } catch (err) {
         if (tempFilePath && fs.existsSync(tempFilePath)) {
@@ -3108,6 +2846,8 @@ router.post("/run-device-assessment", async (req, res) => {
         const cached = await evaluationRef.get();
         const cachedData = cached.exists ? cached.data() || {} : {};
         const isCurrentCachedEvaluation = cachedData.evaluationID === evaluationID
+            && cachedData.modelVersion === "model2_defect_segmentation_v26"
+            && cachedData.gradeRuleVersion === 3
             && typeof cachedData.status === "undefined";
         const requestRef = db.collection("tradeInRequests").doc(tradeInRequestID);
         const requestSnapshot = await requestRef.get();
@@ -3207,32 +2947,23 @@ router.post("/run-device-assessment", async (req, res) => {
         const brand = String(device.brand || "").trim();
         const model = String(device.model || "").trim();
         const phoneModel = [brand, model].filter(Boolean).join(" ") || "Unknown smartphone";
-        const trainedPipelineModel2 = path.join(
-            "C:\\Users\\User\\Desktop\\trained pipeline",
-            "model2_defect_segmentation"
-        );
-        const model2Checkpoint = process.env.MODEL2_CHECKPOINT_PATH || path.join(
-            trainedPipelineModel2,
-            "runs",
-            "auto_hard_negative_from_hn",
-            "saved_models",
-            "best.pt"
-        );
-        const model2Config = process.env.MODEL2_CONFIG_PATH || path.join(
-            trainedPipelineModel2,
-            "config",
-            "config.yaml"
-        );
+        const model2Root = path.join(backendRoot, "model2_defect_segmentation_v26");
+        const model2Checkpoint = process.env.MODEL2_CHECKPOINT_PATH ||
+            path.join(model2Root, "weights", "best.pt");
+        const model2Config = process.env.MODEL2_CONFIG_PATH ||
+            path.join(model2Root, "config.yaml");
         const manifest = {
             evaluationID,
             tradeInRequestID,
             device_id: tradeInRequestID,
-            model2_code_root: trainedPipelineModel2,
+            customer_assessment: !isStaffEvaluation,
             phone_brand: brand,
             phone_model: phoneModel,
+            phone_model_code: device.modelCode || requestData.modelCode || null,
             confidence_threshold: 0.30,
             combine_complementary: false,
             defect_model: {
+                architecture: "v26",
                 checkpoint: model2Checkpoint,
                 config: model2Config,
                 device: "cpu"
@@ -3306,6 +3037,9 @@ router.post("/run-device-assessment", async (req, res) => {
             tradeInRequestID,
             diagnosticID,
             grade: result.grade,
+            modelVersion: result.other.modelVersion,
+            gradeRuleVersion: 3,
+            quickTradeIn: result.other.quickTradeIn,
             msrp: result.msrp ?? null,
             classes: classFields,
             parts: partFields,

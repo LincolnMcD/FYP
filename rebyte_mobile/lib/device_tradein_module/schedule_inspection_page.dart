@@ -404,9 +404,26 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
   }
 
 
+  static const _sameSlotMessage =
+      'This is your current booking slot. Please select a different date or time.';
+
+  bool _isCurrentBookingSlot(String slot) {
+    final originalDate = DateTime.tryParse(widget.initialDate ?? '');
+    if (!widget.fromMyTradeInRequests || originalDate == null) return false;
+    String timeKey(String? value) =>
+        (value ?? '').toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    return DateUtils.isSameDay(_selectedDate, originalDate) &&
+        timeKey(slot) == timeKey(widget.initialSlot);
+  }
+
   Future<void> _onContinueBooking() async {
     if (_selectedSlot == null) {
       _showToast('Please select an available time slot.', true);
+      return;
+    }
+
+    if (_isCurrentBookingSlot(_selectedSlot!)) {
+      _showToast(_sameSlotMessage, true);
       return;
     }
 
@@ -1203,7 +1220,9 @@ class _ScheduleInspectionPageState extends State<ScheduleInspectionPage> {
 
     return GestureDetector(
       onTap: () {
-        if (isDisabled) {
+        if (_isCurrentBookingSlot(slot)) {
+          _showToast(_sameSlotMessage, true);
+        } else if (isDisabled) {
           _showToast('No eligible staff available for this slot. Please choose another slot.', true);
         } else {
           setState(() => _selectedSlot = slot);

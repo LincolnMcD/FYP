@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1013924601244-2nad1gufl1q180r97b2cajiv8kpncsqt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tarumt.rebyte",
+            "certificate_hash": "009492267116454e681d2c7a4ebe4579c84d55b6"
+          }
+        },
+        {
+          "client_id": "1013924601244-6nl8t86hiph0nac800oohu4bgiqj6f13.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tarumt.rebyte",
+            "certificate_hash": "1e9ae438505fae1bf4a331c65eab55cfe9a5e88a"
+          }
+        },
+        {
           "client_id": "1013924601244-1gciiuvp8ikffam43ka6pfdf7043bqgo.apps.googleusercontent.com",
           "client_type": 3
         }

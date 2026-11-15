@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'package:flutter/material.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
@@ -84,6 +85,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
 
   void _onStartDiagnostic() {
     if (!_checkLoginRequired()) return;
+    StaffDiagnosticScope.of(context)?.start();
 
     Navigator.push(
       context,
@@ -102,14 +104,15 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
 
   @override
   Widget build(BuildContext context) {
+    final staff = StaffDiagnosticScope.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FA),
-      appBar: const ReByteAppBar(),
-      drawer: ReByteDrawer(
+      appBar: staff == null ? const ReByteAppBar() : null,
+      drawer: staff != null ? null : ReByteDrawer(
         isLoggedIn: widget.isLoggedIn,
         email: widget.email,
         name: widget.name,
-        selectedIndex: 5,
+        selectedIndex: ReByteDrawer.testDeviceIndex,
       ),
       body: SafeArea(
         child: Column(
@@ -123,7 +126,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
                     // Back arrow button
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 22),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: staff?.exit ?? () => Navigator.pop(context),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
@@ -248,7 +251,7 @@ class _DiagnosticSuitePageState extends State<DiagnosticSuitePage> {
           ],
         ),
       ),
-      bottomNavigationBar: const ReByteBottomNavBar(
+      bottomNavigationBar: staff != null ? null : const ReByteBottomNavBar(
         selectedIndex: -1,
       ),
     );

@@ -361,12 +361,23 @@ class ScratchBoostRegressor(_PlainV1Regressor):
         sums = np.bincount(ids, weights=residual if weights is None else residual*weights, minlength=len(counts))
         return sums/np.maximum(counts+self.params['l2'], 1e-12)
 
-    def fit(self, X, y, X_valid, y_valid, categorical=(), callback=None):
+    def fit(self, X, y, X_valid, y_valid, categorical=(), callback=None, *,
+            validation_msrp=None, validation_price=None):
         y, y_valid = np.asarray(y, dtype=float), np.asarray(y_valid, dtype=float)
         if y.ndim != 1 or y_valid.ndim != 1 or len(y) != len(X) or len(y_valid) != len(X_valid) or len(y) < 2 or not len(y_valid):
             raise ValueError('Require at least 2 training rows and nonempty matching validation arrays')
         if not np.isfinite(y).all() or not np.isfinite(y_valid).all():
             raise ValueError('Targets must be finite')
+        use_price = validation_msrp is not None or validation_price is not None
+        self.selection_metric = 'validation_rmse'
+        if use_price:
+            validation_msrp = np.asarray(validation_msrp, dtype=float)
+            validation_price = np.asarray(validation_price, dtype=float)
+            if (validation_msrp.shape != y_valid.shape or validation_price.shape != y_valid.shape
+                    or not np.isfinite(validation_msrp).all() or not np.isfinite(validation_price).all()
+                    or (validation_msrp <= 0).any()):
+                raise ValueError('Supply matching finite validation MSRP and selling prices')
+            self.selection_metric = 'validation_price_mae'
         first = self._encode_fit(X, y, categorical)
         matrices = [first] + [self._bin(self._matrix(X, y, order)) for order in self._orders[1:]]
         inference, valid = self._transform(X), self._transform(X_valid)
@@ -413,8 +424,13 @@ class ScratchBoostRegressor(_PlainV1Regressor):
                 mask = np.ones(len(y), dtype=bool); mask[self._orders[permutation][0]] = False
                 row['ordered_prefix_rmse'] = float(np.sqrt(np.mean(residual[mask]**2)))
             self.history.append(row)
-            if row['validation_rmse'] < best - 1e-12:
-                self.best_iteration, best, stale = iteration, row['validation_rmse'], 0
+            if use_price:
+                price = validation_msrp * np.clip(valid_pred, 0, .9999)
+                row.update({f'validation_price_{key}': value
+                            for key, value in regression_metrics(validation_price, price).items()})
+            score = row[self.selection_metric]
+            if score < best - 1e-12:
+                self.best_iteration, best, stale = iteration, score, 0
             else:
                 stale += 1
             if callback:

@@ -1,0 +1,55 @@
+feature,split_gain_percent
+deviceAge,88.52844878256467
+totalDmgScore,5.6107485580975744
+brand=apple,2.4419554358589366
+ramCapacity,2.040138189482705
+internalPerfromanceOverallMark,0.833246155554953
+model=iphone xr,0.1761097164774584
+model=iphone 11,0.1397500212320181
+brand=google pixel,0.13920894888444535
+model=iphone 12,0.04218932781385624
+screenDmgScore,0.042161628780834244
+storage,0.006043235252562104
+brand=realme,0.0
+brand=redmi,0.0
+brand=samsung,0.0
+brand=infinix,0.0
+brand=nothing,0.0
+brand=oneplus,0.0
+brand=oppo,0.0
+brand=poco,0.0
+brand=asus,0.0
+brand=honor,0.0
+brand=huawei,0.0
+model=f5 pro,0.0
+model=axon 40 ultra,0.0
+model=asus rog phone 5,0.0
+brand=zte,0.0
+brand=xiaomi,0.0
+brand=vivo,0.0
+brand=tecno,0.0
+brand=sony,0.0
+model=iphone 16,0.0
+model=iphone 17 pro,0.0
+model=iphone 17 pro max,0.0
+model=find x5 pro,0.0
+model=hot 11,0.0
+model=honor magic4 pro,0.0
+model=huawei p60 pro,0.0
+model=galaxy s25,0.0
+model=pixel 10a,0.0
+model=oneplus 11,0.0
+model=nothing phone (3),0.0
+model=note 40 5g,0.0
+model=iphone 7,0.0
+model=pixel 8,0.0
+model=realme gt 6,0.0
+model=realme gt 2 pro,0.0
+model=vivo x90 pro,0.0
+model=spark 20c,0.0
+model=sony xperia 5 iii,0.0
+model=redmi note 12 pro,0.0
+model=realme gt 8 pro,0.0
+model=xiaomi 12 pro,0.0
+hasScreenDamage,0.0
+msrp,0.0

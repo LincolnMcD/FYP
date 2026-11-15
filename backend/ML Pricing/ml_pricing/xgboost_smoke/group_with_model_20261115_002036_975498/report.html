@@ -1,0 +1,26 @@
+<!doctype html><html><meta charset="utf-8">
+<title>From-scratch training report</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:20px;background:#f6f8fb;color:#182238}table{border-collapse:collapse;background:white}td,th{padding:12px;border:1px solid #ddd}img{width:100%}</style>
+<h1>From-scratch XGBoost-style regression</h1><p>Independent NumPy/Pandas histogram boosting with second-order split gains, L1/L2 leaf penalties, gamma, asymmetric trees and learned missing-value directions. Categorical inputs use training-only one-hot encoding. This is a custom implementation of the core method, not the XGBoost package or its model format.</p><p>Training curves are resubstitution metrics, not unbiased generalization estimates. All preprocessing is fitted on training data only.</p><h2>Held-out test results</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mae</th>
+      <th>rmse</th>
+      <th>r2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>retention_ratio</th>
+      <td>0.1658</td>
+      <td>0.2076</td>
+      <td>0.2875</td>
+    </tr>
+    <tr>
+      <th>price_myr</th>
+      <td>594.5928</td>
+      <td>745.1573</td>
+      <td>0.2119</td>
+    </tr>
+  </tbody>
+</table><p>Early stopping: price_mae; best iteration: 4</p><h2>Training and validation progress</h2><img src="learning_curves.png" alt="Learning curves"><p>Lower MAE/RMSE is better; higher R² is better. Ratio metrics and MYR price metrics use different units. Synthetic results do not establish real-market accuracy.</p><p><a href="learning_history.csv">Every-iteration CSV</a> · <a href="metrics.json">Full metrics</a> · <a href="feature_importance.csv">Feature split gains</a></p><h2>Validation price errors</h2><img src="price_learning_curves.png" alt="Validation price curves"></html>

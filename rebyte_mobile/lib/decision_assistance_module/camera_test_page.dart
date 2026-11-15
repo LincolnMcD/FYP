@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -161,6 +162,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
 
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -298,6 +300,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
   Future<void> _handleSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -406,8 +409,10 @@ class _CameraTestPageState extends State<CameraTestPage> {
   }
 
   Future<void> _handleBack() async {
+    if (StaffDiagnosticScope.requestExit(context)) return;
     final bool? confirmExit = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -495,7 +500,7 @@ class _CameraTestPageState extends State<CameraTestPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         if (_currentStage != 0) {
           setState(() => _currentStage = 0);
         } else {

@@ -1,0 +1,163 @@
+{
+  "implementation": "scratch_boost_v2",
+  "boosting": "ordered",
+  "categorical_encoding": "permutation_aligned_ordered_statistics",
+  "ordered_approximation": "dyadic prefix leaf models; shared tree structures and quantile borders",
+  "encoded_feature_count": 17,
+  "training_metric_encoding": "inference (resubstitution)",
+  "configuration": "with_model",
+  "strategy": "group",
+  "training_seconds": 0.3227015000011306,
+  "hyperparameters": {
+    "iterations": 20,
+    "depth": 4,
+    "learning_rate": 0.05,
+    "bins": 32,
+    "l2": 3.0,
+    "patience": 50,
+    "seed": 42,
+    "prior": 0.25,
+    "smoothing": 10.0,
+    "boosting": "ordered",
+    "permutations": 3,
+    "one_hot_max_size": 4,
+    "max_cat_combination": 2,
+    "min_samples_leaf": 5,
+    "min_gain": 1e-08,
+    "feature_fraction": 1.0,
+    "bagging_temperature": 0.0
+  },
+  "dataset": "C:\\Users\\User\\Desktop\\ML Pricing\\Phone Training Dataset - Temp Brand.csv",
+  "sample_rows": 5000,
+  "split": {
+    "test": {
+      "records": 706,
+      "models": [
+        "galaxy note 9",
+        "galaxy s24 ultra",
+        "honor magic v3",
+        "honor x9b",
+        "iphone 13 pro",
+        "redmi note 17 pro 5g",
+        "vivo x90 pro",
+        "vivo y05",
+        "xiaomi 11 lite 5g ne",
+        "xiaomi 17"
+      ]
+    },
+    "validation": {
+      "records": 716,
+      "models": [
+        "galaxy a37",
+        "galaxy s21 5g",
+        "iphone 15",
+        "iphone 17",
+        "oppo find x10 pro max",
+        "oppo reno8 5g",
+        "realme 13 pro+ 5g",
+        "vivo v27 pro",
+        "xiaomi 12 pro",
+        "xiaomi mi 6"
+      ]
+    },
+    "train": {
+      "records": 3578,
+      "models": [
+        "galaxy a15",
+        "galaxy a52",
+        "galaxy a57",
+        "galaxy s24",
+        "galaxy s25",
+        "galaxy s26",
+        "honor 200 pro",
+        "honor 8",
+        "honor 90",
+        "honor magic 5 pro",
+        "honor magic 6 pro",
+        "honor magic 7 pro",
+        "honor magic 8 pro",
+        "honor x9d",
+        "iphone 13",
+        "iphone 14",
+        "iphone 14 pro",
+        "iphone 15 pro",
+        "iphone 16",
+        "iphone 16 pro",
+        "iphone 17 pro",
+        "oppo f1s",
+        "oppo f25 pro",
+        "oppo find x",
+        "oppo find x5",
+        "oppo find x8 pro",
+        "oppo find x9 ultra",
+        "oppo reno13 pro 5g",
+        "oppo reno16 pro 5g",
+        "realme 1",
+        "realme 12 pro+",
+        "realme 16 pro+ 5g",
+        "realme gt 2 pro",
+        "realme gt 7 pro",
+        "realme note 80",
+        "realme p4 power 5g",
+        "redmi note 10 pro",
+        "redmi note 14 pro+ 5g",
+        "vivo nex",
+        "vivo v30 pro",
+        "vivo v40 pro",
+        "vivo x100 pro",
+        "vivo x200 pro",
+        "vivo x70 pro+",
+        "vivo x80 pro",
+        "xiaomi 13 ultra",
+        "xiaomi 14t",
+        "xiaomi 15 ultra"
+      ]
+    }
+  },
+  "best_iteration": 20,
+  "attempted_iterations": 20,
+  "selection_metric": "validation_price_mae",
+  "best_validation_price_mae_myr": 319.34147400921756,
+  "test_metrics": {
+    "retention_ratio": {
+      "mae": 0.09377139956331573,
+      "rmse": 0.12248571736076591,
+      "r2": 0.7017281802036344
+    },
+    "price_myr": {
+      "mae": 228.13359869193843,
+      "rmse": 331.5810546491937,
+      "r2": 0.8861011573100978
+    }
+  },
+  "depreciation_checks": {
+    "backDmgScore": {
+      "Passed": 280,
+      "Checked": 280
+    },
+    "backDmgScore > frameDmgScore": {
+      "Passed": 224,
+      "Checked": 280
+    },
+    "deviceAge": {
+      "Passed": 280,
+      "Checked": 280
+    },
+    "frameDmgScore": {
+      "Passed": 280,
+      "Checked": 280
+    },
+    "internalPerfromanceOverallMark": {
+      "Passed": 280,
+      "Checked": 280
+    },
+    "screenDmgScore": {
+      "Passed": 280,
+      "Checked": 280
+    },
+    "screenDmgScore > backDmgScore": {
+      "Passed": 252,
+      "Checked": 280
+    }
+  }
+}

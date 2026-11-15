@@ -13,14 +13,14 @@ def main():
     parser.add_argument('--prepare-images',help='Create automatic inspection JSON from an image directory.')
     parser.add_argument('--lookup-phone',action='store_true',help='Write a sourced brand/model profile JSON.')
     parser.add_argument('--brand');parser.add_argument('--model');parser.add_argument('--checkpoint')
-    parser.add_argument('--config');parser.add_argument('--sam-checkpoint');parser.add_argument('--phone-api')
+    parser.add_argument('--config');parser.add_argument('--sam-checkpoint');parser.add_argument('--model-code')
     args=parser.parse_args()
     if not args.output:parser.error('--output is required')
     if args.prepare_images or args.lookup_phone:
         if not args.brand or not args.model:parser.error('--brand and --model are required')
         if args.lookup_phone:
-            from .phone_specs import PHONE_SPECS_API_BASE,lookup
-            profile=lookup(args.brand,args.model,api_base=args.phone_api or PHONE_SPECS_API_BASE)
+            from .catalog_specs import lookup
+            profile=lookup(args.brand,args.model,args.model_code)
             path=Path(args.output)
             if path.exists():raise FileExistsError(path)
             path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(profile,indent=2),encoding='utf-8')
@@ -28,7 +28,7 @@ def main():
         if not args.checkpoint:parser.error('--checkpoint is required for preparation')
         from .config_builder import prepare
         print(prepare(args.prepare_images,args.brand,args.model,args.checkpoint,args.output,
-                      args.config,args.sam_checkpoint,args.phone_api));return
+                      args.config,args.sam_checkpoint,model_code=args.model_code));return
     if args.demo:
         from .demo import create_demo
         source=create_demo(Path(args.output).resolve().with_name(Path(args.output).name+'_inputs'))

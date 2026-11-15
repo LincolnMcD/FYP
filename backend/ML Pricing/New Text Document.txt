@@ -1,8 +1,17 @@
 cd "C:\Users\User\Desktop\ML Pricing"
 python -m pip install -r .\ml_pricing\requirements.txt
-python -m ml_pricing.src.train --strategy group --configuration with_model
-
+python -m ml_pricing.src.train_scratch --strategy group --configuration with_model --boosting ordered --iterations 1500 --log-every 10
 
 
 
 python -m ml_pricing.src.train --iterations 20
+
+
+print best with model
+$path = 'C:\Users\User\Desktop\ML Pricing\ml_pricing\scratch_runs\group_with_model_20261115_031526_393979\metrics.json'
+$m = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+
+"Best iteration: $($m.best_iteration)"
+"Test price MAE:  RM {0:N2}" -f $m.test_metrics.price_myr.mae
+"Test price RMSE: RM {0:N2}" -f $m.test_metrics.price_myr.rmse
+"Test price R2:   {0:F4}" -f $m.test_metrics.price_myr.r2

@@ -1,0 +1,14 @@
+# Paths are relative to the project folder when launched from it.
+root: .
+pretrained: weights/yolo26n.pt
+output: runs/phone26n_augmented
+device: cuda
+epochs: 200
+patience: 20
+batch: 12
+size: 640
+workers: 2
+seed: 26
+lr: 0.001
+# Leave empty to select the confidence threshold on validation every epoch.
+confidence: null

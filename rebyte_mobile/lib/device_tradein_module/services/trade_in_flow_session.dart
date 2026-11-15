@@ -23,6 +23,7 @@ class TradeInFlowSession {
   static final Set<String> _pendingRemovedImageViews = {};
   static Future<void>? _backgroundUploadFuture;
   static int _currentStep = 1;
+  static bool quickTradeInEnabled = false;
   static String? _lastEnteredImei;
   static String? _currentUserEmail;
   static bool _hasLoadedFromPrefs = false;
@@ -226,6 +227,7 @@ class TradeInFlowSession {
     _pendingRemovedImageViews.clear();
     _backgroundUploadFuture = null;
     _currentStep = 1;
+    quickTradeInEnabled = false;
     _lastEnteredImei = null;
     _currentUserEmail = null;
     _clearPrefs();

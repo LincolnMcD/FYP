@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -270,6 +271,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
   void _onProceedToGps() {
     showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -435,6 +437,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
   Future<void> _handleSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -554,6 +557,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
   Future<bool> _showExitConfirmationDialog() async {
     final bool? result = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -627,6 +631,7 @@ class _NetworkTestPageState extends State<NetworkTestPage> {
   }
 
   Future<void> _handleBack() async {
+    if (StaffDiagnosticScope.requestExit(context)) return;
     final bool shouldExit = await _showExitConfirmationDialog();
     if (shouldExit && mounted) {
       Navigator.pop(context);

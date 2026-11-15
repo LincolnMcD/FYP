@@ -1,0 +1,5 @@
+torch>=2.10
+numpy
+Pillow
+PyYAML
+tqdm

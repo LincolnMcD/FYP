@@ -10,22 +10,27 @@ import numpy as np
 import pandas as pd
 from ml_pricing.src.config import ROOT
 from ml_pricing.src.predict import validate_request
-from ml_pricing.src.preprocessing import prepare_features
-from ml_pricing.src.scratch import ScratchBoostRegressor
+from ml_pricing.src.preprocessing import prepare_features, DAMAGE_FIELDS
+from ml_pricing.src.xgboost_scratch import load_custom_model
 
 
-def discover_models(directory=ROOT / 'scratch_runs'):
-    return sorted(Path(directory).glob('*/model.json'), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+def discover_models(directory=None):
+    directories = [Path(directory)] if directory is not None else [ROOT/'xgboost_runs', ROOT/'scratch_runs']
+    return sorted([p for d in directories for p in d.glob('*/model.json')], key=lambda p: p.stat().st_mtime_ns, reverse=True)
 
 
 class ModelTester:
     """Prediction backend, usable without opening a window or retraining."""
     def __init__(self, path):
         self.path = Path(path).resolve()
-        self.model = ScratchBoostRegressor.load(self.path)
+        self.model = load_custom_model(self.path)
+        self.algorithm = 'XGBoost-style' if hasattr(self.model, 'category_values') else 'CatBoost-style'
         self.configuration = 'with_model' if 'model' in self.model.features else 'without_model'
+        self.separate_damage = set(DAMAGE_FIELDS).issubset(self.model.features)
 
     def categories(self, column):
+        if hasattr(self.model, 'category_values'):
+            return self.model.category_values.get(column, [])
         if hasattr(self.model, 'specs'):
             stats = self.model.category_maps.get(json.dumps([column]))
             if not stats:
@@ -35,12 +40,22 @@ class ModelTester:
 
     def predict(self, values, actual_price=None):
         request = dict(values)
+        if self.separate_damage:
+            request.update(totalDmgScore=0, hasScreenDamage=0)
+        if self.configuration == 'without_model':
+            request.setdefault('model', '__UNKNOWN__')
         validate_request(request)
+        if self.separate_damage:
+            for field in DAMAGE_FIELDS:
+                request[field] = float(request[field])
+                if not 0 <= request[field] <= 100:
+                    raise ValueError(f'{field} must be between 0 and 100')
         if actual_price is not None:
             actual_price = float(actual_price)
             if not np.isfinite(actual_price) or actual_price < 0:
                 raise ValueError('Actual selling price must be a finite, nonnegative number')
-        X = prepare_features(pd.DataFrame([request]), self.configuration)
+        frame = pd.DataFrame([request])
+        X = frame[self.model.features] if self.separate_damage else prepare_features(frame, self.configuration)
         raw_ratio = float(self.model.predict(X)[0])
         if not np.isfinite(raw_ratio):
             raise ValueError('Model returned a non-finite prediction')
@@ -106,10 +121,13 @@ class TesterWindow:
             ('hasScreenDamage', 'Screen damage? (0 = no, 1 = yes)', '0'),
             ('screenDmgScore', 'Screen damage score (≥ 0)', '0'),
             ('totalDmgScore', 'Total damage score (≥ 0)', '2')]
-        self.inputs, self.widgets = {}, {}
+        fields += [('backDmgScore', 'Back damage score (0–100)', '0'),
+                   ('frameDmgScore', 'Frame damage score (0–100)', '0')]
+        self.inputs, self.widgets, self.field_labels = {}, {}, {}
         for index, (key, label, default) in enumerate(fields):
             row, col = 1 + (index//2)*2, index%2
-            ttk.Label(form, text=label).grid(row=row, column=col, sticky='w', padx=(0, 12), pady=(0, 4))
+            self.field_labels[key] = ttk.Label(form, text=label)
+            self.field_labels[key].grid(row=row, column=col, sticky='w', padx=(0, 12), pady=(0, 4))
             variable = tk.StringVar(value=default); self.inputs[key] = variable
             if key in ('brand', 'model', 'hasScreenDamage'):
                 widget = ttk.Combobox(form, textvariable=variable, width=23,
@@ -121,11 +139,11 @@ class TesterWindow:
             self.widgets[key] = widget
             variable.trace_add('write', self.clear_prediction)
 
-        ttk.Label(form, text='Actual selling price (RM, optional)').grid(row=11, column=0, columnspan=2, sticky='w', pady=(2, 4))
+        self.actual_label = ttk.Label(form, text='Actual selling price (RM, optional)')
         self.actual = tk.StringVar(); self.actual.trace_add('write', self.clear_prediction)
-        ttk.Entry(form, textvariable=self.actual).grid(row=12, column=0, columnspan=2, sticky='ew', padx=(0, 12))
+        self.actual_entry = ttk.Entry(form, textvariable=self.actual)
         self.predict_button = ttk.Button(form, text='Predict retention & price', command=self.predict, style='Predict.TButton', state='disabled')
-        self.predict_button.grid(row=13, column=0, columnspan=2, sticky='ew', padx=(0, 12), pady=(18, 0))
+        self.layout_inputs(self.inputs)
 
         results = ttk.Frame(content, padding=(12, 0, 0, 0)); results.grid(row=0, column=1, sticky='new')
         ttk.Label(results, text='Estimated selling price', style='Heading.TLabel').pack(anchor='w')
@@ -149,6 +167,21 @@ class TesterWindow:
             self.load_model(initial_model)
         elif self.paths:
             self.load_model(self.paths[0])
+
+    def layout_inputs(self, features):
+        active = [key for key in self.inputs if key in features]
+        for key in self.inputs:
+            self.widgets[key].grid_remove()
+            self.field_labels[key].grid_remove()
+        for index, key in enumerate(active):
+            pair, col = divmod(index, 2)
+            row = 1 + pair * 2
+            self.field_labels[key].grid(row=row, column=col)
+            self.widgets[key].grid(row=row + 1, column=col)
+        row = 1 + 2 * ((len(active) + 1) // 2)
+        self.actual_label.grid(row=row, column=0, columnspan=2, sticky='w', pady=(2, 4))
+        self.actual_entry.grid(row=row + 1, column=0, columnspan=2, sticky='ew', padx=(0, 12))
+        self.predict_button.grid(row=row + 2, column=0, columnspan=2, sticky='ew', padx=(0, 12), pady=(18, 0))
 
     def clear_prediction(self, *_):
         if hasattr(self, 'price'):
@@ -174,11 +207,14 @@ class TesterWindow:
                 self.run.set(self.tester.path.parent.name)
             return
         self.tester = candidate
+        self.layout_inputs(candidate.model.features)
+        screen_range = '0–100' if candidate.separate_damage else '≥ 0'
+        self.field_labels['screenDmgScore'].configure(text=f'Screen damage score ({screen_range})')
         self.run.set(candidate.path.parent.name)
         self.clear_prediction()
         model = candidate.model
-        mode = model.params.get('boosting', 'plain')
-        self.model_info.set(f'{candidate.configuration}  •  {mode} boosting  •  {len(model.trees)} saved trees  •  '
+        mode = model.params.get('boosting', 'second-order' if candidate.algorithm == 'XGBoost-style' else 'plain')
+        self.model_info.set(f'{candidate.algorithm}  •  {candidate.configuration}  •  {mode} boosting  •  {len(model.trees)} saved trees  •  '
                             f'Best validation iteration: {model.best_iteration}\n'
                             'Each run stores its best validation snapshot. Latest saved run is selected on startup.')
         self.path_label.set(f'Loaded: {candidate.path}')
@@ -190,7 +226,7 @@ class TesterWindow:
         if self.tester is None:
             return
         try:
-            result = self.tester.predict({key: value.get() for key, value in self.inputs.items()},
+            result = self.tester.predict({key: self.inputs[key].get() for key in self.tester.model.features},
                                          self.actual.get().strip() or None)
         except Exception as exc:
             self.clear_prediction()
@@ -208,6 +244,8 @@ class TesterWindow:
         model_name = self.inputs['model'].get().strip().casefold()
         known = self.tester.categories('model')
         text = ('Phone model was seen in training.' if model_name in known else 'Phone model was not seen in training; categorical fallback is used.') if known else 'This predictor does not use phone model names.'
+        if known and model_name not in known and self.tester.algorithm == 'XGBoost-style':
+            text += '\nUnseen phone names use all-zero one-hot indicators.'
         if result['raw_retention_ratio'] != result['retention_ratio']:
             text += '\nRetention was clipped to the supported range.'
         self.exposure.set(text)

@@ -485,12 +485,17 @@ class TradeInService {
 
   /// Send image to model1_phone_detection to verify if image contains a smartphone.
   /// Automatically retries up to 5 times before failing to handle PyTorch model cold-start or busy GPU/CPU.
-  static Future<Map<String, dynamic>> detectPhone(String imagePath, {int maxRetries = 5}) async {
+  static Future<Map<String, dynamic>> detectPhone(
+    String imagePath, {
+    int maxRetries = 5,
+    Future<void>? abortTrigger,
+  }) async {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final request = http.MultipartRequest(
+        final request = http.AbortableMultipartRequest(
           'POST',
           Uri.parse('$baseUrl/detect-phone'),
+          abortTrigger: abortTrigger,
         );
         request.files.add(await http.MultipartFile.fromPath('image', imagePath));
 
@@ -507,6 +512,8 @@ class TradeInService {
             continue;
           }
         }
+      } on http.RequestAbortedException {
+        rethrow;
       } catch (e) {
         // If timeout or connection hiccup, automatically retry
         if (attempt < maxRetries) {
@@ -680,6 +687,7 @@ class TradeInService {
   static Future<Map<String, dynamic>> uploadStaffDeviceImages({
     required String tradeInRequestID,
     required Map<String, String> imagePaths,
+    required Map<String, String> retainedImages,
   }) async {
     try {
       final cleanId = tradeInRequestID.replaceAll('#', '').trim();
@@ -687,6 +695,7 @@ class TradeInService {
       final request = http.MultipartRequest('POST', uri);
 
       request.fields['tradeInRequestID'] = cleanId;
+      request.fields['retainedImages'] = jsonEncode(retainedImages);
 
       for (final entry in imagePaths.entries) {
         final slotKey = entry.key;
@@ -810,7 +819,17 @@ class TradeInService {
         final data = jsonDecode(response.body);
         return data is Map<String, dynamic> ? data : {'success': true};
       }
-      return {'success': false, 'message': 'HTTP ${response.statusCode}'};
+      String? message;
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map) message = body['message']?.toString();
+      } on FormatException {
+        // Some connection errors return an HTML response.
+      }
+      return {
+        'success': false,
+        'message': message ?? 'Self-test save failed (HTTP ${response.statusCode}).',
+      };
     } catch (e) {
       return {'success': false, 'message': 'Error saving device diagnostic: $e'};
     }

@@ -4,3 +4,7 @@ import 'package:flutter/widgets.dart';
 /// password reset) is open above them in the navigator.
 final RouteObserver<ModalRoute<dynamic>> appRouteObserver =
     RouteObserver<ModalRoute<dynamic>>();
+
+/// Observes page navigation without treating dialogs as page changes.
+final RouteObserver<PageRoute<dynamic>> appPageRouteObserver =
+    RouteObserver<PageRoute<dynamic>>();

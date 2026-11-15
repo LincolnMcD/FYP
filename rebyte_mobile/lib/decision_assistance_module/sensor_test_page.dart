@@ -1,3 +1,4 @@
+import 'staff_diagnostic_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -244,6 +245,7 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
 
     await showDialog(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -382,6 +384,7 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
   Future<void> _handleSkip() async {
     final bool? confirmSkip = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -498,6 +501,7 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
   Future<bool> _showExitConfirmationDialog() async {
     final bool? result = await showDialog<bool>(
       context: context,
+      useRootNavigator: StaffDiagnosticScope.of(context) == null,
       barrierDismissible: false,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -585,9 +589,9 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
+        if (didPop || StaffDiagnosticScope.requestExit(context)) return;
         final shouldExit = await _showExitConfirmationDialog();
-        if (shouldExit && mounted) {
+        if (shouldExit && context.mounted) {
           Navigator.pop(context);
         }
       },
@@ -605,8 +609,9 @@ class _SensorTestPageState extends State<SensorTestPage> with SingleTickerProvid
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
                       onPressed: () async {
+                        if (StaffDiagnosticScope.requestExit(context)) return;
                         final shouldExit = await _showExitConfirmationDialog();
-                        if (shouldExit && mounted) {
+                        if (shouldExit && context.mounted) {
                           Navigator.pop(context);
                         }
                       },

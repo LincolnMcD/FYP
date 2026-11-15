@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'models/device_model.dart';
 import 'services/trade_in_flow_session.dart';
-import 'services/trade_in_service.dart';
 import 'device_assessment_loading_page.dart';
 import '../widgets/rebyte_app_bar.dart';
 import '../widgets/rebyte_bottom_nav_bar.dart';
 import '../account_management_module/home_page.dart';
-import '../decision_assistance_module/diagnostic_suite_page.dart';
 import 'my_trade_in_requests_page.dart';
 
 class ImproveAssessmentPage extends StatefulWidget {
@@ -33,7 +31,6 @@ class ImproveAssessmentPage extends StatefulWidget {
 
 class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  bool _hasDiagnosticRecord = false;
 
   @override
   void initState() {
@@ -43,19 +40,6 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
     TradeInFlowSession.currentStep = 5;
     TradeInFlowSession.setTradeInRequestId(widget.tradeInRequestID);
     TradeInFlowSession.setCurrentDevice(widget.device);
-    _checkDiagnosticRecord();
-  }
-
-  Future<void> _checkDiagnosticRecord() async {
-    final devId = widget.device.deviceID;
-    if (devId.isNotEmpty) {
-      final exists = await TradeInService.checkDeviceDiagnosticExists(devId);
-      if (mounted) {
-        setState(() {
-          _hasDiagnosticRecord = exists;
-        });
-      }
-    }
   }
 
   void _onBackToHome() {
@@ -93,26 +77,6 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
       ),
       (route) => false,
     );
-  }
-
-  void _onPerformSelfTest() {
-    if (_hasDiagnosticRecord) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DiagnosticSuitePage(
-          device: widget.device,
-          tradeInRequestID: widget.tradeInRequestID,
-          isLoggedIn: widget.isLoggedIn,
-          email: widget.email,
-          name: widget.name,
-          fromImproveAssessment: true,
-        ),
-      ),
-    ).then((_) {
-      // Recheck when returning from diagnostic
-      _checkDiagnosticRecord();
-    });
   }
 
   void _onProceedAssessment() {
@@ -208,7 +172,7 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
 
                       // Description
                       const Text(
-                        'Running a quick diagnostic self-test provides detailed internal health results (like battery capacity and sensor status), which can increase the accuracy of your trade-in offer.',
+                        'Proceed with your uploaded photos to assess your device condition and prepare your trade-in offer.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -238,92 +202,6 @@ class _ImproveAssessmentPageState extends State<ImproveAssessmentPage> {
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Secondary Button: Perform Device Self-Test
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: OutlinedButton(
-                                onPressed: _hasDiagnosticRecord ? null : _onPerformSelfTest,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: _hasDiagnosticRecord
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF0F172A),
-                                  disabledForegroundColor: const Color(0xFF94A3B8),
-                                  side: BorderSide(
-                                    color: _hasDiagnosticRecord
-                                        ? const Color(0xFFE2E8F0)
-                                        : const Color(0xFFCBD5E1),
-                                    width: 1.2,
-                                  ),
-                                  backgroundColor: _hasDiagnosticRecord
-                                      ? const Color(0xFFF1F5F9)
-                                      : Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      _hasDiagnosticRecord
-                                          ? Icons.check_circle_outline_rounded
-                                          : Icons.monitor_heart_outlined,
-                                      size: 20,
-                                      color: _hasDiagnosticRecord
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF0F172A),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      _hasDiagnosticRecord
-                                          ? 'Self-Test Completed'
-                                          : 'Perform Device Self-Test',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: _hasDiagnosticRecord
-                                            ? const Color(0xFF94A3B8)
-                                            : const Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Gray overlay when self-test has already been completed
-                            if (_hasDiagnosticRecord)
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF64748B).withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Footer Subtext
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'You can always run the test later from your device settings if you change your mind.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Color(0xFF64748B),
-                            height: 1.4,
                           ),
                         ),
                       ),

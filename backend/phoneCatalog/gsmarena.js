@@ -24,14 +24,63 @@ async function getCatalogModels(brand) {
 const identity = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const splitCodes = value => String(value || "").split(/[,|;\n]/).map(identity).filter(Boolean);
 
+const parse = line => Array.from(line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^,"]*))/g),
+    ([, quoted, plain]) => quoted == null ? plain : quoted.replaceAll('""', '"'));
+
+async function getCatalogModelCodes(brand) {
+    const brandKey = identity(brand);
+    if (!brandKey) return [];
+    const csv = await fs.readFile(catalogPath, "utf8").catch(error => {
+        if (error.code === "ENOENT") return "";
+        throw error;
+    });
+    const [header, ...lines] = csv.split(/\r?\n/);
+    const codesIndex = parse(header.replace(/^\uFEFF/, ""))
+        .findIndex(column => ["modelCode", "model_codes"].includes(column));
+    if (codesIndex < 0) return [];
+
+    return lines.filter(line => identity(line.slice(0, line.indexOf(","))) === brandKey)
+        .map(line => {
+            const fields = parse(line);
+            const raw = fields[codesIndex] || "";
+            const codes = raw.startsWith("[") ? JSON.parse(raw) : raw.split(/[,|;\n]/);
+            return {
+                name: fields[1],
+                codes: codes.map(code => code.trim()).filter(code => identity(code).length >= 4),
+            };
+        });
+}
+
+function catalogModelKey(brand, name) {
+    const key = identity(name);
+    const prefix = identity(brand);
+    return key.startsWith(prefix) ? key.slice(prefix.length) : key;
+}
+
+function findCatalogCodes(brand, name, rows) {
+    const key = catalogModelKey(brand, name);
+    return [...new Set(rows.filter(row => catalogModelKey(brand, row.name) === key)
+        .flatMap(row => row.codes))];
+}
+
+async function getCatalogModelName(brand, modelCode, expectedModel) {
+    const code = identity(modelCode);
+    if (!code) return null;
+    const rows = await getCatalogModelCodes(brand);
+    const matches = rows.filter(row => row.codes.some(candidate => identity(candidate) === code));
+    const expectedKey = catalogModelKey(brand, expectedModel);
+    const exact = matches.find(row => catalogModelKey(brand, row.name) === expectedKey);
+    if (exact) return exact.name;
+    const names = [...new Set(matches.map(row => row.name))];
+    return names.length === 1 ? names[0] : null;
+}
+
 async function getCatalogSpecs(brand, model, modelCode, ram) {
     const csv = await fs.readFile(catalogPath, "utf8").catch(error => {
         if (error.code === "ENOENT") return "";
         throw error;
     });
     const [header, ...lines] = csv.split(/\r?\n/);
-    const parse = line => Array.from(line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^,"]*))/g),
-        ([, quoted, plain]) => quoted == null ? plain : quoted.replaceAll('""', '"'));
     const columns = parse(header.replace(/^\uFEFF/, ""));
     const specsIndex = columns.findIndex(column => ["specs", "specifications"].includes(column));
     const codesIndex = columns.findIndex(column => ["modelCode", "model_codes"].includes(column));
@@ -78,4 +127,4 @@ async function getCatalogSpecs(brand, model, modelCode, ram) {
     };
 }
 
-module.exports = { catalogPath, getCatalogModels, getCatalogSpecs };
+module.exports = { catalogPath, getCatalogModels, getCatalogSpecs, getCatalogModelCodes, findCatalogCodes, getCatalogModelName };

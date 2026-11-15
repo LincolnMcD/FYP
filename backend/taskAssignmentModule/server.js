@@ -3157,8 +3157,8 @@ async function getOrBuildTasksDataset({ forceRefresh = false, includeOrderDetail
             displayStatus = "Assigned";
         }
 
-        const statusBadge = taskType === "Inspect" && displayStatus === "Cancelled" ? "Cancelled" : displayStatus;
-        if (taskType === "Inspect" && displayStatus === "Cancelled") displayStatus = "Terminated";
+        const statusBadge = displayStatus;
+        if (displayStatus === "Cancelled") displayStatus = "Terminated";
 
         // Resolve device details from devices record
         const deviceBrand = devData.brand || trData.deviceBrand || trData.brand || "Apple";

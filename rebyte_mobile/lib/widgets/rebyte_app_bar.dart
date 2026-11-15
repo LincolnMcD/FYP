@@ -161,6 +161,8 @@ class ReByteAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class ReByteDrawer extends StatefulWidget {
+  static const testDeviceIndex = 7;
+
   final bool isLoggedIn;
   final String? name;
   final String? email;
@@ -288,7 +290,7 @@ class _ReByteDrawerState extends State<ReByteDrawer> {
                       _buildDrawerItem(
                         Icons.phonelink_setup_rounded,
                         'Test My Device',
-                        isSelected: effectiveSelectedIndex == 5,
+                        isSelected: effectiveSelectedIndex == ReByteDrawer.testDeviceIndex,
                         onTap: () {
                           Navigator.pop(context);
                           if (!widget.isLoggedIn) {
@@ -652,7 +654,12 @@ class _DrawerItemTileState extends State<_DrawerItemTile> {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) return;
 
-    final viewport = RenderAbstractViewport.of(renderObject);
+    final viewport = RenderAbstractViewport.maybeOf(renderObject);
+    if (viewport == null) {
+      // Fixed drawer items are visible without a scroll viewport.
+      if (!_isVisibleInViewport) setState(() => _isVisibleInViewport = true);
+      return;
+    }
     if (viewport is! RenderBox) return;
     final viewportBox = viewport as RenderBox;
     if (!viewportBox.hasSize) return;
