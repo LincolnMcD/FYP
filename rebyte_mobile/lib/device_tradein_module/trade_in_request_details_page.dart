@@ -340,10 +340,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
     final diag = _diagnostic;
 
     final String grade = (eval?['grade']?.toString().toUpperCase() ?? 'A').trim();
-    final String diagnosticId = (eval?['diagnosticID']?.toString() ?? '').trim();
-    final bool hasDiagnostic = diagnosticId.isNotEmpty &&
-        diagnosticId.toUpperCase() != 'NULL' &&
-        diag != null;
+    final bool hasDiagnostic = diag != null;
 
     // Inspection grade condition title & color
     String conditionLabel;
@@ -420,14 +417,24 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
         'mark': diag?['connectivityMark'],
       },
       {
-        'title': 'Audio & Microphone',
+        'title': 'Microphone',
         'icon': Icons.mic_none_rounded,
         'mark': diag?['microphoneMark'],
       },
       {
-        'title': 'Sensors & GPS',
+        'title': 'Sensors',
         'icon': Icons.sensors_rounded,
         'mark': diag?['sensorMark'],
+      },
+      {
+        'title': 'Speaker',
+        'icon': Icons.volume_up_outlined,
+        'mark': diag?['speakerMark'],
+      },
+      {
+        'title': 'GPS',
+        'icon': Icons.location_on_outlined,
+        'mark': diag?['gpsMark'],
       },
     ];
 
@@ -842,7 +849,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'No internal diagnostic test record associated with this evaluation (N/A).',
+                                  'No saved internal diagnostic test record is available for this device.',
                                   style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
                                 ),
                               ),
@@ -866,7 +873,7 @@ class _TradeInRequestDetailsPageState extends State<TradeInRequestDetailsPage> {
                             final int score = (m is num)
                                 ? m.toInt()
                                 : (m != null ? int.tryParse(m.toString()) ?? 100 : 100);
-                            final int scoreOutOf10 = (score / 10).round().clamp(1, 10);
+                            final int scoreOutOf10 = (score / 10).round().clamp(0, 10);
                             final bool isGood = score >= 80;
 
                             return Container(

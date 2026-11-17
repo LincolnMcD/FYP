@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../staff_module/staff_home_page.dart';
 import '../../account_management_module/services/session_service.dart';
-import '../../account_management_module/welcome_page.dart';
+import '../../account_management_module/home_page.dart';
 import '../../device_tradein_module/models/device_model.dart';
 
 class StaffAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -28,7 +28,13 @@ class StaffAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       leading: Builder(
         builder: (ctx) => IconButton(
-          icon: const Icon(Icons.menu, color: Color(0xFF0C5AD2)),
+          style: const ButtonStyle(
+              backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+              overlayColor: WidgetStatePropertyAll(Colors.transparent),
+              shadowColor: WidgetStatePropertyAll(Colors.transparent),
+              elevation: WidgetStatePropertyAll(0),
+            ),
+            icon: const Icon(Icons.menu, color: Color(0xFF0C5AD2)),
           onPressed: () {
             if (onMenuPressed != null) {
               onMenuPressed!();
@@ -89,11 +95,15 @@ class StaffAppBar extends StatelessWidget implements PreferredSizeWidget {
 
 class StaffDrawer extends StatefulWidget {
   final int selectedIndex;
+  final ValueChanged<int>? onDestinationSelected;
+  final VoidCallback? onLogout;
   final Future<bool> Function()? onBeforeNavigate;
 
   const StaffDrawer({
     super.key,
     this.selectedIndex = 2,
+    this.onDestinationSelected,
+    this.onLogout,
     this.onBeforeNavigate,
   });
 
@@ -127,6 +137,10 @@ class _StaffDrawerState extends State<StaffDrawer> {
     if (widget.onBeforeNavigate != null && !await widget.onBeforeNavigate!()) return;
     if (!mounted) return;
     Navigator.pop(context); // Close drawer
+    if (widget.onDestinationSelected case final select?) {
+      select(index);
+      return;
+    }
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -157,7 +171,7 @@ class _StaffDrawerState extends State<StaffDrawer> {
               if (mounted && context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (_) => const WelcomePage()),
+                  MaterialPageRoute(builder: (_) => const HomePage(isLoggedIn: false, toastMessage: 'Logout successful')),
                   (route) => false,
                 );
               }
@@ -259,9 +273,9 @@ class _StaffDrawerState extends State<StaffDrawer> {
                     Icons.assignment_outlined,
                     'Tasks',
                     isSelected: widget.selectedIndex == 2,
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
+                    onTap: widget.onDestinationSelected == null
+                        ? () => Navigator.pop(context)
+                        : () => _navigateToIndex(2),
                   ),
                   _buildDrawerItem(
                     Icons.person_outline,
@@ -277,6 +291,10 @@ class _StaffDrawerState extends State<StaffDrawer> {
                       if (widget.onBeforeNavigate != null && !await widget.onBeforeNavigate!()) return;
                       if (!context.mounted) return;
                       Navigator.pop(context);
+                      if (widget.onDestinationSelected case final select?) {
+                        select(4);
+                        return;
+                      }
                       final route = MaterialPageRoute<void>(
                         builder: (_) => const StaffHomePage(initialShowStandards: true),
                       );
@@ -295,7 +313,7 @@ class _StaffDrawerState extends State<StaffDrawer> {
               Icons.logout,
               'Logout',
               iconColor: const Color(0xFFEF4444),
-              onTap: _showLogoutDialog,
+              onTap: widget.onLogout ?? _showLogoutDialog,
             ),
           ],
         ),

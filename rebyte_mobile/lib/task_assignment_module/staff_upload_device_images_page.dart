@@ -1,3 +1,4 @@
+import '../account_management_module/services/session_service.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -51,11 +52,38 @@ class _StaffUploadDeviceImagesPageState
   final Map<int, int> _slotTokens = {};
   bool _isUploadingToServer = false;
 
+  bool _allowsTwoPhotos = false;
+
+  bool _hasVerifiedPhoto(ImageSlotItem slot) =>
+      slot.status == ImageSlotStatus.success &&
+      (slot.localFilePath?.isNotEmpty ?? false);
+
+  String? get _missingRequiredPhoto {
+    if (_allowsTwoPhotos) {
+      final verifiedViews = photoSlots.where(_hasVerifiedPhoto)
+          .map((slot) => slot.keyName).toSet();
+      if (!verifiedViews.contains('front_screen_open') &&
+          !verifiedViews.contains('front_screen_closed')) {
+        return 'Front';
+      }
+      return verifiedViews.contains('back') ? null : 'Back';
+    }
+    return photoSlots.where((slot) => !slot.isOptional && !_hasVerifiedPhoto(slot))
+        .firstOrNull?.label;
+  }
+
+  bool get _isProcessingPhotos => bulkPhotoBusy || photoEditsBlocked ||
+      photoSlots.any((slot) => slot.status == ImageSlotStatus.uploading);
+
   bool get _areRequiredImagesUploaded =>
-      !bulkPhotoBusy && !photoEditsBlocked && photoSlots.length >= 7 &&
-      photoSlots.sublist(0, 7).every(
-            (s) => s.status == ImageSlotStatus.success && s.localFilePath != null,
-          );
+      !_isProcessingPhotos && _missingRequiredPhoto == null;
+
+  Future<void> _loadStaffPhotoRequirement() async {
+    final session = await SessionService.getSession();
+    if (!mounted) return;
+    final email = session['email']?.toString().trim().toLowerCase();
+    setState(() => _allowsTwoPhotos = email == 'lincoln@rebyte.com');
+  }
 
   @override
   void initState() {
@@ -123,6 +151,7 @@ class _StaffUploadDeviceImagesPageState
     }
 
     _loadExistingStaffImages();
+    _loadStaffPhotoRequirement();
   }
 
   Future<void> _loadExistingStaffImages() async {
@@ -412,17 +441,14 @@ class _StaffUploadDeviceImagesPageState
   }
 
   Future<void> _onVerifyDeviceDetails() async {
-    if (bulkPhotoBusy || photoEditsBlocked) return;
-    // Check if the 7 required slots (indices 0 to 6) are fulfilled
-    final requiredSlots = photoSlots.sublist(0, 7);
-    final unverifiedSlots = requiredSlots
-        .where((s) => s.status != ImageSlotStatus.success || s.localFilePath == null)
-        .toList();
-
-    if (unverifiedSlots.isNotEmpty) {
+    if (_isProcessingPhotos) return;
+    final missingPhoto = _missingRequiredPhoto;
+    if (missingPhoto != null) {
       StaffToast.show(
         context,
-        'Please upload all 7 required device angles before proceeding (${unverifiedSlots.first.label} is missing).',
+        _allowsTwoPhotos
+            ? 'Upload a front and back photo before proceeding. Missing: $missingPhoto.'
+            : 'Upload all 7 required device views before proceeding. Missing: $missingPhoto.',
         isError: true,
       );
       return;
@@ -552,9 +578,11 @@ class _StaffUploadDeviceImagesPageState
                     const SizedBox(height: 8),
 
                     // Description
-                    const Text(
-                      'Please provide clear, well-lit photos of your device from the angles specified below to ensure an accurate trade-in valuation. Supported formats: JPG, PNG (Max 5MB each).',
-                      style: TextStyle(
+                    Text(
+                      _allowsTwoPhotos
+                          ? 'Upload at least 2 clear photos: one front (screen on or off) and one back. JPG or PNG, max 5MB each.'
+                          : 'Please provide clear, well-lit photos of your device from the angles specified below to ensure an accurate trade-in valuation. Supported formats: JPG, PNG (Max 5MB each).',
+                      style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF64748B),
                         height: 1.45,
@@ -608,7 +636,7 @@ class _StaffUploadDeviceImagesPageState
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                  onPressed: _areRequiredImagesUploaded
                       ? _onVerifyDeviceDetails
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -627,7 +655,7 @@ class _StaffUploadDeviceImagesPageState
                           height: 22,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF64748B)),
                           ),
                         )
                       : Row(
@@ -638,7 +666,7 @@ class _StaffUploadDeviceImagesPageState
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
-                                color: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                                color: _areRequiredImagesUploaded
                                     ? Colors.white
                                     : const Color(0xFF94A3B8),
                               ),
@@ -646,7 +674,7 @@ class _StaffUploadDeviceImagesPageState
                             const SizedBox(width: 8),
                             Icon(
                               Icons.arrow_forward_rounded,
-                              color: (_areRequiredImagesUploaded && !_isUploadingToServer)
+                              color: _areRequiredImagesUploaded
                                   ? Colors.white
                                   : const Color(0xFF94A3B8),
                               size: 20,

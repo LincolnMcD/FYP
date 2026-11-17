@@ -37,14 +37,14 @@
     .topbar-title { color: #173a75; font-size: 20px; font-weight: 700; }
     .topbar-right { display: flex; align-items: center; gap: 28px; color: #7a8496; font-size: 14px; }
     .profile { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: #828a98; background: #f0f1f4; }
-    
+
     .content { padding: 30px 40px 48px; max-width: 1200px; margin: 0 auto; width: 100%; }
     .back { display: inline-flex; padding: 8px; color: #5d6572; text-decoration: none; margin: 0 0 12px -8px; }
     .back svg { width: 24px; height: 24px; }
-    
+
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; flex-wrap: wrap; gap: 16px; }
     h1 { margin: 0; color: #161a20; font-size: clamp(24px, 2.2vw, 28px); line-height: 1.2; font-weight: 700; letter-spacing: -0.5px; }
-    
+
     .form-header-actions { display: flex; gap: 12px; }
     .btn-cancel { height: 40px; padding: 0 20px; border: 1px solid #cbd1df; background: #fff; color: #52596a; border-radius: 20px; font-weight: 600; font-size: 14px; cursor: pointer; }
     .btn-primary { height: 40px; padding: 0 20px; border: 0; background: var(--primary); color: #fff; border-radius: 20px; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .15s ease, opacity .15s ease; }
@@ -52,31 +52,31 @@
     .btn-primary svg { width: 16px; height: 16px; }
 
     .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
-    
+
     .card { background: #fff; border: 1px solid #e9ebf0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
     .card-title { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 24px; }
     .card-title svg { color: var(--primary); width: 20px; height: 20px; }
-    
+
     .form-group { margin-bottom: 20px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
     .form-label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 8px; }
-    
+
     .input-wrapper { position: relative; display: flex; align-items: center; }
     .input-wrapper svg.icon { position: absolute; left: 14px; width: 18px; height: 18px; color: #94a3b8; pointer-events: none; z-index: 2; }
     .input-wrapper svg.eye { position: absolute; right: 14px; width: 18px; height: 18px; color: #94a3b8; cursor: pointer; z-index: 2; }
     .input-field { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #1e293b; background: #fafafa; }
     .input-field:focus { outline: none; border-color: var(--primary); background: #fff; }
     .input-field::placeholder { color: #94a3b8; }
-    
+
     .select-field { width: 100%; height: 42px; padding: 0 36px 0 40px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #1e293b; background: #fafafa; appearance: none; }
     .select-field:focus { outline: none; border-color: var(--primary); background: #fff; }
     .select-arrow { position: absolute; right: 14px; width: 16px; height: 16px; color: #94a3b8; pointer-events: none; }
     .input-wrapper > .select-arrow { top: 13px; }
-    
+
     .subtext { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.4; }
-    
+
     .btn-generate { margin-top: 12px; display: inline-flex; padding: 6px 12px; background: #e0e7ff; color: #4338ca; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; }
-    
+
     .dropdown-menu label:hover { background: #f8fafc; }
 
     .input-field[readonly] { background: #f1f5f9; color: #475569; cursor: not-allowed; border-color: #e2e8f0; }
@@ -330,7 +330,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- Security Setup -->
           <div class="card">
             <div class="card-title">
@@ -393,7 +393,7 @@
               </button>
               <div class="error-msg" id="workLocationError">Please select a work base location on the map</div>
             </div>
-            
+
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label">Device Specialization</label>
               <div class="input-wrapper">
@@ -402,7 +402,7 @@
                 <div class="custom-select is-disabled" id="specializationControl" style="width: 100%; position: relative;">
                   <div class="select-field" id="specializationToggle" role="button" tabindex="-1" aria-disabled="true" style="display: flex; align-items: center; cursor: not-allowed; user-select: none;">Select devices</div>
                   <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute; right:14px; top:13px; pointer-events:none;"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  
+
                   <div class="dropdown-menu" id="specializationMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10; max-height: 200px; overflow-y: auto;">
                     <input type="search" class="brand-search" id="specializationSearch" placeholder="Search..." aria-label="Search device specialization">
                     <label class="brand-option"><input type="checkbox" value="Apple"> Apple</label>
@@ -411,20 +411,16 @@
                     <label class="brand-option"><input type="checkbox" value="OPPO"> OPPO</label>
                     <label class="brand-option"><input type="checkbox" value="HONOR"> HONOR</label>
                     <label class="brand-option"><input type="checkbox" value="vivo"> vivo</label>
-                    <label class="brand-option"><input type="checkbox" value="realme"> realme</label>
+                    <label class="brand-option"><input type="checkbox" value="Realme"> Realme</label>
                     <label class="brand-option"><input type="checkbox" value="Huawei"> Huawei</label>
-                    <label class="brand-option"><input type="checkbox" value="Redmi"> Redmi</label>
-                    <label class="brand-option"><input type="checkbox" value="POCO"> POCO</label>
+                    <label class="brand-option"><input type="checkbox" value="Google"> Google</label>
                     <label class="brand-option"><input type="checkbox" value="OnePlus"> OnePlus</label>
-                    <label class="brand-option"><input type="checkbox" value="Nothing"> Nothing</label>
-                    <label class="brand-option"><input type="checkbox" value="ASUS"> ASUS</label>
-                    <label class="brand-option"><input type="checkbox" value="Google Pixel"> Google Pixel</label>
-                    <label class="brand-option"><input type="checkbox" value="Motorola"> Motorola</label>
-                    <label class="brand-option"><input type="checkbox" value="Infinix"> Infinix</label>
-                    <label class="brand-option"><input type="checkbox" value="TECNO"> TECNO</label>
-                    <label class="brand-option"><input type="checkbox" value="ZTE"> ZTE</label>
-                    <label class="brand-option"><input type="checkbox" value="nubia"> nubia</label>
-                    <label class="brand-option"><input type="checkbox" value="Sony"> Sony</label>
+
+
+
+
+
+
                   </div>
                 </div>
               </div>
@@ -437,7 +433,7 @@
       </form>
     </section>
   </main>
-  
+
   <!-- Leaflet Map Picker Modal -->
   <div class="map-modal-backdrop" id="mapModal" style="display:none;">
     <div class="map-modal-card">
@@ -483,7 +479,7 @@
     const specializationMenu = document.getElementById('specializationMenu');
     const specializationSearch = document.getElementById('specializationSearch');
     const brandCheckboxes = [...specializationMenu.querySelectorAll('input[type="checkbox"]')];
-    
+
     let selectedWorkLocation = null;
     let leafletMap = null;
     let mapMarker = null;
@@ -629,7 +625,7 @@
     openMapBtn.addEventListener('click', (ev) => {
       if (ev) ev.preventDefault();
       console.log('Work base location clicked');
-      
+
       const modal = document.getElementById('mapModal');
       if (!modal) {
         console.error('Modal element #mapModal not found in DOM');
@@ -775,7 +771,7 @@
       if (showErrors || phoneInput.value) setError(phoneInput, document.getElementById('phoneError'), phoneResult.message, !phoneResult.isValid);
       if (showErrors || passwordInput.value) setError(passwordInput, document.getElementById('passwordError'), passwordResult.message, !passwordResult.isValid);
       document.getElementById('positionError').classList.toggle('show', (showErrors || Boolean(positionInput.value)) && !positionIsValid);
-      
+
       const workLocError = document.getElementById('workLocationError');
       if (workLocError) {
         workLocError.classList.toggle('show', showErrors && !locationIsValid);

@@ -26,6 +26,15 @@ class StaffAssignedTasksPage extends StatefulWidget {
 class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   late int _selectedTabIndex; // 0: Assigned, 1: In Progress, 2: Completed
   bool _isLoading = true;
+  int _visibleCompleted = 5;
+  final _taskScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _taskScroll.dispose();
+    super.dispose();
+  }
+
   List<Map<String, dynamic>> _tasks = [];
   final Set<String> _startingTaskIDs = {};
   String? _toast;
@@ -34,6 +43,13 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
   @override
   void initState() {
     super.initState();
+    _taskScroll.addListener(() {
+      if (_selectedTabIndex == 2 && _taskScroll.position.extentAfter < 200 &&
+          _visibleCompleted < _completedTasks.length) {
+        setState(() => _visibleCompleted =
+            (_visibleCompleted + 5).clamp(0, _completedTasks.length));
+      }
+    });
     _selectedTabIndex = widget.initialTabIndex;
     _loadTasks();
   }
@@ -56,21 +72,22 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     });
   }
 
+  int _taskLoad = 0;
+
   Future<void> _loadTasks() async {
-    setState(() => _isLoading = true);
-    final tasks = await TaskAssignmentService.fetchStaffTasks(
-      email: widget.email,
-      staffID: widget.staffID,
-    );
-    if (mounted) {
+    final load = ++_taskLoad;
+    void display(List<Map<String, dynamic>> tasks) {
+      if (!mounted || load != _taskLoad) return;
       setState(() {
-        _tasks = tasks.where((t) {
-          final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
-          return s != 'reassigned' && s != 'absent' && s != 'rejected' && s != 'cancelled';
-        }).toList();
+        _tasks = tasks.where((task) => !['reassigned', 'absent', 'rejected', 'cancelled']
+            .contains(task['scheduleStatus']?.toString().toLowerCase())).toList();
         _isLoading = false;
       });
     }
+    final tasks = await TaskAssignmentService.fetchStaffTasks(
+      email: widget.email, staffID: widget.staffID, onCached: display,
+    );
+    display(tasks);
   }
 
   DateTime _getTaskScheduleDateTime(Map<String, dynamic> task) {
@@ -124,11 +141,14 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     final list = _tasks.where((t) {
       final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
       final ts = (t['taskStatus']?.toString() ?? '').toLowerCase();
-      return s == 'completed' || ts == 'delivered';
+      return s == 'completed' || ts == 'delivered' || ts == 'completed';
     }).toList();
 
-    // Sort completed tasks from earliest to latest task
-    list.sort((a, b) => _getTaskScheduleDateTime(a).compareTo(_getTaskScheduleDateTime(b)));
+    // Most recently completed first, with the booked time for older records.
+    DateTime completedTime(Map<String, dynamic> task) =>
+        DateTime.tryParse(task['completedAt']?.toString() ?? '') ??
+        _getTaskScheduleDateTime(task);
+    list.sort((a, b) => completedTime(b).compareTo(completedTime(a)));
 
     return list;
   }
@@ -230,8 +250,11 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
                                   ],
                                 )
                               : ListView.separated(
+                                  controller: _taskScroll,
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                  itemCount: _currentTabTasks.length,
+                                  itemCount: _selectedTabIndex == 2
+                                      ? _visibleCompleted.clamp(0, _completedTasks.length)
+                                      : _currentTabTasks.length,
                                   separatorBuilder: (_, _) => const SizedBox(height: 14),
                                   itemBuilder: (context, index) {
                                     return _buildTaskCard(_currentTabTasks[index]);
@@ -294,7 +317,13 @@ class _StaffAssignedTasksPageState extends State<StaffAssignedTasksPage> {
     final isSelected = _selectedTabIndex == index;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _selectedTabIndex = index),
+      onTap: () {
+        if (_taskScroll.hasClients) _taskScroll.jumpTo(0);
+        setState(() {
+          _selectedTabIndex = index;
+          _visibleCompleted = 5;
+        });
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,

@@ -35,40 +35,31 @@ class _StaffSchedulePageState extends State<StaffSchedulePage> {
     _loadTasks();
   }
 
-  Future<void> _loadTasks() async {
-    setState(() => _isLoading = true);
-    try {
-      final results = await Future.wait([
-        TaskAssignmentService.fetchStaffTasks(
-          email: widget.email,
-          staffID: widget.staffID,
-        ),
-        TaskAssignmentService.fetchLeaveApplications(
-          email: widget.email,
-          staffID: widget.staffID,
-        ),
-      ]);
+  int _scheduleLoad = 0;
 
-      if (mounted) {
-        final tasks = results[0];
-        final leaves = results[1];
-        setState(() {
-          _allTasks = tasks.where((t) {
-            final s = (t['scheduleStatus']?.toString() ?? '').toLowerCase();
-            return s != 'absent' && s != 'cancelled' && s != 'reassigned';
-          }).toList();
-          _approvedLeaves = leaves.where((l) {
-            final st = (l['leaveStatus'] ?? '').toString().toUpperCase();
-            return st == 'APPROVED';
-          }).toList();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+  Future<void> _loadTasks() async {
+    final load = ++_scheduleLoad;
+    void displayTasks(List<Map<String, dynamic>> tasks) {
+      if (!mounted || load != _scheduleLoad) return;
+      setState(() {
+        _allTasks = tasks.where((task) => !['absent', 'cancelled', 'reassigned']
+            .contains(task['scheduleStatus']?.toString().toLowerCase())).toList();
+        _isLoading = false;
+      });
     }
+    void displayLeaves(List<Map<String, dynamic>> leaves) {
+      if (!mounted || load != _scheduleLoad) return;
+      setState(() => _approvedLeaves = leaves.where((leave) =>
+          leave['leaveStatus']?.toString().toUpperCase() == 'APPROVED').toList());
+    }
+    await Future.wait([
+      TaskAssignmentService.fetchStaffTasks(
+        email: widget.email, staffID: widget.staffID, onCached: displayTasks,
+      ).then(displayTasks),
+      TaskAssignmentService.fetchLeaveApplications(
+        email: widget.email, staffID: widget.staffID, onCached: displayLeaves,
+      ).then(displayLeaves),
+    ]);
   }
 
   DateTime? _parseLeaveDate(String? dStr) {

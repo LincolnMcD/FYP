@@ -869,6 +869,8 @@
       try {
         const tasks = await OperationsAnalytics.fetchTasks();
         const summary = OperationsAnalytics.summarize(tasks, currentMonth);
+        const operationsLink = document.querySelector('a[href*="operationalPerformance.html"]');
+        if (operationsLink) operationsLink.href = `../reportModule/operationalPerformance.html?month=${encodeURIComponent(currentMonth)}`;
         const delivery = summary.averageDeliveryMinutesPerTask;
         const inspection = summary.averageInspectionMinutes;
         document.getElementById('opsInspection').textContent = inspection == null ? '—' : `${Number(inspection).toFixed(2)} min/task`;

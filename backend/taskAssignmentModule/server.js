@@ -768,6 +768,20 @@ router.get("/staff-tasks", async (req, res) => {
  * PATCH /api/task-assignment/update-status
  * Update status of task, schedule, and delivery
  */
+function tradeInBookingStart(date, time) {
+    if (date?.toDate) date = date.toDate();
+    if (date instanceof Date) {
+        date = date.toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+    }
+    const day = String(date || "").split("T")[0];
+    const match = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i.exec(String(time || "").trim());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !match) return null;
+    let hour = Number(match[1]);
+    if (match[3]) hour = hour % 12 + (match[3].toUpperCase() === "PM" ? 12 : 0);
+    const result = new Date(`${day}T${String(hour).padStart(2, "0")}:${match[2]}:00+08:00`);
+    return Number.isNaN(result.getTime()) ? null : result;
+}
+
 router.patch("/update-status", async (req, res) => {
     try {
         const { taskID, orderID, scheduleID, status, rejectionReason, rejectionNotes, proofOfDeliveryUrl } = req.body;
@@ -850,6 +864,43 @@ router.patch("/update-status", async (req, res) => {
             (taskData && (taskData.appointmentID || taskData.tradeInRequestID)) ||
             tradeInReqID
         );
+
+        if (isRejected && isTradeInTask) {
+            if (!tradeInReqID && apptID) {
+                const appointment = await db.collection("tradeInAppointment").doc(apptID).get();
+                tradeInReqID = appointment.data()?.tradeInRequestID;
+            }
+            if (!tradeInReqID) {
+                return res.status(400).json({ success: false, message: "Cannot identify the trade-in request." });
+            }
+            const cleanID = String(tradeInReqID).replace(/^#/, "");
+            const [evaluation, matches] = await Promise.all([
+                db.collection("staffEvaluation").doc(`STAEV-${cleanID}`).get(),
+                db.collection("staffEvaluation").where("tradeInRequestID", "==", cleanID).limit(1).get()
+            ]);
+            if (evaluation.exists || !matches.empty) {
+                return res.status(409).json({
+                    success: false,
+                    message: "This task already has a staff evaluation and cannot be rejected."
+                });
+            }
+        }
+
+        if (isCompleted && String(taskData?.taskType || "").toLowerCase().includes("collect")) {
+            const appointment = apptID
+                ? await db.collection("tradeInAppointment").doc(apptID).get() : null;
+            const requestID = tradeInReqID || appointment?.data()?.tradeInRequestID;
+            const request = requestID
+                ? await db.collection("tradeInRequests").doc(String(requestID).replace(/^#/, "")).get() : null;
+            const deviceID = request?.data()?.deviceID || taskData?.deviceID;
+            const diagnostic = deviceID
+                ? await db.collection("deviceDiagnostic").doc(`INT-${deviceID}`).get() : null;
+            if (!diagnostic?.exists || typeof diagnostic.data().diagnosticScore !== "number") {
+                return res.status(409).json({
+                    success: false, message: "Complete and save the device self-test before completing collection."
+                });
+            }
+        }
 
         const rejectingStaffID = (schedData && schedData.staffID) || (taskData && taskData.staffID) || null;
 
@@ -1107,7 +1158,8 @@ router.patch("/update-status", async (req, res) => {
             const rawType = (appData.appointmentType || (taskData && taskData.taskType) || "Inspect").toLowerCase();
             const method = rawType.includes("collect") ? "Doorstep Collection" : "On-Site Inspection";
 
-            let schedDate = (schedData && schedData.scheduleDate) || appData.appointmentDate;
+            let schedDate = (schedData && schedData.scheduleDate) || (taskData && taskData.scheduleDate) || appData.appointmentDate;
+            if (!schedDate && typeof appData.scheduledAt === "string") schedDate = appData.scheduledAt.split("T")[0];
             if (!schedDate && appData.scheduledAt && typeof appData.scheduledAt.toDate === "function") {
                 const d = appData.scheduledAt.toDate();
                 schedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1124,6 +1176,29 @@ router.patch("/update-status", async (req, res) => {
             const address = appData.appointmentLocation || null;
 
             const excludeStaffIDs = rejectingStaffID ? [rejectingStaffID] : [];
+
+            const bookingStart = tradeInBookingStart(schedDate, appointmentTime);
+            const customerUnreachable = /customer.*unreachable|unreachable.*customer/i.test(rejectionReason || "");
+            if (customerUnreachable || !bookingStart || Date.now() >= bookingStart.getTime()) {
+                const reason = customerUnreachable
+                    ? "Customer unreachable. Please rebook or cancel your appointment."
+                    : "The booked appointment time has started or passed. Please rebook or cancel.";
+                await handleFailedTradeInReassignment({
+                    appointmentID: apptID,
+                    tradeInRequestID: effectiveTradeInReqID,
+                    scheduleID: effectiveSchedID,
+                    taskID: effectiveTaskID,
+                    appointmentDate: schedDate,
+                    appointmentTime,
+                    method,
+                    reason
+                });
+                invalidateTaskCache();
+                return res.json({
+                    success: true, reassigned: false, onHold: true,
+                    message: "Task placed On Hold and customer notification requested."
+                });
+            }
 
             const reassignResult = await assignTradeInTask({
                 tradeInRequestID: effectiveTradeInReqID,
@@ -2473,7 +2548,7 @@ router.get("/track-delivery/:orderID", async (req, res) => {
         // Resolve customer address & destination coordinates
         let address = {};
         const addressID = orderData.addressID || tradeInAppt.addressID || tradeInReq.addressID || taskData.addressID;
-        if (addressID && includeOrderDetails) {
+        if (addressID) {
             const aDoc = await db.collection("address").doc(addressID).get();
             if (aDoc.exists) {
                 address = aDoc.data() || {};
@@ -2719,6 +2794,13 @@ async function getOrBuildTasksDataset({ forceRefresh = false, includeOrderDetail
     const now = Date.now();
     if (!forceRefresh && taskCache.data && (now - taskCache.timestamp < CACHE_TTL_MS) && (!includeOrderDetails || taskCache.detailsLoaded)) {
         return { taskList: taskCache.data, counts: taskCache.counts, detailsLoaded: taskCache.detailsLoaded };
+    }
+
+    const diagnostics = await db.collection("deviceDiagnostic").get();
+    const diagnosticsByDevice = new Map();
+    for (const doc of diagnostics.docs) {
+        const record = doc.data();
+        if (record.deviceID) diagnosticsByDevice.set(String(record.deviceID), record);
     }
 
     // Fetch independent collections in parallel before building the combined task view.
@@ -3252,6 +3334,7 @@ async function getOrBuildTasksDataset({ forceRefresh = false, includeOrderDetail
         }
 
         return {
+            diagnostic: diagnosticsByDevice.get(String(deviceID || "")) || null,
             taskID: tid,
             orderID: tradeInRequestID || appointmentID || tid,
             scheduleID: scheduleID || null,

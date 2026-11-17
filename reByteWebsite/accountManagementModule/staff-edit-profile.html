@@ -195,14 +195,10 @@
         requirementsToggle.setAttribute('aria-expanded', 'false');
       }
     });
-    const brands = [
-      'Apple', 'Samsung', 'Xiaomi', 'OPPO', 'HONOR', 'vivo', 'realme', 'Huawei',
-      'Redmi', 'POCO', 'OnePlus', 'Nothing', 'ASUS', 'Google Pixel', 'Motorola',
-      'Infinix', 'TECNO', 'ZTE', 'nubia', 'Sony'
-    ];
+    const brands = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'HONOR', 'vivo', 'Realme', 'Huawei', 'Google', 'OnePlus'];
     function canonicalSpecialization(value) {
       const name = String(value || '').trim();
-      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google Pixel', 'oppo': 'OPPO', 'honor': 'HONOR' };
+      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google', 'google pixel': 'Google', 'oppo': 'OPPO', 'honor': 'HONOR' };
       const canonical = aliases[name.toLowerCase()] || name;
       return brands.find(brand => brand.toLowerCase() === canonical.toLowerCase()) || canonical;
     }

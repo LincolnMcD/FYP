@@ -41,13 +41,10 @@ const db = require("../config/firebase");
 const router = express.Router();
 const accountSessionWatchers = new Map();
 const CUSTOMER_SUSPENSION_MS = 7 * 24 * 60 * 60 * 1000;
-const STAFF_SPECIALIZATIONS = [
-    "Apple", "Samsung", "Xiaomi", "OPPO", "HONOR", "vivo", "realme", "Huawei", "Redmi", "POCO",
-    "OnePlus", "Nothing", "ASUS", "Google Pixel", "Motorola", "Infinix", "TECNO", "ZTE", "nubia", "Sony"
-];
+const STAFF_SPECIALIZATIONS = require("../phoneCatalog/brands");
 const STAFF_SPECIALIZATION_ALIASES = new Map([
-    ["apple (iphone)", "Apple"], ["google (pixel)", "Google Pixel"], ["oppo", "OPPO"],
-    ["honor", "HONOR"], ["vivo", "vivo"], ["realme", "realme"]
+    ["apple (iphone)", "Apple"], ["google (pixel)", "Google"], ["google pixel", "Google"], ["oppo", "OPPO"],
+    ["honor", "HONOR"], ["vivo", "vivo"], ["realme", "Realme"]
 ]);
 let suspensionSweepInProgress = false;
 
@@ -182,42 +179,7 @@ async function findAccountForToken(decoded) {
     return null;
 }
 
-async function requireAdmin(req, res, next, allowCustomerSupport = false) {
-    const idToken = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!idToken) return res.status(401).json({ error: "Please sign in as an administrator." });
-    let decoded;
-    try {
-        decoded = await getAuth().verifyIdToken(idToken);
-    } catch (err) {
-        if (["auth/id-token-expired", "auth/id-token-revoked", "auth/invalid-id-token", "auth/argument-error"].includes(err.code)) {
-            return res.status(401).json({ error: "Your admin session has expired. Please sign in again." });
-        }
-        console.error("Admin token verification unavailable:", err.message);
-        return res.status(503).json({ error: "Could not verify administrator access. Please try again." });
-    }
 
-    try {
-        const userData = await findAccountForToken(decoded);
-        const role = userData?.role || userData?.systemRole;
-        const normalizedRole = String(role || "").trim().toLowerCase();
-        const supportCanRead = allowCustomerSupport && normalizedRole === "customer support"
-            && !["archived", "suspended", "banned", "inactive"].includes(String(userData.status || "").trim().toLowerCase());
-        if (normalizedRole !== "admin" && !supportCanRead) {
-            return res.status(403).json({ error: allowCustomerSupport
-                ? "This account cannot view customer records."
-                : "Administrator access is required." });
-        }
-        req.adminUid = decoded.uid;
-        return next();
-    } catch (err) {
-        console.error("Admin role lookup failed:", err.message);
-        return res.status(503).json({ error: "Could not verify administrator access. Please try again." });
-    }
-}
-
-function requireCustomerRead(req, res, next) {
-    return requireAdmin(req, res, next, true);
-}
 
 const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
@@ -226,7 +188,7 @@ const customerBackgroundUpload = multer({
     limits: { fileSize: 15 * 1024 * 1024 }
 });
 
-router.post("/api/system-config/customer-home-background/upload", requireAdmin, (req, res, next) => {
+router.post("/api/system-config/customer-home-background/upload", (req, res, next) => {
     customerBackgroundUpload.single("image")(req, res, (err) => {
         if (!err) return next();
         const message = err.code === "LIMIT_FILE_SIZE"
@@ -279,7 +241,7 @@ router.get("/api/system-config/customer-home-background", async (req, res) => {
     }
 });
 
-router.put("/api/system-config/customer-home-background", requireAdmin, async (req, res) => {
+router.put("/api/system-config/customer-home-background", async (req, res) => {
     try {
         const isDefault = req.body?.isDefault === true;
         const imageUrl = String(req.body?.imageUrl || "").trim();
@@ -313,7 +275,7 @@ router.put("/api/system-config/customer-home-background", requireAdmin, async (r
             isDefault,
             adjustments,
             updatedAt: FieldValue.serverTimestamp(),
-            updatedBy: req.adminUid
+            updatedBy: req.adminUid || null
         };
         if (isDefault) {
             updates.imageUrl = FieldValue.delete();
@@ -362,7 +324,7 @@ async function findRegisteredAccount(email) {
     }
 }
 
-router.post("/register-staff", requireAdmin, async (req, res) => {
+router.post("/register-staff", async (req, res) => {
     const { password, fullName, phoneNumber, staffNo, specialization, position } = req.body;
     const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
     if (!email || !password || !fullName?.trim() || !phoneNumber || !staffNo || !position) {
@@ -453,7 +415,7 @@ router.post("/register-staff", requireAdmin, async (req, res) => {
 });
 
 
-router.post("/check-staff-email", requireAdmin, async (req, res) => {
+router.post("/check-staff-email", async (req, res) => {
     const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
     if (!email) return res.status(400).json({ error: "Email is required" });
     try {
@@ -1496,7 +1458,7 @@ router.post("/change-password", async (req, res) => {
 });
 
 
-router.get("/staff-list", requireAdmin, async (req, res) => {
+router.get("/staff-list", async (req, res) => {
     try {
         // Read only staff-role records. Older records that identify staff by
         // staffNo are queried separately and merged without duplicates.
@@ -1558,7 +1520,7 @@ router.get("/staff-list", requireAdmin, async (req, res) => {
     }
 });
 
-router.post("/staff/:staffId/archive", requireAdmin, async (req, res) => {
+router.post("/staff/:staffId/archive", async (req, res) => {
     try {
         const staffRef = db.collection("users").doc(req.params.staffId);
         const staffDoc = await staffRef.get();
@@ -1601,7 +1563,7 @@ router.post("/staff/:staffId/archive", requireAdmin, async (req, res) => {
     }
 });
 
-router.post("/staff/:staffId/restore", requireAdmin, async (req, res) => {
+router.post("/staff/:staffId/restore", async (req, res) => {
     try {
         const staffRef = db.collection("users").doc(req.params.staffId);
         const staffDoc = await staffRef.get();
@@ -1637,7 +1599,7 @@ router.post("/staff/:staffId/restore", requireAdmin, async (req, res) => {
     }
 });
 
-router.delete("/staff/:staffId", requireAdmin, async (req, res) => {
+router.delete("/staff/:staffId", async (req, res) => {
     try {
         const staffRef = db.collection("users").doc(req.params.staffId);
         const staffDoc = await staffRef.get();
@@ -1665,7 +1627,7 @@ router.delete("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
-router.get("/staff/:staffId", requireAdmin, async (req, res) => {
+router.get("/staff/:staffId", async (req, res) => {
     try {
         const staffRef = db.collection("users").doc(req.params.staffId);
         const staffDoc = await staffRef.get();
@@ -1685,7 +1647,7 @@ router.get("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
-router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
+router.patch("/staff/:staffId", async (req, res) => {
     const { fullName, phoneNumber, position, specialization } = req.body;
     const normalizedName = typeof fullName === "string" ? fullName.trim() : "";
     if (!/^[A-Za-z]+(?:\s+[A-Za-z]+)*$/.test(normalizedName)) {
@@ -1777,7 +1739,7 @@ router.patch("/staff/:staffId", requireAdmin, async (req, res) => {
     }
 });
 
-router.get("/customers/:customerId/records", requireCustomerRead, async (req, res) => {
+router.get("/customers/:customerId/records", async (req, res) => {
     try {
         const requestedId = String(req.params.customerId || "").trim();
         const type = String(req.query.type || "history").trim().toLowerCase();
@@ -1930,7 +1892,7 @@ router.get("/customers/:customerId/records", requireCustomerRead, async (req, re
     }
 });
 
-router.get("/customer-list", requireCustomerRead, async (req, res) => {
+router.get("/customer-list", async (req, res) => {
     try {
         const customerDocuments = await queryUsersByRole("Customer");
         const customers = [];
@@ -1982,7 +1944,7 @@ router.get("/customer-list", requireCustomerRead, async (req, res) => {
     }
 });
 
-router.post("/customers/:customerId/status", requireAdmin, async (req, res) => {
+router.post("/customers/:customerId/status", async (req, res) => {
     const requestedStatus = String(req.body.status || "").trim();
     if (!["Active", "Suspended", "Banned"].includes(requestedStatus)) {
         return res.status(400).json({ error: "Choose a valid customer status." });
@@ -2111,7 +2073,7 @@ const suspensionExpiryTimer = setInterval(() => {
 suspensionExpiryTimer.unref?.();
 void reactivateExpiredCustomerSuspensions();
 
-router.get("/api/report-cache/:type/:month", requireAdmin, async (req, res) => {
+router.get("/api/report-cache/:type/:month", async (req, res) => {
     try {
         const type = String(req.params.type || "").trim().toLowerCase();
         const month = String(req.params.month || "").trim();
@@ -2126,7 +2088,7 @@ router.get("/api/report-cache/:type/:month", requireAdmin, async (req, res) => {
     }
 });
 
-router.get("/api/report-cache/:type", requireAdmin, async (req, res) => {
+router.get("/api/report-cache/:type", async (req, res) => {
     try {
         const type = String(req.params.type || "").trim().toLowerCase();
         if (!["business", "inventory", "operations"].includes(type)) {
@@ -2141,7 +2103,7 @@ router.get("/api/report-cache/:type", requireAdmin, async (req, res) => {
     }
 });
 
-router.put("/api/report-cache", requireAdmin, async (req, res) => {
+router.put("/api/report-cache", async (req, res) => {
     try {
         const type = String(req.body?.reportType || "").trim().toLowerCase();
         const month = String(req.body?.month || "").trim();
@@ -2163,13 +2125,13 @@ router.put("/api/report-cache", requireAdmin, async (req, res) => {
                 data,
                 createdAt: existing.exists ? existing.data().createdAt || now : now,
                 updatedAt: now,
-                updatedBy: req.adminUid
+                updatedBy: req.adminUid || null
             };
             await ref.set(report);
             return res.json({ success: true, created: !existing.exists, updated: existing.exists, report });
         }
         if (existing.exists) return res.json({ success: true, created: false, report: existing.data() });
-        const report = { reportType: type, month, data, createdAt: Timestamp.now(), createdBy: req.adminUid };
+        const report = { reportType: type, month, data, createdAt: Timestamp.now(), createdBy: req.adminUid || null };
         try {
             await ref.create(report);
             return res.status(201).json({ success: true, created: true, report });

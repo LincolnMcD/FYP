@@ -1,3 +1,4 @@
+import 'staff_device_self_test_page.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -1199,7 +1200,7 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
         final String instructionText = _isInspectTask
             ? 'Please proceed along the route and arrive within 65 meters of the destination before starting the inspection.'
             : (_isCollectTask
-                ? 'Please proceed along the route and arrive within 65 meters of the destination before recording proof of collection and completing the task.'
+                ? 'Please proceed along the route and arrive within 65 meters of the destination before performing the self-test and completing the task.'
                 : 'Please proceed along the route and arrive within 65 meters of the destination before recording proof of delivery and completing the order.');
 
         await showDialog<void>(
@@ -1457,25 +1458,32 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
     }
     if (mounted) setState(() => _isActionLoading = false);
 
-    // Prompt Proof of Collection Dialog asking staff to take a photo of the collected device
     if (!mounted) return;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => ProofOfDeliveryDialog(
-        orderID: _orderID,
-        taskID: _taskID,
-        scheduleID: _scheduleID,
-        customerName: _customerName,
-        deliveryAddress: _address,
-        isCollect: true,
-      ),
+    var deviceID = _task['deviceID']?.toString() ?? '';
+    if (deviceID.isEmpty) {
+      final requestID = (_task['tradeInRequestID'] ?? _task['tradeInID'] ?? _orderID).toString();
+      final details = await TradeInService.getTradeInRequestDetails(requestID);
+      deviceID = details?['deviceID']?.toString() ?? '';
+    }
+    if (!mounted) return;
+    if (deviceID.isEmpty) {
+      StaffToast.show(context, 'Could not identify this collection device.', isError: true);
+      return;
+    }
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => StaffDeviceSelfTestPage(
+        deviceID: deviceID,
+        onDiagnosticSaved: () => TaskAssignmentService.updateTaskStatus(
+          taskID: _taskID, orderID: _orderID,
+          scheduleID: _scheduleID, status: 'Completed',
+        ),
+      )),
     );
-
-    if (result != null && result['success'] == true && mounted) {
+    if (result == true && mounted) {
       _stopLiveGpsTracking();
       widget.onTaskUpdated?.call();
-      Navigator.pop(context, 'Collection completed with proof recorded!');
+      Navigator.pop(context, 'Collection completed with self-test saved.');
     }
   }
 
@@ -2017,7 +2025,7 @@ class _StaffNavigationPageState extends State<StaffNavigationPage> {
                                     _isInspectTask
                                         ? 'Start Inspection'
                                         : _isCollectTask
-                                            ? 'Complete Collect'
+                                            ? 'Perform Self Test'
                                             : 'Complete Deliver',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

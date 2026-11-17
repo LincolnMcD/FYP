@@ -7,12 +7,17 @@ import '../../account_management_module/services/session_service.dart';
 class TaskAssignmentService {
   static String get baseUrl => AuthService.baseUrl;
 
+  static final _listCache = <Uri, List<Map<String, dynamic>>>{};
+  static final _balanceCache = <Uri, Map<String, dynamic>>{};
+
   /// Fetch tasks assigned to the logged-in staff member
   static Future<List<Map<String, dynamic>>> fetchStaffTasks({
     String? staffID,
     String? email,
     bool requireLiveData = false,
+    ValueChanged<List<Map<String, dynamic>>>? onCached,
   }) async {
+    List<Map<String, dynamic>>? cached;
     try {
       final query = <String, String>{};
       if (staffID != null && staffID.isNotEmpty) query['staffID'] = staffID;
@@ -38,17 +43,25 @@ class TaskAssignmentService {
       final uri = Uri.parse(
         '$baseUrl/api/task-assignment/staff-tasks',
       ).replace(queryParameters: query);
+      if (query.isNotEmpty) {
+        cached = _listCache[uri];
+        if (cached != null) onCached?.call(cached);
+      }
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['tasks'] is List) {
-          return List<Map<String, dynamic>>.from(data['tasks'] as List);
+          final fresh = List<Map<String, dynamic>>.from(data['tasks'] as List);
+          if (query.isNotEmpty) _listCache[uri] = fresh;
+          return fresh;
         }
       }
+      if (onCached != null && cached != null) return cached;
       if (requireLiveData) throw StateError('Could not load staff tasks.');
       return [];
     } catch (e) {
+      if (onCached != null && cached != null) return cached;
       if (requireLiveData) rethrow;
       debugPrint('TaskAssignmentService.fetchStaffTasks error: $e');
       return [];
@@ -232,20 +245,29 @@ class TaskAssignmentService {
     String? staffID,
     String? email,
     bool requireLiveData = false,
+    ValueChanged<Map<String, dynamic>>? onCached,
   }) async {
+    Map<String, dynamic>? cached;
     try {
       final query = <String, String>{};
       if (staffID != null && staffID.isNotEmpty) query['staffID'] = staffID;
       if (email != null && email.isNotEmpty) query['email'] = email;
 
       final uri = Uri.parse('$baseUrl/api/task-assignment/leave-balance').replace(queryParameters: query);
+      if (query.isNotEmpty) {
+        cached = _balanceCache[uri];
+        if (cached != null) onCached?.call(cached);
+      }
       final res = await http.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map<String, dynamic> && data['success'] == true) {
-          return data;
+          final fresh = data;
+          if (query.isNotEmpty) _balanceCache[uri] = fresh;
+          return fresh;
         }
       }
+      if (onCached != null && cached != null) return cached;
       if (requireLiveData) throw StateError('Could not load leave balance.');
       return {
         'success': true,
@@ -253,6 +275,7 @@ class TaskAssignmentService {
         'medicalRemaining': 14,
       };
     } catch (e) {
+      if (onCached != null && cached != null) return cached;
       if (requireLiveData) rethrow;
       debugPrint('TaskAssignmentService.fetchLeaveBalance error: $e');
       return {
@@ -267,24 +290,32 @@ class TaskAssignmentService {
   static Future<List<Map<String, dynamic>>> fetchLeaveApplications({
     String? staffID,
     String? email,
+    ValueChanged<List<Map<String, dynamic>>>? onCached,
   }) async {
+    List<Map<String, dynamic>>? cached;
     try {
       final query = <String, String>{};
       if (staffID != null && staffID.isNotEmpty) query['staffID'] = staffID;
       if (email != null && email.isNotEmpty) query['email'] = email;
 
       final uri = Uri.parse('$baseUrl/api/task-assignment/leave-applications').replace(queryParameters: query);
+      if (query.isNotEmpty) {
+        cached = _listCache[uri];
+        if (cached != null) onCached?.call(cached);
+      }
       final res = await http.get(uri).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map<String, dynamic> && data['success'] == true && data['applications'] is List) {
-          return List<Map<String, dynamic>>.from(data['applications'] as List);
+          final fresh = List<Map<String, dynamic>>.from(data['applications'] as List);
+          if (query.isNotEmpty) _listCache[uri] = fresh;
+          return fresh;
         }
       }
-      return [];
+      return onCached != null && cached != null ? cached : [];
     } catch (e) {
       debugPrint('TaskAssignmentService.fetchLeaveApplications error: $e');
-      return [];
+      return onCached != null && cached != null ? cached : [];
     }
   }
 

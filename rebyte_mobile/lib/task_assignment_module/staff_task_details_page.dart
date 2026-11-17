@@ -1,3 +1,6 @@
+import '../widgets/saved_device_diagnostic.dart';
+import '../device_tradein_module/services/trade_in_service.dart';
+import 'widgets/staff_app_bar_and_drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +24,25 @@ class StaffTaskDetailsPage extends StatefulWidget {
 
 class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
   bool _isMapLoading = true;
+  bool _checkingEvaluation = false;
+  bool _hasStaffEvaluation = false;
+  Map<String, dynamic>? _collectionDiagnostic;
+  bool get _isTradeInTask => ['inspect', 'inspection', 'collect', 'collection']
+      .contains(_currentTask['taskType']?.toString().toLowerCase());
+
+  Future<void> _checkStaffEvaluation() async {
+    if (!_isTradeInTask) return;
+    setState(() => _checkingEvaluation = true);
+    final requestID = (_currentTask['tradeInRequestID'] ??
+        _currentTask['tradeInID'] ?? _currentTask['orderID'] ?? '').toString();
+    final evaluation = requestID.isEmpty ? null
+        : await TradeInService.getEvaluation(requestID, source: 'staffEvaluation');
+    if (!mounted) return;
+    setState(() {
+      _hasStaffEvaluation = evaluation?['evaluationID']?.toString().startsWith('STAEV-') == true;
+      _checkingEvaluation = false;
+    });
+  }
   bool _isActionLoading = false;
   late Map<String, dynamic> _currentTask;
 
@@ -28,7 +50,30 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
   void initState() {
     super.initState();
     _currentTask = Map<String, dynamic>.from(widget.task);
+    _checkStaffEvaluation();
+    _loadCollectionDiagnostic();
   }
+
+  Future<void> _loadCollectionDiagnostic() async {
+    if (!_currentTask['taskType'].toString().toLowerCase().contains('collect')) return;
+    var deviceID = _currentTask['deviceID']?.toString() ?? '';
+    if (deviceID.isEmpty) {
+      final requestID = (_currentTask['tradeInRequestID'] ?? _currentTask['tradeInID'] ??
+          _currentTask['orderID'] ?? '').toString();
+      final details = await TradeInService.getTradeInRequestDetails(requestID);
+      deviceID = details?['deviceID']?.toString() ?? '';
+    }
+    if (deviceID.isEmpty) return;
+    final diagnostic = await TradeInService.getDeviceDiagnostic(deviceID);
+    if (mounted) setState(() => _collectionDiagnostic = diagnostic);
+  }
+
+  Widget _buildCollectionDiagnostic() => SafeArea(
+    top: false,
+    child: _collectionDiagnostic == null
+        ? const Text('No saved self-test result available.')
+        : SavedDeviceDiagnostic(result: _collectionDiagnostic!),
+  );
 
   String _formatConditionWithGrade(dynamic condVal, [dynamic gradeVal]) {
     final gradeStr = (gradeVal ?? '').toString().toUpperCase().trim();
@@ -601,7 +646,13 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                 ],
               ),
             ),
-            if (proofOfDeliveryUrl.isNotEmpty) ...[
+            if (isCollect && (
+                (_currentTask['taskStatus'] ?? '').toString().toLowerCase() == 'completed' ||
+                (_currentTask['scheduleStatus'] ?? '').toString().toLowerCase() == 'completed')) ...[
+              const SizedBox(height: 16),
+              _buildCollectionDiagnostic(),
+            ],
+            if (!isCollect && proofOfDeliveryUrl.isNotEmpty) ...[
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
@@ -681,7 +732,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
               Expanded(
                 flex: 1,
                 child: OutlinedButton.icon(
-                  onPressed: _isActionLoading
+                  onPressed: _isActionLoading || _checkingEvaluation || _hasStaffEvaluation
                       ? null
                       : () async {
                           final result = await showDialog<Map<String, dynamic>>(
@@ -690,7 +741,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                           );
                           if (result != null && result['confirmed'] == true) {
                             setState(() => _isActionLoading = true);
-                            await TaskAssignmentService.updateTaskStatus(
+                            final success = await TaskAssignmentService.updateTaskStatus(
                               taskID: taskID,
                               orderID: orderID,
                               scheduleID: scheduleID,
@@ -698,24 +749,33 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                               rejectionReason: result['reason'],
                               rejectionNotes: result['notes'],
                             );
+                            if (!context.mounted) return;
+                            if (!success) {
+                              setState(() => _isActionLoading = false);
+                              _checkStaffEvaluation();
+                              StaffToast.show(context, 'Could not reject this task. It may already have a staff evaluation.', isError: true);
+                              return;
+                            }
                             widget.onTaskUpdated?.call();
                             if (!context.mounted) return;
                             Navigator.pop(context, {
                               'rejected': true,
-                              'message': 'Delivery task is rejected',
+                              'message': _isTradeInTask ? 'Trade-in task rejected' : 'Delivery task is rejected',
                             });
                           }
                         },
-                  icon: const Icon(Icons.close, color: Color(0xFFDC2626), size: 18),
+                  icon: const Icon(Icons.close, size: 18),
                   label: const Text(
                     'Reject Task',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFDC2626),
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDC2626),
+                    disabledForegroundColor: const Color(0xFF94A3B8),
+                    disabledBackgroundColor: const Color(0xFFE2E8F0),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: const BorderSide(color: Color(0xFFFCA5A5)),
                     shape: RoundedRectangleBorder(

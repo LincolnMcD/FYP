@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'staff_profile_page.dart';
+import '../task_assignment_module/widgets/staff_app_bar_and_drawer.dart';
 import '../account_management_module/services/session_service.dart';
 import '../account_management_module/services/auth_service.dart';
 import '../account_management_module/services/account_session_watch_service.dart';
@@ -47,20 +48,36 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   DateTime? _nextSessionCheckAt;
   ModalRoute<dynamic>? _observedRoute;
 
+  List<Map<String, dynamic>>? _cachedTasks;
+  Map<String, dynamic>? _cachedLeave;
+  int _dashboardLoad = 0;
   late Future<List<Map<String, dynamic>>?> _dashboardTasks;
   late Future<Map<String, dynamic>?> _dashboardLeave;
 
   void _refreshDashboard() {
-    _dashboardTasks = TaskAssignmentService.fetchStaffTasks(email: _email, requireLiveData: true)
-        .then<List<Map<String, dynamic>>?>((tasks) => tasks, onError: (_) => null);
-    _dashboardLeave = _loadDashboardLeave()
+    final load = ++_dashboardLoad;
+    _cachedTasks = null;
+    _cachedLeave = null;
+    _dashboardTasks = Future.microtask(() => TaskAssignmentService.fetchStaffTasks(
+      email: _email,
+      requireLiveData: true,
+      onCached: (tasks) {
+        if (mounted && load == _dashboardLoad) setState(() => _cachedTasks = tasks);
+      },
+    )).then<List<Map<String, dynamic>>?>((tasks) => tasks, onError: (_) => null);
+    _dashboardLeave = Future.microtask(() => _loadDashboardLeave(load))
         .then<Map<String, dynamic>?>((leave) => leave, onError: (_) => null);
   }
 
-  Future<Map<String, dynamic>> _loadDashboardLeave() async {
+  Future<Map<String, dynamic>> _loadDashboardLeave(int load) async {
     final email = _email ?? (await SessionService.getSession())['email'];
     if (email == null || email.isEmpty) throw StateError('Staff session missing');
-    return TaskAssignmentService.fetchLeaveBalance(email: email, requireLiveData: true);
+    return TaskAssignmentService.fetchLeaveBalance(
+      email: email, requireLiveData: true,
+      onCached: (leave) {
+        if (mounted && load == _dashboardLoad) setState(() => _cachedLeave = leave);
+      },
+    );
   }
 
   bool get _isCurrentRoute => ModalRoute.of(context)?.isCurrent ?? true;
@@ -232,13 +249,29 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: _buildDrawer(),
+      drawer: StaffDrawer(
+        selectedIndex: _showStandards ? 4 : _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _showStandards = index == 4;
+            if (!_showStandards) _selectedIndex = index;
+          });
+          if (index == 0) _refreshDashboard();
+        },
+        onLogout: _showLogoutDialog,
+      ),
       backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: Builder(
           builder: (context) => IconButton(
+            style: const ButtonStyle(
+              backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+              overlayColor: WidgetStatePropertyAll(Colors.transparent),
+              shadowColor: WidgetStatePropertyAll(Colors.transparent),
+              elevation: WidgetStatePropertyAll(0),
+            ),
             icon: const Icon(Icons.menu, color: Color(0xFF0C5AD2)),
             onPressed: () { Scaffold.of(context).openDrawer(); },
           ),
@@ -426,40 +459,96 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
     String fields(Map<String, dynamic> task, List<String> keys) =>
         keys.map((key) => task[key]?.toString() ?? '').where((value) => value.isNotEmpty).join(' · ');
 
-    Widget taskCard(Map<String, dynamic> task) => Card(
-      child: ListTile(
-        leading: const Icon(Icons.assignment_outlined),
-        title: Text(fields(task, ['taskType', 'deviceModel'])),
-        subtitle: Text(fields(task, ['scheduleStartTime', 'customerName'])),
-      ),
-    );
-    const heading = TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15);
-    Widget actionCard(Map<String, dynamic> task) => Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF003799), Color(0xFF0C5AD2)]),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('IN PROGRESS', style: TextStyle(color: Color(0xFF99F6E4), fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text(fields(task, ['taskType', 'deviceModel']), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          Text(fields(task, ['scheduleStartTime', 'customerName']), style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white),
-              onPressed: () => setState(() => _selectedIndex = 2),
-              child: const Text('View Tasks'),
+    Widget taskCard(Map<String, dynamic> task, {bool actionRequired = false}) {
+      final type = (task['taskType'] ?? '').toString().toLowerCase();
+      final inspect = type.contains('inspect');
+      final collect = type.contains('collect');
+      final accent = Color(inspect ? 0xFF7C3AED : collect ? 0xFF059669 : 0xFF2563EB);
+      final background = Color(inspect ? 0xFFF3E8FF : collect ? 0xFFECFDF5 : 0xFFEFF6FF);
+      final label = inspect ? 'Inspection' : collect ? 'Collection' : 'Delivery';
+      final status = category(task);
+      return Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => setState(() {
+            _selectedIndex = actionRequired ? 2 : 1;
+            _showStandards = false;
+          }),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withValues(alpha: .35)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(10)),
+                      child: Icon(
+                        inspect ? Icons.assignment_outlined
+                            : collect ? Icons.local_mall_outlined : Icons.local_shipping_outlined,
+                        color: accent, size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(label, style: TextStyle(
+                      color: accent, fontWeight: FontWeight.w700, fontSize: 12,
+                    ))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: background,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            status == 2 ? Icons.check_circle_outline
+                                : status == 1 ? Icons.timelapse : Icons.schedule,
+                            size: 13, color: accent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            status == 2 ? 'Completed' : status == 1 ? 'In Progress' : 'Assigned',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: accent),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  fields(task, ['scheduleStartTime', 'scheduleEndTime']),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0C5AD2)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  task['deviceModel']?.toString() ?? task['model']?.toString() ?? label,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  task['customerName']?.toString() ?? '',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-
+        ),
+      );
+    }
+    const heading = TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 15);
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -470,11 +559,12 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
           FutureBuilder<List<Map<String, dynamic>>?>(
             future: _dashboardTasks,
             builder: (context, snapshot) {
-              final tasks = snapshot.data;
+              final tasks = snapshot.connectionState == ConnectionState.waiting
+                  ? _cachedTasks ?? snapshot.data : snapshot.data ?? _cachedTasks;
               final scheduled = (tasks ?? []).where((task) =>
                   task['scheduleDate'] == todayKey && category(task) != null).toList()
                 ..sort((a, b) => fields(a, ['scheduleStartTime']).compareTo(fields(b, ['scheduleStartTime'])));
-              final active = (tasks ?? []).where((task) => category(task) == 1).toList();
+              final active = scheduled.where((task) => category(task) == 1).toList();
               final completed = (tasks ?? []).where((task) {
                 if (category(task) != 2) return false;
                 final date = DateTime.tryParse(task['completedAt']?.toString() ?? '');
@@ -503,12 +593,12 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                     'No tasks in progress',
                     'Tasks you start will appear here.',
                   )
-                  else if (active.length == 1) actionCard(active.single)
+                  else if (active.length == 1) taskCard(active.single, actionRequired: true)
                   else LayoutBuilder(builder: (context, constraints) => SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(children: [
                       for (final task in active)
-                        Container(width: constraints.maxWidth * .85, margin: const EdgeInsets.only(right: 12), child: actionCard(task)),
+                        Container(width: constraints.maxWidth * .85, margin: const EdgeInsets.only(right: 12), child: taskCard(task, actionRequired: true)),
                     ]),
                   )),
                   const SizedBox(height: 20),
@@ -526,7 +616,10 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                     scrollDirection: Axis.horizontal,
                     child: Row(children: [
                       for (final task in scheduled)
-                        SizedBox(width: 250, child: taskCard(task)),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: SizedBox(width: 250, child: taskCard(task)),
+                        ),
                     ]),
                   ),
                 ],
@@ -540,11 +633,14 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
               children: [
                 Expanded(child: FutureBuilder<Map<String, dynamic>?>(
                   future: _dashboardLeave,
-                  builder: (context, snapshot) => _buildDashboardTile(
+                  builder: (context, snapshot) {
+                    final leave = snapshot.connectionState == ConnectionState.waiting
+                        ? _cachedLeave ?? snapshot.data : snapshot.data ?? _cachedLeave;
+                    return _buildDashboardTile(
                     icon: Icons.beach_access_outlined,
                     title: 'Leave Balance',
                     accent: const Color(0xFF0C5AD2),
-                    detail: snapshot.data == null
+                    detail: leave == null
                         ? Text(snapshot.connectionState == ConnectionState.waiting ? 'Loading…' : 'Unavailable')
                         : Table(
                             columnWidths: const {
@@ -564,7 +660,7 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                                   Padding(
                                     padding: const EdgeInsets.only(left: 4),
                                     child: Text(
-                                      '${snapshot.data?[entry.value] ?? '—'}',
+                                      '${leave[entry.value] ?? '—'}',
                                       textAlign: TextAlign.end,
                                       style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
                                     ),
@@ -579,7 +675,8 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
                     onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                       builder: (_) => StaffLeaveApplicationPage(email: _email),
                     )),
-                  ),
+                    );
+                  },
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: _buildDashboardTile(
@@ -664,113 +761,6 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      backgroundColor: const Color(0xFFF8F9FB),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: const Color(0xFFF8F9FB),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20),
-                child: _buildLoggedInDrawerHeader(),
-              ),
-            ),
-            Divider(color: Colors.grey.shade200, height: 1),
-            Expanded(
-              child: ClipRect(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildDrawerItem(Icons.grid_view_rounded, 'Dashboard', isSelected: _selectedIndex == 0, onTap: () {
-                      Navigator.pop(context);
-                      setState(() { _refreshDashboard(); _selectedIndex = 0; _showStandards = false; });
-                    }),
-                    _buildDrawerItem(Icons.calendar_today_rounded, 'Schedule', isSelected: _selectedIndex == 1, onTap: () {
-                      Navigator.pop(context);
-                      setState(() { _selectedIndex = 1; _showStandards = false; });
-                    }),
-                    _buildDrawerItem(Icons.assignment_outlined, 'Tasks', isSelected: _selectedIndex == 2, onTap: () {
-                      Navigator.pop(context);
-                      setState(() { _selectedIndex = 2; _showStandards = false; });
-                    }),
-                    _buildDrawerItem(Icons.person_outline, 'Profile', isSelected: _selectedIndex == 3 && !_showStandards, onTap: () {
-                      Navigator.pop(context);
-                      setState(() { _selectedIndex = 3; _showStandards = false; });
-                      _verifyStaffSession();
-                    }),
-                  ],
-                ),
-              ),
-            ),
-            Divider(color: Colors.grey.shade200, height: 1),
-            _buildDrawerItem(Icons.help_outline, 'Help Desk', isSelected: _showStandards, onTap: () {
-              Navigator.pop(context);
-              setState(() => _showStandards = true);
-            }),
-            _buildDrawerItem(Icons.logout, 'Logout', iconColor: const Color(0xFF475569), onTap: _showLogoutDialog),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoggedInDrawerHeader() {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        setState(() {
-          _selectedIndex = 3;
-          _showStandards = false;
-        });
-      },
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha:0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(Icons.person, size: 32, color: Colors.grey.shade400),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _name ?? 'ReByte Staff',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _email ?? 'staff@rebyte.com',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-                if (_position != null && _position!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    _position == 'Both' ? 'Inspector & Collector' : _position!,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0C5AD2)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -893,37 +883,5 @@ class _StaffHomePageState extends State<StaffHomePage> with WidgetsBindingObserv
       ),
     );
   }
-  Widget _buildDrawerItem(IconData icon, String title, {bool isSelected = false, String? badge, Color? iconColor, void Function()? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: ListTile(
-        leading: Icon(icon, color: isSelected ? Colors.white : (iconColor ?? const Color(0xFF475569)), size: 20),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1E293B),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-        trailing: badge != null
-            ? Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFC53030), // Red color for badge
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                ),
-              )
-            : null,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        tileColor: isSelected ? const Color(0xFF0C5AD2) : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        onTap: onTap ?? () {},
-      ),
-    );
-  }
+
 }

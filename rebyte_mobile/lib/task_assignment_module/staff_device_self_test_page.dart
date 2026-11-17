@@ -8,8 +8,9 @@ import 'widgets/staff_app_bar_and_drawer.dart';
 
 class StaffDeviceSelfTestPage extends StatefulWidget {
   final String deviceID;
+  final Future<bool> Function()? onDiagnosticSaved;
 
-  const StaffDeviceSelfTestPage({super.key, required this.deviceID});
+  const StaffDeviceSelfTestPage({super.key, required this.deviceID, this.onDiagnosticSaved});
 
   @override
   State<StaffDeviceSelfTestPage> createState() =>
@@ -30,6 +31,13 @@ class _StaffDeviceSelfTestPageState extends State<StaffDeviceSelfTestPage> {
     _testInProgress = false;
     setState(() => _saving = true);
     final result = await save();
+    if (result['success'] == true && widget.onDiagnosticSaved != null) {
+      final completed = await widget.onDiagnosticSaved!();
+      if (!completed) {
+        result['success'] = false;
+        result['message'] = 'Self-test saved. Could not complete collection. Please retry.';
+      }
+    }
     if (!mounted) return {'success': false};
     setState(() {
       _saving = false;

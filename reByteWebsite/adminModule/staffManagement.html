@@ -115,7 +115,7 @@
       .search { width: 100%; }
       .card-footer { align-items: flex-start; flex-direction: column; }
     }
-  
+
     .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; opacity: 0; visibility: hidden; transition: all 0.2s ease; }
     .modal-backdrop.show { opacity: 1; visibility: visible; }
     .modal-card { background: #fff; border-radius: 16px; padding: 0; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -208,7 +208,7 @@
     .map-modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
     .map-modal-close { background: none; border: none; font-size: 24px; line-height: 1; color: #64748b; cursor: pointer; padding: 4px 8px; }
     .map-modal-close:hover { color: #0f172a; }
-    
+
     .map-search-bar-wrap {
       position: relative;
       padding: 10px 20px;
@@ -483,20 +483,16 @@
                 <label class="edit-brand-option"><input type="checkbox" value="OPPO"> OPPO</label>
                 <label class="edit-brand-option"><input type="checkbox" value="HONOR"> HONOR</label>
                 <label class="edit-brand-option"><input type="checkbox" value="vivo"> vivo</label>
-                <label class="edit-brand-option"><input type="checkbox" value="realme"> realme</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Realme"> Realme</label>
                 <label class="edit-brand-option"><input type="checkbox" value="Huawei"> Huawei</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Redmi"> Redmi</label>
-                <label class="edit-brand-option"><input type="checkbox" value="POCO"> POCO</label>
+                <label class="edit-brand-option"><input type="checkbox" value="Google"> Google</label>
                 <label class="edit-brand-option"><input type="checkbox" value="OnePlus"> OnePlus</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Nothing"> Nothing</label>
-                <label class="edit-brand-option"><input type="checkbox" value="ASUS"> ASUS</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Google Pixel"> Google Pixel</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Motorola"> Motorola</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Infinix"> Infinix</label>
-                <label class="edit-brand-option"><input type="checkbox" value="TECNO"> TECNO</label>
-                <label class="edit-brand-option"><input type="checkbox" value="ZTE"> ZTE</label>
-                <label class="edit-brand-option"><input type="checkbox" value="nubia"> nubia</label>
-                <label class="edit-brand-option"><input type="checkbox" value="Sony"> Sony</label>
+
+
+
+
+
+
               </div>
             </div>
           </div>
@@ -589,7 +585,7 @@
   <script>
     const user = ReByteAuth.getUser();
     if (!user || user.role !== 'Admin') window.location.href = '../accountManagementModule/login.html';
-    
+
     let allStaffData = [];
     const tbody = document.getElementById('staffRows');
     const search = document.getElementById('staffSearch');
@@ -789,13 +785,9 @@
 
     function canonicalSpecialization(value) {
       const name = String(value || '').trim();
-      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google Pixel', 'oppo': 'OPPO', 'honor': 'HONOR', 'vivo': 'vivo', 'realme': 'realme' };
+      const aliases = { 'apple (iphone)': 'Apple', 'google (pixel)': 'Google', 'google pixel': 'Google', 'oppo': 'OPPO', 'honor': 'HONOR', 'vivo': 'vivo', 'realme': 'Realme' };
       const canonical = aliases[name.toLowerCase()] || name;
-      const brands = [
-        'Apple', 'Samsung', 'Xiaomi', 'OPPO', 'HONOR', 'vivo', 'realme', 'Huawei',
-        'Redmi', 'POCO', 'OnePlus', 'Nothing', 'ASUS', 'Google Pixel', 'Motorola',
-        'Infinix', 'TECNO', 'ZTE', 'nubia', 'Sony'
-      ];
+      const brands = ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'HONOR', 'vivo', 'Realme', 'Huawei', 'Google', 'OnePlus'];
       return brands.find(brand => brand.toLowerCase() === canonical.toLowerCase()) || canonical;
     }
 
@@ -1111,7 +1103,7 @@
       const targetStaffId = button.dataset.staffId;
       const staff = allStaffData.find(item => String(item.id || item.userId || '') === targetStaffId);
       if (staff) openStaffEdit(staff);
-      
+
       // Immediately retrieve the latest staff record at that moment from server
       if (targetStaffId) {
         ReByteAuth.getStaffById(targetStaffId).then(res => {
@@ -1342,7 +1334,7 @@
       });
       loadStaff();
     }));
-    
+
     document.querySelectorAll('.nav-item[href="#"]').forEach(link => link.addEventListener('click', event => event.preventDefault()));
 
     // fetch on load

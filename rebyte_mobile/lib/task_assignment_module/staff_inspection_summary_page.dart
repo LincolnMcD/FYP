@@ -1,3 +1,4 @@
+import '../widgets/inspection_photo_gallery.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -2087,6 +2088,31 @@ class _StaffInspectionSummaryPageState
     final bool hasEvalImages = evalImages.isNotEmpty;
     final int itemCount = hasEvalImages ? evalImages.length : localPhotos.length;
 
+    final photos = List.generate(itemCount, (index) {
+      String? url;
+      String? filePath;
+      String caption = 'Photo ${index + 1}';
+
+      if (hasEvalImages) {
+        final imgObj = evalImages[index];
+        url = imgObj['imageUrl']?.toString() ?? imgObj['originalImageUrl']?.toString();
+        final view = imgObj['imageView']?.toString();
+        if (view != null && view.isNotEmpty) {
+          caption = view.replaceAll('_', ' ').toUpperCase();
+        }
+      } else {
+        final item = localPhotos[index];
+        final rawPath = item['path']!;
+        if (rawPath.startsWith('http')) {
+          url = rawPath;
+        } else {
+          filePath = rawPath;
+        }
+        caption = item['key']!.replaceAll('_', ' ').toUpperCase();
+      }
+      return (url: url, filePath: filePath, caption: caption);
+    });
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -2162,44 +2188,24 @@ class _StaffInspectionSummaryPageState
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: itemCount,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
-                      String? url;
-                      String? filePath;
-                      String caption = 'Photo ${index + 1}';
-
-                      if (hasEvalImages) {
-                        final imgObj = evalImages[index];
-                        url = imgObj['imageUrl']?.toString() ?? imgObj['originalImageUrl']?.toString();
-                        final view = imgObj['imageView']?.toString();
-                        if (view != null && view.isNotEmpty) {
-                          caption = view.replaceAll('_', ' ').toUpperCase();
-                        }
-                      } else {
-                        final item = localPhotos[index];
-                        final rawPath = item['path']!;
-                        if (rawPath.startsWith('http')) {
-                          url = rawPath;
-                        } else {
-                          filePath = rawPath;
-                        }
-                        caption = item['key']!.replaceAll('_', ' ').toUpperCase();
-                      }
+                      final photo = photos[index];
 
                       return SizedBox(
                         width: itemWidth,
                         child: GestureDetector(
-                          onTap: () {
-                            _showImagePreviewDialog(
-                              imageUrl: url,
-                              filePath: filePath,
-                              title: caption,
-                            );
-                          },
+                          onTap: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => InspectionPhotoGallery(
+                              photos: photos,
+                              initialIndex: index,
+                            ),
+                          ),
                           child: _buildPhotoThumbCard(
-                            imageUrl: url,
-                            filePath: filePath,
-                            caption: caption,
+                            imageUrl: photo.url,
+                            filePath: photo.filePath,
+                            caption: photo.caption,
                           ),
                         ),
                       );
@@ -2232,7 +2238,7 @@ class _StaffInspectionSummaryPageState
             Image.network(
               imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Center(
+              errorBuilder: (_, _, _) => const Center(
                 child: Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
               ),
               loadingBuilder: (context, child, loadingProgress) {
@@ -2291,95 +2297,6 @@ class _StaffInspectionSummaryPageState
     );
   }
 
-  void _showImagePreviewDialog({
-    String? imageUrl,
-    String? filePath,
-    required String title,
-  }) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 600),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: Color(0xFF334155)),
-
-                // Interactive zoomable image
-                Flexible(
-                  child: InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 4.0,
-                    child: Center(
-                      child: imageUrl != null && imageUrl.isNotEmpty
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.contain,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const Center(
-                                  child: CircularProgressIndicator(color: Colors.white),
-                                );
-                              },
-                              errorBuilder: (_, __, ___) => const Center(
-                                child: Text('Failed to load image', style: TextStyle(color: Colors.white70)),
-                              ),
-                            )
-                          : (filePath != null && File(filePath).existsSync()
-                              ? Image.file(File(filePath), fit: BoxFit.contain)
-                              : const Center(
-                                  child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 60),
-                                )),
-                    ),
-                  ),
-                ),
-
-                // Footer hint
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    'Pinch or double tap to zoom',
-                    style: TextStyle(color: Colors.white54, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _CrackPainter extends CustomPainter {

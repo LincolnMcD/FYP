@@ -83,11 +83,11 @@ class _StaffEditProfilePageState extends State<StaffEditProfilePage> {
       final normalizedSpecializations = savedSpecializations.map((s) {
         final normalized = switch (s.trim().toLowerCase()) {
           'apple (iphone)' => 'Apple',
-          'google (pixel)' => 'Google Pixel',
+          'google (pixel)' || 'google pixel' => 'Google',
           'oppo' => 'OPPO',
           'honor' => 'HONOR',
           'vivo' => 'vivo',
-          'realme' => 'realme',
+          'realme' => 'Realme',
           _ => s.trim(),
         };
         return _brands.firstWhere((brand) => brand.toLowerCase() == normalized.toLowerCase(), orElse: () => normalized);

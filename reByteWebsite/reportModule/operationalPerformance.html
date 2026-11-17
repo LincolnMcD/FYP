@@ -611,23 +611,20 @@
       monthSelect.disabled = false;
     }
 
-    async function refreshCurrentOperations(month) {
-      try {
-        const tasks = await OperationsAnalytics.fetchTasks();
-        const freshSummary = OperationsAnalytics.summarize(tasks, month);
-        await ReportSnapshots.save('operations', month, freshSummary);
-        if (selectedOpsMonth() === month) await renderOperations(true);
-      } catch (err) {
-        console.warn('Current operational report refresh failed; keeping the saved report visible:', err.message);
-      }
-    }
-
-    async function renderOperations(skipCurrentRefresh = false) {
+    async function renderOperations() {
       const requestId = ++opsRenderRequest;
       const month = selectedOpsMonth();
-      let summary = await ReportSnapshots.get('operations', month);
+      const isCurrentMonth = !ReportSnapshots.isPastMonth(month);
+      let summary;
+      if (isCurrentMonth) {
+        const tasks = await OperationsAnalytics.fetchTasks();
+        if (requestId !== opsRenderRequest) return;
+        summary = OperationsAnalytics.summarize(tasks, month);
+        void ReportSnapshots.save('operations', month, summary);
+      } else {
+        summary = await ReportSnapshots.get('operations', month);
+      }
       if (requestId !== opsRenderRequest) return;
-      const hasSavedSummary = Boolean(summary);
       if (!summary) {
         if (!window.operationTasks) {
           document.getElementById('operationsNote').textContent = 'Loading live task records for this month…';
@@ -669,7 +666,7 @@
       document.getElementById('operationsNote').textContent = summary.totalTasks ? `Showing ${opsCount(summary.totalTasks)} Firebase task records created in ${month}. Average durations use completed tasks with startAt and completedAt. Average delivery distance uses completed delivery tasks only, excluding Self Pickup orders; recorded 0 km distances are included.` : `No task records have a creation date in ${month}.`;
       const currentDate = new Date();
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-      if (month === currentMonth && hasSavedSummary && !skipCurrentRefresh) void refreshCurrentOperations(month);
+
     }
 
     function renderOperationResources() {
