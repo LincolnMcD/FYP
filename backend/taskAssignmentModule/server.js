@@ -341,7 +341,11 @@ router.post("/assign", requireAuth, async (req, res) => {
  */
 router.get("/staff-tasks", async (req, res) => {
     try {
-        await autoResolveOverdueTradeInTasks().catch(() => {});
+        if (Date.now() - lastAutoResolveTime > AUTO_RESOLVE_THROTTLE_MS) {
+            lastAutoResolveTime = Date.now();
+            void autoResolveOverdueTradeInTasks().catch(error =>
+                console.error("Background overdue booking check failed:", error));
+        }
         const { staffID, email } = req.query;
         let targetStaffID = staffID;
 

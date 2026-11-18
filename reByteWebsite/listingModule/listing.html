@@ -386,12 +386,39 @@
 
     /* Table Container */
     .table-card {
+      display: flex;
+      flex-direction: column;
       background: #ffffff;
       border: 1px solid var(--border-color);
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       min-height: 480px;
+    }
+
+    .table-card.is-empty table {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .table-card.is-empty thead {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+    .table-card.is-empty tbody {
+      display: flex;
+      flex: 1;
+    }
+    .table-card.is-empty tbody tr {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 0;
+    }
+    .table-card.is-empty tbody td {
+      width: 100%;
     }
 
     table {
@@ -641,6 +668,8 @@
 
     /* Table Footer & Pagination matching Image 1 */
     .table-footer {
+      margin-top: auto;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -1481,7 +1510,7 @@
       <div class="modal-body" style="padding: 22px 24px;">
         <!-- Device Info Banner -->
         <div class="rental-device-banner">
-          <img id="rentalModalHeroImg" src="" alt="Device" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+          <img id="rentalModalHeroImg" src="" alt="Device" onerror="this.onerror=null; this.src='no-device-image.svg'">
           <div style="flex: 1; min-width: 0;">
             <div id="rentalModalDeviceName" style="font-weight: 700; color: #0f172a; font-size: 14.5px;">Device Model</div>
             <div style="font-size: 12.5px; color: #64748b; margin-top: 3px;">
@@ -1552,7 +1581,7 @@
       </header>
       <div class="confirm-body">
         <div class="confirm-product-box">
-          <img id="rentalDiscardImg" src="" alt="Device" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+          <img id="rentalDiscardImg" src="" alt="Device" onerror="this.onerror=null; this.src='no-device-image.svg'">
           <div class="confirm-product-info">
             <div class="confirm-product-title" id="rentalDiscardName">Device Model</div>
             <div class="confirm-product-meta" id="rentalDiscardMeta">Product ID: -</div>
@@ -1831,10 +1860,6 @@
                   ? Number(data.rentPricePerMonth)
                   : (data.rentalPrice ? Number(data.rentalPrice) : Math.round((lstPrice > 0 ? lstPrice * 0.08 : colPrice * 0.05) * 100) / 100);
 
-                const brandLower = String(brandName).toLowerCase();
-                const sampleImg = brandLower === 'apple'
-                  ? 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg'
-                  : 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg';
 
                 const smartTitle = data.listingTitle || `${formatProductTitle(brandName, modelName)} - ${storageSize} - ${colorName}`;
 
@@ -1863,7 +1888,7 @@
                   rawStatus: rawSt,
                   sku: `SKU-${doc.id.substring(0, 6).toUpperCase()}`,
                   imei: devData.imeiNum || trData.imei || data.imei || `358${doc.id.replace(/\D/g, '').padEnd(11, '0').slice(0, 11)}`,
-                  imageUrl: (data.imageUrl && !data.imageUrl.includes('sample_')) ? data.imageUrl : ((devData.imageUrl && !devData.imageUrl.includes('sample_')) ? devData.imageUrl : ''),
+                  imageUrl: (data.imageUrl && !/sample_|no-device-image\.svg/i.test(data.imageUrl)) ? data.imageUrl : '',
                   category: devData.deviceCategory || data.category || 'Smartphones',
                   dateAdded: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()) : new Date().toISOString()
                 });
@@ -2288,6 +2313,7 @@
 
       const hasCheckbox = activeTab === 'draft' || activeTab === 'listed' || activeTab === 'hidden';
       const colSpanCount = activeTab === 'draft' ? 7 : (hasCheckbox ? 6 : (activeTab === 'purchased' || activeTab === 'lost' ? 4 : 5));
+      tbody.closest('.table-card').classList.toggle('is-empty', pageListings.length === 0);
 
       if (isLoading && allListings.length === 0) {
         tbody.innerHTML = `
@@ -2481,7 +2507,7 @@
               <div class="product-thumb">
                 ${(item.imageUrl && !item.imageUrl.includes('sample_'))
                   ? `<img src="${item.imageUrl}" alt="${item.model}" onerror="this.onerror=null; this.parentNode.innerHTML='<svg width=\\'22\\' height=\\'22\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'#94a3b8\\' stroke-width=\\'1.8\\'><rect x=\\'5\\' y=\\'2\\' width=\\'14\\' height=\\'20\\' rx=\\'2\\' ry=\\'2\\'></rect><line x1=\\'12\\' y1=\\'18\\' x2=\\'12.01\\' y2=\\'18\\'></line></svg>';">`
-                  : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`
+                  : `<img src="no-device-image.svg" alt="No image uploaded" style="width:100%;height:100%;object-fit:contain">`
                 }
               </div>
               <div class="product-info">
@@ -2655,7 +2681,7 @@
           <div style="width: 100px; height: 100px; border-radius: 12px; background: #f1f5f9; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
             ${(item.imageUrl && !item.imageUrl.includes('sample_'))
               ? `<img src="${item.imageUrl}" alt="${item.model}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.parentNode.innerHTML='<svg width=\\'42\\' height=\\'42\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'#94a3b8\\' stroke-width=\\'1.8\\'><rect x=\\'5\\' y=\\'2\\' width=\\'14\\' height=\\'20\\' rx=\\'2\\' ry=\\'2\\'></rect><line x1=\\'12\\' y1=\\'18\\' x2=\\'12.01\\' y2=\\'18\\'></line></svg>';">`
-              : `<svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`
+              : `<img src="no-device-image.svg" alt="No image uploaded" style="width:100%;height:100%;object-fit:contain">`
             }
           </div>
           <div style="flex: 1;">
@@ -2765,7 +2791,7 @@
       document.getElementById('rentalModalSpecsMeta').textContent = specsMeta ? `• ${specsMeta}` : '';
       
       const heroImg = document.getElementById('rentalModalHeroImg');
-      heroImg.src = item.imageUrl || 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg';
+      heroImg.src = item.imageUrl && !item.imageUrl.includes('sample_') ? item.imageUrl : 'no-device-image.svg';
 
       // Pre-populate fields
       const titleInput = document.getElementById('rentalListingTitle');
@@ -2780,7 +2806,7 @@
 
       // Populate initial image list from item or backend
       const itemImgUrl = item.imageUrl;
-      if (itemImgUrl && !itemImgUrl.includes('sample_')) {
+      if (itemImgUrl && !/sample_|no-device-image\.svg/i.test(itemImgUrl)) {
         rentalImages.push({
           id: 'initial_0',
           imageID: 'initial_0',
@@ -2820,7 +2846,7 @@
                 if (resData && resData.images && resData.images.length > 0) {
                   // Only update if user hasn't uploaded new staged images yet
                   if (rentalStagedNewUploads.length === 0 && rentalStagedDeletedImages.length === 0) {
-                    rentalImages = resData.images.map(im => ({
+                    rentalImages = resData.images.filter(im => im.imageUrl && !/sample_|no-device-image\.svg/i.test(im.imageUrl)).map(im => ({
                       id: im.imageID || im.id,
                       imageID: im.imageID || im.id,
                       imageUrl: im.imageUrl
@@ -2852,7 +2878,7 @@
       rentalImages.forEach((img, idx) => {
         html += `
           <div class="rental-thumb-box" title="Photo ${idx + 1}">
-            <img src="${escapeHtml(img.imageUrl)}" alt="Product Photo ${idx + 1}" onerror="this.src='https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg'">
+            <img src="${escapeHtml(img.imageUrl)}" alt="Product Photo ${idx + 1}" onerror="this.onerror=null; this.src='no-device-image.svg'">
             <button type="button" class="rental-thumb-del" title="Delete photo" onclick="deleteRentalImage(${idx}, event)">&times;</button>
           </div>
         `;
@@ -3016,7 +3042,7 @@
         if (currentRentalItem) {
           if (discardName) discardName.textContent = formatProductTitle(currentRentalItem.brand, currentRentalItem.model);
           if (discardMeta) discardMeta.textContent = `Product ID: ${currentRentalItem.productID || currentRentalItem.id} • Status: RENT`;
-          if (discardImg) discardImg.src = currentRentalItem.imageUrl || 'https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_hero_phone.jpg';
+          if (discardImg) discardImg.src = currentRentalItem.imageUrl && !currentRentalItem.imageUrl.includes('sample_') ? currentRentalItem.imageUrl : 'no-device-image.svg';
         }
 
         if (discardModal) {

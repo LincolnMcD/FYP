@@ -684,7 +684,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
           ),
         ),
         TextButton(
-          onPressed: () => setState(() => _selectedIndex = 1),
+          onPressed: () {
+            if (!_isLoggedIn) {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const WelcomePage()));
+              return;
+            }
+            setState(() => _selectedIndex = 1);
+          },
           style: TextButton.styleFrom(
             minimumSize: Size.zero,
             padding: EdgeInsets.zero,
@@ -1330,7 +1336,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                     margin: EdgeInsets.zero,
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTap: () => Navigator.of(context).push<void>(
+                      onTap: () {
+                        if (!_isLoggedIn) {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const WelcomePage()));
+                          return;
+                        }
+                        Navigator.of(context).push<void>(
                         MaterialPageRoute(
                           builder: (_) => ProductDetailPage(
                             product: product,
@@ -1340,7 +1351,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, RouteA
                             onCartUpdated: _loadCartCount,
                           ),
                         ),
-                      ),
+                        );
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(10),
                         child: Column(
@@ -1501,6 +1513,8 @@ class _CustomerHomeBackgroundState extends State<_CustomerHomeBackground> {
   @override
   void initState() {
     super.initState();
+    // Load independently of socket events: a reused socket may already be connected.
+    _loadCurrentBackground();
     _socket = socket_io.io(
       AuthService.baseUrl,
       socket_io.OptionBuilder()
@@ -1511,7 +1525,7 @@ class _CustomerHomeBackgroundState extends State<_CustomerHomeBackground> {
     );
     _socket!.onConnect((_) => _loadCurrentBackground());
     _socket!.on('customer-home-background-updated', (data) {
-      if (data is Map) {
+      if (mounted && data is Map) {
         _configUpdates.add(Map<String, dynamic>.from(data));
       }
     });
@@ -1525,6 +1539,7 @@ class _CustomerHomeBackgroundState extends State<_CustomerHomeBackground> {
       if (response.statusCode != 200) return;
       final payload = jsonDecode(response.body);
       final config = payload is Map ? payload['config'] : null;
+      if (!mounted) return;
       _configUpdates.add(config is Map ? Map<String, dynamic>.from(config) : null);
     } catch (_) {
       // Retain the current view if the backend is temporarily unavailable.

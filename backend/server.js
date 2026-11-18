@@ -18,6 +18,11 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cors());
+// Lightweight discovery check, independent of database connections and login.
+app.get('/api/health/rebyte', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ app: 'ReByte', service: 'backend' });
+});
 app.use(express.static(path.join(__dirname, "../reByteWebsite")));
 app.use((req, res, next) => {
     const safePath = String(req.path || "/").replace(/(^|\/)([^/]{20,}|[^/]*@[^/]*)/g, "$1:id");

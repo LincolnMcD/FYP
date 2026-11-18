@@ -793,7 +793,7 @@
                 category: dev.deviceCategory || 'Smartphones',
                 offerPrice: offer,
                 suggestedSellingPrice: sug,
-                imageUrl: dev.imageUrl || (String(brand).toLowerCase() === 'apple' ? '../accountManagementModule/assets/images/iphone14.jpg' : '../accountManagementModule/assets/images/galaxy_s23.jpg'),
+                imageUrl: dev.imageUrl && !String(dev.imageUrl).includes('sample_') ? dev.imageUrl : '',
                 alreadyInProduct: isAlready,
                 existingProductID: existingPID
               });
@@ -906,7 +906,7 @@
             <td>
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div class="product-thumb">
-                  <img src="${escapeHtml(item.imageUrl || '../accountManagementModule/assets/images/iphone14.jpg')}" alt="${escapeHtml(item.model)}" onerror="this.src='../accountManagementModule/assets/images/iphone14.jpg'">
+                  <img src="${escapeHtml(item.imageUrl || 'no-device-image.svg')}" alt="${escapeHtml(item.model)}" onerror="this.onerror=null; this.src='no-device-image.svg'">
                 </div>
                 <div>
                   <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${escapeHtml(formatProductTitle(item.brand, item.model))}</div>
@@ -941,7 +941,7 @@
               ${isDrafted
                 ? `<a href="listing.html?tab=draft&search=${encodeURIComponent(item.existingProductID || '')}" class="btn-view-draft">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    Draft Created (${escapeHtml(item.existingProductID || 'Draft')})
+                    Draft Created
                    </a>`
                 : `<button type="button" class="btn-single-draft" id="btn_draft_${escapeHtml(item.tradeInRequestID)}" onclick="singleCreateDraft('${escapeHtml(item.tradeInRequestID)}')">
                     Create Draft

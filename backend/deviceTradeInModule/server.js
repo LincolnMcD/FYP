@@ -3178,7 +3178,7 @@ router.get("/diagnostic/:deviceID", async (req, res) => {
                 success: true,
                 exists: true,
                 diagnosticID: docID,
-                data: docSnap.data()
+                data: req.query.summary === "true" ? { diagnosticScore: docSnap.data().diagnosticScore ?? null } : docSnap.data()
             });
         }
 
@@ -3190,7 +3190,7 @@ router.get("/diagnostic/:deviceID", async (req, res) => {
                 success: true,
                 exists: true,
                 diagnosticID: doc.id,
-                data: doc.data()
+                data: req.query.summary === "true" ? { diagnosticScore: doc.data().diagnosticScore ?? null } : doc.data()
             });
         }
 
@@ -3211,6 +3211,8 @@ router.get("/evaluation/:tradeInRequestID", async (req, res) => {
             return res.status(400).json({ success: false, message: "tradeInRequestID is required." });
         }
 
+        const summaryOnly = req.query.summary === "true";
+        const summaryData = data => ({ grade: data.grade ?? null, parts: data.parts || { screen: data.screen ?? null, back: data.back ?? null, frame: data.frame ?? null } });
         const source = req.query.source === "staffEvaluation" ? "staffEvaluation" : "evaluation";
         const prefix = source === "staffEvaluation" ? "STAEV" : "EV";
         const evaluationID = `${prefix}-${tradeInRequestID}`;
@@ -3226,6 +3228,7 @@ router.get("/evaluation/:tradeInRequestID", async (req, res) => {
                     const fallbackRef = db.collection("evaluation").doc(`EV-${tradeInRequestID}`);
                     const fbSnap = await fallbackRef.get();
                     if (fbSnap.exists) {
+                        if (summaryOnly) return res.json({ success: true, evaluationID: `EV-${tradeInRequestID}`, evaluation: summaryData(fbSnap.data()) });
                         const imagesSnap = await fallbackRef.collection("images").get();
                         const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
                         return res.json({
@@ -3241,7 +3244,8 @@ router.get("/evaluation/:tradeInRequestID", async (req, res) => {
                 return res.status(404).json({ success: false, message: "Evaluation not found." });
             }
             const foundDoc = q.docs[0];
-            const imagesSnap = await foundDoc.ref.collection("images").get();
+            if (summaryOnly) return res.json({ success: true, evaluationID: foundDoc.id, evaluation: summaryData(foundDoc.data()) });
+                        const imagesSnap = await foundDoc.ref.collection("images").get();
             const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
             return res.json({
                 success: true,
@@ -3253,7 +3257,8 @@ router.get("/evaluation/:tradeInRequestID", async (req, res) => {
             });
         }
 
-        const imagesSnap = await evaluationRef.collection("images").get();
+        if (summaryOnly) return res.json({ success: true, evaluationID: evaluationID, evaluation: summaryData(docSnap.data()) });
+                        const imagesSnap = await evaluationRef.collection("images").get();
         const images = imagesSnap.docs.map(d => ({ imageID: d.id, ...d.data() }));
 
         return res.json({

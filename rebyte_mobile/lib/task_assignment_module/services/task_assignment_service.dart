@@ -47,7 +47,7 @@ class TaskAssignmentService {
         cached = _listCache[uri];
         if (cached != null) onCached?.call(cached);
       }
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -58,7 +58,8 @@ class TaskAssignmentService {
         }
       }
       if (onCached != null && cached != null) return cached;
-      if (requireLiveData) throw StateError('Could not load staff tasks.');
+      debugPrint('Staff tasks request failed: HTTP ${response.statusCode}, backend $baseUrl, response ${response.body}');
+      if (requireLiveData) throw StateError('Could not load staff tasks (HTTP ${response.statusCode}).');
       return [];
     } catch (e) {
       if (onCached != null && cached != null) return cached;

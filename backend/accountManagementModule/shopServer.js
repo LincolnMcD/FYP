@@ -2707,7 +2707,7 @@ router.get("/admin/products/:productID", async (req, res) => {
                 productID: d.productID || productID,
                 uploadedAt: upAt
             };
-        });
+        }).filter(image => image.imageUrl && !/sample_|no-device-image\.svg/i.test(String(image.imageUrl)));
 
         // Fetch linked device
         let device = null;
@@ -2730,30 +2730,11 @@ router.get("/admin/products/:productID", async (req, res) => {
 
         const isDraft = String(pData.listingStatus || pData.status || "").toLowerCase() === "draft";
 
-        let effectiveImageUrl = pData.imageUrl || "";
+        let effectiveImageUrl = pData.imageUrl && !/sample_|no-device-image\.svg/i.test(String(pData.imageUrl)) ? pData.imageUrl : "";
+        pData.imageUrl = effectiveImageUrl;
 
-        // For draft listings, do not inherit device/trade-in images or fallback samples
-        if (!isDraft) {
-            if (!effectiveImageUrl && device && (device.imageUrl || device.image)) {
-                const devImg = device.imageUrl || device.image;
-                if (!String(devImg).includes("sample_")) {
-                    effectiveImageUrl = devImg;
-                }
-            }
-            if (!effectiveImageUrl && tradeInRequest && tradeInRequest.imageUrl) {
-                const trImg = tradeInRequest.imageUrl;
-                if (!String(trImg).includes("sample_") && !String(trImg).includes("proof_of_delivery")) {
-                    effectiveImageUrl = trImg;
-                }
-            }
-            if (!effectiveImageUrl) {
-                const brandLower = String((device && device.brand) || pData.brand || "").toLowerCase();
-                effectiveImageUrl = brandLower === "apple"
-                    ? "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_iphone14.jpg"
-                    : "https://res.cloudinary.com/spyhcckw/image/upload/v1792084768/product/sample_galaxy_s23.jpg";
-            }
-        }
-
+        // Only product photos belong in listing upload slots; inspection photos and
+        // display placeholders must not be inserted as uploaded product images.
         // If no subcollection images exist and we have a valid image, include as primary
         if (images.length === 0 && effectiveImageUrl) {
             images.push({

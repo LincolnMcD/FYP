@@ -55,7 +55,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
   }
 
   Future<void> _loadCollectionDiagnostic() async {
-    if (!_currentTask['taskType'].toString().toLowerCase().contains('collect')) return;
+    if (!_isTradeInTask) return;
     var deviceID = _currentTask['deviceID']?.toString() ?? '';
     if (deviceID.isEmpty) {
       final requestID = (_currentTask['tradeInRequestID'] ?? _currentTask['tradeInID'] ??
@@ -646,7 +646,7 @@ class _StaffTaskDetailsPageState extends State<StaffTaskDetailsPage> {
                 ],
               ),
             ),
-            if (isCollect && (
+            if ((isCollect || isInspect) && (
                 (_currentTask['taskStatus'] ?? '').toString().toLowerCase() == 'completed' ||
                 (_currentTask['scheduleStatus'] ?? '').toString().toLowerCase() == 'completed')) ...[
               const SizedBox(height: 16),

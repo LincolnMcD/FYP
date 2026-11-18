@@ -1175,6 +1175,79 @@
       .content { padding: 20px 16px; }
       .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
     }
+      .inspection-detail-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px; }
+    #savedInspectionDialog::backdrop { background:rgba(15,23,42,.48); }
+
+    #viewInspectionReport { background:transparent;border:0;font:inherit;font-size:13px;cursor:pointer; }
+    #viewInspectionReport:disabled { color:#a1a8b3;cursor:not-allowed; }
+    .inspection-empty { min-height:145px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#94a3b8;text-align:center;padding:20px; }
+    .inspection-empty-icon { font-size:36px;font-weight:400;color:#94a3b8; }
+    .inspection-score-summary { display:flex;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid #e2e8f0; }
+    .inspection-score-summary p,.inspection-report-overview p { color:#64748b;font-size:13px;line-height:1.6;margin:6px 0 0; }
+    .inspection-score-circle { width:80px;height:80px;border:7px solid #0b479f;border-right-color:#e2e8f0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-size:25px;font-weight:700;color:#0f274b; }
+    .inspection-score-circle small { font-size:12px;color:#64748b;font-weight:500; }
+    .inspection-external-summary { padding:18px 0 6px; }
+    .inspection-summary-heading { display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px; }
+    .inspection-grade { display:inline-block;background:#e8f4ef;color:#11613f;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:600; }
+    .inspection-surface { display:grid;grid-template-columns:1fr auto;gap:8px;margin:14px 0;color:#475569;font-size:13px; }
+    .inspection-coverage-track { grid-column:1/-1;height:5px;border-radius:5px;background:#e2e8f0;overflow:hidden; }
+    .inspection-coverage-track i { display:block;height:100%;background:#d79a26; }
+    #savedInspectionDialog { border:0;border-radius:16px;padding:0;width:min(1000px,95vw);max-height:92vh;color:#334155;box-shadow:0 24px 80px #0f172a40; }
+    .inspection-close { position:sticky;top:12px;float:right;margin:12px 14px -48px 0;z-index:2;border:0;border-radius:50%;background:#eef2f7;color:#475569;font-size:25px;width:36px;height:36px;cursor:pointer; }
+    .inspection-paper { padding:60px 55px 32px;background:white; }
+    .inspection-letterhead { display:flex;justify-content:space-between;align-items:end;gap:20px;border-bottom:2px solid #cbd0db;padding-bottom:24px;margin-bottom:34px; }
+    .inspection-letterhead strong { font-size:42px;color:#082d69;letter-spacing:-1px; }
+    .inspection-letterhead h2 { margin:4px 0 0;font-size:25px;color:#5d6574;font-weight:500; }
+    .inspection-letterhead>div:last-child { text-align:right;color:#082d69;font-size:14px; }
+    .inspection-letterhead span { display:block;color:#7a818f;letter-spacing:1.5px;margin-top:8px;font-size:12px; }
+    .inspection-device { display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center;margin-bottom:36px; }
+    .inspection-device-photo { border:1px solid #e2e5ea;border-radius:14px;padding:15px;min-height:170px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px #102d5910; }
+    .inspection-device-photo img { width:100%;height:150px;object-fit:contain;border-radius:10px; }
+    .inspection-paper h3 { color:#082d69;font-size:21px;margin:0 0 18px; }
+    .inspection-device h3,.inspection-section>h3 { padding-bottom:13px;border-bottom:1px solid #e2e5ea; }
+    .inspection-device-fields { display:grid;grid-template-columns:1fr 1fr;gap:22px; }
+    .inspection-field-label { display:block;text-transform:uppercase;color:#687181;font-size:11px;margin-bottom:8px;letter-spacing:.5px; }
+    .inspection-device-fields strong { color:#242a32;font-size:15px;overflow-wrap:anywhere; }
+    .inspection-report-overview { display:flex;align-items:center;gap:25px;padding:26px;background:#f6f8fb;border:1px solid #e2e5ea;border-radius:15px;margin:30px 0 36px; }
+    .inspection-report-overview h3 { margin-bottom:12px;color:#242a32; }
+    .inspection-report-overview .inspection-score-circle { width:105px;height:105px;font-size:32px; }
+    .inspection-section { margin-top:34px; }
+    .inspection-external-tile { padding:18px;border:1px solid #e2e5ea;border-radius:12px;background:#f8fafc; }
+    .inspection-external-tile span { display:block;color:#64748b;font-size:13px; }
+    .inspection-external-tile strong { display:block;color:#0c3d84;font-size:25px;margin-top:10px; }
+    .inspection-external-tile p { margin:5px 0 0;font-size:12px;color:#64748b; }
+    .inspection-diagnostics { display:grid;grid-template-columns:1fr 1fr;gap:28px 32px;padding:12px 0; }
+    .inspection-diagnostic-item { display:flex;align-items:start;gap:12px; }
+    .inspection-diagnostic-item>div { flex:1; }
+    .inspection-diagnostic-item strong { font-size:15px;color:#242a32; }
+    .inspection-diagnostic-item p { font-size:12px;line-height:1.6;color:#687181;margin:7px 0 0; }
+    .inspection-item-icon { color:#0b6738;font-size:20px; }
+    .inspection-result { border-radius:20px;font-size:12px;padding:4px 9px;white-space:nowrap; }
+    .inspection-result.good { background:#08b84e;color:white; }
+    .inspection-result.muted { background:#606b7a;color:white; }
+    .inspection-photo { width:100%;height:180px;object-fit:contain;background:#f8fafc;border-radius:12px; }
+    .inspection-report-footer { border-top:1px solid #cbd0db;margin-top:40px;padding-top:20px;font-size:11px;color:#687181; }
+    @media(max-width:650px) { .inspection-paper { padding:50px 22px 24px; } .inspection-device { grid-template-columns:1fr; } .inspection-device-photo { max-width:240px; } .inspection-diagnostics { grid-template-columns:1fr; } .inspection-letterhead strong { font-size:32px; } .inspection-letterhead h2 { font-size:19px; } .inspection-report-overview { padding:18px;gap:15px; } }
+
+    .inspection-photo-card { border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;padding:0;background:white;cursor:zoom-in;text-align:left;font:inherit;box-shadow:0 3px 12px #0f274b08;transition:box-shadow .2s,border-color .2s; }
+    .inspection-photo-card:hover { border-color:#9ab9e7;box-shadow:0 6px 20px #0f274b14; }
+    .inspection-photo-card:focus-visible { outline:3px solid #0c5ad2;outline-offset:3px; }
+    .inspection-photo-frame { position:relative;padding:12px;background:#f5f7fb; }
+    .inspection-photo-frame .inspection-photo { display:block;height:200px;border-radius:8px; }
+    .inspection-photo-expand { position:absolute;right:20px;bottom:20px;background:#ffffffed;border-radius:8px;padding:3px 8px;color:#0c479e;font-size:20px;box-shadow:0 2px 8px #0f274b15; }
+    .inspection-photo-caption { padding:14px 16px;display:flex;flex-direction:column;gap:5px; }
+    .inspection-photo-caption strong { color:#17365c;font-size:14px; }
+    .inspection-photo-caption span { color:#8290a3;font-size:11px; }
+    #inspectionPhotoPreview { padding:0;border:0;border-radius:18px;width:min(1100px,96vw);max-height:94vh;background:#f5f7fb;box-shadow:0 24px 90px #0005; }
+    #inspectionPhotoPreview::backdrop { background:rgba(6,18,36,.8); }
+    #inspectionPhotoPreview header { display:flex;justify-content:space-between;align-items:center;padding:18px 22px;background:white;border-bottom:1px solid #e2e8f0; }
+    #inspectionPhotoPreview header div { display:flex;flex-direction:column;gap:5px;color:#17365c; }
+    #inspectionPreviewCount { font-size:12px;color:#8290a3; }
+    #inspectionPhotoPreview button { border:0;border-radius:50%;width:38px;height:38px;background:white;color:#17365c;font-size:28px;cursor:pointer;box-shadow:0 2px 12px #0f274b15;flex-shrink:0; }
+    #inspectionPhotoPreview button:disabled { opacity:.25;cursor:default; }
+    .inspection-preview-stage { display:flex;align-items:center;gap:12px;padding:20px; }
+    .inspection-preview-stage img { flex:1;min-width:0;width:100%;height:70vh;object-fit:contain; }
+    @media(max-width:650px) { .inspection-preview-stage { padding:10px;gap:5px; } .inspection-preview-stage img { height:65vh; } #inspectionPhotoPreview button { width:30px;height:30px; } }
   </style>
 <style id="listing-tab-title-style">h1 { font-family:Inter,Arial,sans-serif !important; font-size:26px !important; font-weight:800 !important; color:#0f172a !important; letter-spacing:-0.5px !important; line-height:1.2 !important; }</style>
 </head>
@@ -1450,41 +1523,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 Inspection Report
               </div>
-              <a href="#" class="report-link" onclick="openFullInspectionReport(event)">View Full</a>
+              <button type="button" id="viewInspectionReport" class="report-link" onclick="openFullInspectionReport(event)" disabled>View Full</button>
             </div>
 
-            <div class="report-row">
-              <div class="report-row-top">
-                <span>Display & Touch</span>
-                <span class="badge-pass" id="displayReportBadge">PASS</span>
-              </div>
-              <div class="report-bar">
-                <div class="report-bar-fill fill-green" id="displayReportBar" style="width: 100%;"></div>
-              </div>
-              <p class="report-notes" id="displayReportNotes">No scratches visible, TrueTone active.</p>
-            </div>
+            <div id="actualInspectionSummary" aria-live="polite">Loading saved inspection report…</div>
 
-            <div class="report-row">
-              <div class="report-row-top">
-                <span>Housing & Frame</span>
-                <span class="badge-minor" id="housingReportBadge">MINOR WEAR</span>
-              </div>
-              <div class="report-bar">
-                <div class="report-bar-fill fill-yellow" id="housingReportBar" style="width: 78%;"></div>
-              </div>
-              <p class="report-notes" id="housingReportNotes">Micro-abrasions near charging port. Grade A-.</p>
-            </div>
-
-            <div class="report-row">
-              <div class="report-row-top">
-                <span>Camera System</span>
-                <span class="badge-pass" id="cameraReportBadge">PASS</span>
-              </div>
-              <div class="report-bar">
-                <div class="report-bar-fill fill-green" id="cameraReportBar" style="width: 100%;"></div>
-              </div>
-              <p class="report-notes" id="cameraReportNotes">Lenses clear, optical sensors verified.</p>
-            </div>
           </div>
 
         </div>
@@ -1845,6 +1888,7 @@
         currentProduct = data.product;
         currentDevice = data.device || {};
         currentTradeIn = data.tradeInRequest || {};
+        loadSavedInspectionReport();
         
         // Preserve staged new uploads and staged deletions
         const baseImages = Array.isArray(data.images) && data.images.length > 0 ? [...data.images] : [];
@@ -1861,9 +1905,7 @@
           if (currentImages.length === 0) {
             const isDraft = String((currentProduct && (currentProduct.listingStatus || currentProduct.status)) || 'draft').toLowerCase() === 'draft';
             if (!isDraft) {
-              const actualImg = (currentProduct && currentProduct.imageUrl) ||
-                                (currentTradeIn && currentTradeIn.imageUrl) ||
-                                (currentDevice && (currentDevice.imageUrl || currentDevice.image));
+              const actualImg = currentProduct && currentProduct.imageUrl;
               if (actualImg && !String(actualImg).includes('sample_') && !String(actualImg).includes('proof_of_delivery')) {
                 currentImages.push({
                   id: 'primary-img',
@@ -2437,49 +2479,89 @@
       }
     }
 
-    function renderInspectionReport(dev, tr) {
-      const cr = dev.conditionReport || (tr.finalQuotation && tr.finalQuotation.conditionReport) || {};
-      const screenIssues = cr.screen ? Object.values(cr.screen).some(v => v > 1) : false;
-      const frameIssues = cr.frame ? Object.values(cr.frame).some(v => v > 1) : false;
-
-      // Display
-      const dispBadge = document.getElementById('displayReportBadge');
-      const dispBar = document.getElementById('displayReportBar');
-      const dispNotes = document.getElementById('displayReportNotes');
-      if (screenIssues) {
-        dispBadge.className = 'badge-minor';
-        dispBadge.textContent = 'MINOR DEFECTS';
-        dispBar.className = 'report-bar-fill fill-yellow';
-        dispBar.style.width = '75%';
-        dispNotes.textContent = 'Hairline micro-scratches documented during diagnostic run.';
-      } else {
-        dispBadge.className = 'badge-pass';
-        dispBadge.textContent = 'PASS';
-        dispBar.className = 'report-bar-fill fill-green';
-        dispBar.style.width = '100%';
-        dispNotes.textContent = 'No scratches visible, touch digitizer fully responsive.';
+    let savedInspection = { evaluation: null, diagnostic: null, loaded: false, failed: false, detailed: false };
+    const diagnosticComponents = [
+      ['touchScreenMark', 'Touchscreen'], ['displayMark', 'Display'],
+      ['cameraMark', 'Camera'], ['microphoneMark', 'Microphone'],
+      ['speakerMark', 'Speaker'], ['sensorMark', 'Sensors'],
+      ['connectivityMark', 'Connectivity'], ['gpsMark', 'GPS']
+    ];
+    function numericValue(value) {
+      return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+    }
+    function reportNumber(value, suffix = '') {
+      const number = numericValue(value);
+      return number === null ? 'Not recorded' : `${number.toFixed(1).replace(/\.0$/, '')}${suffix}`;
+    }
+    function inspectionParts() {
+      const evaluation = savedInspection.evaluation;
+      return [['screen', 'Front / Screen'], ['back', 'Back'], ['frame', 'Frame']].map(([key, label]) => {
+        const part = evaluation?.parts?.[key] || evaluation?.[key];
+        const coverage = numericValue(part?.dmgCoverage ?? part?.coverage);
+        return { key, label, coverage, text: coverage === null ? 'Not recorded' : `${(coverage * 100).toFixed(2)}% damage coverage` };
+      });
+    }
+    async function fetchInspectionRecord(path) {
+      let missing = false;
+      for (const base of getCandidateBaseUrls()) {
+        try {
+          const response = await fetch(`${base}/api/tradein/${path}`);
+          if (response.status === 404) { missing = true; continue; }
+          if (!response.ok) continue;
+          const payload = await response.json();
+          if (payload.success) return payload;
+        } catch (_) {}
       }
-
-      // Frame
-      const hBadge = document.getElementById('housingReportBadge');
-      const hBar = document.getElementById('housingReportBar');
-      const hNotes = document.getElementById('housingReportNotes');
-      if (frameIssues) {
-        hBadge.className = 'badge-minor';
-        hBadge.textContent = 'MINOR WEAR';
-        hBar.className = 'report-bar-fill fill-yellow';
-        hBar.style.width = '80%';
-        hNotes.textContent = 'Minor scuffs near corners. Grade A-.';
-      } else {
-        hBadge.className = 'badge-pass';
-        hBadge.textContent = 'PASS';
-        hBar.className = 'report-bar-fill fill-green';
-        hBar.style.width = '100%';
-        hNotes.textContent = 'Pristine housing and back chassis. No dents.';
+      if (missing) return null;
+      throw new Error('Could not retrieve inspection record');
+    }
+    async function loadSavedInspectionReport(detail = false) {
+      const deviceId = currentProduct?.deviceID || currentDevice?.deviceID;
+      const requestId = currentProduct?.tradeInRequestID || currentTradeIn?.tradeInRequestID || currentTradeIn?.id;
+      const results = await Promise.allSettled([
+        deviceId ? fetchInspectionRecord(`diagnostic/${encodeURIComponent(deviceId)}${detail ? "" : "?summary=true"}`) : Promise.resolve(null),
+        requestId ? fetchInspectionRecord(`evaluation/${encodeURIComponent(String(requestId).replace(/^#/, ''))}?source=staffEvaluation${detail ? "" : "&summary=true"}`) : Promise.resolve(null)
+      ]);
+      savedInspection = {
+        diagnostic: results[0].status === 'fulfilled' ? results[0].value?.data || null : (detail ? savedInspection.diagnostic : null),
+        evaluation: results[1].status === 'fulfilled' ? results[1].value?.evaluation || null : (detail ? savedInspection.evaluation : null),
+        failed: results.some(result => result.status === 'rejected'), loaded: true, detailed: detail
+      };
+      renderInspectionReport();
+    }
+    function renderInspectionReport() {
+      const container = document.getElementById('actualInspectionSummary');
+      const button = document.getElementById('viewInspectionReport');
+      if (!container) return;
+      const { diagnostic, evaluation, loaded, failed } = savedInspection;
+      button.disabled = !loaded || (!diagnostic && !evaluation);
+      if (!loaded) { container.innerHTML = '<div class="inspection-empty">Loading saved inspection summary…</div>'; return; }
+      if (!diagnostic && !evaluation) {
+        container.innerHTML = failed ? '<div class="inspection-empty">Could not load inspection summary.<button type="button" onclick="loadSavedInspectionReport()">Retry</button></div>' : '<div class="inspection-empty"><span class="inspection-empty-icon">&#9776;</span><strong>No record found</strong></div>';
+        return;
       }
+      container.innerHTML = (diagnostic ? `<div class="inspection-score-summary"><div class="inspection-score-circle">${reportNumber(diagnostic.diagnosticScore)}<small>/100</small></div><div><strong>Internal condition</strong><p>Saved eight-component self-test score</p></div></div>` : '<div class="inspection-external-summary"><strong>Internal condition</strong><p class="report-notes">No record found</p></div>') +
+        (evaluation ? `<div class="inspection-external-summary"><div class="inspection-summary-heading"><strong>External condition</strong>${evaluation.grade ? `<span class="inspection-grade">Grade ${escapeHtml(evaluation.grade)}</span>` : ''}</div>${inspectionParts().filter(part => part.coverage !== null).map(part => `<div class="inspection-surface"><span>${part.label}</span><strong>${(part.coverage*100).toFixed(2)}%</strong><div class="inspection-coverage-track"><i style="width:${Math.max(0,Math.min(100,part.coverage*100))}%"></i></div></div>`).join('')}<p class="report-notes">Damage coverage by surface</p></div>` : '<div class="inspection-external-summary"><strong>External condition</strong><p class="report-notes">No record found</p></div>') +
+        (failed ? '<p class="report-notes">Some summary data could not be loaded. <button type="button" onclick="loadSavedInspectionReport()">Retry</button></p>' : '');
+    }
+
+    function isProductPhoto(image) {
+      const url = image && image.imageUrl;
+      return typeof url === 'string' && url.trim() !== '' &&
+        !/sample_|no-device-image\.svg|proof_of_delivery/i.test(url);
+    }
+
+    function hideUnavailablePhoto(image) {
+      if (!currentImages.includes(image)) return;
+      currentImages = currentImages.filter(candidate => candidate !== image);
+      try {
+        sessionStorage.setItem('rebyte_product_images_' + productID, JSON.stringify(currentImages));
+      } catch (_) {}
+      renderGallery();
     }
 
     function renderGallery() {
+      currentImages = currentImages.filter(isProductPhoto);
       const mainImg = document.getElementById('galleryMainImg');
       const emptyState = document.getElementById('galleryEmptyState');
       const thumbsContainer = document.getElementById('thumbnailsContainer');
@@ -2508,12 +2590,9 @@
         emptyState.style.display = 'none';
         mainImg.style.display = 'block';
         if (selectedImageIndex >= count) selectedImageIndex = 0;
-        mainImg.src = currentImages[selectedImageIndex].imageUrl;
-        mainImg.onerror = function() {
-          this.onerror = null;
-          this.style.display = 'none';
-          emptyState.style.display = 'flex';
-        };
+        const selectedImage = currentImages[selectedImageIndex];
+        mainImg.onerror = () => hideUnavailablePhoto(selectedImage);
+        mainImg.src = selectedImage.imageUrl;
       }
 
       // Remove existing thumb items except the Add button
@@ -2530,10 +2609,7 @@
         img.className = 'thumb-img';
         img.src = imgObj.imageUrl;
         img.alt = `Thumb ${idx + 1}`;
-        img.onerror = function() {
-          this.onerror = null;
-          this.style.opacity = '0.35';
-        };
+        img.onerror = () => hideUnavailablePhoto(imgObj);
 
         item.appendChild(img);
 
@@ -2557,14 +2633,7 @@
     function selectThumbnail(idx) {
       if (idx < 0 || idx >= currentImages.length) return;
       selectedImageIndex = idx;
-      const mainImg = document.getElementById('galleryMainImg');
-      mainImg.src = currentImages[idx].imageUrl;
-
-      const items = document.querySelectorAll('.thumbnails-row .thumb-item');
-      items.forEach((it, i) => {
-        if (i === idx) it.classList.add('active');
-        else it.classList.remove('active');
-      });
+      renderGallery();
     }
 
     function triggerFileInput() {
@@ -3094,9 +3163,115 @@
       window.location.href = `listing.html?tab=${st}`;
     }
 
-    function openFullInspectionReport(e) {
+    async function openFullInspectionReport(e) {
       if (e) e.preventDefault();
-      showToast('Opening complete diagnostic inspection report...', 'info');
+      if (!savedInspection.loaded || (!savedInspection.evaluation && !savedInspection.diagnostic)) return;
+      document.getElementById('savedInspectionDialog')?.remove();
+      const dialog = document.createElement('dialog');
+      dialog.id = 'savedInspectionDialog';
+      dialog.setAttribute('aria-label', 'Device inspection report');
+      dialog.innerHTML = '<button type="button" class="inspection-close" aria-label="Close report">×</button><div class="inspection-empty">Loading inspection report…</div>';
+      const close = () => dialog.close();
+      dialog.querySelector('button').onclick = close;
+      dialog.addEventListener('click', event => { if(event.target === dialog) close(); });
+      dialog.addEventListener('close', () => dialog.remove());
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      // The summary request never fetches component results or inspection photos.
+      await loadSavedInspectionReport(true);
+      if (!dialog.isConnected) return;
+      if (savedInspection.failed) {
+        dialog.innerHTML = '<button type="button" class="inspection-close" aria-label="Close report">×</button><div class="inspection-empty">Could not load the complete report.<button type="button" id="retryInspectionReport">Retry</button></div>';
+        dialog.querySelector('.inspection-close').onclick = close;
+        dialog.querySelector('#retryInspectionReport').onclick = () => { dialog.remove(); openFullInspectionReport(); };
+        return;
+      }
+      const { evaluation, diagnostic } = savedInspection;
+      const field = (label, value) => value === null || value === undefined || value === '' ? '' : `<div><span class="inspection-field-label">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+      const classes = evaluation?.classes || evaluation || {};
+      const defectLabels = { screenScratch:'Screen scratch',screenCrack:'Screen crack',backScratch:'Back scratch',backCrack:'Back crack',frameScratch:'Frame scratch',frameDent:'Frame dent' };
+      const defects = Object.entries(defectLabels).filter(([key]) => classes[key] && typeof classes[key] === 'object').map(([key,label]) => {
+        const record = classes[key];
+        const facts = [];
+        if (numericValue(record.count) !== null) facts.push(`Count: ${record.count}`);
+        if (record.severity) facts.push(`Severity: ${record.severity}`);
+        if (numericValue(record.coverage) !== null) facts.push(`Coverage: ${(Number(record.coverage)*100).toFixed(2)}%`);
+        if (numericValue(record.area) !== null) facts.push(`Area: ${Number(record.area).toFixed(2)} cm²`);
+        return `<div class="inspection-diagnostic-item"><span class="inspection-item-icon">&#9671;</span><div><strong>${escapeHtml(label)}</strong><p>${escapeHtml(facts.join(' · '))}</p></div></div>`;
+      }).join('');
+      const images = (evaluation?.images || []).filter(image => /^https?:\/\//i.test(image.imageUrl || ''));
+      const productImage = currentImages.find(isProductPhoto)?.imageUrl;
+      const hero = productImage || images[0]?.imageUrl;
+      const rawDate = diagnostic?.createdAt;
+      const date = rawDate && typeof rawDate === 'object' && (rawDate._seconds ?? rawDate.seconds) != null ? new Date((rawDate._seconds ?? rawDate.seconds)*1000) : new Date(rawDate || Date.now());
+      const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+      const title = formatProductTitle(currentDevice?.brand || currentProduct?.brand,currentDevice?.model || currentProduct?.model);
+      const internalItems = diagnosticComponents.filter(([key]) => numericValue(diagnostic?.[key]) !== null).map(([key,label]) => {
+        const score = Number(diagnostic[key]);
+        return `<div class="inspection-diagnostic-item"><span class="inspection-item-icon">&#10003;</span><div><strong>${label}</strong><p>Saved diagnostic result</p></div><span class="inspection-result ${score >= 80 ? 'good' : 'muted'}">${reportNumber(score/10)} / 10</span></div>`;
+      }).join('');
+      dialog.innerHTML = `<button type="button" class="inspection-close" aria-label="Close report">×</button><article class="inspection-paper">
+        <header class="inspection-letterhead"><div><strong>ReByte</strong><h2>Inspection Report</h2></div><div><b>${escapeHtml(validDate.toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'Asia/Kuala_Lumpur'}))}</b><span>CONFIDENTIAL</span></div></header>
+        <section class="inspection-device"><div class="inspection-device-photo">${hero ? `<img src="${escapeHtml(hero)}" alt="Device photo">` : '<span class="inspection-empty-icon">&#9647;</span>'}</div><div><h3>Device Information</h3><div class="inspection-device-fields">${field('Model', title)}${field('Storage',currentDevice?.storageCapacity || currentDevice?.storage || currentProduct?.storage)}${field('Color',currentDevice?.color || currentProduct?.color)}${field('IMEI',currentDevice?.imei || currentDevice?.imeiNum)}</div></div></section>
+        <section class="inspection-report-overview">${diagnostic && numericValue(diagnostic.diagnosticScore) !== null ? `<div class="inspection-score-circle">${reportNumber(diagnostic.diagnosticScore)}<small>/100</small></div>` : ''}<div><h3>Inspection Summary</h3>${evaluation?.grade ? `<span class="inspection-grade">Grade ${escapeHtml(evaluation.grade)}</span>` : ''}<p>${diagnostic ? 'Internal self-test results' : ''}${diagnostic && evaluation ? ' and ' : ''}${evaluation ? 'external surface assessment' : ''} from the saved device inspection.</p></div></section>
+        ${evaluation ? `<section class="inspection-section"><h3>External Condition Summary</h3><div class="inspection-detail-grid">${inspectionParts().filter(part => part.coverage !== null).map(part => `<div class="inspection-external-tile"><span>${part.label}</span><strong>${(part.coverage*100).toFixed(2)}%</strong><p>Damage coverage</p></div>`).join('')}</div></section>` : ''}
+        ${defects ? `<section class="inspection-section"><h3>External Defect Details</h3><div class="inspection-diagnostics">${defects}</div></section>` : ''}
+        ${diagnostic && internalItems ? `<section class="inspection-section"><h3>Detailed Diagnostics</h3><div class="inspection-diagnostics">${internalItems}</div></section>` : ''}
+        ${images.length ? `<section class="inspection-section"><h3>Inspection Photos</h3><div class="inspection-detail-grid">${images.map((image,index) => `<button type="button" class="inspection-photo-card" data-inspection-photo="${index}" aria-label="Enlarge ${escapeHtml(inspectionPhotoLabel(image,index))}"><div class="inspection-photo-frame"><img src="${escapeHtml(image.imageUrl)}" alt="${escapeHtml(inspectionPhotoLabel(image,index))}" class="inspection-photo" loading="lazy"><span class="inspection-photo-expand" aria-hidden="true">&#x2922;</span></div><div class="inspection-photo-caption"><strong>${escapeHtml(inspectionPhotoLabel(image,index))}</strong><span>Photo ${index+1} of ${images.length}</span></div></button>`).join('')}</div></section>` : ''}
+        <footer class="inspection-report-footer">Generated on ${escapeHtml(new Date().toLocaleDateString('en-GB',{timeZone:'Asia/Kuala_Lumpur'}))} · ReByte Internal Reporting System</footer>
+      </article>`;
+      dialog.querySelector('.inspection-close').onclick = close;
+      dialog.querySelectorAll('[data-inspection-photo]').forEach(button => {
+        button.onclick = () => openInspectionPhotoPreview(images, Number(button.dataset.inspectionPhoto));
+      });
+    }
+
+    function inspectionPhotoLabel(image, index) {
+      const label = String(image.imageView || '').replace(/[_-]+/g, ' ').trim();
+      return label ? label.replace(/\b\w/g, character => character.toUpperCase()) : `Inspection photo ${index+1}`;
+    }
+
+    function openInspectionPhotoPreview(images, initialIndex) {
+      document.getElementById('inspectionPhotoPreview')?.remove();
+      let index = initialIndex;
+      const viewer = document.createElement('dialog');
+      viewer.id = 'inspectionPhotoPreview';
+      viewer.setAttribute('aria-label', 'Inspection photo preview');
+      viewer.innerHTML = `<header><div><strong id="inspectionPreviewTitle"></strong><span id="inspectionPreviewCount"></span></div><button type="button" data-photo-close aria-label="Close photo preview">&times;</button></header><div class="inspection-preview-stage"><button type="button" data-photo-prev aria-label="Previous photo">&#8249;</button><img id="inspectionPreviewImage" alt=""><button type="button" data-photo-next aria-label="Next photo">&#8250;</button></div>`;
+      const update = () => {
+        const image = images[index];
+        const label = inspectionPhotoLabel(image,index);
+        viewer.querySelector('#inspectionPreviewTitle').textContent = label;
+        viewer.querySelector('#inspectionPreviewCount').textContent = `${index+1} / ${images.length}`;
+        const preview = viewer.querySelector('img');
+        preview.src = image.imageUrl;
+        preview.alt = label;
+        viewer.querySelector('[data-photo-prev]').disabled = index === 0;
+        viewer.querySelector('[data-photo-next]').disabled = index === images.length-1;
+      };
+      const move = direction => { index = Math.max(0,Math.min(images.length-1,index+direction)); update(); };
+      viewer.querySelector('[data-photo-close]').onclick = () => viewer.close();
+      viewer.querySelector('[data-photo-prev]').onclick = () => move(-1);
+      viewer.querySelector('[data-photo-next]').onclick = () => move(1);
+      viewer.addEventListener('keydown', event => {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault(); move(event.key === 'ArrowLeft' ? -1 : 1);
+        }
+      });
+      let touchStartX = null;
+      viewer.querySelector('img').addEventListener('touchstart', event => { touchStartX = event.touches.length === 1 ? event.touches[0].clientX : null; }, {passive:true});
+      viewer.querySelector('img').addEventListener('touchend', event => {
+        if(touchStartX !== null && event.changedTouches.length === 1) {
+          const delta = event.changedTouches[0].clientX-touchStartX;
+          if(Math.abs(delta)>60) move(delta>0 ? -1 : 1);
+        }
+        touchStartX = null;
+      }, {passive:true});
+      viewer.addEventListener('click', event => { if(event.target === viewer) viewer.close(); });
+      viewer.addEventListener('close', () => viewer.remove());
+      document.body.appendChild(viewer);
+      update();
+      viewer.showModal();
     }
 
     function limitTwoDecimals(input) {
